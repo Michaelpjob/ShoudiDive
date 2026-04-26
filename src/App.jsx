@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import Basemap from "./components/Basemap.jsx";
 import DataOverlay from "./components/DataOverlay.jsx";
 import WindParticles from "./components/WindParticles.jsx";
+import MpaLayer, { styleForType } from "./components/MpaLayer.jsx";
 import {
   project,
   unproject,
@@ -90,7 +91,7 @@ function formatWindow(dates, fallback, layer) {
 }
 
 const PREF_KEY = "ca-coast-conditions:prefs:v1";
-const DEFAULT_PREFS = { theme: "light", opacity: 0.62, units: "F" };
+const DEFAULT_PREFS = { theme: "light", opacity: 0.62, units: "F", mpaOn: true };
 
 function loadPrefs() {
   try {
@@ -138,6 +139,8 @@ export default function App() {
         opacity={prefs.opacity}
         units={prefs.units}
         dataState={dataState}
+        mpaOn={prefs.mpaOn}
+        setMpaOn={(v) => setPref("mpaOn", v)}
       />
     </div>
   );
@@ -259,7 +262,7 @@ function SettingsPopover({ prefs, setPref }) {
   );
 }
 
-function DesktopView({ layer, setLayer, composite, setComposite, opacity, units, dataState }) {
+function DesktopView({ layer, setLayer, composite, setComposite, opacity, units, dataState, mpaOn, setMpaOn }) {
   const stageRef = useRef(null);
   const [size, setSize] = useState({ w: 1200, h: 700 });
   const [hover, setHover] = useState(null);
@@ -268,6 +271,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
   const [controlsOpen, setControlsOpen] = useState(true);
   const [spotsOpen, setSpotsOpen] = useState(true);
   const [legendOpen, setLegendOpen] = useState(true);
+  const [selectedMpa, setSelectedMpa] = useState(null);
 
   // Pan/zoom state — viewBox in original svg coords. Initial = full extent.
   const [vb, setVb] = useState({ x: 0, y: 0, w: 1, h: 1 });
@@ -435,6 +439,13 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
           />
         </foreignObject>
 
+        <MpaLayer
+          width={size.w}
+          height={size.h}
+          active={mpaOn}
+          onSelect={setSelectedMpa}
+        />
+
         <g className="spot-pins">
           {SAVED_SPOTS.map((s) => {
             const [x, y] = project(s.lng, s.lat, size.w, size.h);
@@ -495,7 +506,18 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
           onClick={() => setControlsOpen((v) => !v)}
         >
           <span className="panel-title">Layer</span>
-          <Chevron open={controlsOpen} />
+          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button
+              type="button"
+              className={"mpa-pill" + (mpaOn ? " active" : "")}
+              onClick={(e) => { e.stopPropagation(); setMpaOn(!mpaOn); }}
+              title={mpaOn ? "MPAs visible · click to hide" : "MPAs hidden · click to show"}
+              aria-pressed={mpaOn}
+            >
+              MPAs
+            </button>
+            <Chevron open={controlsOpen} />
+          </span>
         </div>
         {controlsOpen && <div className="panel-body">
           <div className="layer-toggle layer-toggle-3" role="tablist">
@@ -776,10 +798,107 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
       </div>
 
       <div className="attribution">
-        zoom 7 · 34.6°N −120.3°W · CA Coast bbox 32.4°→37.6°N · −124.0°→−117.0°W
+        zoom 7 · 34.6°N −120.3°W · CA Coast bbox 31.8°→37.6°N · −124.0°→−116.8°W
+      </div>
+
+      {mpaOn && <CoronadosBanner vb={vb} size={size} />}
+
+      {selectedMpa && (
+        <MpaPopup mpa={selectedMpa} onClose={() => setSelectedMpa(null)} />
+      )}
+    </div>
+  );
+}
+
+// US-Mexico maritime boundary is at ~32.534°N. When the MPA layer is on
+// AND the visible viewBox dips below that, surface a small disclaimer.
+function CoronadosBanner({ vb, size }) {
+  if (!vb || !size.h) return null;
+  const [, visibleSouthLat] = unproject(0, vb.y + vb.h, size.w, size.h);
+  if (visibleSouthLat > 32.534) return null;
+  return (
+    <div className="mpa-banner">
+      MPA data covers California waters only. The Coronados sit inside Mexico's
+      Islas del Pacífico Biosphere Reserve — see{" "}
+      <a href="https://www.gob.mx/conanp" target="_blank" rel="noreferrer">CONANP</a>.
+    </div>
+  );
+}
+
+function MpaPopup({ mpa, onClose }) {
+  const style = styleForType(mpa.type);
+  const officialUrl =
+    "https://wildlife.ca.gov/Conservation/Marine/MPAs/Network";
+  const verdict = verdictForType(mpa.type);
+  return (
+    <div className="mpa-popup-overlay" onClick={onClose}>
+      <div className="mpa-popup" onClick={(e) => e.stopPropagation()}>
+        <div className="mpa-popup-head">
+          <div>
+            <div className="mpa-popup-name">{mpa.name}</div>
+            <div className="mpa-popup-fullname">{fullNameForType(mpa.type)}</div>
+          </div>
+          <span className="mpa-pill" style={{ background: style.fill, borderColor: style.stroke, color: style.stroke }}>
+            {mpa.type}
+          </span>
+        </div>
+        <div className={"mpa-verdict mpa-verdict-" + verdict.kind}>
+          <span className="mpa-verdict-icon">{verdict.icon}</span>
+          <strong>{verdict.label}</strong>
+        </div>
+        <p className="mpa-popup-body">
+          {verdict.kind === "no" && (
+            <>Take of any living marine resource is generally prohibited inside this area.</>
+          )}
+          {verdict.kind === "limited" && (
+            <>Limited recreational take is allowed — specific species and methods only. <strong>Verify with CDFW before harvesting.</strong></>
+          )}
+          {verdict.kind === "ok" && (
+            <>Most recreational take is allowed within this area; specific exclusions may apply.</>
+          )}
+        </p>
+        <p className="mpa-popup-meta mono">
+          {mpa.areaKm2 ? `${mpa.areaKm2} km² · ` : ""}
+          {mpa.ccrCitation || "CCR Title 14 §632"}
+        </p>
+        <a
+          className="mpa-popup-link"
+          href={officialUrl}
+          target="_blank"
+          rel="noreferrer"
+        >
+          ↗ Official CDFW regulation page
+        </a>
+        <p className="mpa-popup-disclaimer">
+          Information shown is for planning purposes only. Verify with CDFW before harvesting.
+        </p>
       </div>
     </div>
   );
+}
+
+function verdictForType(type) {
+  if (!type) return { kind: "limited", icon: "⚠", label: "CHECK RULES" };
+  const t = type.toUpperCase();
+  if (t.includes("NO-TAKE") || t === "SMR" || t === "FMR")
+    return { kind: "no", icon: "⛔", label: "NO TAKE" };
+  if (t === "SMP" || t === "SMRMA")
+    return { kind: "ok", icon: "✓", label: "TAKE ALLOWED" };
+  return { kind: "limited", icon: "⚠", label: "LIMITED TAKE" };
+}
+
+function fullNameForType(type) {
+  const map = {
+    SMR: "State Marine Reserve",
+    SMCA: "State Marine Conservation Area",
+    "SMCA (No-Take)": "State Marine Conservation Area · No Take",
+    SMP: "State Marine Park",
+    SMRMA: "State Marine Recreational Management Area",
+    FMR: "Federal Marine Reserve",
+    FMCA: "Federal Marine Conservation Area",
+    "Special Closure": "Special Closure",
+  };
+  return map[type] || "Marine Protected Area";
 }
 
 function Tooltip({ x, y, layer, composite, lng, lat, units }) {

@@ -192,6 +192,15 @@ export function getWindSpeed(lng, lat, composite = 1) {
   return bilinear(state.layers.wind?.[slotKey("wind", composite)], lng, lat);
 }
 
+// Returns the loaded scalar grid for a (layer, composite) — the same Float32Array
+// that bilinear() reads from. Lets DataOverlay render at native grid resolution
+// (one canvas pixel per source cell) and let the browser scale up smoothly.
+export function getLayerGrid(layer, composite) {
+  const w = state.layers[layer]?.[slotKey(layer, composite)];
+  if (!w) return null;
+  return { data: w.data, width: w.width, height: w.height };
+}
+
 // Bilinear lookup against U or V grid (NaN-safe).
 function bilinearComponent(grid, lng, lat) {
   if (!grid) return NaN;

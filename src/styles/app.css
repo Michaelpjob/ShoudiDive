@@ -185,6 +185,15 @@ body {
   user-select: none;
 }
 
+/* Keep map line weights constant regardless of viewBox zoom. */
+.map-svg .basemap line,
+.map-svg .basemap path,
+.map-svg .basemap ellipse,
+.map-svg .spot-pins circle,
+.map-svg .mpa-layer path {
+  vector-effect: non-scaling-stroke;
+}
+
 /* ---------- Floating panels ---------- */
 
 .panel {
@@ -890,6 +899,126 @@ body {
   line-height: 1.6;
 }
 .phone-side-label2 strong { color: var(--ink); display: block; font-family: "Inter", sans-serif; font-size: 12px; margin-bottom: 4px; }
+
+/* ---------- MPA layer ---------- */
+
+.mpa-pill {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: var(--bg-sunken);
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 100px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.mpa-pill:hover { color: var(--ink); border-color: var(--ink-3); }
+.mpa-pill.active {
+  background: var(--ink);
+  color: var(--bg-panel-solid);
+  border-color: var(--ink);
+}
+
+.mpa-banner {
+  position: absolute;
+  top: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-panel);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--line);
+  border-radius: 100px;
+  padding: 6px 14px;
+  font-size: 11px;
+  color: var(--ink-2);
+  z-index: 25;
+  box-shadow: var(--shadow-1);
+  max-width: 92vw;
+  text-align: center;
+}
+.mpa-banner a { color: var(--accent); text-decoration: none; }
+.mpa-banner a:hover { text-decoration: underline; }
+
+.mpa-popup-overlay {
+  position: absolute;
+  inset: 0;
+  background: oklch(0 0 0 / 0.18);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.mpa-popup {
+  width: 420px;
+  max-width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+  background: var(--bg-panel-solid);
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  box-shadow: var(--shadow-2);
+  padding: 16px 18px 14px;
+}
+.mpa-popup-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.mpa-popup-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.mpa-popup-fullname {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  margin-top: 1px;
+}
+
+.mpa-verdict {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--r-2);
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+.mpa-verdict-no { background: rgba(192, 57, 43, 0.16); color: oklch(0.42 0.18 25); }
+.mpa-verdict-limited { background: rgba(230, 126, 34, 0.18); color: oklch(0.46 0.16 55); }
+.mpa-verdict-ok { background: rgba(46, 160, 80, 0.18); color: oklch(0.42 0.16 145); }
+[data-theme="dark"] .mpa-verdict-no { color: oklch(0.78 0.16 25); }
+[data-theme="dark"] .mpa-verdict-limited { color: oklch(0.82 0.14 60); }
+[data-theme="dark"] .mpa-verdict-ok { color: oklch(0.82 0.14 145); }
+.mpa-verdict-icon { font-size: 18px; }
+
+.mpa-popup-body { font-size: 12.5px; color: var(--ink-2); margin: 0 0 10px; line-height: 1.5; }
+.mpa-popup-meta { font-size: 11px; color: var(--ink-3); margin: 0 0 12px; }
+.mpa-popup-link {
+  display: inline-block;
+  font-size: 12.5px;
+  color: var(--accent);
+  text-decoration: none;
+  margin-bottom: 12px;
+}
+.mpa-popup-link:hover { text-decoration: underline; }
+.mpa-popup-disclaimer {
+  font-size: 10.5px;
+  color: var(--ink-3);
+  border-top: 1px dashed var(--line);
+  padding-top: 8px;
+  margin: 0;
+  font-style: italic;
+}
 
 /* ---------- Settings popover (replaces iframe-protocol Tweaks panel) ---------- */
 
