@@ -103,6 +103,11 @@ export default function MapLabels({ labels, vb, size }) {
         pointerEvents: "none",
         overflow: "hidden",
         zIndex: 12,
+        // Stop the user from accidentally text-selecting these while
+        // panning or pinch-zooming the map.
+        userSelect: "none",
+        WebkitUserSelect: "none",
+        WebkitTouchCallout: "none",
       }}
     >
       {visible.map((p) => (

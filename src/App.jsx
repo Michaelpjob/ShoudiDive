@@ -601,7 +601,16 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
       onTouchCancel={onTouchEnd}
-      style={{ cursor: isPanning ? "grabbing" : "grab", touchAction: "none" }}
+      style={{
+        cursor: isPanning ? "grabbing" : "grab",
+        touchAction: "none",
+        // Pinch-zoom + panning kept dragging text selection across the map
+        // labels, leaving them highlighted blue. Lock selection on the whole
+        // stage; tooltips/panels above this stay selectable normally.
+        userSelect: "none",
+        WebkitUserSelect: "none",
+        WebkitTouchCallout: "none",
+      }}
     >
       <svg
         className="map-svg"
@@ -686,6 +695,12 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
           {SAVED_SPOTS.map((s) => {
             const [x, y] = project(s.lng, s.lat, size.w, size.h);
             const isActive = s.id === activeSpot;
+            // SVG <circle> radius scales with viewBox, so a 7-unit pin
+            // becomes ~56 px wide at 8× zoom. Divide by zoomLevel so the
+            // pin stays the same on-screen size regardless of zoom.
+            // (vector-effect: non-scaling-stroke handles the outline width.)
+            const r = (isActive ? 7 : 4) / zoomLevel;
+            const inner = 3 / zoomLevel;
             return (
               <g
                 key={s.id}
@@ -695,12 +710,12 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
                 <circle
                   cx={x}
                   cy={y}
-                  r={isActive ? 7 : 4}
+                  r={r}
                   fill="var(--bg-panel-solid)"
                   stroke="var(--ink)"
                   strokeWidth={isActive ? 2.2 : 1.4}
                 />
-                {isActive && <circle cx={x} cy={y} r="3" fill="var(--ink)" />}
+                {isActive && <circle cx={x} cy={y} r={inner} fill="var(--ink)" />}
               </g>
             );
           })}
