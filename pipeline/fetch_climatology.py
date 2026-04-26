@@ -56,19 +56,29 @@ SESSION = requests.Session()
 SESSION.headers.update({"Accept": "*/*", "User-Agent": "shouldidive/0.1"})
 
 
-def erddap_nc(dataset: str, variable: str, d: date, stride: int, pre_xy: str) -> Path:
-    """Download (and cache) a single ERDDAP daily slice as netCDF."""
+def erddap_nc(dataset: str, variable: str, d: date, stride: int, pre_xy: str,
+              lng_360: bool = False) -> Path:
+    """Download (and cache) a single ERDDAP daily slice as netCDF.
+
+    Some datasets (the W-US MODIS archive) store longitude in 0..360°. Pass
+    `lng_360=True` for those so we offset the bbox bounds before requesting.
+    """
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     nc_path = CACHE_DIR / f"climo_{dataset}_{d.isoformat()}_s{stride}.nc"
     if nc_path.exists():
         return nc_path
+    if lng_360:
+        lng_min = (BBOX["lng_min"] + 360.0) % 360.0
+        lng_max = (BBOX["lng_max"] + 360.0) % 360.0
+    else:
+        lng_min, lng_max = BBOX["lng_min"], BBOX["lng_max"]
     url = (
         f"{ERDDAP_BASE}/{dataset}.nc"
         f"?{variable}"
         f"[({d}T00:00:00Z):1:({d}T23:59:59Z)]"
         f"{pre_xy}"
         f"[({BBOX['lat_min']}):{stride}:({BBOX['lat_max']})]"
-        f"[({BBOX['lng_min']}):{stride}:({BBOX['lng_max']})]"
+        f"[({lng_min}):{stride}:({lng_max})]"
     )
     print(f"  GET {dataset} {d}", flush=True)
     r = SESSION.get(url, timeout=180)
@@ -122,14 +132,15 @@ def open_first_array(nc_path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]
     return arr.astype(np.float32), lat, lng
 
 
-def mean_stack(samples: list[date], dataset: str, variable: str, stride: int, pre_xy: str):
+def mean_stack(samples: list[date], dataset: str, variable: str, stride: int, pre_xy: str,
+               lng_360: bool = False):
     """Pull ERDDAP slices for the given dates, stack, return per-pixel mean.
     Skips dates that fail to fetch or open."""
     stacks = []
     lat_ref = lng_ref = None
     for d in samples:
         try:
-            nc_path = erddap_nc(dataset, variable, d, stride, pre_xy)
+            nc_path = erddap_nc(dataset, variable, d, stride, pre_xy, lng_360=lng_360)
         except Exception as e:
             print(f"  skip {d}: fetch failed — {e!s}")
             continue
@@ -214,12 +225,16 @@ def main() -> None:
     # Note: VIIRS NRT (the daily-fetcher dataset) only retains a few weeks of
     # history, so prior-year dates 404 there. For climatology we switch to
     # MODIS Aqua's long-archive product (erdMH1chla1day, 2003-present).
+    # Use the W-US MODIS Aqua archive (erdMWchla1day, 2002-present, 0.0125°
+    # native, longitude stored in 0..360°). VIIRS NRT only retains a few
+    # weeks so prior-year dates 404 there.
     print(f"chl climo for {now.year}-{now.month:02d}: averaging {monthly_samples}")
     try:
         chl_mean, _, _ = mean_stack(
             monthly_samples,
-            "erdMH1chla1day", "chlorophyll",
-            stride=1, pre_xy="",
+            "erdMWchla1day", "chlorophyll",
+            stride=1, pre_xy="[0]",
+            lng_360=True,
         )
         print(f"  chl climo: {np.nanmin(chl_mean):.3f}–{np.nanmax(chl_mean):.3f} mg/m³")
         encode_log10(chl_mean, *CHL_RANGE, OUT_DIR / "chl_climo.png")
@@ -231,8 +246,9 @@ def main() -> None:
     try:
         chl_annual, _, _ = mean_stack(
             annual_samples,
-            "erdMH1chla1day", "chlorophyll",
-            stride=1, pre_xy="",
+            "erdMWchla1day", "chlorophyll",
+            stride=1, pre_xy="[0]",
+            lng_360=True,
         )
         print(f"  chl annual: {np.nanmin(chl_annual):.3f}–{np.nanmax(chl_annual):.3f} mg/m³")
         encode_log10(chl_annual, *CHL_RANGE, OUT_DIR / "chl_climo_annual.png")
