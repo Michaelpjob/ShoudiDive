@@ -101,6 +101,13 @@ export default function BathyLayer({ width, height, active, zoomLevel, onSelect 
 
   if (!active || !visible.length) return null;
 
+  // SVG circles scale with viewBox, so a fixed `r="3.2"` blooms to ~26 px
+  // at 8× zoom. Divide by zoomLevel to keep markers the intended on-screen
+  // size at any zoom. (vector-effect: non-scaling-stroke handles the outline.)
+  const z = Number.isFinite(zoomLevel) && zoomLevel > 0 ? zoomLevel : 1;
+  const tapR = 14 / z;
+  const dotR = 3.2 / z;
+
   return (
     <g className="bathy-layer">
       {visible.map((f) => {
@@ -119,12 +126,12 @@ export default function BathyLayer({ width, height, active, zoomLevel, onSelect 
             }}
           >
             {/* Tap target */}
-            <circle cx={x} cy={y} r="14" fill="transparent" />
-            {/* Marker dot — small, doesn't scale-explode on zoom */}
+            <circle cx={x} cy={y} r={tapR} fill="transparent" />
+            {/* Marker dot — fixed on-screen size at any zoom */}
             <circle
               cx={x}
               cy={y}
-              r="3.2"
+              r={dotR}
               fill={sty.color}
               stroke="var(--bg)"
               strokeWidth="1.6"
