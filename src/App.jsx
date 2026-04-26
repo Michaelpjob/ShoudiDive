@@ -952,23 +952,23 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
                 </p>
                 <p className="info-p">
                   <span className="swatch" style={{ background: "rgb(194,65,12)" }}></span>
-                  <strong>Poor</strong> — 0–10 ft. Pea-soup; consider another day.
+                  <strong>Poor</strong> — 0–10 ft. Burnt orange; silty / blown out.
                 </p>
                 <p className="info-p">
                   <span className="swatch" style={{ background: "rgb(234,179,8)" }}></span>
-                  <strong>Fair</strong> — 10–20 ft. Murky but workable.
+                  <strong>Fair</strong> — 10–20 ft. Yellow; washed out.
                 </p>
                 <p className="info-p">
                   <span className="swatch" style={{ background: "rgb(132,204,22)" }}></span>
-                  <strong>Good</strong> — 20–30 ft. Solid CA-coast day.
+                  <strong>Good</strong> — 20–30 ft. Lime; typical CA kelp diving with some green.
                 </p>
                 <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(22,163,74)" }}></span>
-                  <strong>Very Good</strong> — 30–50 ft. Strong; gin-clear pockets.
+                  <span className="swatch" style={{ background: "rgb(6,182,212)" }}></span>
+                  <strong>Very Good</strong> — 30–50 ft. Cyan; clean blue water.
                 </p>
                 <p className="info-p">
                   <span className="swatch" style={{ background: "rgb(14,165,233)" }}></span>
-                  <strong>Excellent</strong> — 50 ft+. Tropical-grade.
+                  <strong>Excellent</strong> — 50 ft+. Sky blue; tropical / once-a-year clarity.
                 </p>
               </div>
             )}

@@ -16,11 +16,13 @@ const WIND_RAMP = [
 // Predicted-visibility ramp (Secchi feet → [r,g,b]). Stops sit at the lower
 // edge of each category band so cells between bands interpolate smoothly:
 // Poor (0–10) → Fair (10–20) → Good (20–30) → Very Good (30–50) → Excellent (50+).
+// Very Good moved from emerald to cyan so the gradient reads as a single
+// "muddy → clean blue water" arc instead of doubling back through green.
 const VIZ_RAMP = [
   { ft: 0,  c: [194, 65, 12]  },   // Poor — burnt orange  #c2410c
-  { ft: 10, c: [234, 179, 8]  },   // Fair — amber          #eab308
+  { ft: 10, c: [234, 179, 8]  },   // Fair — yellow         #eab308
   { ft: 20, c: [132, 204, 22] },   // Good — lime           #84cc16
-  { ft: 30, c: [22, 163, 74]  },   // Very Good — emerald   #16a34a
+  { ft: 30, c: [6, 182, 212]  },   // Very Good — cyan      #06b6d4
   { ft: 50, c: [14, 165, 233] },   // Excellent — sky blue  #0ea5e9
 ];
 function windColorRGBArr(kt) {
