@@ -191,7 +191,7 @@ def open_wave(grib_path: Path):
     return lat2d, lng2d, height, period, direction
 
 
-def fill_nearest(arr, max_cells: int = 12):
+def fill_nearest(arr, max_cells: int = 40):
     """Fill NaN cells with their nearest valid neighbour's value.
 
     gfswave wcoast 0.16° masks shallow / nearshore cells where bathymetry
@@ -201,9 +201,11 @@ def fill_nearest(arr, max_cells: int = 12):
     a few km offshore have perfectly good values.
 
     `max_cells` caps how far the fill can propagate (in grid cells, ~5 km
-    each). Beyond that we leave NaN so we don't paint a whole empty
-    sub-region with one stale value. 12 cells ≈ 60 km, plenty to cover the
-    inner-shelf gap without bleeding across an entire dead zone.
+    each). 40 cells ≈ 200 km — wide enough to bridge gfswave's broader
+    masked zones around Pt Conception, the Channel Islands lee shore, and
+    inside SB / SD bays, but still narrow enough that far-inland cells
+    (Arizona desert, etc.) stay NaN rather than getting painted with
+    offshore Pacific Hs.
     """
     valid = np.isfinite(arr)
     if not valid.any():

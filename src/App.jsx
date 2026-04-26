@@ -63,10 +63,10 @@ function useIsMobile() {
   return useSyncExternalStore(subscribeMatchMedia, getMobileSnapshot, () => false);
 }
 
-// Tall head-down freediver silhouette: splayed monofin at top, slender
-// body, hands clasped overhead, small head at the bottom. Solid fill from
-// currentColor so it inherits the brand-mark colour from CSS, which in
-// turn flips with the theme via `var(--accent)` / `var(--ink)`.
+// Head-down freediver: two splayed fin blades at top, slender torso,
+// small head at the bottom. Solid currentColor fills so it inherits
+// `.brand-mark { color: var(--ink) }` and flips automatically between
+// dark and light themes.
 function FreediverLogo() {
   return (
     <svg
@@ -77,36 +77,33 @@ function FreediverLogo() {
       aria-hidden="true"
       role="img"
     >
-      {/* Monofin — two splayed blades at the top, narrow waist where
-          the ankles would cinch together. */}
+      {/* Left fin blade — curved teardrop fanning up-left from the
+          ankles at (12, 13). */}
       <path d="
-        M 8.6 1
-        C 9.0 4.5, 10.4 8.5, 11.4 12
-        C 11.6 9, 11.7 5, 11.85 1.5
-        C 12.0 5, 12.1 9, 12.3 12
-        C 13.3 8.5, 14.7 4.5, 15.1 1
-        L 14.0 1
-        C 13.4 3.8, 12.7 6.5, 12.2 9
-        C 12.05 6.5, 12.05 3, 11.85 1
-        C 11.65 3, 11.65 6.5, 11.5 9
-        C 11.0 6.5, 10.3 3.8, 9.7 1
+        M 12 13
+        C 10.8 9, 9.4 4.5, 7.5 1.2
+        C 7.6 4, 9.1 9, 11.6 13
         Z
       " />
-      {/* Body — long slender torso tapering toward the head, with a
-          subtle inward curve for the waist so it reads as a figure. */}
+      {/* Right fin blade — mirror of the left. */}
       <path d="
-        M 11.15 12
-        C 10.6 16, 10.5 20, 10.85 24
-        C 11.0 27, 11.2 29, 11.4 30.5
-        L 12.6 30.5
-        C 12.8 29, 13.0 27, 13.15 24
-        C 13.5 20, 13.4 16, 12.85 12
+        M 12 13
+        C 13.2 9, 14.6 4.5, 16.5 1.2
+        C 16.4 4, 14.9 9, 12.4 13
         Z
       " />
-      {/* Hands clasped overhead — a small tail of arms leading into the head. */}
-      <ellipse cx="12" cy="31.5" rx="0.95" ry="1.5" />
-      {/* Head */}
-      <ellipse cx="12" cy="34" rx="1.5" ry="1.8" />
+      {/* Body — slender torso with a slight waist taper. */}
+      <path d="
+        M 11.2 12.5
+        C 10.7 17, 10.5 22, 10.9 27
+        C 11.0 29, 11.2 30.5, 11.5 31.5
+        L 12.5 31.5
+        C 12.8 30.5, 13.0 29, 13.1 27
+        C 13.5 22, 13.3 17, 12.8 12.5
+        Z
+      " />
+      {/* Head — clearly rounded at the bottom tip. */}
+      <ellipse cx="12" cy="33.5" rx="1.7" ry="1.9" />
     </svg>
   );
 }
