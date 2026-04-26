@@ -83,6 +83,19 @@ def decode_uv_png(path: Path, lo: float, hi: float):
     return u, v
 
 
+def decode_wave_png(path: Path):
+    """Wave RGBA PNG: R=height (0..12 m), G=period (0..25 s), B=direction (0..360°)."""
+    img = np.array(Image.open(path))
+    valid = img[..., 3] > 0
+    h = np.full(img.shape[:2], np.nan, dtype=np.float32)
+    p = np.full(img.shape[:2], np.nan, dtype=np.float32)
+    d = np.full(img.shape[:2], np.nan, dtype=np.float32)
+    h[valid] = (img[..., 0][valid].astype(np.float32) / 255) * 12.0
+    p[valid] = (img[..., 1][valid].astype(np.float32) / 255) * 25.0
+    d[valid] = (img[..., 2][valid].astype(np.float32) / 255) * 360.0
+    return h, p, d
+
+
 def bilinear_sample(src_arr, src_w, src_h, lng_grid, lat_grid):
     """Sample src_arr at the given lng/lat using bilinear interp.
     src_arr is shape (src_h, src_w) where row 0 = lat_max."""
@@ -285,11 +298,26 @@ def main():
     v_5d = np.tile(flat(v_today)[:, None], (1, 5))
     along_climo_5d = np.zeros(n, dtype=float)  # placeholder
 
-    # Defaults for inputs we haven't wired yet
-    sig_wave_height = np.zeros(n)
-    peak_period = np.full(n, 10.0)
-    swell_dir_deg = np.zeros(n)
-    swell_height = np.zeros(n)
+    # Wave data from NOAA WaveWatch III (gfswave wcoast 0.16°), if present.
+    wave_path = OUT_DIR / "wave_now.png"
+    if wave_path.exists():
+        wave_h_src, wave_p_src, wave_d_src = decode_wave_png(wave_path)
+        wave_h = bilinear_sample(wave_h_src, wave_h_src.shape[1], wave_h_src.shape[0], lng_grid, lat_grid)
+        wave_p = bilinear_sample(wave_p_src, wave_p_src.shape[1], wave_p_src.shape[0], lng_grid, lat_grid)
+        wave_d = bilinear_sample(wave_d_src, wave_d_src.shape[1], wave_d_src.shape[0], lng_grid, lat_grid)
+        # NaN-safe defaults where waves aren't covered (over land, etc.).
+        sig_wave_height = flat(np.where(np.isfinite(wave_h), wave_h, 0.0))
+        peak_period     = flat(np.where(np.isfinite(wave_p), wave_p, 10.0))
+        swell_dir_deg   = flat(np.where(np.isfinite(wave_d), wave_d, 270.0))
+        swell_height    = sig_wave_height.copy()  # use HTSGW as today's swell height
+        print(f"  using WW3 waves: height mean {np.nanmean(wave_h):.2f} m, period mean {np.nanmean(wave_p):.1f} s")
+    else:
+        sig_wave_height = np.zeros(n)
+        peak_period = np.full(n, 10.0)
+        swell_dir_deg = np.zeros(n)
+        swell_height = np.zeros(n)
+        print("  wave_now.png missing — passing zero swell (run pipeline/fetch_waves.py first for full prediction)")
+
     precip_7d = np.zeros(n)
     river_disch = np.full(n, 5.0)
     river_climo = np.full(n, 5.0)
