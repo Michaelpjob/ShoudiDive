@@ -1,9 +1,15 @@
-"""Fetch 10-m wind from NOAA HRRR via NOMADS, encode speed PNG + U/V RGBA PNG.
+"""Fetch 10-m wind from NOAA HRRR + GFS via NOMADS, encode speed PNG + U/V RGBA PNG.
 
-Uses byte-range fetches against HRRR's `.idx` index files so each forecast hour
-downloads ~3-5 MB of GRIB2 instead of the full ~150 MB. Three slots are written:
-now (f0), +6h (f6), +24h (f24). All come from the same extended run (00/06/12/18z)
-so the data is internally consistent. Cron runs hourly to pick up the freshest run.
+Uses byte-range fetches against `.idx` index files so each forecast hour
+downloads only ~3-12 MB of GRIB2 instead of the full file. Four slots are
+written:
+
+  now    HRRR f00 — most recent extended run (00/06/12/18z)
+  +6h    HRRR f06 — same run
+  +24h   HRRR f24 — same run
+  +72h   GFS  f72 — most recent GFS run with f072 published
+
+HRRR caps at f48 so +72h has to come from GFS (0.25° / ~25 km).
 
 Encoded outputs in `public/data/`:
   wind_speed_{slot}.png  — 8-bit grayscale; 0=NaN, 1..255 = 0..50 knots linear
@@ -28,8 +34,17 @@ from scipy.spatial import cKDTree
 # Match the existing app's bbox.
 BBOX = dict(lat_min=31.8, lat_max=37.6, lng_min=-124.0, lng_max=-116.8)
 
-NOMADS = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/hrrr/prod"
-SLOTS = {"now": 0, "p6h": 6, "p24h": 24}
+NOMADS_HRRR = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/hrrr/prod"
+NOMADS_GFS = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod"
+
+# Per-slot config: (source, fcst_hour). HRRR for short-range; GFS for +72h
+# since HRRR maxes out at f48.
+SLOTS = {
+    "now":  {"source": "hrrr", "fhour": 0},
+    "p6h":  {"source": "hrrr", "fhour": 6},
+    "p24h": {"source": "hrrr", "fhour": 24},
+    "p72h": {"source": "gfs",  "fhour": 72},
+}
 
 # Output grid (regular lat/lng over bbox). 5 km cells ≈ 144x115.
 GRID_W, GRID_H = 140, 110
@@ -48,49 +63,64 @@ SESSION.headers.update({"Accept": "*/*", "User-Agent": "shouldidive/0.1 (+github
 
 
 def _get(url, **kwargs):
-    """requests.get pinned to HTTP/1.1."""
-    # urllib3's HTTP/1.1 fallback works fine; just ensure we don't ask for h2.
     return SESSION.get(url, timeout=180, **kwargs)
 
 
-def find_latest_extended_run() -> tuple[date, int]:
-    """Latest HRRR run at 00/06/12/18z that has f48 published.
+# ---- HRRR run discovery -----------------------------------------------------
 
-    Walks back hourly from "now" rounded down to a 6h cycle, checks if the
-    f48 .idx exists. Stops at first hit. Looks back up to 36 h.
-    """
+def find_latest_hrrr_extended_run() -> tuple[date, int]:
+    """Latest HRRR run at 00/06/12/18z that has f48 published. Looks back 36 h."""
     now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
-    # Round down to nearest 00/06/12/18 cycle.
     cycle = (now.hour // 6) * 6
     candidate = now.replace(hour=cycle)
-
-    for _ in range(7):  # try latest, then prev 6 cycles back (36 h)
+    for _ in range(7):
         url = (
-            f"{NOMADS}/hrrr.{candidate.strftime('%Y%m%d')}/conus/"
+            f"{NOMADS_HRRR}/hrrr.{candidate.strftime('%Y%m%d')}/conus/"
             f"hrrr.t{candidate.hour:02d}z.wrfsfcf48.grib2.idx"
         )
-        r = SESSION.head(url, timeout=30, allow_redirects=True)
-        if r.status_code == 200:
+        if SESSION.head(url, timeout=30, allow_redirects=True).status_code == 200:
             return candidate.date(), candidate.hour
-        print(f"  miss: {candidate.strftime('%Y-%m-%d %H')}z f48 not yet published")
+        print(f"  miss: HRRR {candidate.strftime('%Y-%m-%d %H')}z f48 not yet published")
         candidate -= timedelta(hours=6)
     raise RuntimeError("No HRRR extended run with f48 found in last 36 hours")
 
 
-def fetch_wind_slice(run_date: date, run_hour: int, fcst_hour: int) -> Path:
-    """Byte-range fetch UGRD+VGRD at 10 m for one HRRR forecast hour."""
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    slug = f"hrrr_{run_date.strftime('%Y%m%d')}_t{run_hour:02d}z_f{fcst_hour:02d}"
-    grib_path = CACHE_DIR / f"{slug}.grib2"
-    if grib_path.exists():
-        return grib_path
+# ---- GFS run discovery ------------------------------------------------------
 
-    base = (
-        f"{NOMADS}/hrrr.{run_date.strftime('%Y%m%d')}/conus/"
-        f"hrrr.t{run_hour:02d}z.wrfsfcf{fcst_hour:02d}.grib2"
-    )
-    print(f"  GET {base}.idx", flush=True)
-    idx = _get(base + ".idx").text
+def find_latest_gfs_run_with_f072() -> tuple[date, int]:
+    """Latest GFS run at 00/06/12/18z that has f072 published. Looks back 24 h.
+
+    GFS f072 typically lands ~5 hours after the cycle starts.
+    """
+    now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    cycle = (now.hour // 6) * 6
+    candidate = now.replace(hour=cycle)
+    for _ in range(5):
+        url = (
+            f"{NOMADS_GFS}/gfs.{candidate.strftime('%Y%m%d')}/{candidate.hour:02d}/atmos/"
+            f"gfs.t{candidate.hour:02d}z.pgrb2.0p25.f072.idx"
+        )
+        if SESSION.head(url, timeout=30, allow_redirects=True).status_code == 200:
+            return candidate.date(), candidate.hour
+        print(f"  miss: GFS {candidate.strftime('%Y-%m-%d %H')}z f072 not yet published")
+        candidate -= timedelta(hours=6)
+    raise RuntimeError("No GFS run with f072 found in last 24 hours")
+
+
+# ---- Generic byte-range fetch via .idx --------------------------------------
+
+def _fetch_uv_slice(
+    source: str,
+    base_url: str,
+    cache_path: Path,
+) -> Path:
+    """Common byte-range fetch logic — works for both HRRR and GFS .idx files
+    since both use the same wgrib2 index format."""
+    if cache_path.exists():
+        return cache_path
+
+    print(f"  GET {base_url}.idx", flush=True)
+    idx = _get(base_url + ".idx").text
     lines = idx.strip().split("\n")
 
     u_start = u_idx = v_start = v_idx = None
@@ -106,7 +136,7 @@ def fetch_wind_slice(run_date: date, run_hour: int, fcst_hour: int) -> Path:
         elif var == "VGRD":
             v_start, v_idx = int(parts[1]), i
     if u_start is None or v_start is None:
-        raise RuntimeError(f"UGRD/VGRD at 10 m not found in {base}.idx")
+        raise RuntimeError(f"UGRD/VGRD at 10 m not found in {base_url}.idx")
 
     last_idx = max(u_idx, v_idx)
     if last_idx + 1 < len(lines):
@@ -114,15 +144,37 @@ def fetch_wind_slice(run_date: date, run_hour: int, fcst_hour: int) -> Path:
         range_header = f"bytes={min(u_start, v_start)}-{end}"
     else:
         range_header = f"bytes={min(u_start, v_start)}-"
-    print(f"  range fetch {range_header}", flush=True)
-    r = _get(base, headers={"Range": range_header})
+    print(f"  range fetch {source} {range_header}", flush=True)
+    r = _get(base_url, headers={"Range": range_header})
     r.raise_for_status()
-    grib_path.write_bytes(r.content)
-    return grib_path
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    cache_path.write_bytes(r.content)
+    return cache_path
 
+
+def fetch_hrrr_slice(run_date: date, run_hour: int, fcst_hour: int) -> Path:
+    slug = f"hrrr_{run_date.strftime('%Y%m%d')}_t{run_hour:02d}z_f{fcst_hour:02d}"
+    base = (
+        f"{NOMADS_HRRR}/hrrr.{run_date.strftime('%Y%m%d')}/conus/"
+        f"hrrr.t{run_hour:02d}z.wrfsfcf{fcst_hour:02d}.grib2"
+    )
+    return _fetch_uv_slice("hrrr", base, CACHE_DIR / f"{slug}.grib2")
+
+
+def fetch_gfs_slice(run_date: date, run_hour: int, fcst_hour: int) -> Path:
+    slug = f"gfs_{run_date.strftime('%Y%m%d')}_t{run_hour:02d}z_f{fcst_hour:03d}"
+    base = (
+        f"{NOMADS_GFS}/gfs.{run_date.strftime('%Y%m%d')}/{run_hour:02d}/atmos/"
+        f"gfs.t{run_hour:02d}z.pgrb2.0p25.f{fcst_hour:03d}"
+    )
+    return _fetch_uv_slice("gfs", base, CACHE_DIR / f"{slug}.grib2")
+
+
+# ---- Open + regrid ----------------------------------------------------------
 
 def open_uv(grib_path: Path):
-    """Open the GRIB2 slice with cfgrib, return (lat2d, lng2d, u, v) in HRRR's native LCC grid."""
+    """Open the GRIB2 slice with cfgrib. Handles both HRRR (LCC, 2D coords)
+    and GFS (regular lat/lng, 1D coords) — returns 2D lat/lng arrays either way."""
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         ds = xr.open_dataset(
@@ -133,17 +185,23 @@ def open_uv(grib_path: Path):
                 "filter_by_keys": {"typeOfLevel": "heightAboveGround", "level": 10},
             },
         )
-    u = np.asarray(ds["u10"].values)
-    v = np.asarray(ds["v10"].values)
-    lat2d = np.asarray(ds["latitude"].values)
-    lng2d = np.asarray(ds["longitude"].values)
+    u = np.asarray(ds["u10"].values).squeeze()
+    v = np.asarray(ds["v10"].values).squeeze()
+    lat = np.asarray(ds["latitude"].values)
+    lng = np.asarray(ds["longitude"].values)
+    if lat.ndim == 1 and lng.ndim == 1:
+        # GFS: regular global grid, 1D coords. Mesh up.
+        lng2d, lat2d = np.meshgrid(lng, lat)
+    else:
+        lat2d, lng2d = lat, lng
     # Normalize lng to -180..180
     lng2d = ((lng2d + 180.0) % 360.0) - 180.0
     return lat2d, lng2d, u, v
 
 
-def regrid_to_bbox(lat2d, lng2d, u, v):
-    """Nearest-neighbor regrid from HRRR's LCC 2D coords to a regular bbox grid."""
+def regrid_to_bbox(lat2d, lng2d, u, v, source: str):
+    """Nearest-neighbor regrid to our common bbox grid. Different sources
+    have different cell sizes, so the 'too far' threshold is per-source."""
     pad = 0.5
     in_bbox = (
         (lat2d >= BBOX["lat_min"] - pad) & (lat2d <= BBOX["lat_max"] + pad) &
@@ -155,22 +213,25 @@ def regrid_to_bbox(lat2d, lng2d, u, v):
     pts_v = v[in_bbox].ravel()
 
     if pts_lat.size == 0:
-        raise RuntimeError("HRRR has no points within bbox padding")
+        raise RuntimeError(f"{source}: no points within bbox padding")
 
     tree = cKDTree(np.column_stack([pts_lng, pts_lat]))
-    lat_out = np.linspace(BBOX["lat_max"], BBOX["lat_min"], GRID_H)  # row 0 = top = lat_max
+    lat_out = np.linspace(BBOX["lat_max"], BBOX["lat_min"], GRID_H)
     lng_out = np.linspace(BBOX["lng_min"], BBOX["lng_max"], GRID_W)
     grid_lng, grid_lat = np.meshgrid(lng_out, lat_out)
     flat_pts = np.column_stack([grid_lng.ravel(), grid_lat.ravel()])
     dists, idxs = tree.query(flat_pts, k=1)
     u_grid = pts_u[idxs].reshape(grid_lat.shape).astype(np.float32)
     v_grid = pts_v[idxs].reshape(grid_lat.shape).astype(np.float32)
-    # Mark cells whose nearest HRRR point is too far (>0.1°) as NaN — out-of-domain.
-    too_far = dists.reshape(grid_lat.shape) > 0.1
+    # Out-of-domain threshold: HRRR is 3 km (~0.03°), GFS is 0.25°.
+    threshold = 0.4 if source == "gfs" else 0.1
+    too_far = dists.reshape(grid_lat.shape) > threshold
     u_grid[too_far] = np.nan
     v_grid[too_far] = np.nan
     return u_grid, v_grid
 
+
+# ---- Encoders ---------------------------------------------------------------
 
 def encode_speed_png(u: np.ndarray, v: np.ndarray, out_path: Path) -> None:
     speed_kt = np.sqrt(u * u + v * v) * 1.94384
@@ -183,7 +244,6 @@ def encode_speed_png(u: np.ndarray, v: np.ndarray, out_path: Path) -> None:
 
 
 def encode_uv_png(u: np.ndarray, v: np.ndarray, out_path: Path) -> None:
-    """RGBA: R=U byte, G=V byte (both scaled to UV_RANGE), B=0, A=valid."""
     valid = np.isfinite(u) & np.isfinite(v)
     lo, hi = UV_RANGE
     u_clip = np.clip((u - lo) / (hi - lo), 0.0, 1.0) * 255.0
@@ -197,39 +257,65 @@ def encode_uv_png(u: np.ndarray, v: np.ndarray, out_path: Path) -> None:
     Image.fromarray(rgba, mode="RGBA").save(out_path, optimize=True)
 
 
+# ---- Orchestrator -----------------------------------------------------------
+
 def main() -> None:
-    run_date, run_hour = find_latest_extended_run()
-    print(f"HRRR run: {run_date} t{run_hour:02d}z")
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Find runs lazily — only call HRRR/GFS discovery if at least one slot needs it.
+    sources_needed = {cfg["source"] for cfg in SLOTS.values()}
+    runs: dict[str, tuple[date, int]] = {}
+    if "hrrr" in sources_needed:
+        d, h = find_latest_hrrr_extended_run()
+        runs["hrrr"] = (d, h)
+        print(f"HRRR run: {d} t{h:02d}z")
+    if "gfs" in sources_needed:
+        d, h = find_latest_gfs_run_with_f072()
+        runs["gfs"] = (d, h)
+        print(f"GFS run:  {d} t{h:02d}z")
 
     wind_layer = {
         "speed_range": list(SPEED_RANGE),
         "uv_range": list(UV_RANGE),
         "unit": "kt",
         "grid": {"width": GRID_W, "height": GRID_H},
-        "source": "NOAA HRRR",
+        "source": "NOAA HRRR + GFS",
         "windows": {},
     }
 
-    for slot, fcst in SLOTS.items():
-        grib_path = fetch_wind_slice(run_date, run_hour, fcst)
-        lat2d, lng2d, u_lcc, v_lcc = open_uv(grib_path)
-        u, v = regrid_to_bbox(lat2d, lng2d, u_lcc, v_lcc)
+    for slot, cfg in SLOTS.items():
+        source = cfg["source"]
+        fhour = cfg["fhour"]
+        run_date, run_hour = runs[source]
+
+        try:
+            if source == "hrrr":
+                grib_path = fetch_hrrr_slice(run_date, run_hour, fhour)
+            else:
+                grib_path = fetch_gfs_slice(run_date, run_hour, fhour)
+            lat2d, lng2d, u_native, v_native = open_uv(grib_path)
+            u, v = regrid_to_bbox(lat2d, lng2d, u_native, v_native, source)
+        except Exception as e:
+            # Per the correctness principle: skip the slot rather than fake it.
+            print(f"  {slot}: failed — {e!s}", flush=True)
+            continue
+
         speed_path = OUT_DIR / f"wind_speed_{slot}.png"
         uv_path = OUT_DIR / f"wind_uv_{slot}.png"
         encode_speed_png(u, v, speed_path)
         encode_uv_png(u, v, uv_path)
         valid_at = (
             datetime(run_date.year, run_date.month, run_date.day, run_hour, tzinfo=timezone.utc)
-            + timedelta(hours=fcst)
+            + timedelta(hours=fhour)
         )
         wind_layer["windows"][slot] = {
             "speed_url": f"/data/wind_speed_{slot}.png",
             "uv_url": f"/data/wind_uv_{slot}.png",
             "valid_at": valid_at.isoformat().replace("+00:00", "Z"),
-            "fcst_hour": fcst,
+            "fcst_hour": fhour,
+            "source": source.upper(),
         }
-        print(f"  wrote wind_{slot}  ({GRID_H}x{GRID_W})")
+        print(f"  wrote wind_{slot}  ({GRID_H}x{GRID_W})  source={source}")
 
     # Merge into existing manifest, preserving sst/chl entries.
     manifest_path = OUT_DIR / "manifest.json"

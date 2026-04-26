@@ -26,6 +26,7 @@ import {
   getWindUV,
   windCompass,
   windCardinal,
+  windSource,
   dataDates,
   isReal,
   getDataState,
@@ -976,8 +977,10 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
             </span>
             <span>
               <strong>{compositeText}</strong>
-              {layer === "wind" ? " · HRRR" : ` · ${composite}-day composite`}
-              {!layerIsReal && dataState?.ready && " · demo"}
+              {layer === "wind"
+                ? ` · ${windSource(composite) || "HRRR"}`
+                : ` · ${composite}-day composite`}
+              {!layerIsReal && dataState?.ready && " · no data"}
             </span>
           </div>
         </div>}

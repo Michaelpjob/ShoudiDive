@@ -111,6 +111,7 @@ export async function loadManifest() {
             uvV: uv.v,
             valid_at: w.valid_at,
             fcst_hour: w.fcst_hour,
+            source: w.source || null,  // "HRRR" / "GFS" — for the legend
           };
         }
       } else {
@@ -193,6 +194,11 @@ export function getLayerGrid(layer, composite) {
   const w = state.layers[layer]?.[slotKey(layer, composite)];
   if (!w) return null;
   return { data: w.data, width: w.width, height: w.height };
+}
+
+// Source name for the active wind slot ("HRRR" / "GFS"), or null when not loaded.
+export function windSource(composite) {
+  return state.layers.wind?.[slotKey("wind", composite)]?.source ?? null;
 }
 
 // Bilinear lookup against U or V grid (NaN-safe).
