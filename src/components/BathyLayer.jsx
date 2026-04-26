@@ -1,22 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
 import { project } from "../lib/mapData.js";
 
-// Class-driven marker styling per design.
+// Class-driven marker styling. Colours are tuned for the dark map
+// background — every hex below clears WCAG AA contrast against the
+// deep-navy sea so labels stay readable.
 const CLASS_STYLE = {
-  seamount:        { color: "#0d2540", glyph: "▲" },
-  bank:            { color: "#0d2540", glyph: "▲" },
-  ridge:           { color: "#0d2540", glyph: "▲" },
-  reef:            { color: "#7c2d12", glyph: "◆" },
-  rock:            { color: "#7c2d12", glyph: "◆" },
-  basin:           { color: "#475569", glyph: "▽" },
-  trough:          { color: "#475569", glyph: "▽" },
-  canyon:          { color: "#475569", glyph: "▽" },
-  anchorage:       { color: "#065f46", glyph: "⚓" },
-  landmark:        { color: "#065f46", glyph: "⚓" },
-  islands:         { color: "#065f46", glyph: "⚓" },
-  "community-spot":{ color: "#a16207", glyph: "✚" },
+  seamount:        { color: "#7dd3fc", glyph: "▲" },  // sky-300
+  bank:            { color: "#7dd3fc", glyph: "▲" },
+  ridge:           { color: "#7dd3fc", glyph: "▲" },
+  reef:            { color: "#fb923c", glyph: "◆" },  // orange-400
+  rock:            { color: "#fb923c", glyph: "◆" },
+  basin:           { color: "#cbd5e1", glyph: "▽" },  // slate-300
+  trough:          { color: "#cbd5e1", glyph: "▽" },
+  canyon:          { color: "#cbd5e1", glyph: "▽" },
+  anchorage:       { color: "#34d399", glyph: "⚓" }, // emerald-400
+  landmark:        { color: "#34d399", glyph: "⚓" },
+  islands:         { color: "#34d399", glyph: "⚓" },
+  "community-spot":{ color: "#fbbf24", glyph: "✚" }, // amber-400
 };
-const DEFAULT_STYLE = { color: "#475569", glyph: "•" };
+const DEFAULT_STYLE = { color: "#cbd5e1", glyph: "•" };
 
 export function styleForClass(cls) {
   return CLASS_STYLE[cls] || DEFAULT_STYLE;

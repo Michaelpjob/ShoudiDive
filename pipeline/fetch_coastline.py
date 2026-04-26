@@ -35,10 +35,10 @@ BBOX = dict(lat_min=31.8, lat_max=37.6, lng_min=-124.0, lng_max=-116.8)
 # come back complete. We re-clip to the exact bbox at write time.
 PAD_DEG = 0.20
 
-# Drop polygons smaller than this (~10 m × 10 m near 34°N). Below that they're
-# named rocks/islets that consume vertices without rendering at any zoom we
-# support.
-MIN_FEATURE_AREA_DEG2 = 1e-4
+# Drop polygons smaller than this. Below that they're sub-pixel rocks that
+# consume vertices without rendering at any zoom we support. Seeded features
+# (named islands like the Coronados) are always kept regardless of size.
+MIN_FEATURE_AREA_DEG2 = 1e-6
 
 # Douglas-Peucker tolerance, in degrees. ~10 m at 34°N — still well below
 # the pixel size at any zoom level our SVG supports, but slashes vertex
@@ -57,8 +57,13 @@ LAND_SEEDS = [
     ("santa-barbara-island",-119.03, 33.48),
     ("santa-catalina",      -118.45, 33.39),
     ("san-clemente-island", -118.50, 32.90),
-    ("n-coronado",          -117.30, 32.42),
-    ("s-coronado",          -117.25, 32.38),
+    # Las Coronadas — four small islands in MX waters off Tijuana. Centroids
+    # are tight; if any of the smaller ones drift off centre OSM-side they
+    # may show up as `unnamed-land` instead, but they'll still render.
+    ("coronado-norte",      -117.298, 32.419),
+    ("coronado-medio",      -117.273, 32.405),
+    ("pilar-de-la-virgen",  -117.265, 32.395),
+    ("coronado-sur",        -117.247, 32.378),
     ("baja-mainland",       -116.95, 32.10),
 ]
 
@@ -218,7 +223,8 @@ def main() -> None:
         clipped = poly.intersection(clip_box)
         if clipped.is_empty:
             continue
-        if clipped.area < MIN_FEATURE_AREA_DEG2:
+        is_seeded = names != ["unnamed-land"]
+        if not is_seeded and clipped.area < MIN_FEATURE_AREA_DEG2:
             dropped_tiny += 1
             continue
         # Douglas-Peucker simplify: ~3 m precision is plenty at any zoom we

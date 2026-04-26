@@ -404,38 +404,74 @@ def main():
     flat = lambda a: np.asarray(a).reshape(n)
 
     # ---- Climatology PNGs (sst + chl + chl annual) ----------------------
+    # The model's persistence_with_decay does `np.log(climo)` so a single
+    # NaN climo cell propagates to a NaN visibility output. Any cell where
+    # BOTH today's obs and the climo are missing (e.g. SoCal Bight under
+    # heavy marine layer for the climo's sample days, plus VIIRS NRT 404s
+    # for today) used to render as a hatched no-data zone. Cascade through
+    # this-month climo → annual climo → today's obs → a global default so
+    # the model always has something finite to anchor on.
+    SST_DEFAULT_C = 16.0   # rough CA-coast annual mean
+    CHL_DEFAULT_MGPM3 = 1.0  # rough CA-coast annual mean
+
     sst_climo_path = OUT_DIR / "sst_climo.png"
     chl_climo_path = OUT_DIR / "chl_climo.png"
     chl_annual_path = OUT_DIR / "chl_climo_annual.png"
+
     if sst_climo_path.exists():
         sst_climo_src = decode_linear_png(sst_climo_path, 9.0, 25.0)
         sst_climo_grid = bilinear_sample(sst_climo_src, sst_climo_src.shape[1], sst_climo_src.shape[0], lng_grid, lat_grid)
-        sst_climo_flat = flat(np.where(np.isfinite(sst_climo_grid), sst_climo_grid, sst_today))
-        print(f"  using SST climo: {np.nanmean(sst_climo_grid):.2f} °C mean")
+        print(f"  using SST climo: {np.nanmean(sst_climo_grid):.2f} °C mean "
+              f"({np.isnan(sst_climo_grid).mean() * 100:.0f}% NaN cells)")
     else:
-        sst_climo_flat = flat(sst_today)
-        print("  sst_climo.png missing — using today's SST as climo (anomaly = 0)")
-    if chl_climo_path.exists():
-        chl_climo_src = decode_log10_png(chl_climo_path, 0.05, 20.0)
-        chl_climo_grid = bilinear_sample(chl_climo_src, chl_climo_src.shape[1], chl_climo_src.shape[0], lng_grid, lat_grid)
-        chl_climo_doy_flat = flat(np.where(np.isfinite(chl_climo_grid), chl_climo_grid, chl_today))
-        print(f"  using chl climo: {np.nanmean(chl_climo_grid):.3f} mg/m³ mean")
-    else:
-        chl_climo_doy_flat = flat(chl_today)
-        print("  chl_climo.png missing — using today's chl as climo")
+        sst_climo_grid = np.full(lat_grid.shape, np.nan, dtype=np.float32)
+        print("  sst_climo.png missing — falling back to today's SST + default")
+    sst_climo_filled = np.where(np.isfinite(sst_climo_grid), sst_climo_grid, sst_today)
+    sst_climo_filled = np.where(np.isfinite(sst_climo_filled), sst_climo_filled, SST_DEFAULT_C)
+    sst_climo_flat = flat(sst_climo_filled)
+
     if chl_annual_path.exists():
         chl_annual_src = decode_log10_png(chl_annual_path, 0.05, 20.0)
         chl_annual_grid = bilinear_sample(chl_annual_src, chl_annual_src.shape[1], chl_annual_src.shape[0], lng_grid, lat_grid)
-        chl_climo_annual_flat = flat(np.where(np.isfinite(chl_annual_grid), chl_annual_grid, chl_today))
     else:
-        chl_climo_annual_flat = chl_climo_doy_flat.copy()
+        chl_annual_grid = np.full(lat_grid.shape, np.nan, dtype=np.float32)
+
+    if chl_climo_path.exists():
+        chl_climo_src = decode_log10_png(chl_climo_path, 0.05, 20.0)
+        chl_climo_grid = bilinear_sample(chl_climo_src, chl_climo_src.shape[1], chl_climo_src.shape[0], lng_grid, lat_grid)
+        print(f"  using chl climo: {np.nanmean(chl_climo_grid):.3f} mg/m³ mean "
+              f"({np.isnan(chl_climo_grid).mean() * 100:.0f}% NaN cells)")
+    else:
+        chl_climo_grid = np.full(lat_grid.shape, np.nan, dtype=np.float32)
+        print("  chl_climo.png missing — falling back to today's chl + annual + default")
+    # Cascade: monthly → annual → today → default. After this every cell is finite.
+    chl_climo_filled = np.where(np.isfinite(chl_climo_grid), chl_climo_grid, chl_annual_grid)
+    chl_climo_filled = np.where(np.isfinite(chl_climo_filled), chl_climo_filled, chl_today)
+    chl_climo_filled = np.where(np.isfinite(chl_climo_filled), chl_climo_filled, CHL_DEFAULT_MGPM3)
+    chl_climo_doy_flat = flat(chl_climo_filled)
+
+    chl_annual_filled = np.where(np.isfinite(chl_annual_grid), chl_annual_grid, chl_climo_filled)
+    chl_climo_annual_flat = flat(chl_annual_filled)
+
+    # Today's SST is used for the anomaly term (sst_today - sst_climo). NaN
+    # cells (over land, gap-filled holes) need to fall back to the climo so
+    # anomaly = 0 rather than NaN.
+    sst_today_filled = np.where(np.isfinite(sst_today), sst_today, sst_climo_filled)
+    sst_today_flat = flat(sst_today_filled)
+    nan_sst_pct = np.isnan(sst_today).mean() * 100
+    if nan_sst_pct > 1:
+        print(f"  sst_today: filled {nan_sst_pct:.0f}% NaN cells with climo")
+
+    # Today's wind feeds upwelling + exposure. NaN cells fall back to 0 (calm).
+    u_today_filled = np.where(np.isfinite(u_today), u_today, 0.0)
+    v_today_filled = np.where(np.isfinite(v_today), v_today, 0.0)
 
     # ---- 5-day wind history --------------------------------------------
     # d-0 is today's wind (already decoded as u_today/v_today). We layer in
     # d-1..d-4 from the GFS-history PNGs, falling back to d-0 if a slot is
     # missing (e.g. NOMADS purged that day).
-    u_stack = [flat(u_today)]
-    v_stack = [flat(v_today)]
+    u_stack = [flat(u_today_filled)]
+    v_stack = [flat(v_today_filled)]
     history_used = 1
     for k in range(1, 5):
         hp = OUT_DIR / f"wind_uv_d-{k}.png"
@@ -443,12 +479,12 @@ def main():
             uh, vh = decode_uv_png(hp, -30.0, 30.0)
             uh_g = bilinear_sample(uh, uh.shape[1], uh.shape[0], lng_grid, lat_grid)
             vh_g = bilinear_sample(vh, vh.shape[1], vh.shape[0], lng_grid, lat_grid)
-            u_stack.append(flat(np.where(np.isfinite(uh_g), uh_g, u_today)))
-            v_stack.append(flat(np.where(np.isfinite(vh_g), vh_g, v_today)))
+            u_stack.append(flat(np.where(np.isfinite(uh_g), uh_g, u_today_filled)))
+            v_stack.append(flat(np.where(np.isfinite(vh_g), vh_g, v_today_filled)))
             history_used += 1
         else:
-            u_stack.append(flat(u_today))
-            v_stack.append(flat(v_today))
+            u_stack.append(flat(u_today_filled))
+            v_stack.append(flat(v_today_filled))
     u_5d = np.stack(u_stack, axis=-1)  # (n, 5)
     v_5d = np.stack(v_stack, axis=-1)
     print(f"  wind 5-day stack: {history_used}/5 real days, rest tile from today")
@@ -552,10 +588,10 @@ def main():
         chl_lastvalid_age_days=age,
         chl_climo_doy=chl_climo_doy_flat,
         chl_climo_annual=chl_climo_annual_flat,
-        sst_today=flat(sst_today),
+        sst_today=sst_today_flat,
         sst_climo=sst_climo_flat,
         u_wind_5d=u_5d, v_wind_5d=v_5d, along_climo_5d=along_climo_5d,
-        u_wind_today=flat(u_today), v_wind_today=flat(v_today),
+        u_wind_today=flat(u_today_filled), v_wind_today=flat(v_today_filled),
         sig_wave_height_3d_max=sig_wave_height_3d_max,
         peak_period_3d_max=peak_period_3d_max,
         swell_dir_today_deg=swell_dir_deg,
