@@ -211,12 +211,15 @@ def main() -> None:
     except Exception as e:
         print(f"  SST climo failed — {e!s}")
 
+    # Note: VIIRS NRT (the daily-fetcher dataset) only retains a few weeks of
+    # history, so prior-year dates 404 there. For climatology we switch to
+    # MODIS Aqua's long-archive product (erdMH1chla1day, 2003-present).
     print(f"chl climo for {now.year}-{now.month:02d}: averaging {monthly_samples}")
     try:
         chl_mean, _, _ = mean_stack(
             monthly_samples,
-            "nesdisVHNnoaaSNPPnoaa20NRTchlaGapfilledDaily", "chlor_a",
-            stride=1, pre_xy="[0]",
+            "erdMH1chla1day", "chlorophyll",
+            stride=1, pre_xy="",
         )
         print(f"  chl climo: {np.nanmin(chl_mean):.3f}–{np.nanmax(chl_mean):.3f} mg/m³")
         encode_log10(chl_mean, *CHL_RANGE, OUT_DIR / "chl_climo.png")
@@ -228,8 +231,8 @@ def main() -> None:
     try:
         chl_annual, _, _ = mean_stack(
             annual_samples,
-            "nesdisVHNnoaaSNPPnoaa20NRTchlaGapfilledDaily", "chlor_a",
-            stride=1, pre_xy="[0]",
+            "erdMH1chla1day", "chlorophyll",
+            stride=1, pre_xy="",
         )
         print(f"  chl annual: {np.nanmin(chl_annual):.3f}–{np.nanmax(chl_annual):.3f} mg/m³")
         encode_log10(chl_annual, *CHL_RANGE, OUT_DIR / "chl_climo_annual.png")
