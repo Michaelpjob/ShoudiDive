@@ -105,8 +105,8 @@ export default function BathyLayer({ width, height, active, zoomLevel, onSelect 
   // at 8× zoom. Divide by zoomLevel to keep markers the intended on-screen
   // size at any zoom. (vector-effect: non-scaling-stroke handles the outline.)
   const z = Number.isFinite(zoomLevel) && zoomLevel > 0 ? zoomLevel : 1;
-  const tapR = 14 / z;
-  const dotR = 3.2 / z;
+  const tapR = 18 / z;
+  const dotR = 5 / z;
 
   return (
     <g className="bathy-layer">

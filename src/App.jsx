@@ -699,8 +699,8 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
             // becomes ~56 px wide at 8× zoom. Divide by zoomLevel so the
             // pin stays the same on-screen size regardless of zoom.
             // (vector-effect: non-scaling-stroke handles the outline width.)
-            const r = (isActive ? 7 : 4) / zoomLevel;
-            const inner = 3 / zoomLevel;
+            const r = (isActive ? 11 : 7) / zoomLevel;
+            const inner = 4 / zoomLevel;
             return (
               <g
                 key={s.id}
