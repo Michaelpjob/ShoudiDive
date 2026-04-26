@@ -3,6 +3,7 @@ import { SeaBasemap, LandBasemap } from "./components/Basemap.jsx";
 import DataOverlay from "./components/DataOverlay.jsx";
 import WindParticles from "./components/WindParticles.jsx";
 import MpaLayer, { styleForType } from "./components/MpaLayer.jsx";
+import BathyLayer, { styleForClass } from "./components/BathyLayer.jsx";
 import {
   project,
   unproject,
@@ -91,7 +92,7 @@ function formatWindow(dates, fallback, layer) {
 }
 
 const PREF_KEY = "ca-coast-conditions:prefs:v1";
-const DEFAULT_PREFS = { theme: "light", opacity: 0.62, units: "F", mpaOn: true };
+const DEFAULT_PREFS = { theme: "light", opacity: 0.62, units: "F", mpaOn: true, bathyOn: false };
 
 function loadPrefs() {
   try {
@@ -141,6 +142,8 @@ export default function App() {
         dataState={dataState}
         mpaOn={prefs.mpaOn}
         setMpaOn={(v) => setPref("mpaOn", v)}
+        bathyOn={prefs.bathyOn}
+        setBathyOn={(v) => setPref("bathyOn", v)}
       />
     </div>
   );
@@ -262,7 +265,7 @@ function SettingsPopover({ prefs, setPref }) {
   );
 }
 
-function DesktopView({ layer, setLayer, composite, setComposite, opacity, units, dataState, mpaOn, setMpaOn }) {
+function DesktopView({ layer, setLayer, composite, setComposite, opacity, units, dataState, mpaOn, setMpaOn, bathyOn, setBathyOn }) {
   const stageRef = useRef(null);
   const [size, setSize] = useState({ w: 1200, h: 700 });
   const [hover, setHover] = useState(null);
@@ -272,6 +275,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
   const [spotsOpen, setSpotsOpen] = useState(true);
   const [legendOpen, setLegendOpen] = useState(true);
   const [selectedMpa, setSelectedMpa] = useState(null);
+  const [selectedBathy, setSelectedBathy] = useState(null);
 
   // Pan/zoom state — viewBox in original svg coords. Initial = full extent.
   const [vb, setVb] = useState({ x: 0, y: 0, w: 1, h: 1 });
@@ -452,6 +456,14 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
           onSelect={setSelectedMpa}
         />
 
+        <BathyLayer
+          width={size.w}
+          height={size.h}
+          active={bathyOn}
+          zoomLevel={size.w > 0 && vb.w > 0 ? size.w / vb.w : 1}
+          onSelect={setSelectedBathy}
+        />
+
         <g className="spot-pins">
           {SAVED_SPOTS.map((s) => {
             const [x, y] = project(s.lng, s.lat, size.w, size.h);
@@ -512,7 +524,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
           onClick={() => setControlsOpen((v) => !v)}
         >
           <span className="panel-title">Layer</span>
-          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <button
               type="button"
               className={"mpa-pill" + (mpaOn ? " active" : "")}
@@ -521,6 +533,15 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
               aria-pressed={mpaOn}
             >
               MPAs
+            </button>
+            <button
+              type="button"
+              className={"mpa-pill" + (bathyOn ? " active" : "")}
+              onClick={(e) => { e.stopPropagation(); setBathyOn(!bathyOn); }}
+              title={bathyOn ? "Bottom detail visible · click to hide" : "Bottom detail hidden · click to show"}
+              aria-pressed={bathyOn}
+            >
+              Bottom
             </button>
             <Chevron open={controlsOpen} />
           </span>
@@ -812,6 +833,79 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
       {selectedMpa && (
         <MpaPopup mpa={selectedMpa} onClose={() => setSelectedMpa(null)} />
       )}
+
+      {selectedBathy && (
+        <BathyPopup feature={selectedBathy} onClose={() => setSelectedBathy(null)} />
+      )}
+    </div>
+  );
+}
+
+function BathyPopup({ feature, onClose }) {
+  const sty = styleForClass(feature.class);
+  const isCommunity = feature.class === "community-spot";
+  const classLabel =
+    feature.class === "seamount" ? "Seamount"
+    : feature.class === "bank" ? "Bank"
+    : feature.class === "reef" ? "Reef"
+    : feature.class === "basin" ? "Basin"
+    : feature.class === "trough" ? "Trough"
+    : feature.class === "anchorage" ? "Anchorage"
+    : feature.class === "landmark" ? "Landmark"
+    : "Community spot";
+  return (
+    <div className="mpa-popup-overlay" onClick={onClose}>
+      <div className="mpa-popup" onClick={(e) => e.stopPropagation()}>
+        <div className="mpa-popup-head">
+          <div>
+            <div className="mpa-popup-name">{feature.name}</div>
+            <div className="mpa-popup-fullname">{classLabel}</div>
+          </div>
+          <span
+            className="mpa-pill"
+            style={{
+              background: "transparent",
+              borderColor: sty.color,
+              color: sty.color,
+            }}
+          >
+            {sty.glyph} {feature.shortName || feature.name}
+          </span>
+        </div>
+
+        {(feature.minDepthFt || feature.minDepthM) && (
+          <p className="mpa-popup-meta mono">
+            {feature.minDepthFt ? `Min depth ${feature.minDepthFt} ft` : ""}
+            {feature.minDepthFt && feature.minDepthM ? ` (${feature.minDepthM} m)` : ""}
+            {!feature.minDepthFt && feature.minDepthM ? `Min depth ${feature.minDepthM} m` : ""}
+          </p>
+        )}
+
+        {feature.description && (
+          <p className="mpa-popup-body">{feature.description}</p>
+        )}
+
+        {Array.isArray(feature.commonSpecies) && feature.commonSpecies.length > 0 && (
+          <p className="mpa-popup-body" style={{ marginTop: -4 }}>
+            <strong>Commonly targeted:</strong> {feature.commonSpecies.join(", ")}.
+          </p>
+        )}
+
+        <p className="mpa-popup-meta mono">
+          Source: {feature.source || "n/a"}
+        </p>
+
+        {isCommunity && (
+          <p className="mpa-popup-disclaimer">
+            Community-sourced. Verify locally and stay clear of MPAs.
+          </p>
+        )}
+        {!isCommunity && (
+          <p className="mpa-popup-disclaimer">
+            For navigation, verify with current NOAA charts.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
