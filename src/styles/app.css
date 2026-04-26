@@ -332,9 +332,17 @@ body {
 }
 .info-tr.collapsed {
   width: auto;
+  max-height: none;
 }
-.info-tr.collapsed .panel-body,
-.info-tr.collapsed .panel-header { display: none; }
+
+/* Generic collapsed-panel rule: shrink panels to just their header bar. */
+.panel.collapsed {
+  width: auto;
+  min-width: 180px;
+}
+.panel.collapsed .panel-header {
+  border-bottom: none;
+}
 
 .info-toggle {
   appearance: none;

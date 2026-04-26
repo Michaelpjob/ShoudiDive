@@ -23,6 +23,26 @@ import {
   getDataState,
 } from "./lib/dataSource.js";
 
+function Chevron({ open }) {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      style={{
+        transform: open ? "rotate(0deg)" : "rotate(-90deg)",
+        transition: "transform 0.15s",
+        color: "var(--ink-3)",
+      }}
+    >
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  );
+}
+
 // Time filter is layer-aware: SST/chl use composite windows, wind uses forecast slots.
 const TIME_OPTIONS = {
   sst:  { label: "Composite",      helper: "rolling window",      buttons: ["1 Day", "2 Day", "3 Day"], tags: ["freshest", "balanced", "best cover"] },
@@ -245,6 +265,9 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
   const [hover, setHover] = useState(null);
   const [activeSpot, setActiveSpot] = useState("lajolla");
   const [infoOpen, setInfoOpen] = useState(true);
+  const [controlsOpen, setControlsOpen] = useState(true);
+  const [spotsOpen, setSpotsOpen] = useState(true);
+  const [legendOpen, setLegendOpen] = useState(true);
 
   // Pan/zoom state — viewBox in original svg coords. Initial = full extent.
   const [vb, setVb] = useState({ x: 0, y: 0, w: 1, h: 1 });
@@ -273,6 +296,12 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
       return prev;
     });
   }, [size.w, size.h]);
+
+  // Stale hover state from the previous layer carries an incompatible val
+  // shape (number for sst/chl, {u,v,kt} object for wind). Drop it on switch.
+  useEffect(() => {
+    setHover(null);
+  }, [layer]);
 
   function clampVb(next) {
     const w = Math.max(size.w / MAX_ZOOM, Math.min(size.w, next.w));
@@ -340,15 +369,14 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
       return;
     }
 
-    // Hover lookup — convert screen px to vbox coord, then to lng/lat.
+    // Hover lookup — convert screen px to vbox coord, then to lng/lat. We
+    // intentionally do NOT cache the value here: if the layer changes while
+    // hover is still populated, the cached val shape would mismatch the
+    // active layer's tooltip code. Tooltip recomputes from lng/lat instead.
     const vbX = vb.x + (x / r.width) * vb.w;
     const vbY = vb.y + (y / r.height) * vb.h;
     const [lng, lat] = unproject(vbX, vbY, size.w, size.h);
-    let val;
-    if (layer === "sst") val = getSST(lng, lat, composite);
-    else if (layer === "chl") val = getChl(lng, lat, composite);
-    else val = { ...getWindUV(lng, lat, composite), kt: getWindSpeed(lng, lat, composite) };
-    setHover({ x, y, lng, lat, val });
+    setHover({ x, y, lng, lat });
   }
   function onLeave() {
     setHover(null);
@@ -453,21 +481,23 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
           x={hover.x}
           y={hover.y}
           layer={layer}
-          val={hover.val}
+          composite={composite}
           lng={hover.lng}
           lat={hover.lat}
           units={units}
         />
       )}
 
-      <div className="panel controls-tl">
-        <div className="panel-header">
+      <div className={"panel controls-tl" + (controlsOpen ? "" : " collapsed")}>
+        <div
+          className="panel-header"
+          style={{ cursor: "pointer", userSelect: "none" }}
+          onClick={() => setControlsOpen((v) => !v)}
+        >
           <span className="panel-title">Layer</span>
-          <span className="panel-title mono" style={{ color: "var(--ink-3)" }}>
-            v1.0
-          </span>
+          <Chevron open={controlsOpen} />
         </div>
-        <div className="panel-body">
+        {controlsOpen && <div className="panel-body">
           <div className="layer-toggle layer-toggle-3" role="tablist">
             <button
               className={layer === "sst" ? "active" : ""}
@@ -513,23 +543,19 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
               <span className="mono">{compositeText}</span>
             </div>
           </div>
-        </div>
+        </div>}
       </div>
 
-      {infoOpen ? (
-        <div className="panel info-tr">
-          <div className="panel-header">
-            <span className="panel-title">How to read this</span>
-            <button
-              className="icon-btn"
-              onClick={() => setInfoOpen(false)}
-              aria-label="Collapse"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M6 9l6 6 6-6" />
-              </svg>
-            </button>
-          </div>
+      <div className={"panel info-tr" + (infoOpen ? "" : " collapsed")}>
+        <div
+          className="panel-header"
+          style={{ cursor: "pointer", userSelect: "none" }}
+          onClick={() => setInfoOpen((v) => !v)}
+        >
+          <span className="panel-title">How to read this</span>
+          <Chevron open={infoOpen} />
+        </div>
+        {infoOpen && (<>
           <div className="panel-body" style={{ overflowY: "auto" }}>
             {layer === "sst" ? (
               <div className="info-section">
@@ -624,33 +650,19 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
               </p>
             </div>
           </div>
-        </div>
-      ) : (
-        <button
-          className="info-toggle"
-          style={{ position: "absolute", top: 56, right: 12, zIndex: 20 }}
-          onClick={() => setInfoOpen(true)}
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="16" x2="12" y2="12" />
-            <line x1="12" y1="8" x2="12.01" y2="8" />
-          </svg>
-          How to read this
-        </button>
-      )}
+        </>)}
+      </div>
 
-      <div className="panel spots-bl">
-        <div className="panel-header">
+      <div className={"panel spots-bl" + (spotsOpen ? "" : " collapsed")}>
+        <div
+          className="panel-header"
+          style={{ cursor: "pointer", userSelect: "none" }}
+          onClick={() => setSpotsOpen((v) => !v)}
+        >
           <span className="panel-title">Saved Spots</span>
-          <button className="icon-btn" aria-label="Add">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-          </button>
+          <Chevron open={spotsOpen} />
         </div>
-        <div className="panel-body">
+        {spotsOpen && <div className="panel-body">
           <div className="spots-list">
             {SAVED_SPOTS.map((s) => {
               let v, valTxt, unit, col;
@@ -693,21 +705,28 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
               );
             })}
           </div>
-        </div>
+        </div>}
       </div>
 
-      <div className="panel legend-br">
-        <div className="panel-header">
+      <div className={"panel legend-br" + (legendOpen ? "" : " collapsed")}>
+        <div
+          className="panel-header"
+          style={{ cursor: "pointer", userSelect: "none" }}
+          onClick={() => setLegendOpen((v) => !v)}
+        >
           <span className="panel-title">
             {layer === "sst" ? "Sea Surface Temperature"
               : layer === "chl" ? "Water Clarity (Chlorophyll-a)"
               : "Wind Speed (10 m)"}
           </span>
-          <span className="panel-title mono" style={{ color: "var(--ink-3)" }}>
-            {layer === "sst" ? `°${units}` : layer === "chl" ? "mg/m³" : "kt"}
+          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span className="panel-title mono" style={{ color: "var(--ink-3)" }}>
+              {layer === "sst" ? `°${units}` : layer === "chl" ? "mg/m³" : "kt"}
+            </span>
+            <Chevron open={legendOpen} />
           </span>
         </div>
-        <div className="panel-body">
+        {legendOpen && <div className="panel-body">
           <div className={`legend-bar ${layer}`}></div>
           <div className="legend-ticks">
             {layer === "sst" ? (
@@ -742,7 +761,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
               {!layerIsReal && dataState?.ready && " · demo"}
             </span>
           </div>
-        </div>
+        </div>}
       </div>
 
       <div className="zoom-ctl">
@@ -763,9 +782,10 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
   );
 }
 
-function Tooltip({ x, y, layer, val, lng, lat, units }) {
+function Tooltip({ x, y, layer, composite, lng, lat, units }) {
   let title, big, sub;
   if (layer === "sst") {
+    const val = getSST(lng, lat, composite);
     title = "Sea Surface Temp";
     const f = val * 9 / 5 + 32;
     big = units === "F" ? `${f.toFixed(1)}°F` : `${val.toFixed(1)}°C`;
@@ -777,20 +797,22 @@ function Tooltip({ x, y, layer, val, lng, lat, units }) {
       : f < 75 ? "Warm · springsuit"
       : "Hot · trunks";
   } else if (layer === "chl") {
+    const val = getChl(lng, lat, composite);
     title = "Chl-a · Water Clarity";
     big = `${val.toFixed(2)} mg/m³`;
-    const tier =
+    sub =
       val < 0.3 ? "Gin clear"
       : val < 1.0 ? "Clear"
       : val < 3.5 ? "Moderate"
       : val < 10  ? "Productive"
       : "Bloom";
-    sub = tier;
   } else {
     title = "Wind · 10 m";
-    if (Number.isFinite(val.kt) && Number.isFinite(val.u) && Number.isFinite(val.v)) {
-      const deg = windCompass(val.u, val.v);
-      big = `${val.kt.toFixed(1)} kt`;
+    const { u, v } = getWindUV(lng, lat, composite);
+    const kt = getWindSpeed(lng, lat, composite);
+    if (Number.isFinite(kt) && Number.isFinite(u) && Number.isFinite(v)) {
+      const deg = windCompass(u, v);
+      big = `${kt.toFixed(1)} kt`;
       sub = `from ${windCardinal(deg)} (${Math.round(deg)}°)`;
     } else {
       big = "—";
