@@ -33,7 +33,12 @@ import {
   dataDates,
   isReal,
   getDataState,
+  getWind5dSummary,
 } from "./lib/dataSource.js";
+import WindDayGrid, {
+  defaultWindSelection,
+  selToSlotKey,
+} from "./components/WindDayGrid.jsx";
 
 // Reactive viewport-width hook. Returns true at <760 px so we can branch the
 // layout between the floating-panel desktop UI and a bottom-sheet mobile UI.
@@ -161,8 +166,24 @@ export default function App() {
   const [prefs, setPrefs] = useState(loadPrefs);
   const [layer, setLayer] = useState("sst");
   const [composite, setComposite] = useState(2);
+  // Wind selection lives separately: {day, bucket, hour}. Translates to the
+  // composite slot key when the wind layer is active. Initialized lazily
+  // from summary.best_window once data loads.
+  const [windSel, setWindSel] = useState({ day: 0, bucket: "morning", hour: null });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const dataState = useDataVersion();
+
+  // Once wind5d data lands, anchor the initial selection on best_window so
+  // a user opening the wind layer for the first time immediately sees the
+  // glassiest forecast. Only runs once (when summary first becomes available).
+  const sawSummaryRef = useRef(false);
+  useEffect(() => {
+    if (sawSummaryRef.current) return;
+    const summary = getWind5dSummary();
+    if (!summary) return;
+    sawSummaryRef.current = true;
+    setWindSel(defaultWindSelection(summary));
+  }, [dataState?.ready]);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", prefs.theme);
@@ -191,6 +212,8 @@ export default function App() {
         setLayer={setLayer}
         composite={composite}
         setComposite={setComposite}
+        windSel={windSel}
+        setWindSel={setWindSel}
         opacity={prefs.opacity}
         units={prefs.units}
         dataState={dataState}
@@ -319,7 +342,10 @@ function SettingsPopover({ prefs, setPref }) {
   );
 }
 
-function DesktopView({ layer, setLayer, composite, setComposite, opacity, units, dataState, mpaOn, setMpaOn, bathyOn, setBathyOn }) {
+function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWindSel, opacity, units, dataState, mpaOn, setMpaOn, bathyOn, setBathyOn }) {
+  // For the wind layer the active "composite" is a slot-key string derived
+  // from windSel. For all other layers it stays the legacy 1/2/3 integer.
+  const activeComposite = layer === "wind" ? selToSlotKey(windSel) : composite;
   const isMobile = useIsMobile();
   const stageRef = useRef(null);
   const [size, setSize] = useState({ w: 1200, h: 700 });
@@ -555,8 +581,8 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
       : composite === 2
       ? "Apr 23–24, 2026"
       : "Apr 22–24, 2026";
-  const compositeText = formatWindow(dataDates(layer, composite), fallbackText, layer);
-  const layerIsReal = isReal(layer, composite);
+  const compositeText = formatWindow(dataDates(layer, activeComposite), fallbackText, layer);
+  const layerIsReal = isReal(layer, activeComposite);
   const timeOpts = TIME_OPTIONS[layer];
 
   // Current zoom factor: ratio of full-extent width to visible viewBox width.
@@ -669,7 +695,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
                 width={size.w}
                 height={size.h}
                 layer={layer}
-                composite={composite}
+                composite={activeComposite}
                 opacity={opacity}
                 dataReady={dataState?.ready}
               />
@@ -680,7 +706,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
                 <WindParticles
                   width={f.innerW}
                   height={f.innerH}
-                  composite={composite}
+                  composite={activeComposite}
                   dataReady={dataState?.ready}
                   active={layer === "wind"}
                 />
@@ -745,7 +771,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
           x={hover.x}
           y={hover.y}
           layer={layer}
-          composite={composite}
+          composite={activeComposite}
           lng={hover.lng}
           lat={hover.lat}
           units={units}
@@ -756,6 +782,8 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
         <MobileSheet
           layer={layer} setLayer={setLayer}
           composite={composite} setComposite={setComposite}
+          windSel={windSel} setWindSel={setWindSel}
+          activeComposite={activeComposite}
           units={units}
           dataState={dataState}
           mpaOn={mpaOn} setMpaOn={setMpaOn}
@@ -828,34 +856,44 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
               <span className="lt-sub">predicted</span>
             </button>
           </div>
-          <div className="composite">
-            <div className="composite-label">
-              <span>{timeOpts.label}</span>
-              <span className="hint">{timeOpts.helper}</span>
+          {layer === "wind" ? (
+            <div className="composite wind-grid-host">
+              <div className="composite-label">
+                <span>5-day forecast</span>
+                <span className="hint">HRRR + GFS · Pacific time</span>
+              </div>
+              <WindDayGrid sel={windSel} setSel={setWindSel} layout="stack" />
             </div>
-            <div
-              className="composite-buttons"
-              style={{ gridTemplateColumns: `repeat(${timeOpts.buttons.length}, 1fr)` }}
-            >
-              {timeOpts.buttons.map((label, i) => {
-                const d = i + 1;
-                return (
-                  <button
-                    key={d}
-                    className={composite === d ? "active" : ""}
-                    onClick={() => setComposite(d)}
-                  >
-                    <span className="cb-num">{label}</span>
-                    <span className="cb-tag">{timeOpts.tags[i]}</span>
-                  </button>
-                );
-              })}
+          ) : (
+            <div className="composite">
+              <div className="composite-label">
+                <span>{timeOpts.label}</span>
+                <span className="hint">{timeOpts.helper}</span>
+              </div>
+              <div
+                className="composite-buttons"
+                style={{ gridTemplateColumns: `repeat(${timeOpts.buttons.length}, 1fr)` }}
+              >
+                {timeOpts.buttons.map((label, i) => {
+                  const d = i + 1;
+                  return (
+                    <button
+                      key={d}
+                      className={composite === d ? "active" : ""}
+                      onClick={() => setComposite(d)}
+                    >
+                      <span className="cb-num">{label}</span>
+                      <span className="cb-tag">{timeOpts.tags[i]}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="composite-window">
+                <span>Window</span>
+                <span className="mono">{compositeText}</span>
+              </div>
             </div>
-            <div className="composite-window">
-              <span>{layer === "wind" ? "Valid" : "Window"}</span>
-              <span className="mono">{compositeText}</span>
-            </div>
-          </div>
+          )}
         </div>}
       </div>
 
@@ -1017,7 +1055,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
             {SAVED_SPOTS.map((s) => {
               let v, valTxt, unit, col;
               if (layer === "sst") {
-                v = getSST(s.lng, s.lat, composite);
+                v = getSST(s.lng, s.lat, activeComposite);
                 if (Number.isFinite(v)) {
                   valTxt = units === "F" ? `${(v * 9 / 5 + 32).toFixed(1)}` : `${v.toFixed(1)}`;
                   col = sstColor(v);
@@ -1027,7 +1065,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
                 }
                 unit = `°${units}`;
               } else if (layer === "chl") {
-                v = getChl(s.lng, s.lat, composite);
+                v = getChl(s.lng, s.lat, activeComposite);
                 if (Number.isFinite(v)) {
                   valTxt = `${v.toFixed(2)}`;
                   col = chlColor(v);
@@ -1037,12 +1075,12 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
                 }
                 unit = "mg/m³";
               } else if (layer === "wind") {
-                v = getWindSpeed(s.lng, s.lat, composite);
+                v = getWindSpeed(s.lng, s.lat, activeComposite);
                 valTxt = Number.isFinite(v) ? `${v.toFixed(1)}` : "—";
                 unit = "kt";
                 col = "var(--ink-2)";
               } else {
-                v = getVizFt(s.lng, s.lat, composite);
+                v = getVizFt(s.lng, s.lat, activeComposite);
                 valTxt = Number.isFinite(v) ? `~${Math.round(v)}` : "—";
                 unit = "ft";
                 col = "var(--ink-2)";
@@ -1130,7 +1168,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
             <span>
               <strong>{compositeText}</strong>
               {layer === "wind"
-                ? ` · ${windSource(composite) || "HRRR"}`
+                ? ` · ${windSource(activeComposite) || "HRRR"}`
                 : layer === "viz"
                 ? ` · model output`
                 : ` · ${composite}-day composite`}

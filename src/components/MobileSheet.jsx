@@ -15,6 +15,7 @@ import {
   windSource,
 } from "../lib/dataSource.js";
 import { styleForClass } from "./BathyLayer.jsx";
+import WindDayGrid from "./WindDayGrid.jsx";
 
 const TABS = [
   { id: "layers", label: "Layers" },
@@ -26,6 +27,8 @@ const TABS = [
 export default function MobileSheet({
   layer, setLayer,
   composite, setComposite,
+  windSel, setWindSel,
+  activeComposite,
   units, dataState,
   mpaOn, setMpaOn,
   bathyOn, setBathyOn,
@@ -36,6 +39,9 @@ export default function MobileSheet({
 }) {
   const [tab, setTab] = useState(null);
   const open = tab !== null;
+  // For wind, lookups go through the slot-key string; for everything else
+  // the legacy integer composite still applies.
+  const lookupKey = activeComposite ?? composite;
 
   return (
     <>
@@ -46,6 +52,7 @@ export default function MobileSheet({
             <LayerSection
               layer={layer} setLayer={setLayer}
               composite={composite} setComposite={setComposite}
+              windSel={windSel} setWindSel={setWindSel}
               units={units}
               mpaOn={mpaOn} setMpaOn={setMpaOn}
               bathyOn={bathyOn} setBathyOn={setBathyOn}
@@ -55,13 +62,13 @@ export default function MobileSheet({
           )}
           {tab === "spots" && (
             <SpotsSection
-              layer={layer} composite={composite} units={units}
+              layer={layer} composite={lookupKey} units={units}
               activeSpot={activeSpot} setActiveSpot={setActiveSpot}
             />
           )}
           {tab === "legend" && (
             <LegendSection
-              layer={layer} units={units} composite={composite}
+              layer={layer} units={units} composite={lookupKey}
               compositeText={compositeText}
               layerIsReal={layerIsReal}
               dataReady={dataState?.ready}
@@ -93,6 +100,7 @@ export default function MobileSheet({
 function LayerSection({
   layer, setLayer,
   composite, setComposite,
+  windSel, setWindSel,
   units,
   mpaOn, setMpaOn,
   bathyOn, setBathyOn,
@@ -121,30 +129,39 @@ function LayerSection({
         </button>
       </div>
 
-      <div className="ms-row-label">{timeOpts.label}</div>
-      <div
-        className="ms-time-row"
-        style={{ gridTemplateColumns: `repeat(${timeOpts.buttons.length}, 1fr)` }}
-      >
-        {timeOpts.buttons.map((label, i) => {
-          const d = i + 1;
-          return (
-            <button
-              key={d}
-              className={composite === d ? "active" : ""}
-              onClick={() => setComposite(d)}
-            >
-              <span className="ms-time-label">{label}</span>
-              <span className="ms-time-tag">{timeOpts.tags[i]}</span>
-            </button>
-          );
-        })}
-      </div>
+      {layer === "wind" ? (
+        <>
+          <div className="ms-row-label">5-day forecast</div>
+          <WindDayGrid sel={windSel} setSel={setWindSel} layout="row" />
+        </>
+      ) : (
+        <>
+          <div className="ms-row-label">{timeOpts.label}</div>
+          <div
+            className="ms-time-row"
+            style={{ gridTemplateColumns: `repeat(${timeOpts.buttons.length}, 1fr)` }}
+          >
+            {timeOpts.buttons.map((label, i) => {
+              const d = i + 1;
+              return (
+                <button
+                  key={d}
+                  className={composite === d ? "active" : ""}
+                  onClick={() => setComposite(d)}
+                >
+                  <span className="ms-time-label">{label}</span>
+                  <span className="ms-time-tag">{timeOpts.tags[i]}</span>
+                </button>
+              );
+            })}
+          </div>
 
-      <div className="ms-window">
-        <span>{layer === "wind" ? "Valid" : "Window"}</span>
-        <span className="mono">{compositeText}</span>
-      </div>
+          <div className="ms-window">
+            <span>Window</span>
+            <span className="mono">{compositeText}</span>
+          </div>
+        </>
+      )}
 
       <div className="ms-row-label">Overlays</div>
       <div className="ms-overlay-row">
