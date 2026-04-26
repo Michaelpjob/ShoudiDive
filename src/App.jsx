@@ -883,7 +883,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
                   <strong>Dense green</strong> = bloom or red tide. Avoid if water smells off.
                 </p>
               </div>
-            ) : (
+            ) : layer === "wind" ? (
               <div className="info-section">
                 <h4 className="info-h">Wind Speed (10 m)</h4>
                 <p className="info-p">
@@ -911,12 +911,47 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
                   for the exact knots and compass bearing.
                 </p>
               </div>
+            ) : (
+              <div className="info-section">
+                <h4 className="info-h">Predicted Visibility · model output</h4>
+                <p className="info-p">
+                  <strong>This is a prediction, not a measurement.</strong> A zone-aware
+                  model blends satellite, weather, and ocean inputs to estimate the
+                  Secchi-equivalent visibility you'd expect in feet.
+                </p>
+                <p className="info-p">
+                  <span className="swatch" style={{ background: "rgb(194,65,12)" }}></span>
+                  <strong>Poor</strong> — 0–10 ft. Pea-soup; consider another day.
+                </p>
+                <p className="info-p">
+                  <span className="swatch" style={{ background: "rgb(234,179,8)" }}></span>
+                  <strong>Fair</strong> — 10–20 ft. Murky but workable.
+                </p>
+                <p className="info-p">
+                  <span className="swatch" style={{ background: "rgb(132,204,22)" }}></span>
+                  <strong>Good</strong> — 20–30 ft. Solid CA-coast day.
+                </p>
+                <p className="info-p">
+                  <span className="swatch" style={{ background: "rgb(22,163,74)" }}></span>
+                  <strong>Very Good</strong> — 30–50 ft. Strong; gin-clear pockets.
+                </p>
+                <p className="info-p">
+                  <span className="swatch" style={{ background: "rgb(14,165,233)" }}></span>
+                  <strong>Excellent</strong> — 50 ft+. Tropical-grade.
+                </p>
+              </div>
             )}
             <div className="info-section">
-              <h4 className="info-h">{layer === "wind" ? "Forecast slots" : "Why composite windows?"}</h4>
+              <h4 className="info-h">{
+                layer === "wind"  ? "Forecast slots"
+                : layer === "viz" ? "How the model works"
+                : "Why composite windows?"
+              }</h4>
               <p className="info-p">
                 {layer === "wind"
                   ? "HRRR is NOAA's hourly 3-km weather model. Now is the freshest analysis. +6h is your afternoon look-ahead. +24h is tomorrow morning. Updated every hour."
+                  : layer === "viz"
+                  ? "A zone-aware stack (3 latitude × 3 distance-from-shore) translates today's chl-a into a Secchi depth, then nudges it for storm-driven bottom stir, river/precip runoff, tidal mixing, kelp shading, and substrate. The 'best estimate' is the median; hover any cell to see the value."
                   : "Clouds wipe out single-day satellite imagery off CA, especially the summer marine layer. A 2- or 3-day window backfills with the most recent valid pixel — 1-day is freshest, 3-day has the best coverage."}
               </p>
             </div>
@@ -928,6 +963,8 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
               >
                 {layer === "wind"
                   ? "NOAA HRRR (3-km, hourly). 10-m UGRD/VGRD via NOMADS byte-range fetch. Regridded to ~5 km."
+                  : layer === "viz"
+                  ? "MUR SST · VIIRS chl-a · HRRR + GFS wind (5d) · WaveWatch III (3d max) · CPC precip · USGS river discharge · NOAA CO-OPS tides · MODIS-Aqua climatology. Recomputed daily."
                   : "NOAA Coral Reef Watch · NASA OB.DAAC MODIS-Aqua · Copernicus GLO-MFC. Daily L3 composites, ~1 km grid, regridded to bounding box."}
               </p>
             </div>
