@@ -5,11 +5,15 @@ import { project } from "../lib/mapData.js";
 const CLASS_STYLE = {
   seamount:        { color: "#0d2540", glyph: "▲" },
   bank:            { color: "#0d2540", glyph: "▲" },
+  ridge:           { color: "#0d2540", glyph: "▲" },
   reef:            { color: "#7c2d12", glyph: "◆" },
+  rock:            { color: "#7c2d12", glyph: "◆" },
   basin:           { color: "#475569", glyph: "▽" },
   trough:          { color: "#475569", glyph: "▽" },
+  canyon:          { color: "#475569", glyph: "▽" },
   anchorage:       { color: "#065f46", glyph: "⚓" },
   landmark:        { color: "#065f46", glyph: "⚓" },
+  islands:         { color: "#065f46", glyph: "⚓" },
   "community-spot":{ color: "#a16207", glyph: "✚" },
 };
 const DEFAULT_STYLE = { color: "#475569", glyph: "•" };
