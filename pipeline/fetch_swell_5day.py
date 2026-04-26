@@ -30,6 +30,7 @@ import numpy as np
 import requests
 import xarray as xr
 from PIL import Image
+from scipy.ndimage import distance_transform_edt
 from scipy.spatial import cKDTree
 
 BBOX = dict(lat_min=31.8, lat_max=37.6, lng_min=-124.0, lng_max=-116.8)
@@ -190,6 +191,32 @@ def open_wave(grib_path: Path):
     return lat2d, lng2d, height, period, direction
 
 
+def fill_nearest(arr, max_cells: int = 12):
+    """Fill NaN cells with their nearest valid neighbour's value.
+
+    gfswave wcoast 0.16° masks shallow / nearshore cells where bathymetry
+    interferes with the model — the inner-shelf cells along the CA coast
+    come back as NaN. Without this fill the heatmap shows a band of "no
+    data" hatching all along the shore, even though the open-water cells
+    a few km offshore have perfectly good values.
+
+    `max_cells` caps how far the fill can propagate (in grid cells, ~5 km
+    each). Beyond that we leave NaN so we don't paint a whole empty
+    sub-region with one stale value. 12 cells ≈ 60 km, plenty to cover the
+    inner-shelf gap without bleeding across an entire dead zone.
+    """
+    valid = np.isfinite(arr)
+    if not valid.any():
+        return arr
+    distances, indices = distance_transform_edt(
+        ~valid, return_distances=True, return_indices=True,
+    )
+    filled = arr[tuple(indices)]
+    if max_cells is not None:
+        filled = np.where(distances > max_cells, np.nan, filled)
+    return filled.astype(np.float32)
+
+
 def regrid_to_bbox(lat2d, lng2d, *fields, threshold_deg=0.4):
     """Nearest-neighbor regrid of each input field to our common bbox grid."""
     pad = 0.5
@@ -291,6 +318,13 @@ def main() -> None:
             grib = fetch_wave_slice(run_d, run_h, fhour)
             la2d, ln2d, h_native, p_native, d_native = open_wave(grib)
             h_grid, p_grid, d_grid = regrid_to_bbox(la2d, ln2d, h_native, p_native, d_native)
+            # Fill nearshore gaps so the heatmap reads continuous up to the
+            # coast. WW3 masks the inner-shelf cells; we extrapolate from
+            # the nearest valid offshore neighbour. Capped at ~60 km so we
+            # don't bleed into bays / harbours where the answer is bogus.
+            h_grid = fill_nearest(h_grid)
+            p_grid = fill_nearest(p_grid)
+            d_grid = fill_nearest(d_grid)
             hourly[(day_offset, valid_pt.hour)] = {
                 "h": h_grid, "p": p_grid, "d": d_grid,
                 "valid_at": valid_at_utc,
