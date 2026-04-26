@@ -46,6 +46,17 @@ SLOTS = {
     "p72h": {"source": "gfs",  "fhour": 72},
 }
 
+# History slots: prior daily GFS f000 analyses, used by the visibility model
+# to compute upwelling anomalies (5-day along-shore wind mean). HRRR isn't
+# retained on NOMADS for >2 days, so we use GFS for history regardless. d-0
+# is already covered by `now` above.
+HISTORY_SLOTS = {
+    "d-1": {"days_ago": 1},
+    "d-2": {"days_ago": 2},
+    "d-3": {"days_ago": 3},
+    "d-4": {"days_ago": 4},
+}
+
 # Output grid (regular lat/lng over bbox). 5 km cells ≈ 144x115.
 GRID_W, GRID_H = 140, 110
 
@@ -105,6 +116,23 @@ def find_latest_gfs_run_with_f072() -> tuple[date, int]:
         print(f"  miss: GFS {candidate.strftime('%Y-%m-%d %H')}z f072 not yet published")
         candidate -= timedelta(hours=6)
     raise RuntimeError("No GFS run with f072 found in last 24 hours")
+
+
+def find_gfs_f000_around(target: datetime, search_hours: int = 24) -> tuple[date, int] | None:
+    """Find a published GFS run with f000 around `target`. Walks back in 6h
+    increments up to `search_hours`. Returns None if nothing is published
+    (NOMADS keeps roughly the last 10 days, so prior days should be fine)."""
+    cycle = (target.hour // 6) * 6
+    cand = target.replace(hour=cycle, minute=0, second=0, microsecond=0)
+    for _ in range(search_hours // 6 + 1):
+        url = (
+            f"{NOMADS_GFS}/gfs.{cand.strftime('%Y%m%d')}/{cand.hour:02d}/atmos/"
+            f"gfs.t{cand.hour:02d}z.pgrb2.0p25.f000.idx"
+        )
+        if SESSION.head(url, timeout=30, allow_redirects=True).status_code == 200:
+            return cand.date(), cand.hour
+        cand -= timedelta(hours=6)
+    return None
 
 
 # ---- Generic byte-range fetch via .idx --------------------------------------
@@ -316,6 +344,56 @@ def main() -> None:
             "source": source.upper(),
         }
         print(f"  wrote wind_{slot}  ({GRID_H}x{GRID_W})  source={source}")
+
+    # ---- Daily history (prior 4 days of GFS f000) ----------------------------
+    # Used by the visibility model's upwelling-anomaly feature. We use t12z as
+    # the reference cycle of each prior day. Past-day analyses don't change
+    # once published, so on hourly runs we skip slots whose existing PNG
+    # already targets today's expected calendar date.
+    print("Fetching wind history (4 prior days, GFS f000)...")
+    today_utc = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    history_layer: dict[str, dict] = {}
+
+    existing_history: dict[str, str] = {}
+    if (OUT_DIR / "manifest.json").exists():
+        m = json.loads((OUT_DIR / "manifest.json").read_text())
+        existing_history = (m.get("layers", {}).get("wind", {}).get("history", {}) or {})
+
+    for slot, cfg in HISTORY_SLOTS.items():
+        target = today_utc.replace(hour=12) - timedelta(days=cfg["days_ago"])
+        target_date_iso = target.date().isoformat()
+
+        # Skip if the cached slot already covers the target calendar day.
+        cached = existing_history.get(slot, {}).get("valid_at", "")
+        cached_path = OUT_DIR / f"wind_uv_{slot}.png"
+        if cached.startswith(target_date_iso) and cached_path.exists():
+            history_layer[slot] = existing_history[slot]
+            print(f"  {slot}: cached for {target_date_iso}, skipping fetch")
+            continue
+
+        run = find_gfs_f000_around(target)
+        if run is None:
+            print(f"  {slot}: no GFS run found near {target.strftime('%Y-%m-%d %H')}z — skipping")
+            continue
+        run_date, run_hour = run
+        try:
+            grib_path = fetch_gfs_slice(run_date, run_hour, 0)
+            lat2d, lng2d, u_native, v_native = open_uv(grib_path)
+            u, v = regrid_to_bbox(lat2d, lng2d, u_native, v_native, "gfs")
+        except Exception as e:
+            print(f"  {slot}: failed — {e!s}")
+            continue
+
+        encode_uv_png(u, v, cached_path)
+        valid_at = datetime(run_date.year, run_date.month, run_date.day, run_hour, tzinfo=timezone.utc)
+        history_layer[slot] = {
+            "uv_url": f"/data/wind_uv_{slot}.png",
+            "valid_at": valid_at.isoformat().replace("+00:00", "Z"),
+            "source": "GFS",
+        }
+        print(f"  wrote wind_uv_{slot}  ({run_date} t{run_hour:02d}z)")
+    if history_layer:
+        wind_layer.setdefault("history", {}).update(history_layer)
 
     # Merge into existing manifest, preserving sst/chl entries.
     manifest_path = OUT_DIR / "manifest.json"

@@ -1,15 +1,21 @@
 """Fetch NOAA WaveWatch III (gfswave) wcoast 0.16° grid via NOMADS.
-Encodes height + period + direction as a single RGBA PNG.
+Writes two PNGs: one for "now" conditions and one for the 3-day max envelope
+that the visibility model uses to estimate bottom-stir.
 
 The wcoast grid covers the eastern Pacific at ~18 km native resolution, which
 is plenty for our coastal bbox. We pull just HTSGW/PERPW/DIRPW at f000 ('now')
-via byte-range against the .idx file — typical fetch is <100 KB.
+via byte-range against the .idx file — typical fetch is <100 KB per cycle.
 
-Encoded output: public/data/wave_now.png (RGBA)
-  R = significant wave height,   linear 0..12 m
-  G = primary peak period,       linear 0..25 s
-  B = primary peak direction,    linear 0..360°  (0..255 maps to 0..359°)
-  A = 0 means missing (over land or out of grid); 255 = valid
+Encoded outputs in public/data/:
+  wave_now.png   (RGBA) — latest run, f000
+    R = significant wave height,   linear 0..12 m
+    G = primary peak period,       linear 0..25 s
+    B = primary peak direction,    linear 0..360°  (0..255 maps to 0..359°)
+    A = 0 means missing (over land or out of grid); 255 = valid
+
+  wave_max_3d.png (RGBA) — per-pixel max H/T over the latest run + 3 prior
+                            t00z analyses (covers ~last 3 days of swell)
+    R = Hmax (m), G = Tmax (s), B = 0 (unused), A = valid mask
 
 Run: python pipeline/fetch_waves.py
 """
@@ -50,21 +56,53 @@ def _get(url, **kwargs):
     return SESSION.get(url, timeout=180, **kwargs)
 
 
+def _idx_url(run_date: date, run_hour: int) -> str:
+    return (
+        f"{NOMADS_GFS}/gfs.{run_date.strftime('%Y%m%d')}/{run_hour:02d}/wave/gridded/"
+        f"gfswave.t{run_hour:02d}z.wcoast.0p16.f000.grib2.idx"
+    )
+
+
 def find_latest_gfswave_run() -> tuple[date, int]:
     """Latest GFS cycle (00/06/12/18z) whose gfswave wcoast f000 is published."""
     now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
     cycle = (now.hour // 6) * 6
     candidate = now.replace(hour=cycle)
     for _ in range(5):
-        url = (
-            f"{NOMADS_GFS}/gfs.{candidate.strftime('%Y%m%d')}/{candidate.hour:02d}/wave/gridded/"
-            f"gfswave.t{candidate.hour:02d}z.wcoast.0p16.f000.grib2.idx"
-        )
+        url = _idx_url(candidate.date(), candidate.hour)
         if SESSION.head(url, timeout=30, allow_redirects=True).status_code == 200:
             return candidate.date(), candidate.hour
         print(f"  miss: gfswave {candidate.strftime('%Y-%m-%d %H')}z f000 not yet published")
         candidate -= timedelta(hours=6)
     raise RuntimeError("No gfswave wcoast f000 found in last 24 hours")
+
+
+def find_history_runs(latest_date: date, latest_hour: int, n_days: int = 4) -> list[tuple[date, int]]:
+    """Return up to n_days run handles (date, hour), most recent first, that
+    represent the past ~3 days of swell. Each handle is the most recent cycle
+    that's still available for that calendar day going backward in 24h steps.
+
+    NOMADS retains roughly the last 10 days; older days will simply be missing
+    and we skip them. The caller decides what to do if fewer than n_days are
+    available (we just take the per-pixel max over whatever we got).
+    """
+    out = [(latest_date, latest_hour)]
+    base = datetime(latest_date.year, latest_date.month, latest_date.day, latest_hour, tzinfo=timezone.utc)
+    for k in range(1, n_days):
+        target = base - timedelta(hours=24 * k)
+        # try the same hour first, then walk back in 6h increments up to a day.
+        found = None
+        for back in range(0, 24, 6):
+            cand = target - timedelta(hours=back)
+            url = _idx_url(cand.date(), cand.hour)
+            if SESSION.head(url, timeout=30, allow_redirects=True).status_code == 200:
+                found = (cand.date(), cand.hour)
+                break
+        if found is None:
+            print(f"  history miss: gfswave run within 24h of {target.strftime('%Y-%m-%d %H')}z")
+            continue
+        out.append(found)
+    return out
 
 
 def fetch_wave_slice(run_date: date, run_hour: int) -> Path:
@@ -215,13 +253,43 @@ def main() -> None:
 
     valid = np.isfinite(h_grid)
     if valid.any():
-        print(f"  height: {np.nanmin(h_grid):.2f}–{np.nanmax(h_grid):.2f} m, mean {np.nanmean(h_grid):.2f}")
-        print(f"  period: {np.nanmin(p_grid):.1f}–{np.nanmax(p_grid):.1f} s, mean {np.nanmean(p_grid):.1f}")
-        print(f"  dir:    {np.nanmin(d_grid):.0f}–{np.nanmax(d_grid):.0f}°")
+        print(f"  now height: {np.nanmin(h_grid):.2f}–{np.nanmax(h_grid):.2f} m, mean {np.nanmean(h_grid):.2f}")
+        print(f"  now period: {np.nanmin(p_grid):.1f}–{np.nanmax(p_grid):.1f} s, mean {np.nanmean(p_grid):.1f}")
+        print(f"  now dir:    {np.nanmin(d_grid):.0f}–{np.nanmax(d_grid):.0f}°")
 
     out_path = OUT_DIR / "wave_now.png"
     encode_wave_png(h_grid, p_grid, d_grid, out_path)
     print(f"  wrote {out_path.name}")
+
+    # ---- 3-day max H/T envelope -----------------------------------------
+    # Initialize with the latest run, then fold in up to 3 prior daily runs.
+    print("Building 3-day max envelope...")
+    h_max = np.where(np.isfinite(h_grid), h_grid, -np.inf)
+    p_max = np.where(np.isfinite(p_grid), p_grid, -np.inf)
+    valid_any = np.isfinite(h_grid)
+
+    history = find_history_runs(run_date, run_hour, n_days=4)[1:]  # exclude latest (already folded)
+    for hd, hh in history:
+        try:
+            gp = fetch_wave_slice(hd, hh)
+            la2, ln2, hi, pe, _ = open_wave(gp)
+            hi_g, pe_g, _ = regrid_to_bbox(la2, ln2, hi, pe, np.zeros_like(hi))
+            ok = np.isfinite(hi_g)
+            if ok.any():
+                h_max = np.where(ok, np.maximum(h_max, hi_g), h_max)
+                p_max = np.where(ok, np.maximum(p_max, pe_g), p_max)
+                valid_any = valid_any | ok
+                print(f"  +{hd} t{hh:02d}z folded (max H now {np.nanmax(np.where(valid_any, h_max, np.nan)):.2f} m)")
+        except Exception as e:
+            print(f"  history fetch failed for {hd} t{hh:02d}z: {e!r}")
+
+    h_max = np.where(valid_any, h_max, np.nan)
+    p_max = np.where(valid_any, p_max, np.nan)
+    if valid_any.any():
+        print(f"  3-day max H: {np.nanmin(h_max):.2f}–{np.nanmax(h_max):.2f} m, mean {np.nanmean(h_max):.2f}")
+        print(f"  3-day max T: {np.nanmin(p_max):.1f}–{np.nanmax(p_max):.1f} s, mean {np.nanmean(p_max):.1f}")
+    encode_wave_png(h_max, p_max, np.zeros_like(h_max), OUT_DIR / "wave_max_3d.png")
+    print("  wrote wave_max_3d.png")
 
     # Update manifest with wave entry — for now just metadata; the frontend
     # doesn't render waves as their own layer yet, but fetch_visibility.py
@@ -246,7 +314,8 @@ def main() -> None:
         "grid": {"width": GRID_W, "height": GRID_H},
         "source": "NOAA gfswave (WaveWatch III)",
         "windows": {
-            "now": {"url": "/data/wave_now.png", "valid_at": valid_at},
+            "now":    {"url": "/data/wave_now.png",    "valid_at": valid_at},
+            "max_3d": {"url": "/data/wave_max_3d.png", "valid_at": valid_at},
         },
     }
     manifest_path.write_text(json.dumps(manifest, indent=2))

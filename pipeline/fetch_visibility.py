@@ -1,25 +1,25 @@
 """Run the viz_predict model over the bbox grid; encode predicted Secchi
 visibility (ft) and a quality-flag raster as PNGs the frontend can read.
 
-Inputs (everything wired today):
-  - public/data/sst_1d.png         — today's SST (degC), source pipeline=fetch.py
-  - public/data/chl_1d.png         — most recent valid chlorophyll-a (mg/m³)
-  - public/data/wind_uv_now.png    — today's HRRR/GFS U/V wind (m/s)
-  - public/data/land.geojson       — coastline, used for per-pixel coast_normal
-                                     and distance-to-shore/islands
-
-Inputs deferred (passed as conservative defaults; model still runs):
-  - swell direction + height       — pending NOAA WaveWatch III fetcher
-  - 7-day precip                   — pending NOAA gridded precip fetcher
-  - river discharge                — pending USGS NWIS fetcher
-  - tide range                     — pending NOAA CO-OPS fetcher
-  - 5-day wind history             — using today's wind tiled along the time axis
-  - real chl + SST climatology     — using today's chl/SST as proxy (anomaly = 0)
-  - is_kelp / is_sandy             — False everywhere
+Inputs (all real where available, with documented graceful fallbacks):
+  - public/data/sst_1d.png            — today's SST (degC), source pipeline=fetch.py
+  - public/data/chl_1d.png            — most recent valid chlorophyll-a (mg/m³)
+  - public/data/wind_uv_now.png       — today's HRRR U/V wind (m/s) — d-0
+  - public/data/wind_uv_d-{1..4}.png  — prior-4-days GFS analyses (5-day stack)
+  - public/data/wave_now.png          — today's WaveWatch III H/T/dir
+  - public/data/wave_max_3d.png       — 3-day max H/T (storm history)
+  - public/data/precip_7d.png         — NOAA CPC 7-day cumulative rainfall
+  - public/data/rivers.json           — USGS NWIS recent + climo discharge
+  - public/data/tides.json            — NOAA CO-OPS today's tide range per station
+  - public/data/sst_climo.png         — month-of-year SST climatology
+  - public/data/chl_climo.png         — month-of-year chl climatology
+  - public/data/chl_climo_annual.png  — annual-mean chl baseline
+  - pipeline/static_substrate.json    — approximate kelp + sandy regions
+  - public/data/land.geojson          — coastline, used for distances/normals
 
 Outputs in public/data/:
-  - viz_p50_ft.png                 — Secchi p50 in feet, 8-bit linear 0..80
-  - viz_quality.png                — quality flag mapped to 1..7 (0 = no data)
+  - viz_p10/p50/p90_ft.png            — Secchi (ft), 8-bit linear 0..80
+  - viz_quality.png                   — quality flag mapped to 1..7 (0 = no data)
 
 Run: python pipeline/fetch_visibility.py
 """
@@ -58,6 +58,35 @@ QUALITY_CODES = {
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = ROOT / "public" / "data"
+PIPELINE_DIR = ROOT / "pipeline"
+
+
+# ---- Helpers --------------------------------------------------------------
+
+def _km_to(lat_a, lng_a, lat_b, lng_b):
+    """Equirectangular km distance — accurate enough at our bbox latitudes
+    and ~10x faster than haversine on a grid."""
+    clat = 0.5 * (BBOX["lat_min"] + BBOX["lat_max"])
+    dx = (lng_a - lng_b) * 111.0 * np.cos(np.deg2rad(clat))
+    dy = (lat_a - lat_b) * 111.0
+    return np.sqrt(dx * dx + dy * dy)
+
+
+def shelf_depth_from_dist(dist_to_shore_km):
+    """Crude CA-shelf bathymetry: 0–5 km nearshore ramp to 200 m, then
+    5–15 km steep slope to ~1500 m, then deep abyss. Replaces the constant
+    200 m field we used before. Order-of-magnitude correct for the model's
+    bottom_stir / tide depth-attenuation terms.
+    """
+    d = np.asarray(dist_to_shore_km, dtype=np.float32)
+    out = np.empty_like(d)
+    near = d < 5.0
+    mid  = (d >= 5.0) & (d < 15.0)
+    far  = d >= 15.0
+    out[near] = 40.0 * d[near]                       # 0..200
+    out[mid]  = 200.0 + 130.0 * (d[mid] - 5.0)        # 200..1500
+    out[far]  = np.minimum(1500.0 + 50.0 * (d[far] - 15.0), 4000.0)
+    return np.clip(out, 1.0, 4000.0)
 
 
 # ---- PNG decoders matching dataSource.js encoding -------------------------
@@ -94,6 +123,17 @@ def decode_wave_png(path: Path):
     p[valid] = (img[..., 1][valid].astype(np.float32) / 255) * 25.0
     d[valid] = (img[..., 2][valid].astype(np.float32) / 255) * 360.0
     return h, p, d
+
+
+def decode_log10_png(path: Path, lo: float, hi: float):
+    """8-bit grayscale where 0=NaN, 1..255 maps to log10 lo..hi."""
+    img = np.array(Image.open(path))
+    valid = img > 0
+    log_lo = np.log10(lo)
+    log_hi = np.log10(hi)
+    out = np.full(img.shape, np.nan, dtype=np.float32)
+    out[valid] = 10.0 ** (log_lo + ((img[valid].astype(np.float32) - 1) / 254) * (log_hi - log_lo))
+    return out
 
 
 def bilinear_sample(src_arr, src_w, src_h, lng_grid, lat_grid):
@@ -240,6 +280,73 @@ def _all_points(geom):
     return np.asarray(pts, dtype=float)
 
 
+# ---- River + tide nearest-station spreading -------------------------------
+
+def _spread_rivers(rivers_json: Path, grid_lat, grid_lng):
+    """For each grid cell, pick the nearest river-mouth gauge and assign its
+    discharge + climo to that cell. The model decays runoff with
+    dist_to_river_km already, so picking the nearest gauge is sufficient.
+    """
+    data = json.loads(rivers_json.read_text())
+    rivers = data.get("rivers", [])
+    if not rivers:
+        return np.full(grid_lat.shape, 5.0), np.full(grid_lat.shape, 5.0)
+    pts = np.array([[r["lat"], r["lng"]] for r in rivers])
+    disch = np.array([r["discharge_cfs"] for r in rivers], dtype=np.float32)
+    climo = np.array([r["climo_cfs"] for r in rivers], dtype=np.float32)
+    h, w = grid_lat.shape
+    out_d = np.empty((h, w), dtype=np.float32)
+    out_c = np.empty((h, w), dtype=np.float32)
+    flat_lat = grid_lat.ravel()
+    flat_lng = grid_lng.ravel()
+    for i in range(flat_lat.size):
+        d_km = _km_to(pts[:, 0], pts[:, 1], flat_lat[i], flat_lng[i])
+        k = int(np.argmin(d_km))
+        out_d.flat[i] = disch[k]
+        out_c.flat[i] = climo[k]
+    return out_d, out_c
+
+
+def _spread_tides(tides_json: Path, grid_lat, grid_lng):
+    """Nearest CO-OPS station per cell. Tide-energy mixing varies smoothly
+    along the coast so a Voronoi-style assignment is fine."""
+    data = json.loads(tides_json.read_text())
+    stations = data.get("stations", [])
+    if not stations:
+        return np.full(grid_lat.shape, 1.5)
+    pts = np.array([[s["lat"], s["lng"]] for s in stations])
+    rng = np.array([s["range_m"] for s in stations], dtype=np.float32)
+    h, w = grid_lat.shape
+    out = np.empty((h, w), dtype=np.float32)
+    flat_lat = grid_lat.ravel()
+    flat_lng = grid_lng.ravel()
+    for i in range(flat_lat.size):
+        d_km = _km_to(pts[:, 0], pts[:, 1], flat_lat[i], flat_lng[i])
+        out.flat[i] = rng[int(np.argmin(d_km))]
+    return out
+
+
+# ---- Static kelp + substrate masks ---------------------------------------
+
+def _static_substrate_masks(grid_lat, grid_lng):
+    """Decode pipeline/static_substrate.json into (is_kelp, is_sandy) bool
+    grids. Each region is a (lat, lng, radius_km) circle; cells inside ANY
+    circle in the corresponding list are tagged True."""
+    path = PIPELINE_DIR / "static_substrate.json"
+    is_kelp = np.zeros(grid_lat.shape, dtype=bool)
+    is_sandy = np.zeros(grid_lat.shape, dtype=bool)
+    if not path.exists():
+        return is_kelp, is_sandy
+    cfg = json.loads(path.read_text())
+    for circle in cfg.get("kelp_circles", []):
+        d = _km_to(grid_lat, grid_lng, circle["lat"], circle["lng"])
+        is_kelp |= d <= float(circle["radius_km"])
+    for circle in cfg.get("sandy_circles", []):
+        d = _km_to(grid_lat, grid_lng, circle["lat"], circle["lng"])
+        is_sandy |= d <= float(circle["radius_km"])
+    return is_kelp, is_sandy
+
+
 # ---- Encoders -------------------------------------------------------------
 
 def encode_linear_png(arr, lo, hi, out_path):
@@ -281,19 +388,8 @@ def main():
         sys.exit(1)
 
     # Decode source PNGs
-    sst_src = decode_linear_png(sst_path, 9.0, 25.0)            # degC
-    chl_src = decode_linear_png(chl_path, 0.05, 20.0)            # mg/m³ — note: chl PNG uses log10 scale
-    # The chl PNG is log10-encoded (per fetch.py), so re-decode in log space.
-    chl_src = decode_linear_png(chl_path, 0.05, 20.0)
-    # Actually re-do: chl was encoded log10. The decode helper above is linear.
-    # Use a dedicated log10 decode here:
-    img = np.array(Image.open(chl_path))
-    valid = img > 0
-    log_lo = np.log10(0.05)
-    log_hi = np.log10(20.0)
-    chl_src = np.full(img.shape, np.nan, dtype=np.float32)
-    chl_src[valid] = 10.0 ** (log_lo + ((img[valid].astype(np.float32) - 1) / 254) * (log_hi - log_lo))
-
+    sst_src = decode_linear_png(sst_path, 9.0, 25.0)             # degC
+    chl_src = decode_log10_png(chl_path, 0.05, 20.0)              # mg/m³ (log10-encoded)
     u_src, v_src = decode_uv_png(wind_uv_path, -30.0, 30.0)
 
     # Bilinear-sample each source onto our grid
@@ -307,60 +403,132 @@ def main():
     n = lat_grid.size
     flat = lambda a: np.asarray(a).reshape(n)
 
-    # Climatology proxies (until real climo is wired): use today's value as
-    # the climo so anomaly = 0 and seasonal_residual = 0. Still honest:
-    # the model just relies on persistence + driver-anomaly contributions.
-    chl_climo_doy_flat = flat(chl_today)
-    chl_climo_annual_flat = flat(chl_today)
-    sst_climo_flat = flat(sst_today)
+    # ---- Climatology PNGs (sst + chl + chl annual) ----------------------
+    sst_climo_path = OUT_DIR / "sst_climo.png"
+    chl_climo_path = OUT_DIR / "chl_climo.png"
+    chl_annual_path = OUT_DIR / "chl_climo_annual.png"
+    if sst_climo_path.exists():
+        sst_climo_src = decode_linear_png(sst_climo_path, 9.0, 25.0)
+        sst_climo_grid = bilinear_sample(sst_climo_src, sst_climo_src.shape[1], sst_climo_src.shape[0], lng_grid, lat_grid)
+        sst_climo_flat = flat(np.where(np.isfinite(sst_climo_grid), sst_climo_grid, sst_today))
+        print(f"  using SST climo: {np.nanmean(sst_climo_grid):.2f} °C mean")
+    else:
+        sst_climo_flat = flat(sst_today)
+        print("  sst_climo.png missing — using today's SST as climo (anomaly = 0)")
+    if chl_climo_path.exists():
+        chl_climo_src = decode_log10_png(chl_climo_path, 0.05, 20.0)
+        chl_climo_grid = bilinear_sample(chl_climo_src, chl_climo_src.shape[1], chl_climo_src.shape[0], lng_grid, lat_grid)
+        chl_climo_doy_flat = flat(np.where(np.isfinite(chl_climo_grid), chl_climo_grid, chl_today))
+        print(f"  using chl climo: {np.nanmean(chl_climo_grid):.3f} mg/m³ mean")
+    else:
+        chl_climo_doy_flat = flat(chl_today)
+        print("  chl_climo.png missing — using today's chl as climo")
+    if chl_annual_path.exists():
+        chl_annual_src = decode_log10_png(chl_annual_path, 0.05, 20.0)
+        chl_annual_grid = bilinear_sample(chl_annual_src, chl_annual_src.shape[1], chl_annual_src.shape[0], lng_grid, lat_grid)
+        chl_climo_annual_flat = flat(np.where(np.isfinite(chl_annual_grid), chl_annual_grid, chl_today))
+    else:
+        chl_climo_annual_flat = chl_climo_doy_flat.copy()
 
-    # 5-day wind history: tile today's wind. The upwelling_anomaly_5d feature
-    # then collapses to (today_along - climo_along), which is what we want.
-    u_5d = np.tile(flat(u_today)[:, None], (1, 5))
-    v_5d = np.tile(flat(v_today)[:, None], (1, 5))
-    along_climo_5d = np.zeros(n, dtype=float)  # placeholder
+    # ---- 5-day wind history --------------------------------------------
+    # d-0 is today's wind (already decoded as u_today/v_today). We layer in
+    # d-1..d-4 from the GFS-history PNGs, falling back to d-0 if a slot is
+    # missing (e.g. NOMADS purged that day).
+    u_stack = [flat(u_today)]
+    v_stack = [flat(v_today)]
+    history_used = 1
+    for k in range(1, 5):
+        hp = OUT_DIR / f"wind_uv_d-{k}.png"
+        if hp.exists():
+            uh, vh = decode_uv_png(hp, -30.0, 30.0)
+            uh_g = bilinear_sample(uh, uh.shape[1], uh.shape[0], lng_grid, lat_grid)
+            vh_g = bilinear_sample(vh, vh.shape[1], vh.shape[0], lng_grid, lat_grid)
+            u_stack.append(flat(np.where(np.isfinite(uh_g), uh_g, u_today)))
+            v_stack.append(flat(np.where(np.isfinite(vh_g), vh_g, v_today)))
+            history_used += 1
+        else:
+            u_stack.append(flat(u_today))
+            v_stack.append(flat(v_today))
+    u_5d = np.stack(u_stack, axis=-1)  # (n, 5)
+    v_5d = np.stack(v_stack, axis=-1)
+    print(f"  wind 5-day stack: {history_used}/5 real days, rest tile from today")
+    along_climo_5d = np.zeros(n, dtype=float)  # we don't have a wind climo yet
 
-    # Wave data from NOAA WaveWatch III (gfswave wcoast 0.16°), if present.
+    # ---- Waves: today (now) + 3-day max envelope -----------------------
     wave_path = OUT_DIR / "wave_now.png"
+    wave_max_path = OUT_DIR / "wave_max_3d.png"
     if wave_path.exists():
         wave_h_src, wave_p_src, wave_d_src = decode_wave_png(wave_path)
         wave_h = bilinear_sample(wave_h_src, wave_h_src.shape[1], wave_h_src.shape[0], lng_grid, lat_grid)
         wave_p = bilinear_sample(wave_p_src, wave_p_src.shape[1], wave_p_src.shape[0], lng_grid, lat_grid)
         wave_d = bilinear_sample(wave_d_src, wave_d_src.shape[1], wave_d_src.shape[0], lng_grid, lat_grid)
-        # NaN-safe defaults where waves aren't covered (over land, etc.).
-        sig_wave_height = flat(np.where(np.isfinite(wave_h), wave_h, 0.0))
-        peak_period     = flat(np.where(np.isfinite(wave_p), wave_p, 10.0))
-        swell_dir_deg   = flat(np.where(np.isfinite(wave_d), wave_d, 270.0))
-        swell_height    = sig_wave_height.copy()  # use HTSGW as today's swell height
-        print(f"  using WW3 waves: height mean {np.nanmean(wave_h):.2f} m, period mean {np.nanmean(wave_p):.1f} s")
+        swell_height_today = flat(np.where(np.isfinite(wave_h), wave_h, 0.0))
+        swell_dir_deg = flat(np.where(np.isfinite(wave_d), wave_d, 270.0))
+        print(f"  using WW3 now: height mean {np.nanmean(wave_h):.2f} m, period mean {np.nanmean(wave_p):.1f} s")
     else:
-        sig_wave_height = np.zeros(n)
-        peak_period = np.full(n, 10.0)
-        swell_dir_deg = np.zeros(n)
-        swell_height = np.zeros(n)
-        print("  wave_now.png missing — passing zero swell (run pipeline/fetch_waves.py first for full prediction)")
+        swell_height_today = np.zeros(n)
+        swell_dir_deg = np.full(n, 270.0)
+        print("  wave_now.png missing — zero swell")
 
-    # Precip from CPC US Unified Daily (7-day cumulative), if present.
+    if wave_max_path.exists():
+        wmh_src, wmp_src, _ = decode_wave_png(wave_max_path)
+        wmh = bilinear_sample(wmh_src, wmh_src.shape[1], wmh_src.shape[0], lng_grid, lat_grid)
+        wmp = bilinear_sample(wmp_src, wmp_src.shape[1], wmp_src.shape[0], lng_grid, lat_grid)
+        sig_wave_height_3d_max = flat(np.where(np.isfinite(wmh), wmh, swell_height_today.reshape(shape2d)))
+        peak_period_3d_max     = flat(np.where(np.isfinite(wmp), wmp, 10.0))
+        print(f"  using WW3 3d max: height mean {np.nanmean(wmh):.2f} m, period mean {np.nanmean(wmp):.1f} s")
+    else:
+        sig_wave_height_3d_max = swell_height_today.copy()
+        peak_period_3d_max = np.full(n, 10.0)
+        print("  wave_max_3d.png missing — using today's wave as 3d max")
+
+    # ---- Precip ----------------------------------------------------------
     precip_path = OUT_DIR / "precip_7d.png"
     if precip_path.exists():
-        precip_src = decode_linear_png(precip_path, 0.0, 200.0)  # mm
+        precip_src = decode_linear_png(precip_path, 0.0, 200.0)
         precip_grid = bilinear_sample(precip_src, precip_src.shape[1], precip_src.shape[0], lng_grid, lat_grid)
-        # Land cells beyond the CPC grid (e.g. Mexican waters) come back NaN —
-        # treat as 0 mm rather than fake. The runoff_index decays with
-        # distance to a river mouth anyway, so far-from-river NaN cells
-        # contribute zero either way.
         precip_7d = flat(np.where(np.isfinite(precip_grid), precip_grid, 0.0))
         if np.nanmax(precip_grid) > 0.5:
-            print(f"  using CPC precip: max {np.nanmax(precip_grid):.1f} mm, mean {np.nanmean(precip_grid):.1f} mm")
+            print(f"  using CPC precip: max {np.nanmax(precip_grid):.1f} mm")
         else:
-            print("  using CPC precip: dry week, all <0.5 mm")
+            print("  using CPC precip: dry week (<0.5 mm)")
     else:
         precip_7d = np.zeros(n)
-        print("  precip_7d.png missing — passing zero precip (run pipeline/fetch_precip.py first)")
-    river_disch = np.full(n, 5.0)
-    river_climo = np.full(n, 5.0)
-    tide_range = np.full(n, 1.5)
-    cloud_frac = np.full(n, 0.55)
+        print("  precip_7d.png missing — zero precip")
+
+    # ---- Rivers (USGS NWIS, nearest gauge per cell) --------------------
+    rivers_json_path = OUT_DIR / "rivers.json"
+    if rivers_json_path.exists():
+        river_disch, river_climo = _spread_rivers(rivers_json_path, lat_grid, lng_grid)
+        river_disch = flat(river_disch); river_climo = flat(river_climo)
+        print(f"  using USGS rivers: discharge mean {np.nanmean(river_disch):.0f} cfs (cell-avg)")
+    else:
+        river_disch = np.full(n, 5.0)
+        river_climo = np.full(n, 5.0)
+        print("  rivers.json missing — using flat 5 cfs (anomaly=0)")
+
+    # ---- Tides (CO-OPS, nearest station per cell) ----------------------
+    tides_json_path = OUT_DIR / "tides.json"
+    if tides_json_path.exists():
+        tide_grid = _spread_tides(tides_json_path, lat_grid, lng_grid)
+        tide_range = flat(tide_grid)
+        print(f"  using CO-OPS tides: range mean {np.nanmean(tide_range):.2f} m")
+    else:
+        tide_range = np.full(n, 1.5)
+        print("  tides.json missing — using flat 1.5 m")
+
+    # ---- Substrate / kelp (static) -------------------------------------
+    is_kelp_grid, is_sandy_grid = _static_substrate_masks(lat_grid, lng_grid)
+    is_kelp = flat(is_kelp_grid)
+    is_sandy = flat(is_sandy_grid)
+    print(f"  static substrate: {is_kelp.sum()} kelp cells, {is_sandy.sum()} sandy cells")
+
+    # ---- Cloud fraction proxy ------------------------------------------
+    # Treat NaN/missing chl as a proxy for clouds blocking the satellite over
+    # the past week. This is rough — chl gap-fill already imputes — but it
+    # captures the "we couldn't see, so we're less confident" signal.
+    cloud_frac_grid = np.where(np.isnan(chl_today), 0.85, 0.45)
+    cloud_frac = flat(cloud_frac_grid)
 
     # No staleness info per cell yet — assume today's chl is the last valid
     # observation (age = 0 where chl is valid; large age elsewhere).
@@ -369,15 +537,16 @@ def main():
     age = np.where(np.isnan(chl_obs_today), 999.0, 0.0)
 
     print("Running viz_predict over the grid (n=%d)..." % n)
+    depth_m = flat(shelf_depth_from_dist(dts_km))
     result = viz_predict.predict_all(
         lat=flat(lat_grid), lng=flat(lng_grid),
-        depth_m=np.full(n, 200.0),  # bathymetry not yet wired
+        depth_m=depth_m,
         dist_to_shore_km=flat(dts_km),
         dist_to_island_km=flat(dti_km),
         dist_to_river_km=flat(dist_to_river_km),
         coast_normal_deg=flat(coast_normal_deg),
-        is_kelp=np.zeros(n, dtype=bool),
-        is_sandy=np.zeros(n, dtype=bool),
+        is_kelp=is_kelp,
+        is_sandy=is_sandy,
         chl_obs_today=chl_obs_today,
         chl_lastvalid=chl_lastvalid,
         chl_lastvalid_age_days=age,
@@ -387,10 +556,10 @@ def main():
         sst_climo=sst_climo_flat,
         u_wind_5d=u_5d, v_wind_5d=v_5d, along_climo_5d=along_climo_5d,
         u_wind_today=flat(u_today), v_wind_today=flat(v_today),
-        sig_wave_height_3d_max=sig_wave_height,
-        peak_period_3d_max=peak_period,
+        sig_wave_height_3d_max=sig_wave_height_3d_max,
+        peak_period_3d_max=peak_period_3d_max,
         swell_dir_today_deg=swell_dir_deg,
-        swell_height_today_m=swell_height,
+        swell_height_today_m=swell_height_today,
         precip_7d_mm=precip_7d,
         river_discharge_cfs=river_disch, river_climo_cfs=river_climo,
         tide_range_today_m=tide_range,

@@ -1,0 +1,114 @@
+"""Fetch today's tide range for major CA tide stations from NOAA CO-OPS.
+
+The visibility model's `tide_index` feature uses the daily tide range (max
+minus min over a 24h window) as a proxy for tidal mixing energy. Range is
+much more useful than a single height because it captures spring-vs-neap
+variation, which actually matters for water clarity in shallow areas.
+
+We pull the next-24-hour hi/lo predictions for each station, take max-min,
+and emit a per-station JSON for the orchestrator to spread spatially via
+nearest-station sampling.
+
+Stations are evenly distributed along the CA coast inside our bbox; the
+visibility orchestrator picks the closest one per cell.
+
+Output: public/data/tides.json
+
+Run: python pipeline/fetch_tides.py
+"""
+from __future__ import annotations
+
+import json
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+import requests
+
+ROOT = Path(__file__).resolve().parents[1]
+OUT_DIR = ROOT / "public" / "data"
+
+STATIONS = [
+    {"name": "monterey",      "id": "9413450", "lat": 36.605, "lng": -121.888},
+    {"name": "port-san-luis", "id": "9412110", "lat": 35.169, "lng": -120.755},
+    {"name": "santa-barbara", "id": "9411340", "lat": 34.404, "lng": -119.693},
+    {"name": "los-angeles",   "id": "9410660", "lat": 33.720, "lng": -118.272},
+    {"name": "la-jolla",      "id": "9410230", "lat": 32.866, "lng": -117.257},
+    {"name": "san-diego",     "id": "9410170", "lat": 32.713, "lng": -117.173},
+]
+
+API = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
+
+SESSION = requests.Session()
+SESSION.headers.update({"Accept": "application/json", "User-Agent": "shouldidive/0.1"})
+
+
+def fetch_tide_range_m(station_id: str) -> float | None:
+    """Predicted max - min tide height (m) over the next 24h. None on error."""
+    now = datetime.now(timezone.utc)
+    begin = now.strftime("%Y%m%d %H:%M")
+    end = (now + timedelta(hours=24)).strftime("%Y%m%d %H:%M")
+    params = {
+        "product": "predictions",
+        "datum": "MLLW",
+        "interval": "hilo",
+        "station": station_id,
+        "begin_date": begin,
+        "end_date": end,
+        "time_zone": "gmt",
+        "units": "metric",
+        "format": "json",
+        "application": "shouldidive",
+    }
+    try:
+        r = SESSION.get(API, params=params, timeout=30)
+        r.raise_for_status()
+        data = r.json()
+    except Exception as e:
+        print(f"  {station_id}: fetch failed — {e!s}")
+        return None
+
+    preds = data.get("predictions", [])
+    if not preds:
+        return None
+    vals = []
+    for p in preds:
+        try:
+            vals.append(float(p["v"]))
+        except (KeyError, ValueError):
+            continue
+    if len(vals) < 2:
+        return None
+    return max(vals) - min(vals)
+
+
+def main() -> None:
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    now = datetime.now(timezone.utc)
+    out_stations = []
+    for st in STATIONS:
+        rng = fetch_tide_range_m(st["id"])
+        # Fallback: 1.5 m is a reasonable mean range on the CA coast — keeps
+        # `tide_index` ≠ 0 but well below spring-tide values.
+        rng_safe = rng if rng is not None else 1.5
+        out_stations.append({
+            "name":          st["name"],
+            "id":            st["id"],
+            "lat":           st["lat"],
+            "lng":           st["lng"],
+            "range_m":       round(rng_safe, 3),
+            "has_real_data": rng is not None,
+        })
+        tag = "OK" if rng is not None else "fallback"
+        print(f"  {st['name']:>14} ({st['id']}): {rng_safe:.2f} m  [{tag}]")
+
+    out = {
+        "generated_at": now.isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "stations": out_stations,
+    }
+    out_path = OUT_DIR / "tides.json"
+    out_path.write_text(json.dumps(out, indent=2))
+    print(f"wrote {out_path.name}")
+
+
+if __name__ == "__main__":
+    main()
