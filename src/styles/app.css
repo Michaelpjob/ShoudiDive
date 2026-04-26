@@ -104,10 +104,13 @@ body {
   gap: 10px;
 }
 .brand-mark {
-  width: 24px;
-  height: 24px;
+  width: 18px;
+  height: 28px;
   display: block;
-  color: var(--accent);
+  /* `currentColor` propagates through the SVG fills. Use --ink so the
+     silhouette reads as a strong dark figure on the light theme and
+     flips to a strong light figure on the dark theme. */
+  color: var(--ink);
   flex-shrink: 0;
 }
 .brand-name {

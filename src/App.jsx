@@ -63,29 +63,50 @@ function useIsMobile() {
   return useSyncExternalStore(subscribeMatchMedia, getMobileSnapshot, () => false);
 }
 
-// Minimal stroke-based freediver — head, body streamlined diagonally,
-// monofin chevron at the tail. Inherits color from `currentColor` so it
-// adapts to light/dark themes via the surrounding `.brand-mark` color.
+// Tall head-down freediver silhouette: splayed monofin at top, slender
+// body, hands clasped overhead, small head at the bottom. Solid fill from
+// currentColor so it inherits the brand-mark colour from CSS, which in
+// turn flips with the theme via `var(--accent)` / `var(--ink)`.
 function FreediverLogo() {
   return (
     <svg
       className="brand-mark"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+      viewBox="0 0 24 36"
+      fill="currentColor"
+      stroke="none"
       aria-hidden="true"
+      role="img"
     >
-      {/* monofin chevron at the tail */}
-      <path d="M2.5 4.5 L4.5 6.5 L2.5 8.5" />
-      {/* body line from fin to shoulder */}
-      <path d="M5 6.5 L13 13.5" />
-      {/* head */}
-      <circle cx="14.4" cy="14.6" r="1.7" fill="currentColor" stroke="none" />
-      {/* arms streamlined forward into the depth */}
-      <path d="M15.7 16 L21 21" />
+      {/* Monofin — two splayed blades at the top, narrow waist where
+          the ankles would cinch together. */}
+      <path d="
+        M 8.6 1
+        C 9.0 4.5, 10.4 8.5, 11.4 12
+        C 11.6 9, 11.7 5, 11.85 1.5
+        C 12.0 5, 12.1 9, 12.3 12
+        C 13.3 8.5, 14.7 4.5, 15.1 1
+        L 14.0 1
+        C 13.4 3.8, 12.7 6.5, 12.2 9
+        C 12.05 6.5, 12.05 3, 11.85 1
+        C 11.65 3, 11.65 6.5, 11.5 9
+        C 11.0 6.5, 10.3 3.8, 9.7 1
+        Z
+      " />
+      {/* Body — long slender torso tapering toward the head, with a
+          subtle inward curve for the waist so it reads as a figure. */}
+      <path d="
+        M 11.15 12
+        C 10.6 16, 10.5 20, 10.85 24
+        C 11.0 27, 11.2 29, 11.4 30.5
+        L 12.6 30.5
+        C 12.8 29, 13.0 27, 13.15 24
+        C 13.5 20, 13.4 16, 12.85 12
+        Z
+      " />
+      {/* Hands clasped overhead — a small tail of arms leading into the head. */}
+      <ellipse cx="12" cy="31.5" rx="0.95" ry="1.5" />
+      {/* Head */}
+      <ellipse cx="12" cy="34" rx="1.5" ry="1.8" />
     </svg>
   );
 }
@@ -128,6 +149,56 @@ function useDataVersion() {
     return unsub;
   }, []);
   return getDataState();
+}
+
+// Compact value readout for the legend metadata strip when the user is
+// hovering over the map. Returns null if the cursor doesn't have data
+// to display (caller falls back to the static window/source line).
+function hoverReadout(layer, hover, activeComposite, units) {
+  if (!hover) return null;
+  const { lng, lat } = hover;
+  if (layer === "sst") {
+    const v = getSST(lng, lat, activeComposite);
+    if (!Number.isFinite(v)) return null;
+    return units === "F"
+      ? `${(v * 9 / 5 + 32).toFixed(1)}°F at cursor`
+      : `${v.toFixed(1)}°C at cursor`;
+  }
+  if (layer === "chl") {
+    const v = getChl(lng, lat, activeComposite);
+    if (!Number.isFinite(v)) return null;
+    return `${v.toFixed(2)} mg/m³ at cursor`;
+  }
+  if (layer === "wind") {
+    const kt = getWindSpeed(lng, lat, activeComposite);
+    if (!Number.isFinite(kt)) return null;
+    const { u, v } = getWindUV(lng, lat, activeComposite);
+    const dirStr =
+      Number.isFinite(u) && Number.isFinite(v)
+        ? ` ${windCardinal(windCompass(u, v))}`
+        : "";
+    return `${kt.toFixed(1)} kt${dirStr} at cursor`;
+  }
+  if (layer === "swell") {
+    const w = getSwell5dStats(lng, lat, activeComposite);
+    if (!Number.isFinite(w.hs)) return null;
+    const ft = w.hs * 3.28084;
+    const tp = Number.isFinite(w.tp) ? ` · ${w.tp.toFixed(0)} s` : "";
+    const dp = Number.isFinite(w.dp) ? ` · ${windCardinal(w.dp)}` : "";
+    return `${ft.toFixed(1)} ft${tp}${dp}`;
+  }
+  if (layer === "viz") {
+    const ft = getVizFt(lng, lat, activeComposite);
+    if (!Number.isFinite(ft)) return null;
+    const cat =
+      ft < 10 ? "Poor"
+      : ft < 20 ? "Fair"
+      : ft < 30 ? "Good"
+      : ft < 50 ? "Very Good"
+      : "Excellent";
+    return `~${Math.round(ft)} ft · ${cat}`;
+  }
+  return null;
 }
 
 function formatWindow(dates, fallback, layer) {
@@ -1280,15 +1351,26 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
                 : "Poor → Excellent"}
             </span>
             <span>
-              <strong>{compositeText}</strong>
-              {layer === "wind"
-                ? ` · ${windSource(activeComposite) || "HRRR"}`
-                : layer === "viz"
-                ? ` · model output`
-                : layer === "swell"
-                ? ` · WaveWatch III`
-                : ` · ${composite}-day composite`}
-              {!layerIsReal && dataState?.ready && " · no data"}
+              {(() => {
+                // Mirror the cursor's reading in the legend metadata when
+                // the user is hovering over the map. Falls back to the
+                // active window / source line when there's nothing to
+                // mirror — so the strip doesn't go blank on idle.
+                const hv = hover ? hoverReadout(layer, hover, activeComposite, units) : null;
+                if (hv) return <strong>{hv}</strong>;
+                const suffix =
+                  layer === "wind"  ? ` · ${windSource(activeComposite) || "HRRR"}`
+                  : layer === "viz" ? ` · model output`
+                  : layer === "swell" ? ` · WaveWatch III`
+                  : ` · ${composite}-day composite`;
+                return (
+                  <>
+                    <strong>{compositeText}</strong>
+                    {suffix}
+                    {!layerIsReal && dataState?.ready && " · no data"}
+                  </>
+                );
+              })()}
             </span>
           </div>
         </div>}

@@ -296,14 +296,46 @@ function bilinear(layer, lng, lat) {
   let sum = 0,
     n = 0;
   for (const v of vs) if (Number.isFinite(v)) (sum += v), n++;
-  if (n === 0) return NaN;
-  if (n < 4) return sum / n;
-  return (
-    v00 * (1 - tx) * (1 - ty) +
-    v10 * tx * (1 - ty) +
-    v01 * (1 - tx) * ty +
-    v11 * tx * ty
-  );
+  if (n > 0) {
+    if (n < 4) return sum / n;
+    return (
+      v00 * (1 - tx) * (1 - ty) +
+      v10 * tx * (1 - ty) +
+      v01 * (1 - tx) * ty +
+      v11 * tx * ty
+    );
+  }
+  // No valid corner — expand outward in concentric shells looking for the
+  // nearest finite pixel. Caps at radius 6 (~30–35 km) so we don't snap
+  // ridiculously far for a hover. Especially useful for the swell layer
+  // where coastal cells still go NaN past the pipeline-side fill cap.
+  return findNearestFinite(data, width, height, fx, fy, 6);
+}
+
+function findNearestFinite(data, width, height, fx, fy, maxRadius) {
+  const cx = Math.round(fx);
+  const cy = Math.round(fy);
+  for (let r = 1; r <= maxRadius; r++) {
+    let bestD2 = Infinity;
+    let bestVal = NaN;
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue; // shell only
+        const x = cx + dx;
+        const y = cy + dy;
+        if (x < 0 || x >= width || y < 0 || y >= height) continue;
+        const v = data[y * width + x];
+        if (!Number.isFinite(v)) continue;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestD2) {
+          bestD2 = d2;
+          bestVal = v;
+        }
+      }
+    }
+    if (Number.isFinite(bestVal)) return bestVal;
+  }
+  return NaN;
 }
 
 const COMPOSITE_KEY = { 1: "1d", 2: "2d", 3: "3d" };
@@ -446,7 +478,12 @@ export function getSwell5dSummary() {
   return state.layers.swell5d?.summary || null;
 }
 
-// (Hs in metres, Tp in seconds, Dp in degrees) at a lng/lat. NaN-safe.
+// (Hs in metres, Tp in seconds, Dp in degrees) at a lng/lat. Tries the
+// 4-corner bilinear first and, if every corner is NaN (cursor is on land
+// or in a cell the pipeline fill couldn't reach), expands outward in
+// concentric shells looking for the nearest valid cell — and returns the
+// FULL Hs/Tp/Dp triplet from that same cell so the three numbers stay
+// consistent.
 export function getSwell5dStats(lng, lat, slotKeyStr) {
   const w = swell5dEntry(slotKeyStr);
   if (!w) return { hs: NaN, tp: NaN, dp: NaN };
@@ -473,7 +510,46 @@ export function getSwell5dStats(lng, lat, slotKeyStr) {
     return v00 * (1 - tx) * (1 - ty) + v10 * tx * (1 - ty)
          + v01 * (1 - tx) * ty       + v11 * tx * ty;
   };
-  return { hs: sample(w.hs), tp: sample(w.tp), dp: sample(w.dp) };
+  let hs = sample(w.hs);
+  let tp = sample(w.tp);
+  let dp = sample(w.dp);
+  if (!Number.isFinite(hs)) {
+    // 4-corner search came up empty — find the closest finite Hs cell
+    // and read the matching Tp/Dp from THE SAME cell so all three values
+    // describe a single neighbour, not an average across mismatched ones.
+    const cell = findNearestFiniteCell(w.hs, w.width, w.height, fx, fy, 6);
+    if (cell) {
+      const idx = cell.y * w.width + cell.x;
+      hs = w.hs[idx];
+      tp = w.tp[idx];
+      dp = w.dp[idx];
+    }
+  }
+  return { hs, tp, dp };
+}
+
+// Like findNearestFinite() but returns the (x, y) of the cell instead of
+// just its value, so the caller can look up paired channels at the same spot.
+function findNearestFiniteCell(data, width, height, fx, fy, maxRadius) {
+  const cx = Math.round(fx);
+  const cy = Math.round(fy);
+  for (let r = 1; r <= maxRadius; r++) {
+    let bestD2 = Infinity;
+    let best = null;
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const x = cx + dx;
+        const y = cy + dy;
+        if (x < 0 || x >= width || y < 0 || y >= height) continue;
+        if (!Number.isFinite(data[y * width + x])) continue;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestD2) { bestD2 = d2; best = { x, y }; }
+      }
+    }
+    if (best) return best;
+  }
+  return null;
 }
 
 // bbox-aggregate stats for a single hour, computed from the loaded grid.
