@@ -100,9 +100,9 @@ export async function loadManifest() {
     for (const [layer, info] of Object.entries(manifest.layers || {})) {
       state.layers[layer] = {};
       if (layer === "wind5d") {
-        // 5-day × 5-bucket forecast (new wind UI). Pull summary.json then
-        // every bucket UV PNG in parallel — that's only ~25 small files
-        // (~250 KB total). Hourly drill-down PNGs load on demand below.
+        // 5-day × 5-bucket forecast (new wind UI). Pull summary.json first
+        // — keep the summary even if individual bucket PNGs fail to decode
+        // so the day grid still renders with whatever data we have.
         try {
           const sres = await fetch(info.summary_url, { cache: "no-cache" });
           if (!sres.ok) throw new Error(`summary ${info.summary_url} ${sres.status}`);
@@ -111,29 +111,44 @@ export async function loadManifest() {
             summary,
             uvRange:    info.uv_range,
             speedRange: info.speed_range,
-            buckets:    {},   // slotKey → { uvU, uvV, width, height, speedKt }
-            hourly:     {},   // slotKey → same shape
-            hourlyLoading: {}, // promise dedup
+            buckets:    {},
+            hourly:     {},
+            hourlyLoading: {},
           };
+          // Load every bucket UV in parallel. CRUCIAL: each task swallows
+          // its own error so one bad PNG can't take down the whole forecast.
           const tasks = [];
+          let failed = 0;
+          let loaded = 0;
           for (const day of summary.days) {
             for (const b of day.buckets) {
-              tasks.push((async () => {
-                const uv = await decodeUVPng(b.uv_url, info.uv_range);
-                const speed = computeSpeedKt(uv);
-                state.layers.wind5d.buckets[bucketKey(day.day, b.bucket)] = {
-                  uvU: uv.u, uvV: uv.v,
-                  width: uv.width, height: uv.height,
-                  data: speed,  // .data alias so DataOverlay can reuse the layer-grid path
-                  speedKt: speed,
-                };
-              })());
+              const key = bucketKey(day.day, b.bucket);
+              tasks.push(
+                decodeUVPng(b.uv_url, info.uv_range)
+                  .then((uv) => {
+                    const speed = computeSpeedKt(uv);
+                    state.layers.wind5d.buckets[key] = {
+                      uvU: uv.u, uvV: uv.v,
+                      width: uv.width, height: uv.height,
+                      data: speed, speedKt: speed,
+                    };
+                    loaded++;
+                  })
+                  .catch((e) => {
+                    failed++;
+                    console.warn(`wind5d bucket ${key} failed`, e);
+                  })
+              );
             }
           }
           await Promise.all(tasks);
+          if (failed) {
+            console.warn(`wind5d: ${loaded} buckets loaded, ${failed} failed`);
+          }
         } catch (e) {
-          console.warn("dataSource: wind5d load failed", e);
-          state.layers.wind5d = null;
+          console.warn("dataSource: wind5d summary load failed", e);
+          // Don't null out — leave whatever summary did parse so the UI
+          // can show the day labels even if the heatmap is missing.
         }
       } else if (layer === "wind") {
         const speedRange = info.speed_range;
