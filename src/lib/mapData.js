@@ -1,7 +1,8 @@
 // Map projection helpers and mocked sea data.
-// Bounding box per spec: lat 32.4°N–37.6°N, lng -124.0° to -117.0°.
+// Bounding box: lat 31.8°N–37.6°N, lng -124.0° to -116.8° (extended south to
+// include Las Islas Coronado and east to give Tijuana coast breathing room).
 
-export const BBOX = { latMin: 32.4, latMax: 37.6, lngMin: -124.0, lngMax: -117.0 };
+export const BBOX = { latMin: 31.8, latMax: 37.6, lngMin: -124.0, lngMax: -116.8 };
 
 export function project(lng, lat, w, h) {
   const x = ((lng - BBOX.lngMin) / (BBOX.lngMax - BBOX.lngMin)) * w;
@@ -73,10 +74,16 @@ export const COASTLINE = [
   [-117.22, 32.74],
   [-117.15, 32.65],
   [-117.12, 32.55],
-  [-117.13, 32.42],
+  [-117.13, 32.42],   // US/MX border
+  [-117.10, 32.30],   // Tijuana coast
+  [-117.05, 32.20],
+  [-117.00, 32.05],
+  [-116.92, 31.95],
+  [-116.88, 31.85],
+  [-116.85, 31.80],   // south edge of bbox
 ];
 
-// Channel Islands (simplified centers + radii in degrees).
+// Channel Islands + Coronados (simplified centers + radii in degrees).
 export const ISLANDS = [
   { name: "San Miguel",       lng: -120.37, lat: 34.04, rx: 0.10, ry: 0.04 },
   { name: "Santa Rosa",       lng: -120.10, lat: 33.97, rx: 0.13, ry: 0.06 },
@@ -86,6 +93,10 @@ export const ISLANDS = [
   { name: "Santa Barbara I.", lng: -119.03, lat: 33.48, rx: 0.03, ry: 0.02 },
   { name: "Santa Catalina",   lng: -118.45, lat: 33.39, rx: 0.13, ry: 0.05 },
   { name: "San Clemente",     lng: -118.50, lat: 32.90, rx: 0.10, ry: 0.04 },
+  // Las Islas Coronado — popular SoCal dive destination off Tijuana
+  { name: "N. Coronado",      lng: -117.30, lat: 32.42, rx: 0.018, ry: 0.030 },
+  { name: "M. Coronado",      lng: -117.27, lat: 32.40, rx: 0.008, ry: 0.010 },
+  { name: "S. Coronado",      lng: -117.25, lat: 32.38, rx: 0.022, ry: 0.035 },
 ];
 
 export const SAVED_SPOTS = [
@@ -97,6 +108,8 @@ export const SAVED_SPOTS = [
   { id: "malibu",    name: "Malibu",         lng: -118.78, lat: 34.02 },
   { id: "catalina",  name: "Catalina",       lng: -118.45, lat: 33.39 },
   { id: "lajolla",   name: "La Jolla",       lng: -117.28, lat: 32.85 },
+  { id: "sandiego",  name: "San Diego",      lng: -117.18, lat: 32.70 },
+  { id: "coronados", name: "Coronados",      lng: -117.27, lat: 32.40 },
 ];
 
 export const SST_STOPS = [

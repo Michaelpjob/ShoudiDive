@@ -62,6 +62,8 @@ export default function Basemap({ width, height }) {
     { text: "LOS ANGELES",        lng: -118.20, lat: 34.10, size: 10, weight: 500 },
     { text: "LA JOLLA",           lng: -117.20, lat: 32.86, size: 9 },
     { text: "SAN DIEGO",          lng: -117.10, lat: 32.65, size: 9, weight: 500 },
+    { text: "TIJUANA",            lng: -116.95, lat: 32.50, size: 9 },
+    { text: "LAS CORONADOS",      lng: -117.32, lat: 32.30, size: 8.5, italic: true, color: "var(--ink-3)" },
     { text: "CHANNEL ISLANDS",    lng: -119.85, lat: 33.78, size: 8.5, italic: true, color: "var(--ink-3)" },
     { text: "SOUTHERN CA BIGHT",  lng: -118.95, lat: 33.20, size: 9, italic: true, color: "var(--ink-3)" },
     { text: "PACIFIC OCEAN",      lng: -122.40, lat: 35.20, size: 11, italic: true, color: "var(--ink-3)", letterSpacing: "0.2em" },

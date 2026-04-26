@@ -246,6 +246,12 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
   const [activeSpot, setActiveSpot] = useState("lajolla");
   const [infoOpen, setInfoOpen] = useState(true);
 
+  // Pan/zoom state — viewBox in original svg coords. Initial = full extent.
+  const [vb, setVb] = useState({ x: 0, y: 0, w: 1, h: 1 });
+  const [isPanning, setIsPanning] = useState(false);
+  const panStateRef = useRef(null);
+  const MAX_ZOOM = 8;
+
   useEffect(() => {
     function measure() {
       if (!stageRef.current) return;
@@ -257,11 +263,87 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
     return () => window.removeEventListener("resize", measure);
   }, []);
 
+  // Reset / clamp the viewBox whenever the stage size changes.
+  useEffect(() => {
+    setVb((prev) => {
+      // First-time init or after a resize that breaks proportions: reset to fit.
+      if (prev.w <= 1 || Math.abs(prev.w / prev.h - size.w / size.h) > 0.001) {
+        return { x: 0, y: 0, w: size.w, h: size.h };
+      }
+      return prev;
+    });
+  }, [size.w, size.h]);
+
+  function clampVb(next) {
+    const w = Math.max(size.w / MAX_ZOOM, Math.min(size.w, next.w));
+    const h = w * (size.h / size.w);
+    const x = Math.max(0, Math.min(size.w - w, next.x));
+    const y = Math.max(0, Math.min(size.h - h, next.y));
+    return { x, y, w, h };
+  }
+
+  function zoomAt(screenX, screenY, factor) {
+    const r = stageRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const newW = vb.w * factor;
+    const cursorVbX = vb.x + (screenX / r.width) * vb.w;
+    const cursorVbY = vb.y + (screenY / r.height) * vb.h;
+    const newH = newW * (size.h / size.w);
+    const newX = cursorVbX - (screenX / r.width) * newW;
+    const newY = cursorVbY - (screenY / r.height) * newH;
+    setVb(clampVb({ x: newX, y: newY, w: newW, h: newH }));
+  }
+
+  function onWheel(e) {
+    e.preventDefault?.();
+    const r = stageRef.current.getBoundingClientRect();
+    const x = e.clientX - r.left;
+    const y = e.clientY - r.top;
+    zoomAt(x, y, e.deltaY < 0 ? 1 / 1.2 : 1.2);
+  }
+
+  function onMouseDown(e) {
+    const r = stageRef.current.getBoundingClientRect();
+    panStateRef.current = {
+      startScreenX: e.clientX - r.left,
+      startScreenY: e.clientY - r.top,
+      startVb: vb,
+      moved: false,
+    };
+    setIsPanning(true);
+  }
+
+  function onMouseUp() {
+    panStateRef.current = null;
+    setIsPanning(false);
+  }
+
   function onMove(e) {
     const r = stageRef.current.getBoundingClientRect();
     const x = e.clientX - r.left;
     const y = e.clientY - r.top;
-    const [lng, lat] = unproject(x, y, size.w, size.h);
+
+    if (panStateRef.current) {
+      const ps = panStateRef.current;
+      const dxScreen = x - ps.startScreenX;
+      const dyScreen = y - ps.startScreenY;
+      if (Math.abs(dxScreen) + Math.abs(dyScreen) > 3) ps.moved = true;
+      const dxVb = (dxScreen / r.width) * ps.startVb.w;
+      const dyVb = (dyScreen / r.height) * ps.startVb.h;
+      setVb(clampVb({
+        x: ps.startVb.x - dxVb,
+        y: ps.startVb.y - dyVb,
+        w: ps.startVb.w,
+        h: ps.startVb.h,
+      }));
+      setHover(null);
+      return;
+    }
+
+    // Hover lookup — convert screen px to vbox coord, then to lng/lat.
+    const vbX = vb.x + (x / r.width) * vb.w;
+    const vbY = vb.y + (y / r.height) * vb.h;
+    const [lng, lat] = unproject(vbX, vbY, size.w, size.h);
     let val;
     if (layer === "sst") val = getSST(lng, lat, composite);
     else if (layer === "chl") val = getChl(lng, lat, composite);
@@ -270,6 +352,12 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
   }
   function onLeave() {
     setHover(null);
+    panStateRef.current = null;
+    setIsPanning(false);
+  }
+
+  function resetView() {
+    setVb({ x: 0, y: 0, w: size.w, h: size.h });
   }
 
   const fallbackText =
@@ -285,8 +373,21 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
   const timeOpts = TIME_OPTIONS[layer];
 
   return (
-    <div className="map-stage" ref={stageRef} onMouseMove={onMove} onMouseLeave={onLeave}>
-      <svg className="map-svg" viewBox={`0 0 ${size.w} ${size.h}`} preserveAspectRatio="none">
+    <div
+      className="map-stage"
+      ref={stageRef}
+      onMouseMove={onMove}
+      onMouseLeave={onLeave}
+      onMouseDown={onMouseDown}
+      onMouseUp={onMouseUp}
+      onWheel={onWheel}
+      style={{ cursor: isPanning ? "grabbing" : "grab" }}
+    >
+      <svg
+        className="map-svg"
+        viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
+        preserveAspectRatio="none"
+      >
         <Basemap width={size.w} height={size.h} />
         <DataOverlay
           width={size.w}
@@ -639,9 +740,9 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
       </div>
 
       <div className="zoom-ctl">
-        <button aria-label="Zoom in">+</button>
-        <button aria-label="Zoom out">−</button>
-        <button aria-label="Recenter">
+        <button aria-label="Zoom in" onClick={() => zoomAt(size.w / 2, size.h / 2, 1 / 1.4)}>+</button>
+        <button aria-label="Zoom out" onClick={() => zoomAt(size.w / 2, size.h / 2, 1.4)}>−</button>
+        <button aria-label="Recenter" onClick={resetView}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="12" cy="12" r="3" />
             <path d="M12 1v3M12 20v3M1 12h3M20 12h3" />
