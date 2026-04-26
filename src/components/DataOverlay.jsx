@@ -12,6 +12,16 @@ const WIND_RAMP = [
   { kt: 25, c: [220, 90, 60]   },
   { kt: 35, c: [140, 30, 90]   },
 ];
+
+// Predicted-visibility ramp (Secchi feet → [r,g,b]). Stops match the
+// framework's clarity categories: Very Poor → Poor → Fair → Good → Excellent.
+const VIZ_RAMP = [
+  { ft: 0,  c: [124, 45, 18]  },   // Very Poor — saddle brown
+  { ft: 7,  c: [194, 65, 12]  },   // Poor — burnt orange
+  { ft: 16, c: [234, 179, 8]  },   // Fair — amber
+  { ft: 49, c: [22, 163, 74]  },   // Good — emerald
+  { ft: 80, c: [14, 165, 233] },   // Excellent — sky blue
+];
 function windColorRGBArr(kt) {
   if (!Number.isFinite(kt)) return [220, 220, 220];
   for (let i = 0; i < WIND_RAMP.length - 1; i++) {
@@ -26,6 +36,23 @@ function windColorRGBArr(kt) {
     }
   }
   return WIND_RAMP[WIND_RAMP.length - 1].c;
+}
+
+function vizColorRGBArr(ft) {
+  if (!Number.isFinite(ft)) return [220, 220, 220];
+  if (ft <= VIZ_RAMP[0].ft) return VIZ_RAMP[0].c;
+  for (let i = 0; i < VIZ_RAMP.length - 1; i++) {
+    const a = VIZ_RAMP[i], b = VIZ_RAMP[i + 1];
+    if (ft >= a.ft && ft <= b.ft) {
+      const k = (ft - a.ft) / (b.ft - a.ft);
+      return [
+        Math.round(a.c[0] + (b.c[0] - a.c[0]) * k),
+        Math.round(a.c[1] + (b.c[1] - a.c[1]) * k),
+        Math.round(a.c[2] + (b.c[2] - a.c[2]) * k),
+      ];
+    }
+  }
+  return VIZ_RAMP[VIZ_RAMP.length - 1].c;
 }
 
 function rgbStrToArr(rgb) {
@@ -69,7 +96,8 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
       let rgb;
       if (layer === "sst") rgb = rgbStrToArr(sstColor(v));
       else if (layer === "chl") rgb = rgbStrToArr(chlColor(v));
-      else rgb = windColorRGBArr(v);
+      else if (layer === "wind") rgb = windColorRGBArr(v);
+      else rgb = vizColorRGBArr(v);  // viz layer (predicted Secchi feet)
       img.data[i * 4]     = rgb[0];
       img.data[i * 4 + 1] = rgb[1];
       img.data[i * 4 + 2] = rgb[2];

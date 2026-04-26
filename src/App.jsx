@@ -25,6 +25,7 @@ import {
   getChl,
   getWindSpeed,
   getWindUV,
+  getVizFt,
   windCompass,
   windCardinal,
   windSource,
@@ -95,11 +96,13 @@ function Chevron({ open }) {
   );
 }
 
-// Time filter is layer-aware: SST/chl use composite windows, wind uses forecast slots.
+// Time filter is layer-aware: SST/chl use composite windows, wind uses
+// forecast slots, viz (predicted) is a single 'now' slot today.
 const TIME_OPTIONS = {
   sst:  { label: "Composite",      helper: "rolling window",      buttons: ["1 Day", "2 Day", "3 Day"],         tags: ["freshest", "balanced", "best cover"] },
   chl:  { label: "Composite",      helper: "rolling window",      buttons: ["1 Day", "2 Day", "3 Day"],         tags: ["freshest", "balanced", "best cover"] },
   wind: { label: "Forecast Step",  helper: "HRRR + GFS",          buttons: ["Now",   "+6h",   "+24h", "+72h"],  tags: ["analysis", "afternoon", "tomorrow", "3-day"] },
+  viz:  { label: "Prediction",     helper: "model output",        buttons: ["Now"],                              tags: ["best estimate"] },
 };
 
 function useDataVersion() {
@@ -544,6 +547,8 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
   const fallbackText =
     layer === "wind"
       ? "now"
+      : layer === "viz"
+      ? "now"
       : composite === 1
       ? "Apr 24, 2026"
       : composite === 2
@@ -761,7 +766,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
           </span>
         </div>
         {controlsOpen && <div className="panel-body">
-          <div className="layer-toggle layer-toggle-3" role="tablist">
+          <div className="layer-toggle layer-toggle-4" role="tablist">
             <button
               className={layer === "sst" ? "active" : ""}
               onClick={() => setLayer("sst")}
@@ -782,6 +787,14 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
             >
               <span className="lt-label">Wind</span>
               <span className="lt-sub">10 m · kt</span>
+            </button>
+            <button
+              className={layer === "viz" ? "active" : ""}
+              onClick={() => setLayer("viz")}
+              title="Predicted visibility — model output, not a measurement"
+            >
+              <span className="lt-label">Forecast</span>
+              <span className="lt-sub">predicted</span>
             </button>
           </div>
           <div className="composite">
@@ -955,10 +968,15 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
                   col = "var(--ink-3)";
                 }
                 unit = "mg/m³";
-              } else {
+              } else if (layer === "wind") {
                 v = getWindSpeed(s.lng, s.lat, composite);
                 valTxt = Number.isFinite(v) ? `${v.toFixed(1)}` : "—";
                 unit = "kt";
+                col = "var(--ink-2)";
+              } else {
+                v = getVizFt(s.lng, s.lat, composite);
+                valTxt = Number.isFinite(v) ? `~${Math.round(v)}` : "—";
+                unit = "ft";
                 col = "var(--ink-2)";
               }
               return (
@@ -993,14 +1011,16 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
           style={{ cursor: "pointer", userSelect: "none" }}
           onClick={() => setLegendOpen((v) => !v)}
         >
-          <span className="panel-title">
+          <span className="panel-title" style={{ display: "flex", alignItems: "center", gap: 6 }}>
             {layer === "sst" ? "Sea Surface Temperature"
               : layer === "chl" ? "Water Clarity (Chlorophyll-a)"
-              : "Wind Speed (10 m)"}
+              : layer === "wind" ? "Wind Speed (10 m)"
+              : "Predicted Visibility"}
+            {layer === "viz" && <span className="predicted-badge">PREDICTED</span>}
           </span>
           <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span className="panel-title mono" style={{ color: "var(--ink-3)" }}>
-              {layer === "sst" ? `°${units}` : layer === "chl" ? "mg/m³" : "kt"}
+              {layer === "sst" ? `°${units}` : layer === "chl" ? "mg/m³" : layer === "wind" ? "kt" : "ft"}
             </span>
             <Chevron open={legendOpen} />
           </span>
@@ -1022,9 +1042,13 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
               <>
                 <span>0.05</span><span>0.3</span><span>1.0</span><span>3.5</span><span>20+</span>
               </>
-            ) : (
+            ) : layer === "wind" ? (
               <>
                 <span>0</span><span>5</span><span>10</span><span>15</span><span>20</span><span>25</span><span>35+</span>
+              </>
+            ) : (
+              <>
+                <span>0</span><span>7</span><span>16</span><span>49</span><span>80+</span>
               </>
             )}
           </div>
@@ -1032,12 +1056,15 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
             <span>
               {layer === "sst" ? "Cold upwelling → Heatwave"
                 : layer === "chl" ? "Gin-clear → Bloom"
-                : "Calm → Gale"}
+                : layer === "wind" ? "Calm → Gale"
+                : "Very Poor → Excellent"}
             </span>
             <span>
               <strong>{compositeText}</strong>
               {layer === "wind"
                 ? ` · ${windSource(composite) || "HRRR"}`
+                : layer === "viz"
+                ? ` · model output`
                 : ` · ${composite}-day composite`}
               {!layerIsReal && dataState?.ready && " · no data"}
             </span>
@@ -1267,7 +1294,7 @@ function Tooltip({ x, y, layer, composite, lng, lat, units }) {
         : val < 10  ? "Productive"
         : "Bloom";
     }
-  } else {
+  } else if (layer === "wind") {
     title = "Wind · 10 m";
     const { u, v } = getWindUV(lng, lat, composite);
     const kt = getWindSpeed(lng, lat, composite);
@@ -1278,6 +1305,23 @@ function Tooltip({ x, y, layer, composite, lng, lat, units }) {
     } else {
       big = "—";
       sub = "no data";
+    }
+  } else {
+    // viz layer — model prediction, NOT a measurement
+    title = "Predicted Visibility";
+    const ft = getVizFt(lng, lat, composite);
+    if (Number.isFinite(ft)) {
+      const cat =
+        ft < 7 ? "Very poor"
+        : ft < 16 ? "Poor"
+        : ft < 49 ? "Fair"
+        : ft < 80 ? "Good"
+        : "Excellent";
+      big = `~${Math.round(ft)} ft`;
+      sub = `${cat} · model output`;
+    } else {
+      big = "—";
+      sub = "no prediction here";
     }
   }
   return (

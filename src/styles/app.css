@@ -489,12 +489,51 @@ body {
     rgb(140,30,90) 100%);
 }
 
-/* Layer toggle: 3 buttons for sst/chl/wind */
+/* Predicted-visibility ramp: Very Poor → Poor → Fair → Good → Excellent.
+   Stops match VIZ_RAMP in DataOverlay.jsx (0/7/16/49/80 ft → 0/8.75/20/61.25/100%). */
+.legend-bar.viz {
+  background: linear-gradient(90deg,
+    rgb(124,45,18) 0%,
+    rgb(194,65,12) 8.75%,
+    rgb(234,179,8) 20%,
+    rgb(22,163,74) 61.25%,
+    rgb(14,165,233) 100%);
+}
+
+/* Layer toggle: 3 buttons for legacy / 4 for sst/chl/wind/viz */
 .layer-toggle.layer-toggle-3 {
   grid-template-columns: 1fr 1fr 1fr;
 }
 .layer-toggle.layer-toggle-3 .lt-label { font-size: 11.5px; }
 .layer-toggle.layer-toggle-3 .lt-sub { font-size: 9.5px; }
+.layer-toggle.layer-toggle-4 {
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+}
+.layer-toggle.layer-toggle-4 .lt-label { font-size: 11px; }
+.layer-toggle.layer-toggle-4 .lt-sub { font-size: 9px; }
+
+/* "PREDICTED" badge for the viz layer — never let it look like a measurement. */
+.predicted-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  background: oklch(0.55 0.16 30 / 0.16);
+  color: oklch(0.50 0.18 30);
+  border-radius: 3px;
+}
+[data-theme="dark"] .predicted-badge {
+  background: oklch(0.55 0.16 30 / 0.24);
+  color: oklch(0.85 0.14 30);
+}
+
+/* Mobile sheet layer toggle — 4 buttons */
+.ms-layer-toggle.ms-layer-toggle-4 {
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+}
+.ms-layer-toggle.ms-layer-toggle-4 .ms-lt-label { font-size: 11px; }
+.ms-layer-toggle.ms-layer-toggle-4 .ms-lt-sub { font-size: 9px; }
 
 .legend-ticks {
   display: flex;

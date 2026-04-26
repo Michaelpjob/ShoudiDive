@@ -7,7 +7,13 @@
 
 import { useState } from "react";
 import { sstColor, chlColor, SAVED_SPOTS } from "../lib/mapData.js";
-import { getSST, getChl, getWindSpeed, windSource } from "../lib/dataSource.js";
+import {
+  getSST,
+  getChl,
+  getWindSpeed,
+  getVizFt,
+  windSource,
+} from "../lib/dataSource.js";
 import { styleForClass } from "./BathyLayer.jsx";
 
 const TABS = [
@@ -96,7 +102,7 @@ function LayerSection({
   return (
     <div className="ms-layers">
       <div className="ms-row-label">Layer</div>
-      <div className="ms-layer-toggle">
+      <div className="ms-layer-toggle ms-layer-toggle-4">
         <button className={layer === "sst" ? "active" : ""} onClick={() => setLayer("sst")}>
           <span className="ms-lt-label">Sea Temp</span>
           <span className="ms-lt-sub">°{units}</span>
@@ -108,6 +114,10 @@ function LayerSection({
         <button className={layer === "wind" ? "active" : ""} onClick={() => setLayer("wind")}>
           <span className="ms-lt-label">Wind</span>
           <span className="ms-lt-sub">kt</span>
+        </button>
+        <button className={layer === "viz" ? "active" : ""} onClick={() => setLayer("viz")}>
+          <span className="ms-lt-label">Forecast</span>
+          <span className="ms-lt-sub">predicted</span>
         </button>
       </div>
 
@@ -182,10 +192,15 @@ function SpotsSection({ layer, composite, units, activeSpot, setActiveSpot }) {
             valTxt = "—"; col = "var(--ink-3)";
           }
           unit = "mg/m³";
-        } else {
+        } else if (layer === "wind") {
           const v = getWindSpeed(s.lng, s.lat, composite);
           valTxt = Number.isFinite(v) ? v.toFixed(1) : "—";
           unit = "kt";
+          col = "var(--ink-2)";
+        } else {
+          const v = getVizFt(s.lng, s.lat, composite);
+          valTxt = Number.isFinite(v) ? `~${Math.round(v)}` : "—";
+          unit = "ft";
           col = "var(--ink-2)";
         }
         return (
@@ -212,13 +227,19 @@ function LegendSection({ layer, units, composite, compositeText, layerIsReal, da
   const title =
     layer === "sst" ? "Sea Surface Temperature"
     : layer === "chl" ? "Water Clarity (Chlorophyll-a)"
-    : "Wind Speed (10 m)";
-  const unitLabel = layer === "sst" ? `°${units}` : layer === "chl" ? "mg/m³" : "kt";
+    : layer === "wind" ? "Wind Speed (10 m)"
+    : "Predicted Visibility";
+  const unitLabel =
+    layer === "sst" ? `°${units}`
+    : layer === "chl" ? "mg/m³"
+    : layer === "wind" ? "kt"
+    : "ft";
   return (
     <div className="ms-legend">
       <div className="ms-legend-head">
         <strong>{title}</strong>
-        <span className="mono" style={{ color: "var(--ink-3)" }}>{unitLabel}</span>
+        {layer === "viz" && <span className="predicted-badge">PREDICTED</span>}
+        <span className="mono" style={{ color: "var(--ink-3)", marginLeft: "auto" }}>{unitLabel}</span>
       </div>
       <div className={`legend-bar ${layer}`}></div>
       <div className="legend-ticks">
@@ -230,20 +251,25 @@ function LegendSection({ layer, units, composite, compositeText, layerIsReal, da
           )
         ) : layer === "chl" ? (
           <><span>0.05</span><span>0.3</span><span>1.0</span><span>3.5</span><span>20+</span></>
-        ) : (
+        ) : layer === "wind" ? (
           <><span>0</span><span>5</span><span>10</span><span>15</span><span>20</span><span>25</span><span>35+</span></>
+        ) : (
+          <><span>0</span><span>7</span><span>16</span><span>49</span><span>80+</span></>
         )}
       </div>
       <div className="legend-meta" style={{ marginTop: 10 }}>
         <span>
           {layer === "sst" ? "Cold upwelling → Heatwave"
             : layer === "chl" ? "Gin-clear → Bloom"
-            : "Calm → Gale"}
+            : layer === "wind" ? "Calm → Gale"
+            : "Very Poor → Excellent"}
         </span>
         <span>
           <strong>{compositeText}</strong>
           {layer === "wind"
             ? ` · ${windSource(composite) || "HRRR"}`
+            : layer === "viz"
+            ? ` · model output`
             : ` · ${composite}-day composite`}
           {!layerIsReal && dataReady && " · no data"}
         </span>
@@ -323,6 +349,42 @@ function InfoSection({ layer }) {
           <p className="info-p">
             <span className="swatch" style={{ background: "rgb(140,30,90)" }}></span>
             <strong>35+ kt</strong> — gale. Stay home.
+          </p>
+        </div>
+      )}
+      {layer === "viz" && (
+        <div className="info-section">
+          <h4 className="info-h">Predicted Visibility · model output</h4>
+          <p className="info-p">
+            <strong>This is a prediction, not a measurement.</strong> A zone-aware
+            model blends today's chl-a, SST, and wind with persistence and a
+            climatology baseline. Use the bar below to read the predicted
+            Secchi-equivalent visibility in feet.
+          </p>
+          <p className="info-p">
+            <span className="swatch" style={{ background: "rgb(124,45,18)" }}></span>
+            <strong>Very Poor</strong> — &lt;7 ft. Pea-soup conditions.
+          </p>
+          <p className="info-p">
+            <span className="swatch" style={{ background: "rgb(194,65,12)" }}></span>
+            <strong>Poor</strong> — 7–16 ft. Murky.
+          </p>
+          <p className="info-p">
+            <span className="swatch" style={{ background: "rgb(234,179,8)" }}></span>
+            <strong>Fair</strong> — 16–49 ft. Workable for most diving.
+          </p>
+          <p className="info-p">
+            <span className="swatch" style={{ background: "rgb(22,163,74)" }}></span>
+            <strong>Good</strong> — 49–80 ft. Strong.
+          </p>
+          <p className="info-p">
+            <span className="swatch" style={{ background: "rgb(14,165,233)" }}></span>
+            <strong>Excellent</strong> — 80 ft+. Tropical-grade.
+          </p>
+          <p className="info-p" style={{ fontSize: 10.5, color: "var(--ink-3)" }}>
+            Inputs partially wired: chl, SST, wind. Pending: WaveWatch swell,
+            precipitation, USGS river discharge, NOAA tide range. Treat outputs
+            as ±20%.
           </p>
         </div>
       )}

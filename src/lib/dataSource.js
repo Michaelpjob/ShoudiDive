@@ -114,6 +114,12 @@ export async function loadManifest() {
             source: w.source || null,  // "HRRR" / "GFS" — for the legend
           };
         }
+      } else if (layer === "viz") {
+        const range = info.range_ft;
+        for (const [slot, w] of Object.entries(info.windows || {})) {
+          const decoded = await decodePng(w.url, "linear", range);
+          state.layers.viz[slot] = { ...decoded, valid_at: w.valid_at };
+        }
       } else {
         const scale = info.scale || "linear";
         const range = info.range;
@@ -166,9 +172,11 @@ function bilinear(layer, lng, lat) {
 
 const COMPOSITE_KEY = { 1: "1d", 2: "2d", 3: "3d" };
 const WIND_SLOT_KEY = { 1: "now", 2: "p6h", 3: "p24h", 4: "p72h" };
+const VIZ_SLOT_KEY  = { 1: "now" };
 
 function slotKey(layer, composite) {
   if (layer === "wind") return WIND_SLOT_KEY[composite] || "now";
+  if (layer === "viz")  return VIZ_SLOT_KEY[composite] || "now";
   return COMPOSITE_KEY[composite] || "1d";
 }
 
@@ -185,6 +193,11 @@ export function getChl(lng, lat, composite = 1) {
 export function getWindSpeed(lng, lat, composite = 1) {
   // Returns knots (NaN if no data).
   return bilinear(state.layers.wind?.[slotKey("wind", composite)], lng, lat);
+}
+
+export function getVizFt(lng, lat, composite = 1) {
+  // Returns predicted Secchi visibility in feet (NaN if not loaded).
+  return bilinear(state.layers.viz?.[slotKey("viz", composite)], lng, lat);
 }
 
 // Returns the loaded scalar grid for a (layer, composite) — the same Float32Array
