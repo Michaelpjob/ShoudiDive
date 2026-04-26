@@ -42,6 +42,11 @@ import WindDayGrid, {
   selToSlotKey,
 } from "./components/WindDayGrid.jsx";
 import WindTimeline from "./components/WindTimeline.jsx";
+import SwellTimeline, { SwellCurrentCard } from "./components/SwellTimeline.jsx";
+import {
+  getSwell5dSummary,
+  getSwell5dStats,
+} from "./lib/dataSource.js";
 
 // Reactive viewport-width hook. Returns true at <760 px so we can branch the
 // layout between the floating-panel desktop UI and a bottom-sheet mobile UI.
@@ -105,13 +110,14 @@ function Chevron({ open }) {
   );
 }
 
-// Time filter is layer-aware: SST/chl use composite windows, wind uses
-// forecast slots, viz (predicted) is a single 'now' slot today.
+// Time filter is layer-aware: SST/chl use composite windows, wind/swell
+// use the 5-day timeline scrubber, viz (predicted) is a single 'now' slot.
 const TIME_OPTIONS = {
-  sst:  { label: "Composite",      helper: "rolling window",      buttons: ["1 Day", "2 Day", "3 Day"],         tags: ["freshest", "balanced", "best cover"] },
-  chl:  { label: "Composite",      helper: "rolling window",      buttons: ["1 Day", "2 Day", "3 Day"],         tags: ["freshest", "balanced", "best cover"] },
-  wind: { label: "Forecast Step",  helper: "HRRR + GFS",          buttons: ["Now",   "+6h",   "+24h", "+72h"],  tags: ["analysis", "afternoon", "tomorrow", "3-day"] },
-  viz:  { label: "Visibility forecast", helper: "model output · feet", buttons: ["Now"],                          tags: ["best estimate"] },
+  sst:   { label: "Composite",      helper: "rolling window",      buttons: ["1 Day", "2 Day", "3 Day"],         tags: ["freshest", "balanced", "best cover"] },
+  chl:   { label: "Composite",      helper: "rolling window",      buttons: ["1 Day", "2 Day", "3 Day"],         tags: ["freshest", "balanced", "best cover"] },
+  wind:  { label: "Forecast Step",  helper: "HRRR + GFS",          buttons: ["Now",   "+6h",   "+24h", "+72h"],  tags: ["analysis", "afternoon", "tomorrow", "3-day"] },
+  swell: { label: "Swell forecast", helper: "WaveWatch III · 5d",  buttons: ["Now"],                              tags: ["timeline below"] },
+  viz:   { label: "Visibility forecast", helper: "model output · feet", buttons: ["Now"],                          tags: ["best estimate"] },
 };
 
 function useDataVersion() {
@@ -169,26 +175,27 @@ export default function App() {
   const [prefs, setPrefs] = useState(loadPrefs);
   const [layer, setLayer] = useState("sst");
   const [composite, setComposite] = useState(2);
-  // Wind selection lives separately: {day, bucket, hour}. Translates to the
-  // composite slot key when the wind layer is active. Initialized lazily
-  // from summary.best_window once data loads.
+  // 5-day forecast layers (wind + swell) each maintain their own
+  // {day, bucket, hour} selection. selToSlotKey turns either one into a
+  // composite string slot key the data layer understands.
   const [windSel, setWindSel] = useState({ day: 0, bucket: "morning", hour: null });
+  const [swellSel, setSwellSel] = useState({ day: 0, bucket: "morning", hour: null });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const dataState = useDataVersion();
 
-  // Reconcile windSel against the loaded forecast. Today's morning + pre-
-  // dawn buckets get dropped from summary.json once they're past, so a
-  // hardcoded initial selection often points at a non-existent slot. We
-  // re-validate whenever the data state changes — if windSel doesn't have
-  // a corresponding bucket in summary, swap to summary.best_window (which
-  // the pipeline guarantees is a real bucket).
+  // Reconcile windSel + swellSel against their loaded forecasts. Today's
+  // morning + pre-dawn buckets get dropped from summary.json once they're
+  // past, so a hardcoded initial selection often points at a non-existent
+  // slot. We re-validate whenever the data state changes.
   useEffect(() => {
-    const summary = getWind5dSummary();
-    if (!summary) return;
-    if (selectionHasData(summary, windSel)) return;
-    setWindSel(defaultWindSelection(summary));
-    // dataState.ready is the trigger; intentionally NOT depending on
-    // windSel so this doesn't loop after we update the state above.
+    const wSummary = getWind5dSummary();
+    if (wSummary && !selectionHasData(wSummary, windSel)) {
+      setWindSel(defaultWindSelection(wSummary));
+    }
+    const sSummary = getSwell5dSummary();
+    if (sSummary && !selectionHasData(sSummary, swellSel)) {
+      setSwellSel(defaultWindSelection(sSummary));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataState?.ready, dataState?.manifest?.generated_at]);
 
@@ -221,6 +228,8 @@ export default function App() {
         setComposite={setComposite}
         windSel={windSel}
         setWindSel={setWindSel}
+        swellSel={swellSel}
+        setSwellSel={setSwellSel}
         opacity={prefs.opacity}
         units={prefs.units}
         dataState={dataState}
@@ -349,15 +358,14 @@ function SettingsPopover({ prefs, setPref }) {
   );
 }
 
-function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWindSel, opacity, units, dataState, mpaOn, setMpaOn, bathyOn, setBathyOn }) {
-  // For the wind layer the active "composite" is a slot-key string derived
-  // from windSel. selToSlotKey takes the loaded summary so it can fall back
-  // to best_window if the requested slot has no data (e.g. today's morning
-  // bucket is past). For other layers, stick with the legacy 1/2/3 integer.
+function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWindSel, swellSel, setSwellSel, opacity, units, dataState, mpaOn, setMpaOn, bathyOn, setBathyOn }) {
+  // Wind + swell layers use a slot-key string derived from their respective
+  // 5-day selection state; selToSlotKey falls back to a valid slot if the
+  // requested one has no data. SST/chl/viz keep the legacy integer composite.
   const activeComposite =
-    layer === "wind"
-      ? selToSlotKey(windSel, getWind5dSummary())
-      : composite;
+    layer === "wind"  ? selToSlotKey(windSel,  getWind5dSummary())
+    : layer === "swell" ? selToSlotKey(swellSel, getSwell5dSummary())
+    : composite;
   const isMobile = useIsMobile();
   const stageRef = useRef(null);
   const [size, setSize] = useState({ w: 1200, h: 700 });
@@ -783,6 +791,9 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
       {layer === "wind" && (
         <WindTimeline sel={windSel} setSel={setWindSel} />
       )}
+      {layer === "swell" && (
+        <SwellTimeline sel={swellSel} setSel={setSwellSel} />
+      )}
 
       {hover && (
         <Tooltip
@@ -843,7 +854,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
           </span>
         </div>
         {controlsOpen && <div className="panel-body">
-          <div className="layer-toggle layer-toggle-4" role="tablist">
+          <div className="layer-toggle layer-toggle-5" role="tablist">
             <button
               className={layer === "sst" ? "active" : ""}
               onClick={() => setLayer("sst")}
@@ -869,6 +880,14 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
               <span className="lt-sub">10 m · kt</span>
             </button>
             <button
+              className={layer === "swell" ? "active" : ""}
+              onClick={() => setLayer("swell")}
+              title="Significant wave height + period + direction from NOAA WaveWatch III"
+            >
+              <span className="lt-label">Swell</span>
+              <span className="lt-sub">Hs · ft</span>
+            </button>
+            <button
               className={layer === "viz" ? "active" : ""}
               onClick={() => setLayer("viz")}
               title="Predicted dive visibility — model output in feet, not a direct measurement"
@@ -887,6 +906,14 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
                 sel={windSel}
                 setSel={setWindSel}
               />
+            </div>
+          ) : layer === "swell" ? (
+            <div className="composite wind-grid-host">
+              <div className="composite-label">
+                <span>5-day swell</span>
+                <span className="hint">drag the timeline below</span>
+              </div>
+              <SwellCurrentCard sel={swellSel} />
             </div>
           ) : (
             <div className="composite">
@@ -1102,6 +1129,12 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
                 v = getWindSpeed(s.lng, s.lat, activeComposite);
                 valTxt = Number.isFinite(v) ? `${v.toFixed(1)}` : "—";
                 unit = "kt";
+                col = "var(--ink-2)";
+              } else if (layer === "swell") {
+                const w = getSwell5dStats(s.lng, s.lat, activeComposite);
+                v = Number.isFinite(w.hs) ? w.hs * 3.28084 : NaN;
+                valTxt = Number.isFinite(v) ? `${v.toFixed(1)}` : "—";
+                unit = "ft";
                 col = "var(--ink-2)";
               } else {
                 v = getVizFt(s.lng, s.lat, activeComposite);
@@ -1432,6 +1465,26 @@ function Tooltip({ x, y, layer, composite, lng, lat, units }) {
       const deg = windCompass(u, v);
       big = `${kt.toFixed(1)} kt`;
       sub = `from ${windCardinal(deg)} (${Math.round(deg)}°)`;
+    } else {
+      big = "—";
+      sub = "no data";
+    }
+  } else if (layer === "swell") {
+    title = "Swell · WaveWatch III";
+    const w = getSwell5dStats(lng, lat, composite);
+    if (Number.isFinite(w.hs)) {
+      const ft = w.hs * 3.28084;
+      const tpStr = Number.isFinite(w.tp) ? ` · ${w.tp.toFixed(0)} s` : "";
+      const dpStr = Number.isFinite(w.dp)
+        ? ` · ${windCardinal(w.dp)} ${Math.round(w.dp)}°`
+        : "";
+      const periodTag =
+        !Number.isFinite(w.tp) ? ""
+        : w.tp >= 12 ? "long-period groundswell"
+        : w.tp >= 8  ? "mixed swell"
+        : "short-period windswell";
+      big = `${ft.toFixed(1)} ft`;
+      sub = `${tpStr.replace(/^ · /, "")}${dpStr}${periodTag ? `\n${periodTag}` : ""}`.trim();
     } else {
       big = "—";
       sub = "no data";

@@ -25,6 +25,19 @@ const VIZ_RAMP = [
   { ft: 30, c: [6, 182, 212]  },   // Very Good — cyan      #06b6d4
   { ft: 50, c: [3, 105, 161]  },   // Excellent — deep blue #0369a1
 ];
+
+// Significant wave height ramp (Hs in METRES → rgb). Gradient reads
+// "glassy → small → fun → solid → big → don't" — increasing Hs as
+// increasing physical risk. Matches the design doc band table.
+const SWELL_RAMP_M = [
+  { hs: 0.0, c: [236, 254, 255] }, // 0 ft — glassy           #ecfeff
+  { hs: 0.3, c: [103, 232, 249] }, // 1 ft — calm              #67e8f9
+  { hs: 1.0, c: [132, 204, 22]  }, // 3 ft — workable          #84cc16
+  { hs: 1.5, c: [234, 179, 8]   }, // 5 ft — sketchy nearshore #eab308
+  { hs: 2.5, c: [249, 115, 22]  }, // 8 ft — big offshore      #f97316
+  { hs: 3.7, c: [220, 38, 38]   }, // 12 ft — XL               #dc2626
+  { hs: 6.0, c: [127, 29, 29]   }, // 20 ft+ — storm seas      #7f1d1d
+];
 function windColorRGBArr(kt) {
   if (!Number.isFinite(kt)) return [220, 220, 220];
   for (let i = 0; i < WIND_RAMP.length - 1; i++) {
@@ -56,6 +69,24 @@ function vizColorRGBArr(ft) {
     }
   }
   return VIZ_RAMP[VIZ_RAMP.length - 1].c;
+}
+
+// Hs in metres → rgb. Glassy → storm-seas gradient.
+function swellColorRGBArr(hsM) {
+  if (!Number.isFinite(hsM)) return [220, 220, 220];
+  if (hsM <= SWELL_RAMP_M[0].hs) return SWELL_RAMP_M[0].c;
+  for (let i = 0; i < SWELL_RAMP_M.length - 1; i++) {
+    const a = SWELL_RAMP_M[i], b = SWELL_RAMP_M[i + 1];
+    if (hsM >= a.hs && hsM <= b.hs) {
+      const k = (hsM - a.hs) / (b.hs - a.hs);
+      return [
+        Math.round(a.c[0] + (b.c[0] - a.c[0]) * k),
+        Math.round(a.c[1] + (b.c[1] - a.c[1]) * k),
+        Math.round(a.c[2] + (b.c[2] - a.c[2]) * k),
+      ];
+    }
+  }
+  return SWELL_RAMP_M[SWELL_RAMP_M.length - 1].c;
 }
 
 function rgbStrToArr(rgb) {
@@ -100,6 +131,7 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
       if (layer === "sst") rgb = rgbStrToArr(sstColor(v));
       else if (layer === "chl") rgb = rgbStrToArr(chlColor(v));
       else if (layer === "wind") rgb = windColorRGBArr(v);
+      else if (layer === "swell") rgb = swellColorRGBArr(v);  // Hs in m
       else rgb = vizColorRGBArr(v);  // viz layer (predicted Secchi feet)
       img.data[i * 4]     = rgb[0];
       img.data[i * 4 + 1] = rgb[1];

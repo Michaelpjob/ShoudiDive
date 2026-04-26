@@ -61,6 +61,41 @@ async function decodePng(url, scale, range) {
   return { data: out, width: c.width, height: c.height };
 }
 
+async function decodeWavePng(url, heightRange, periodRange) {
+  // RGBA: R=Hs (m), G=Tp (s), B=Dp (deg), A=valid.
+  const img = await loadImage(url);
+  const c = document.createElement("canvas");
+  c.width = img.naturalWidth;
+  c.height = img.naturalHeight;
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(img, 0, 0);
+  const id = ctx.getImageData(0, 0, c.width, c.height);
+  const N = c.width * c.height;
+  const hs = new Float32Array(N);
+  const tp = new Float32Array(N);
+  const dp = new Float32Array(N);
+  const speed = new Float32Array(N); // alias for `data` so DataOverlay's
+                                     // generic getLayerGrid path still works.
+  const [hLo, hHi] = heightRange;
+  const [pLo, pHi] = periodRange;
+  for (let i = 0; i < N; i++) {
+    const a = id.data[i * 4 + 3];
+    if (a === 0) {
+      hs[i] = NaN; tp[i] = NaN; dp[i] = NaN; speed[i] = NaN;
+    } else {
+      hs[i] = hLo + (id.data[i * 4]     / 255) * (hHi - hLo);
+      tp[i] = pLo + (id.data[i * 4 + 1] / 255) * (pHi - pLo);
+      dp[i] = (id.data[i * 4 + 2] / 255) * 360.0;
+      speed[i] = hs[i]; // Hs in metres drives the heatmap layer.
+    }
+  }
+  return {
+    hs, tp, dp,
+    width: c.width, height: c.height,
+    data: speed, // .data is what bilinear() / getLayerGrid() reads
+  };
+}
+
 async function decodeUVPng(url, uvRange) {
   const img = await loadImage(url);
   const c = document.createElement("canvas");
@@ -99,7 +134,40 @@ export async function loadManifest() {
     state.manifest = manifest;
     for (const [layer, info] of Object.entries(manifest.layers || {})) {
       state.layers[layer] = {};
-      if (layer === "wind5d") {
+      if (layer === "swell5d") {
+        // 5-day × 5-bucket swell forecast (gfswave). Load summary.json
+        // first; bucket + hourly wave PNGs (RGBA Hs/Tp/Dp) load in
+        // parallel with per-task error-tolerance.
+        try {
+          const sres = await fetch(info.summary_url, { cache: "no-cache" });
+          if (!sres.ok) throw new Error(`swell summary ${info.summary_url} ${sres.status}`);
+          const summary = await sres.json();
+          state.layers.swell5d = {
+            summary,
+            heightRange: info.height_range_m,
+            periodRange: info.period_range_s,
+            buckets:     {},
+            hourly:      {},
+            hourlyLoading: {},
+          };
+          const tasks = [];
+          for (const day of summary.days) {
+            for (const b of day.buckets) {
+              const key = bucketKey(day.day, b.bucket);
+              tasks.push(
+                decodeWavePng(b.wave_url, info.height_range_m, info.period_range_s)
+                  .then((wv) => {
+                    state.layers.swell5d.buckets[key] = wv;
+                  })
+                  .catch((e) => console.warn(`swell5d bucket ${key} failed`, e))
+              );
+            }
+          }
+          await Promise.all(tasks);
+        } catch (e) {
+          console.warn("dataSource: swell5d summary load failed", e);
+        }
+      } else if (layer === "wind5d") {
         // 5-day × 5-bucket forecast (new wind UI). Pull summary.json first
         // — keep the summary even if individual bucket PNGs fail to decode
         // so the day grid still renders with whatever data we have.
@@ -299,13 +367,18 @@ export function getVizFt(lng, lat, composite = 1) {
 // that bilinear() reads from. Lets DataOverlay render at native grid resolution
 // (one canvas pixel per source cell) and let the browser scale up smoothly.
 export function getLayerGrid(layer, composite) {
-  // Wind: a string composite is a wind5d slot key (e.g. "d2_morning").
+  // Wind / Swell: a string composite is a 5-day slot key (e.g. "d2_morning").
   if (layer === "wind" && typeof composite === "string") {
     const w = wind5dEntry(composite);
     return w ? { data: w.data, width: w.width, height: w.height } : null;
   }
   if (layer === "wind5d") {
     const w = wind5dEntry(composite);
+    return w ? { data: w.data, width: w.width, height: w.height } : null;
+  }
+  if (layer === "swell" || layer === "swell5d") {
+    const w = swell5dEntry(typeof composite === "string" ? composite : "d0_midday");
+    // .data is Hs in metres — DataOverlay's swell ramp expects m.
     return w ? { data: w.data, width: w.width, height: w.height } : null;
   }
   const w = state.layers[layer]?.[slotKey(layer, composite)];
@@ -358,6 +431,109 @@ export function getWind5dUV(lng, lat, slotKeyStr) {
          + v01 * (1 - tx) * ty       + v11 * tx * ty;
   };
   return { u: lookup(w.uvU), v: lookup(w.uvV) };
+}
+
+// ---- swell5d helpers -------------------------------------------------------
+
+function swell5dEntry(slotKeyStr) {
+  const s5 = state.layers.swell5d;
+  if (!s5) return null;
+  if (/_h\d{2}$/.test(slotKeyStr)) return s5.hourly[slotKeyStr] || null;
+  return s5.buckets[slotKeyStr] || null;
+}
+
+export function getSwell5dSummary() {
+  return state.layers.swell5d?.summary || null;
+}
+
+// (Hs in metres, Tp in seconds, Dp in degrees) at a lng/lat. NaN-safe.
+export function getSwell5dStats(lng, lat, slotKeyStr) {
+  const w = swell5dEntry(slotKeyStr);
+  if (!w) return { hs: NaN, tp: NaN, dp: NaN };
+  const fx = ((lng - BBOX.lngMin) / (BBOX.lngMax - BBOX.lngMin)) * (w.width - 1);
+  const fy = ((BBOX.latMax - lat) / (BBOX.latMax - BBOX.latMin)) * (w.height - 1);
+  if (fx < 0 || fx > w.width - 1 || fy < 0 || fy > w.height - 1) {
+    return { hs: NaN, tp: NaN, dp: NaN };
+  }
+  const x0 = Math.floor(fx), x1 = Math.min(x0 + 1, w.width - 1);
+  const y0 = Math.floor(fy), y1 = Math.min(y0 + 1, w.height - 1);
+  const tx = fx - x0, ty = fy - y0;
+  const sample = (arr) => {
+    const v00 = arr[y0 * w.width + x0];
+    const v10 = arr[y0 * w.width + x1];
+    const v01 = arr[y1 * w.width + x0];
+    const v11 = arr[y1 * w.width + x1];
+    let sum = 0, n = 0;
+    if (Number.isFinite(v00)) { sum += v00; n++; }
+    if (Number.isFinite(v10)) { sum += v10; n++; }
+    if (Number.isFinite(v01)) { sum += v01; n++; }
+    if (Number.isFinite(v11)) { sum += v11; n++; }
+    if (n === 0) return NaN;
+    if (n < 4) return sum / n;
+    return v00 * (1 - tx) * (1 - ty) + v10 * tx * (1 - ty)
+         + v01 * (1 - tx) * ty       + v11 * tx * ty;
+  };
+  return { hs: sample(w.hs), tp: sample(w.tp), dp: sample(w.dp) };
+}
+
+// bbox-aggregate stats for a single hour, computed from the loaded grid.
+export function getSwell5dHourlyStats(day, hour) {
+  const grid = state.layers.swell5d?.hourly?.[hourKey(day, hour)];
+  if (!grid) return null;
+  let sumHs = 0, sumTp = 0, sumSinDp = 0, sumCosDp = 0, n = 0;
+  for (let i = 0; i < grid.hs.length; i++) {
+    const h = grid.hs[i], t = grid.tp[i], d = grid.dp[i];
+    if (Number.isFinite(h) && Number.isFinite(t) && Number.isFinite(d)) {
+      sumHs += h; sumTp += t;
+      const r = (d * Math.PI) / 180;
+      sumSinDp += Math.sin(r);
+      sumCosDp += Math.cos(r);
+      n++;
+    }
+  }
+  if (n === 0) return null;
+  const meanHs = sumHs / n;
+  const meanTp = sumTp / n;
+  const dpRad = Math.atan2(sumSinDp / n, sumCosDp / n);
+  const meanDp = (((dpRad * 180) / Math.PI) + 360) % 360;
+  return { hs: meanHs, tp: meanTp, dp: meanDp };
+}
+
+// On-demand fetch of one day's 24 hourly wave PNGs. Idempotent + dedupes.
+export async function loadSwell5dHourly(day) {
+  const s5 = state.layers.swell5d;
+  if (!s5) return;
+  const flag = `d${day}`;
+  if (s5.hourlyLoading[flag]) return s5.hourlyLoading[flag];
+
+  const dayInfo = s5.summary?.days?.find((d) => d.day === day);
+  if (!dayInfo) return;
+  const tmpl = dayInfo.hourly_url_template;
+  const hours = Array.from({ length: 24 }, (_, h) => h);
+
+  s5.hourlyLoading[flag] = (async () => {
+    const tasks = hours.map(async (h) => {
+      const url = tmpl.replace("{HH}", String(h).padStart(2, "0"));
+      try {
+        const wv = await decodeWavePng(url, s5.heightRange, s5.periodRange);
+        s5.hourly[hourKey(day, h)] = wv;
+      } catch {
+        // missing hour — silently skip
+      }
+    });
+    await Promise.all(tasks);
+    notify();
+  })();
+  return s5.hourlyLoading[flag];
+}
+
+export function hasSwell5dHourly(day) {
+  const s5 = state.layers.swell5d;
+  if (!s5) return false;
+  for (let h = 0; h < 24; h++) {
+    if (s5.hourly[hourKey(day, h)]) return true;
+  }
+  return false;
 }
 
 // On-demand fetch of a single day's 24 hourly UV PNGs. Idempotent — returns
@@ -522,6 +698,9 @@ export function dataDates(layer, composite) {
     const dayInfo = summary.days?.find((d) => d.day === day);
     return dayInfo ? [`${dayInfo.date}`] : null;
   }
+  if (layer === "swell" && typeof composite === "string") {
+    return dataDatesForSwell(composite);
+  }
   const key = slotKey(layer, composite);
   const w = state.layers[layer]?.[key];
   if (!w) return null;
@@ -533,5 +712,17 @@ export function isReal(layer, composite) {
   if (layer === "wind" && typeof composite === "string") {
     return Boolean(wind5dEntry(composite));
   }
+  if (layer === "swell" && typeof composite === "string") {
+    return Boolean(swell5dEntry(composite));
+  }
   return Boolean(state.layers[layer]?.[slotKey(layer, composite)]);
+}
+
+export function dataDatesForSwell(slotKeyStr) {
+  const summary = state.layers.swell5d?.summary;
+  if (!summary) return null;
+  const dm = slotKeyStr.match(/^d(\d+)_/);
+  const day = dm ? +dm[1] : 0;
+  const dayInfo = summary.days?.find((d) => d.day === day);
+  return dayInfo ? [dayInfo.date] : null;
 }
