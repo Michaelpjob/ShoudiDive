@@ -1136,6 +1136,10 @@ body {
     width: auto;
     max-width: none;
   }
+  /* 4 forecast-step buttons need room; let them scroll horizontally if tight. */
+  .composite-buttons { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .composite-buttons button { min-width: 64px; }
+
   .info-tr {
     top: 50px;
     right: 8px;
@@ -1148,7 +1152,6 @@ body {
     width: auto;
   }
   .spots-bl {
-    /* Move spots above the bottom controls on mobile */
     bottom: auto;
     top: 50px;
     left: 8px;
@@ -1166,6 +1169,32 @@ body {
     bottom: 360px;
     right: 8px;
   }
+  /* Bigger touch targets. */
+  .zoom-ctl button { width: 40px; height: 40px; }
+  .mpa-pill { padding: 5px 10px; font-size: 11px; }
+
+  /* Popups become bottom sheets on phones. */
+  .mpa-popup-overlay { padding: 0; align-items: flex-end; }
+  .mpa-popup {
+    width: 100%;
+    max-width: none;
+    max-height: 80vh;
+    border-radius: 16px 16px 0 0;
+    border-bottom: none;
+    padding-top: 22px;
+  }
+  .mpa-popup::before {
+    content: "";
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--line);
+  }
+
   .attribution { display: none; }
   .tooltip { font-size: 11px; }
 }
@@ -1176,4 +1205,7 @@ body {
   .info-tr.collapsed { display: block; }
   .legend-br { bottom: 180px; }
   .zoom-ctl { bottom: 340px; }
+  /* Default-collapse the layer panel so the map dominates — user can tap to expand. */
+  .controls-tl .panel-body { display: none; }
+  .controls-tl.expanded-mobile .panel-body { display: block; }
 }

@@ -53,9 +53,9 @@ function Chevron({ open }) {
 
 // Time filter is layer-aware: SST/chl use composite windows, wind uses forecast slots.
 const TIME_OPTIONS = {
-  sst:  { label: "Composite",      helper: "rolling window",      buttons: ["1 Day", "2 Day", "3 Day"], tags: ["freshest", "balanced", "best cover"] },
-  chl:  { label: "Composite",      helper: "rolling window",      buttons: ["1 Day", "2 Day", "3 Day"], tags: ["freshest", "balanced", "best cover"] },
-  wind: { label: "Forecast Step",  helper: "HRRR hourly model",   buttons: ["Now",   "+6h",   "+24h"],  tags: ["analysis", "afternoon", "tomorrow"] },
+  sst:  { label: "Composite",      helper: "rolling window",      buttons: ["1 Day", "2 Day", "3 Day"],         tags: ["freshest", "balanced", "best cover"] },
+  chl:  { label: "Composite",      helper: "rolling window",      buttons: ["1 Day", "2 Day", "3 Day"],         tags: ["freshest", "balanced", "best cover"] },
+  wind: { label: "Forecast Step",  helper: "HRRR + GFS",          buttons: ["Now",   "+6h",   "+24h", "+72h"],  tags: ["analysis", "afternoon", "tomorrow", "3-day"] },
 };
 
 function useDataVersion() {
@@ -415,6 +415,87 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
     setVb({ x: 0, y: 0, w: size.w, h: size.h });
   }
 
+  // ---- Touch handlers: 1-finger pan, 2-finger pinch zoom -----------------
+  const touchStateRef = useRef(null);
+
+  function onTouchStart(e) {
+    const r = stageRef.current.getBoundingClientRect();
+    if (e.touches.length === 1) {
+      const t = e.touches[0];
+      touchStateRef.current = {
+        kind: "pan",
+        startScreenX: t.clientX - r.left,
+        startScreenY: t.clientY - r.top,
+        startVb: vb,
+      };
+      setHover(null);
+    } else if (e.touches.length === 2) {
+      const a = e.touches[0];
+      const b = e.touches[1];
+      const cx = (a.clientX + b.clientX) / 2 - r.left;
+      const cy = (a.clientY + b.clientY) / 2 - r.top;
+      touchStateRef.current = {
+        kind: "pinch",
+        cx,
+        cy,
+        startDist: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
+        startVb: vb,
+      };
+      setHover(null);
+    }
+  }
+
+  function onTouchMove(e) {
+    const ts = touchStateRef.current;
+    if (!ts) return;
+    e.preventDefault();
+    const r = stageRef.current.getBoundingClientRect();
+    if (ts.kind === "pan" && e.touches.length === 1) {
+      const t = e.touches[0];
+      const x = t.clientX - r.left;
+      const y = t.clientY - r.top;
+      const dxScreen = x - ts.startScreenX;
+      const dyScreen = y - ts.startScreenY;
+      const dxVb = (dxScreen / r.width) * ts.startVb.w;
+      const dyVb = (dyScreen / r.height) * ts.startVb.h;
+      setVb(clampVb({
+        x: ts.startVb.x - dxVb,
+        y: ts.startVb.y - dyVb,
+        w: ts.startVb.w,
+        h: ts.startVb.h,
+      }));
+    } else if (ts.kind === "pinch" && e.touches.length === 2) {
+      const a = e.touches[0];
+      const b = e.touches[1];
+      const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+      if (dist === 0) return;
+      const factor = ts.startDist / dist; // pinch-out (dist↑) → vbW↓ → zoom in
+      const newW = ts.startVb.w * factor;
+      const newH = newW * (size.h / size.w);
+      const cursorVbX = ts.startVb.x + (ts.cx / r.width) * ts.startVb.w;
+      const cursorVbY = ts.startVb.y + (ts.cy / r.height) * ts.startVb.h;
+      const newX = cursorVbX - (ts.cx / r.width) * newW;
+      const newY = cursorVbY - (ts.cy / r.height) * newH;
+      setVb(clampVb({ x: newX, y: newY, w: newW, h: newH }));
+    }
+  }
+
+  function onTouchEnd(e) {
+    if (e.touches.length === 0) {
+      touchStateRef.current = null;
+    } else if (e.touches.length === 1 && touchStateRef.current?.kind === "pinch") {
+      // Released one finger out of a pinch → restart as a pan from the remaining touch.
+      const r = stageRef.current.getBoundingClientRect();
+      const t = e.touches[0];
+      touchStateRef.current = {
+        kind: "pan",
+        startScreenX: t.clientX - r.left,
+        startScreenY: t.clientY - r.top,
+        startVb: vb,
+      };
+    }
+  }
+
   const fallbackText =
     layer === "wind"
       ? "now"
@@ -466,15 +547,53 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
       onMouseDown={onMouseDown}
       onMouseUp={onMouseUp}
       onWheel={onWheel}
-      style={{ cursor: isPanning ? "grabbing" : "grab" }}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      onTouchCancel={onTouchEnd}
+      style={{ cursor: isPanning ? "grabbing" : "grab", touchAction: "none" }}
     >
       <svg
         className="map-svg"
         viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
         preserveAspectRatio="none"
       >
+        <defs>
+          {/* Diagonal hatch shown wherever the satellite didn't capture
+              data for the active layer. Sits under the data overlay; the
+              overlay's transparent (NaN) cells let it show through. */}
+          <pattern
+            id="noDataHatch"
+            width="9"
+            height="9"
+            patternUnits="userSpaceOnUse"
+            patternTransform="rotate(45)"
+          >
+            <line
+              x1="0"
+              y1="0"
+              x2="0"
+              y2="9"
+              stroke="var(--ink-3)"
+              strokeWidth="2.5"
+              strokeOpacity="0.32"
+            />
+          </pattern>
+        </defs>
+
         {/* Sea + graticule under everything */}
         <SeaBasemap width={size.w} height={size.h} />
+
+        {/* No-data hatch — visible only where the data overlay has
+            transparent cells (i.e. NaN / missing satellite data). */}
+        <rect
+          x="0"
+          y="0"
+          width={size.w}
+          height={size.h}
+          fill="url(#noDataHatch)"
+          pointerEvents="none"
+        />
 
         {/* Data overlay sits on the sea; land on top will clip it visually */}
         <DataOverlay
@@ -610,17 +729,23 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
               <span>{timeOpts.label}</span>
               <span className="hint">{timeOpts.helper}</span>
             </div>
-            <div className="composite-buttons">
-              {[1, 2, 3].map((d, i) => (
-                <button
-                  key={d}
-                  className={composite === d ? "active" : ""}
-                  onClick={() => setComposite(d)}
-                >
-                  <span className="cb-num">{timeOpts.buttons[i]}</span>
-                  <span className="cb-tag">{timeOpts.tags[i]}</span>
-                </button>
-              ))}
+            <div
+              className="composite-buttons"
+              style={{ gridTemplateColumns: `repeat(${timeOpts.buttons.length}, 1fr)` }}
+            >
+              {timeOpts.buttons.map((label, i) => {
+                const d = i + 1;
+                return (
+                  <button
+                    key={d}
+                    className={composite === d ? "active" : ""}
+                    onClick={() => setComposite(d)}
+                  >
+                    <span className="cb-num">{label}</span>
+                    <span className="cb-tag">{timeOpts.tags[i]}</span>
+                  </button>
+                );
+              })}
             </div>
             <div className="composite-window">
               <span>{layer === "wind" ? "Valid" : "Window"}</span>
@@ -752,14 +877,24 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
               let v, valTxt, unit, col;
               if (layer === "sst") {
                 v = getSST(s.lng, s.lat, composite);
-                valTxt = units === "F" ? `${(v * 9 / 5 + 32).toFixed(1)}` : `${v.toFixed(1)}`;
+                if (Number.isFinite(v)) {
+                  valTxt = units === "F" ? `${(v * 9 / 5 + 32).toFixed(1)}` : `${v.toFixed(1)}`;
+                  col = sstColor(v);
+                } else {
+                  valTxt = "—";
+                  col = "var(--ink-3)";
+                }
                 unit = `°${units}`;
-                col = sstColor(v);
               } else if (layer === "chl") {
                 v = getChl(s.lng, s.lat, composite);
-                valTxt = `${v.toFixed(2)}`;
+                if (Number.isFinite(v)) {
+                  valTxt = `${v.toFixed(2)}`;
+                  col = chlColor(v);
+                } else {
+                  valTxt = "—";
+                  col = "var(--ink-3)";
+                }
                 unit = "mg/m³";
-                col = chlColor(v);
               } else {
                 v = getWindSpeed(s.lng, s.lat, composite);
                 valTxt = Number.isFinite(v) ? `${v.toFixed(1)}` : "—";
@@ -1041,25 +1176,35 @@ function Tooltip({ x, y, layer, composite, lng, lat, units }) {
   if (layer === "sst") {
     const val = getSST(lng, lat, composite);
     title = "Sea Surface Temp";
-    const f = val * 9 / 5 + 32;
-    big = units === "F" ? `${f.toFixed(1)}°F` : `${val.toFixed(1)}°C`;
-    sub =
-      f < 55 ? "Frigid · drysuit"
-      : f < 60 ? "Cold · 7 mm"
-      : f < 65 ? "Cool · 5 mm"
-      : f < 70 ? "Mild · 3 mm"
-      : f < 75 ? "Warm · springsuit"
-      : "Hot · trunks";
+    if (!Number.isFinite(val)) {
+      big = "—";
+      sub = "no data here";
+    } else {
+      const f = val * 9 / 5 + 32;
+      big = units === "F" ? `${f.toFixed(1)}°F` : `${val.toFixed(1)}°C`;
+      sub =
+        f < 55 ? "Frigid · drysuit"
+        : f < 60 ? "Cold · 7 mm"
+        : f < 65 ? "Cool · 5 mm"
+        : f < 70 ? "Mild · 3 mm"
+        : f < 75 ? "Warm · springsuit"
+        : "Hot · trunks";
+    }
   } else if (layer === "chl") {
     const val = getChl(lng, lat, composite);
     title = "Chl-a · Water Clarity";
-    big = `${val.toFixed(2)} mg/m³`;
-    sub =
-      val < 0.3 ? "Gin clear"
-      : val < 1.0 ? "Clear"
-      : val < 3.5 ? "Moderate"
-      : val < 10  ? "Productive"
-      : "Bloom";
+    if (!Number.isFinite(val)) {
+      big = "—";
+      sub = "no data here";
+    } else {
+      big = `${val.toFixed(2)} mg/m³`;
+      sub =
+        val < 0.3 ? "Gin clear"
+        : val < 1.0 ? "Clear"
+        : val < 3.5 ? "Moderate"
+        : val < 10  ? "Productive"
+        : "Bloom";
+    }
   } else {
     title = "Wind · 10 m";
     const { u, v } = getWindUV(lng, lat, composite);

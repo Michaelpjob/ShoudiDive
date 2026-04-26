@@ -1,13 +1,9 @@
 // Data source: loads /data/manifest.json + per-window PNGs and exposes
-// (lng, lat, window) → value lookups. Falls back to the synthetic functions
-// in mapData.js for any layer/window the manifest doesn't cover, so the UI
-// keeps working before the pipeline has run.
+// (lng, lat, window) → value lookups. Returns NaN where the satellite
+// didn't capture data — callers must handle "no data" explicitly. We
+// intentionally do NOT synthesize fake data; correctness over completeness.
 
-import {
-  BBOX,
-  sstAt as syntheticSST,
-  chlAt as syntheticChl,
-} from "./mapData.js";
+import { BBOX } from "./mapData.js";
 
 const state = {
   ready: false,
@@ -168,7 +164,7 @@ function bilinear(layer, lng, lat) {
 }
 
 const COMPOSITE_KEY = { 1: "1d", 2: "2d", 3: "3d" };
-const WIND_SLOT_KEY = { 1: "now", 2: "p6h", 3: "p24h" };
+const WIND_SLOT_KEY = { 1: "now", 2: "p6h", 3: "p24h", 4: "p72h" };
 
 function slotKey(layer, composite) {
   if (layer === "wind") return WIND_SLOT_KEY[composite] || "now";
@@ -176,15 +172,13 @@ function slotKey(layer, composite) {
 }
 
 export function getSST(lng, lat, composite = 1) {
-  const v = bilinear(state.layers.sst?.[slotKey("sst", composite)], lng, lat);
-  if (Number.isFinite(v)) return v;
-  return syntheticSST(lng, lat);
+  // Returns °C, or NaN if the satellite didn't capture this cell.
+  return bilinear(state.layers.sst?.[slotKey("sst", composite)], lng, lat);
 }
 
 export function getChl(lng, lat, composite = 1) {
-  const v = bilinear(state.layers.chl?.[slotKey("chl", composite)], lng, lat);
-  if (Number.isFinite(v)) return v;
-  return syntheticChl(lng, lat);
+  // Returns mg/m³, or NaN if the satellite didn't capture this cell.
+  return bilinear(state.layers.chl?.[slotKey("chl", composite)], lng, lat);
 }
 
 export function getWindSpeed(lng, lat, composite = 1) {

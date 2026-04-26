@@ -1,18 +1,6 @@
 import { useEffect, useRef } from "react";
-import {
-  BBOX,
-  unproject,
-  sstColor,
-  chlColor,
-  sstAt as syntheticSST,
-  chlAt as syntheticChl,
-} from "../lib/mapData.js";
-import {
-  getSST,
-  getChl,
-  getWindSpeed,
-  getLayerGrid,
-} from "../lib/dataSource.js";
+import { sstColor, chlColor } from "../lib/mapData.js";
+import { getLayerGrid } from "../lib/dataSource.js";
 
 // Beaufort-aligned wind ramp (knots → [r,g,b]); same stops as the legend.
 const WIND_RAMP = [
@@ -48,80 +36,44 @@ function rgbStrToArr(rgb) {
 export default function DataOverlay({ width, height, layer, composite, opacity, dataReady }) {
   const canvasRef = useRef(null);
 
-  // Two render modes:
-  //   1. Real data loaded → render canvas at the source grid's NATIVE resolution
-  //      (one canvas pixel per source cell). Browser scales smoothly to viewport
-  //      and stays sharp at any zoom. Way faster: ~100 K source cells beats
-  //      ~60 K viewport pixels with bilinear-from-source on every sample.
-  //   2. Data not loaded yet → fall back to the synthetic field rendered at
-  //      0.5× viewport so the prototype look isn't broken on first paint.
+  // Render the canvas at the source grid's NATIVE resolution — one canvas
+  // pixel per source cell. Cells where the satellite didn't capture data
+  // (NaN) stay transparent; the no-data hatch below the overlay shows
+  // through, so the user sees clearly where coverage is missing rather
+  // than fake-smooth synthetic colors.
   useEffect(() => {
     const cv = canvasRef.current;
     if (!cv) return;
     const ctx = cv.getContext("2d");
 
     const grid = getLayerGrid(layer, composite);
-    if (grid) {
-      // Native-grid render — one canvas pixel per source cell. Fall back to
-      // the synthetic field at the cell's lat/lng when source data is NaN
-      // (typically MUR's land mask or VIIRS chl cells the gap-filler couldn't
-      // recover). Without this, the inshore coast goes transparent and the
-      // overlay feels patchy in SoCal.
-      cv.width = grid.width;
-      cv.height = grid.height;
-      const img = ctx.createImageData(grid.width, grid.height);
-      const lngSpan = BBOX.lngMax - BBOX.lngMin;
-      const latSpan = BBOX.latMax - BBOX.latMin;
-      for (let i = 0; i < grid.data.length; i++) {
-        const v = grid.data[i];
-        let rgb;
-        if (Number.isFinite(v)) {
-          if (layer === "sst") rgb = rgbStrToArr(sstColor(v));
-          else if (layer === "chl") rgb = rgbStrToArr(chlColor(v));
-          else rgb = windColorRGBArr(v);
-        } else {
-          // Native grid: row-major. Cell (x, y) → (lng, lat).
-          const x = i % grid.width;
-          const y = (i / grid.width) | 0;
-          const lng = BBOX.lngMin + (x / (grid.width - 1)) * lngSpan;
-          const lat = BBOX.latMax - (y / (grid.height - 1)) * latSpan;
-          if (layer === "sst") rgb = rgbStrToArr(sstColor(syntheticSST(lng, lat)));
-          else if (layer === "chl") rgb = rgbStrToArr(chlColor(syntheticChl(lng, lat)));
-          else {
-            // Wind has no synthetic; leave transparent.
-            img.data[i * 4 + 3] = 0;
-            continue;
-          }
-        }
-        img.data[i * 4]     = rgb[0];
-        img.data[i * 4 + 1] = rgb[1];
-        img.data[i * 4 + 2] = rgb[2];
-        img.data[i * 4 + 3] = 255;
-      }
-      ctx.putImageData(img, 0, 0);
+    if (!grid) {
+      // No real data loaded for this (layer, window) yet: clear the canvas.
+      // The basemap + no-data hatch will be all that's visible.
+      cv.width = 1;
+      cv.height = 1;
+      ctx.clearRect(0, 0, 1, 1);
       return;
     }
 
-    // Fallback (data not loaded): synthetic field at 0.5× viewport.
-    const scale = 0.5;
-    const cw = Math.max(1, Math.floor(width * scale));
-    const ch = Math.max(1, Math.floor(height * scale));
-    cv.width = cw;
-    cv.height = ch;
-    const img = ctx.createImageData(cw, ch);
-    for (let py = 0; py < ch; py++) {
-      for (let px = 0; px < cw; px++) {
-        const [lng, lat] = unproject(px / scale, py / scale, width, height);
-        let rgb;
-        if (layer === "sst") rgb = rgbStrToArr(sstColor(getSST(lng, lat, composite)));
-        else if (layer === "chl") rgb = rgbStrToArr(chlColor(getChl(lng, lat, composite)));
-        else rgb = windColorRGBArr(getWindSpeed(lng, lat, composite));
-        const idx = (py * cw + px) * 4;
-        img.data[idx]     = rgb[0];
-        img.data[idx + 1] = rgb[1];
-        img.data[idx + 2] = rgb[2];
-        img.data[idx + 3] = 255;
+    cv.width = grid.width;
+    cv.height = grid.height;
+    const img = ctx.createImageData(grid.width, grid.height);
+    for (let i = 0; i < grid.data.length; i++) {
+      const v = grid.data[i];
+      if (!Number.isFinite(v)) {
+        // No data at this cell — leave transparent.
+        img.data[i * 4 + 3] = 0;
+        continue;
       }
+      let rgb;
+      if (layer === "sst") rgb = rgbStrToArr(sstColor(v));
+      else if (layer === "chl") rgb = rgbStrToArr(chlColor(v));
+      else rgb = windColorRGBArr(v);
+      img.data[i * 4]     = rgb[0];
+      img.data[i * 4 + 1] = rgb[1];
+      img.data[i * 4 + 2] = rgb[2];
+      img.data[i * 4 + 3] = 255;
     }
     ctx.putImageData(img, 0, 0);
   }, [width, height, layer, composite, dataReady]);
