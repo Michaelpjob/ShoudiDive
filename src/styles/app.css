@@ -489,14 +489,15 @@ body {
     rgb(140,30,90) 100%);
 }
 
-/* Predicted-visibility ramp: Very Poor → Poor → Fair → Good → Excellent.
-   Stops match VIZ_RAMP in DataOverlay.jsx (0/7/16/49/80 ft → 0/8.75/20/61.25/100%). */
+/* Predicted-visibility ramp: Poor → Fair → Good → Very Good → Excellent.
+   Stops match VIZ_RAMP in DataOverlay.jsx (0/10/20/30/50 ft over a 0..50 ft
+   legend bar → 0/20/40/60/100%). */
 .legend-bar.viz {
   background: linear-gradient(90deg,
-    rgb(124,45,18) 0%,
-    rgb(194,65,12) 8.75%,
+    rgb(194,65,12) 0%,
     rgb(234,179,8) 20%,
-    rgb(22,163,74) 61.25%,
+    rgb(132,204,22) 40%,
+    rgb(22,163,74) 60%,
     rgb(14,165,233) 100%);
 }
 

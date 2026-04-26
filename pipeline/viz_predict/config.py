@@ -129,11 +129,11 @@ SECCHI_MAX_M  = 25.0
 SCORE_FULL_SECCHI_M = 30.0
 
 CLARITY_CATEGORIES = [
-    (  0,  20, "Very Poor", "#7c2d12"),
-    ( 20,  40, "Poor",      "#c2410c"),
-    ( 40,  60, "Fair",      "#eab308"),
-    ( 60,  80, "Good",      "#16a34a"),
-    ( 80, 101, "Excellent", "#0ea5e9"),
+    (  0,  20, "Poor",      "#c2410c"),  #  0..10 ft  /  0..3.0 m
+    ( 20,  40, "Fair",      "#eab308"),  # 10..20 ft  /  3.0..6.1 m
+    ( 40,  60, "Good",      "#84cc16"),  # 20..30 ft  /  6.1..9.1 m
+    ( 60,  80, "Very Good", "#16a34a"),  # 30..50 ft  /  9.1..15.2 m
+    ( 80, 101, "Excellent", "#0ea5e9"),  # 50+ ft     /  15.2+ m
 ]
 
 

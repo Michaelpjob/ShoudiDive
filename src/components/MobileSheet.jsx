@@ -254,7 +254,7 @@ function LegendSection({ layer, units, composite, compositeText, layerIsReal, da
         ) : layer === "wind" ? (
           <><span>0</span><span>5</span><span>10</span><span>15</span><span>20</span><span>25</span><span>35+</span></>
         ) : (
-          <><span>0</span><span>7</span><span>16</span><span>49</span><span>80+</span></>
+          <><span>0</span><span>10</span><span>20</span><span>30</span><span>50+</span></>
         )}
       </div>
       <div className="legend-meta" style={{ marginTop: 10 }}>
@@ -262,7 +262,7 @@ function LegendSection({ layer, units, composite, compositeText, layerIsReal, da
           {layer === "sst" ? "Cold upwelling → Heatwave"
             : layer === "chl" ? "Gin-clear → Bloom"
             : layer === "wind" ? "Calm → Gale"
-            : "Very Poor → Excellent"}
+            : "Poor → Excellent"}
         </span>
         <span>
           <strong>{compositeText}</strong>
@@ -362,29 +362,29 @@ function InfoSection({ layer }) {
             Secchi-equivalent visibility in feet.
           </p>
           <p className="info-p">
-            <span className="swatch" style={{ background: "rgb(124,45,18)" }}></span>
-            <strong>Very Poor</strong> — &lt;7 ft. Pea-soup conditions.
-          </p>
-          <p className="info-p">
             <span className="swatch" style={{ background: "rgb(194,65,12)" }}></span>
-            <strong>Poor</strong> — 7–16 ft. Murky.
+            <strong>Poor</strong> — 0–10 ft. Pea-soup; consider another day.
           </p>
           <p className="info-p">
             <span className="swatch" style={{ background: "rgb(234,179,8)" }}></span>
-            <strong>Fair</strong> — 16–49 ft. Workable for most diving.
+            <strong>Fair</strong> — 10–20 ft. Murky but workable.
+          </p>
+          <p className="info-p">
+            <span className="swatch" style={{ background: "rgb(132,204,22)" }}></span>
+            <strong>Good</strong> — 20–30 ft. Solid CA-coast day.
           </p>
           <p className="info-p">
             <span className="swatch" style={{ background: "rgb(22,163,74)" }}></span>
-            <strong>Good</strong> — 49–80 ft. Strong.
+            <strong>Very Good</strong> — 30–50 ft. Strong; gin-clear pockets.
           </p>
           <p className="info-p">
             <span className="swatch" style={{ background: "rgb(14,165,233)" }}></span>
-            <strong>Excellent</strong> — 80 ft+. Tropical-grade.
+            <strong>Excellent</strong> — 50 ft+. Tropical-grade.
           </p>
           <p className="info-p" style={{ fontSize: 10.5, color: "var(--ink-3)" }}>
-            Inputs partially wired: chl, SST, wind. Pending: WaveWatch swell,
-            precipitation, USGS river discharge, NOAA tide range. Treat outputs
-            as ±20%.
+            Driven by chl, SST, 5-day wind, 3-day max swell, precipitation,
+            USGS river discharge, NOAA tide range, and a monthly climatology.
+            Treat outputs as ±20%.
           </p>
         </div>
       )}

@@ -44,9 +44,14 @@ def apply_turbidity_corrections(secchi_m, zone, bottom_stir, runoff_idx,
     return out
 
 
-# Piecewise-linear Secchi-to-score that matches the vis.md band edges:
-#   0m -> 0,  2m -> 20,  5m -> 40,  15m -> 60,  30m -> 80,  60m -> 100
-_BAND_KNOTS_M    = np.array([0.0, 2.0, 5.0, 15.0, 30.0, 60.0])
+# Piecewise-linear Secchi-to-score, calibrated to the published band edges:
+#     0   ft / 0.0  m  -> score 0     (low edge of Poor)
+#    10   ft / 3.0  m  -> score 20    (Poor → Fair)
+#    20   ft / 6.1  m  -> score 40    (Fair → Good)
+#    30   ft / 9.1  m  -> score 60    (Good → Very Good)
+#    50   ft / 15.2 m  -> score 80    (Very Good → Excellent)
+#   ~80   ft / 24.4 m  -> score 100   (top of the encoding range)
+_BAND_KNOTS_M    = np.array([0.0, 3.0, 6.1, 9.1, 15.2, 24.4])
 _BAND_KNOT_SCORE = np.array([0.0, 20.0, 40.0, 60.0, 80.0, 100.0])
 
 

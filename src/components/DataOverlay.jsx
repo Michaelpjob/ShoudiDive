@@ -13,14 +13,15 @@ const WIND_RAMP = [
   { kt: 35, c: [140, 30, 90]   },
 ];
 
-// Predicted-visibility ramp (Secchi feet → [r,g,b]). Stops match the
-// framework's clarity categories: Very Poor → Poor → Fair → Good → Excellent.
+// Predicted-visibility ramp (Secchi feet → [r,g,b]). Stops sit at the lower
+// edge of each category band so cells between bands interpolate smoothly:
+// Poor (0–10) → Fair (10–20) → Good (20–30) → Very Good (30–50) → Excellent (50+).
 const VIZ_RAMP = [
-  { ft: 0,  c: [124, 45, 18]  },   // Very Poor — saddle brown
-  { ft: 7,  c: [194, 65, 12]  },   // Poor — burnt orange
-  { ft: 16, c: [234, 179, 8]  },   // Fair — amber
-  { ft: 49, c: [22, 163, 74]  },   // Good — emerald
-  { ft: 80, c: [14, 165, 233] },   // Excellent — sky blue
+  { ft: 0,  c: [194, 65, 12]  },   // Poor — burnt orange  #c2410c
+  { ft: 10, c: [234, 179, 8]  },   // Fair — amber          #eab308
+  { ft: 20, c: [132, 204, 22] },   // Good — lime           #84cc16
+  { ft: 30, c: [22, 163, 74]  },   // Very Good — emerald   #16a34a
+  { ft: 50, c: [14, 165, 233] },   // Excellent — sky blue  #0ea5e9
 ];
 function windColorRGBArr(kt) {
   if (!Number.isFinite(kt)) return [220, 220, 220];

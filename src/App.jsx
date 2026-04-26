@@ -1048,7 +1048,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
               </>
             ) : (
               <>
-                <span>0</span><span>7</span><span>16</span><span>49</span><span>80+</span>
+                <span>0</span><span>10</span><span>20</span><span>30</span><span>50+</span>
               </>
             )}
           </div>
@@ -1057,7 +1057,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
               {layer === "sst" ? "Cold upwelling → Heatwave"
                 : layer === "chl" ? "Gin-clear → Bloom"
                 : layer === "wind" ? "Calm → Gale"
-                : "Very Poor → Excellent"}
+                : "Poor → Excellent"}
             </span>
             <span>
               <strong>{compositeText}</strong>
@@ -1312,10 +1312,10 @@ function Tooltip({ x, y, layer, composite, lng, lat, units }) {
     const ft = getVizFt(lng, lat, composite);
     if (Number.isFinite(ft)) {
       const cat =
-        ft < 7 ? "Very poor"
-        : ft < 16 ? "Poor"
-        : ft < 49 ? "Fair"
-        : ft < 80 ? "Good"
+        ft < 10 ? "Poor"
+        : ft < 20 ? "Fair"
+        : ft < 30 ? "Good"
+        : ft < 50 ? "Very Good"
         : "Excellent";
       big = `~${Math.round(ft)} ft`;
       sub = `${cat} · model output`;
