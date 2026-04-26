@@ -36,6 +36,9 @@ jobs:
         run: pip install -r pipeline/requirements.txt
 
       - name: Fetch latest ocean data
+        # Don't block the deploy on a flaky NOMADS/ERDDAP — the previously
+        # committed PNGs in public/data/ are still valid for the build.
+        continue-on-error: true
         run: python pipeline/fetch.py
 
       - name: Install JS dependencies

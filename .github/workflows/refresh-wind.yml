@@ -35,6 +35,9 @@ jobs:
         run: pip install -r pipeline/requirements.txt
 
       - name: Fetch latest wind (HRRR now/+6h/+24h)
+        # Don't block the deploy on a flaky NOMADS — the previously
+        # committed wind PNGs in public/data/ are still valid for the build.
+        continue-on-error: true
         run: python pipeline/fetch_wind.py
 
       - name: Install JS dependencies
