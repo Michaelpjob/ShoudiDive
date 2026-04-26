@@ -98,11 +98,13 @@ def open_first_array(nc_path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]
     if arr.ndim == 0 or not np.isfinite(arr).any():
         ds.close()
         return None
-    # ERDDAP sometimes returns extra singleton dims that .squeeze() misses
-    # when there are >1 leading axes (e.g. (1, 1, lat, lon) from VIIRS with
-    # an altitude axis). Force-reduce to 2D by collapsing leading axes.
-    while arr.ndim > 2 and arr.shape[0] == 1:
-        arr = arr[0]
+    # ERDDAP sometimes returns multiple leading axes (e.g. (T, lat, lon) when
+    # MUR has 2 daily slices in the window, or (1, 1, lat, lon) for VIIRS).
+    # Collapse anything before the (lat, lon) trailing pair by nan-mean.
+    while arr.ndim > 2:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            arr = np.nanmean(arr, axis=0)
     if arr.ndim != 2:
         print(f"  unexpected shape {arr.shape} for {nc_path.name}, skipping")
         ds.close()
