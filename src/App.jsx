@@ -32,6 +32,33 @@ import {
   getDataState,
 } from "./lib/dataSource.js";
 
+// Minimal stroke-based freediver — head, body streamlined diagonally,
+// monofin chevron at the tail. Inherits color from `currentColor` so it
+// adapts to light/dark themes via the surrounding `.brand-mark` color.
+function FreediverLogo() {
+  return (
+    <svg
+      className="brand-mark"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {/* monofin chevron at the tail */}
+      <path d="M2.5 4.5 L4.5 6.5 L2.5 8.5" />
+      {/* body line from fin to shoulder */}
+      <path d="M5 6.5 L13 13.5" />
+      {/* head */}
+      <circle cx="14.4" cy="14.6" r="1.7" fill="currentColor" stroke="none" />
+      {/* arms streamlined forward into the depth */}
+      <path d="M15.7 16 L21 21" />
+    </svg>
+  );
+}
+
 function Chevron({ open }) {
   return (
     <svg
@@ -177,12 +204,12 @@ function TopBar({ onSettings, settingsOpen, dataState }) {
   return (
     <div className="topbar">
       <div className="brand">
-        <div className="brand-mark"></div>
+        <FreediverLogo />
         <div>
-          <div className="brand-name">CA Coast Conditions</div>
+          <div className="brand-name">ShouldIDive</div>
         </div>
         <span className="brand-tag">
-          Sea Temp · Water Clarity · CA Coast 32.4°–37.6°N
+          Sea Temp · Water Clarity · Wind · CA Coast 31.8°–37.6°N
         </span>
       </div>
       <div className="topbar-meta">
