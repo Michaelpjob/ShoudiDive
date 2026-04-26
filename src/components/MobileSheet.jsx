@@ -378,8 +378,8 @@ function InfoSection({ layer }) {
             <strong>Very Good</strong> — 30–50 ft. Cyan; clean blue water.
           </p>
           <p className="info-p">
-            <span className="swatch" style={{ background: "rgb(14,165,233)" }}></span>
-            <strong>Excellent</strong> — 50 ft+. Sky blue; tropical / once-a-year clarity.
+            <span className="swatch" style={{ background: "rgb(3,105,161)" }}></span>
+            <strong>Excellent</strong> — 50 ft+. Deep blue; tropical / once-a-year clarity.
           </p>
           <p className="info-p" style={{ fontSize: 10.5, color: "var(--ink-3)" }}>
             Driven by chl, SST, 5-day wind, 3-day max swell, precipitation,

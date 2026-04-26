@@ -967,8 +967,8 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
                   <strong>Very Good</strong> — 30–50 ft. Cyan; clean blue water.
                 </p>
                 <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(14,165,233)" }}></span>
-                  <strong>Excellent</strong> — 50 ft+. Sky blue; tropical / once-a-year clarity.
+                  <span className="swatch" style={{ background: "rgb(3,105,161)" }}></span>
+                  <strong>Excellent</strong> — 50 ft+. Deep blue; tropical / once-a-year clarity.
                 </p>
               </div>
             )}

@@ -133,7 +133,7 @@ CLARITY_CATEGORIES = [
     ( 20,  40, "Fair",      "#eab308"),  # 10..20 ft  /  3.0..6.1 m  — washed out
     ( 40,  60, "Good",      "#84cc16"),  # 20..30 ft  /  6.1..9.1 m  — typical CA kelp diving
     ( 60,  80, "Very Good", "#06b6d4"),  # 30..50 ft  /  9.1..15.2 m — clean blue water
-    ( 80, 101, "Excellent", "#0ea5e9"),  # 50+ ft     /  15.2+ m     — tropical / once-a-year
+    ( 80, 101, "Excellent", "#0369a1"),  # 50+ ft     /  15.2+ m     — tropical / once-a-year
 ]
 
 

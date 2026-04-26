@@ -23,7 +23,7 @@ const VIZ_RAMP = [
   { ft: 10, c: [234, 179, 8]  },   // Fair — yellow         #eab308
   { ft: 20, c: [132, 204, 22] },   // Good — lime           #84cc16
   { ft: 30, c: [6, 182, 212]  },   // Very Good — cyan      #06b6d4
-  { ft: 50, c: [14, 165, 233] },   // Excellent — sky blue  #0ea5e9
+  { ft: 50, c: [3, 105, 161]  },   // Excellent — deep blue #0369a1
 ];
 function windColorRGBArr(kt) {
   if (!Number.isFinite(kt)) return [220, 220, 220];
