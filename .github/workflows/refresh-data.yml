@@ -1,17 +1,19 @@
-name: Refresh ocean data
+name: Refresh ocean data + deploy
 
-# Pulls fresh SST + chl from NOAA CoastWatch ERDDAP, commits the new
-# manifest + PNGs to main. Cloudflare Pages picks up the push and redeploys
-# the site automatically.
+# Pulls fresh SST + chl from NOAA CoastWatch ERDDAP, builds the site,
+# and direct-uploads to Cloudflare Pages via wrangler. Also commits the
+# refreshed data files so the repo + git history stay in sync.
 
 on:
   schedule:
     # 06:00 UTC daily (~23:00 PT prior day) — after MUR L4 typically publishes.
     - cron: "0 6 * * *"
+  push:
+    branches: [main]
   workflow_dispatch: # manual run from the Actions tab
 
 jobs:
-  refresh:
+  refresh-and-deploy:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -25,19 +27,38 @@ jobs:
           cache: pip
           cache-dependency-path: pipeline/requirements.txt
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
       - name: Install pipeline dependencies
         run: pip install -r pipeline/requirements.txt
 
       - name: Fetch latest ocean data
         run: python pipeline/fetch.py
 
-      - name: Commit if data changed
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=shouldidive --branch=main --commit-dirty=true
+
+      - name: Commit refreshed data
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add public/data/
           if git diff --staged --quiet; then
-            echo "No data changes — nothing to commit."
+            echo "No data changes to commit."
           else
             git commit -m "data: refresh $(date -u +%Y-%m-%d)"
             git push
