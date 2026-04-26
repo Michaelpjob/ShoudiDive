@@ -14,11 +14,15 @@ function loadLand() {
 
 function ringToPath(ring, w, h) {
   if (!ring.length) return "";
+  // 3-decimal precision (0.001 base-units) so the path stays sharp even at
+  // ~30× zoom. At toFixed(1) the path snapped to 0.1 px which looked fine
+  // when the basemap was Natural Earth 10 m (200 verts) but visibly
+  // re-blockified the OSM coastline once zoom > 4×.
   const [x0, y0] = project(ring[0][0], ring[0][1], w, h);
-  let d = `M${x0.toFixed(1)} ${y0.toFixed(1)}`;
+  let d = `M${x0.toFixed(3)} ${y0.toFixed(3)}`;
   for (let i = 1; i < ring.length; i++) {
     const [x, y] = project(ring[i][0], ring[i][1], w, h);
-    d += `L${x.toFixed(1)} ${y.toFixed(1)}`;
+    d += `L${x.toFixed(3)} ${y.toFixed(3)}`;
   }
   return d + "Z";
 }
