@@ -116,7 +116,7 @@ function LayerSection({
           <span className="ms-lt-sub">°{units}</span>
         </button>
         <button className={layer === "chl" ? "active" : ""} onClick={() => setLayer("chl")}>
-          <span className="ms-lt-label">Visibility</span>
+          <span className="ms-lt-label">Chl</span>
           <span className="ms-lt-sub">mg/m³</span>
         </button>
         <button className={layer === "wind" ? "active" : ""} onClick={() => setLayer("wind")}>
@@ -124,8 +124,8 @@ function LayerSection({
           <span className="ms-lt-sub">kt</span>
         </button>
         <button className={layer === "viz" ? "active" : ""} onClick={() => setLayer("viz")}>
-          <span className="ms-lt-label">Forecast</span>
-          <span className="ms-lt-sub">predicted</span>
+          <span className="ms-lt-label">Visibility</span>
+          <span className="ms-lt-sub">ft</span>
         </button>
       </div>
 

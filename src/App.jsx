@@ -111,7 +111,7 @@ const TIME_OPTIONS = {
   sst:  { label: "Composite",      helper: "rolling window",      buttons: ["1 Day", "2 Day", "3 Day"],         tags: ["freshest", "balanced", "best cover"] },
   chl:  { label: "Composite",      helper: "rolling window",      buttons: ["1 Day", "2 Day", "3 Day"],         tags: ["freshest", "balanced", "best cover"] },
   wind: { label: "Forecast Step",  helper: "HRRR + GFS",          buttons: ["Now",   "+6h",   "+24h", "+72h"],  tags: ["analysis", "afternoon", "tomorrow", "3-day"] },
-  viz:  { label: "Prediction",     helper: "model output",        buttons: ["Now"],                              tags: ["best estimate"] },
+  viz:  { label: "Visibility forecast", helper: "model output · feet", buttons: ["Now"],                          tags: ["best estimate"] },
 };
 
 function useDataVersion() {
@@ -847,6 +847,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
             <button
               className={layer === "sst" ? "active" : ""}
               onClick={() => setLayer("sst")}
+              title="Sea-surface temperature from MUR satellite"
             >
               <span className="lt-label">Sea Temp</span>
               <span className="lt-sub">°{units}</span>
@@ -854,13 +855,15 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
             <button
               className={layer === "chl" ? "active" : ""}
               onClick={() => setLayer("chl")}
+              title="Chlorophyll-a concentration from VIIRS — visibility proxy"
             >
-              <span className="lt-label">Visibility</span>
+              <span className="lt-label">Chlorophyll</span>
               <span className="lt-sub">mg/m³</span>
             </button>
             <button
               className={layer === "wind" ? "active" : ""}
               onClick={() => setLayer("wind")}
+              title="10 m wind from HRRR + GFS"
             >
               <span className="lt-label">Wind</span>
               <span className="lt-sub">10 m · kt</span>
@@ -868,10 +871,10 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
             <button
               className={layer === "viz" ? "active" : ""}
               onClick={() => setLayer("viz")}
-              title="Predicted visibility — model output, not a measurement"
+              title="Predicted dive visibility — model output in feet, not a direct measurement"
             >
-              <span className="lt-label">Forecast</span>
-              <span className="lt-sub">predicted</span>
+              <span className="lt-label">Visibility</span>
+              <span className="lt-sub">ft · forecast</span>
             </button>
           </div>
           {layer === "wind" ? (
