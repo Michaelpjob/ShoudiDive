@@ -1,5 +1,12 @@
 import { useEffect, useRef } from "react";
-import { unproject, sstColor, chlColor } from "../lib/mapData.js";
+import {
+  BBOX,
+  unproject,
+  sstColor,
+  chlColor,
+  sstAt as syntheticSST,
+  chlAt as syntheticChl,
+} from "../lib/mapData.js";
 import {
   getSST,
   getChl,
@@ -55,21 +62,37 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
 
     const grid = getLayerGrid(layer, composite);
     if (grid) {
-      // Native-grid render — one canvas pixel per source cell.
+      // Native-grid render — one canvas pixel per source cell. Fall back to
+      // the synthetic field at the cell's lat/lng when source data is NaN
+      // (typically MUR's land mask or VIIRS chl cells the gap-filler couldn't
+      // recover). Without this, the inshore coast goes transparent and the
+      // overlay feels patchy in SoCal.
       cv.width = grid.width;
       cv.height = grid.height;
       const img = ctx.createImageData(grid.width, grid.height);
+      const lngSpan = BBOX.lngMax - BBOX.lngMin;
+      const latSpan = BBOX.latMax - BBOX.latMin;
       for (let i = 0; i < grid.data.length; i++) {
         const v = grid.data[i];
         let rgb;
-        if (!Number.isFinite(v)) {
-          // Out-of-coverage cell — leave transparent so basemap shows through.
-          img.data[i * 4 + 3] = 0;
-          continue;
+        if (Number.isFinite(v)) {
+          if (layer === "sst") rgb = rgbStrToArr(sstColor(v));
+          else if (layer === "chl") rgb = rgbStrToArr(chlColor(v));
+          else rgb = windColorRGBArr(v);
+        } else {
+          // Native grid: row-major. Cell (x, y) → (lng, lat).
+          const x = i % grid.width;
+          const y = (i / grid.width) | 0;
+          const lng = BBOX.lngMin + (x / (grid.width - 1)) * lngSpan;
+          const lat = BBOX.latMax - (y / (grid.height - 1)) * latSpan;
+          if (layer === "sst") rgb = rgbStrToArr(sstColor(syntheticSST(lng, lat)));
+          else if (layer === "chl") rgb = rgbStrToArr(chlColor(syntheticChl(lng, lat)));
+          else {
+            // Wind has no synthetic; leave transparent.
+            img.data[i * 4 + 3] = 0;
+            continue;
+          }
         }
-        if (layer === "sst") rgb = rgbStrToArr(sstColor(v));
-        else if (layer === "chl") rgb = rgbStrToArr(chlColor(v));
-        else rgb = windColorRGBArr(v);
         img.data[i * 4]     = rgb[0];
         img.data[i * 4 + 1] = rgb[1];
         img.data[i * 4 + 2] = rgb[2];
