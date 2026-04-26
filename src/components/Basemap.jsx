@@ -6,7 +6,11 @@ import { project, BBOX } from "../lib/mapData.js";
 let landPromise = null;
 function loadLand() {
   if (landPromise) return landPromise;
-  landPromise = fetch("/data/land.geojson", { cache: "force-cache" })
+  // Default cache mode (not force-cache) so the browser revalidates against
+  // the CDN's ETag instead of pinning the first-fetched copy forever.
+  // force-cache used to make sense when the coastline never changed; with
+  // OSM-derived geometry that's no longer true.
+  landPromise = fetch("/data/land.geojson")
     .then((r) => (r.ok ? r.json() : null))
     .catch(() => null);
   return landPromise;

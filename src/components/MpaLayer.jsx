@@ -23,7 +23,9 @@ export function styleForType(type) {
 let mpaPromise = null;
 function loadMpaBoundaries() {
   if (mpaPromise) return mpaPromise;
-  mpaPromise = fetch("/data/mpa-boundaries.geojson", { cache: "force-cache" })
+  // Default cache mode so the browser revalidates with the CDN instead of
+  // serving a permanently-pinned copy from disk.
+  mpaPromise = fetch("/data/mpa-boundaries.geojson")
     .then((r) => (r.ok ? r.json() : null))
     .catch(() => null);
   return mpaPromise;

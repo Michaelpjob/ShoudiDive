@@ -43,7 +43,9 @@ const TIER_PRIORITY = {
 let bathyPromise = null;
 export function loadBathyFeatures() {
   if (bathyPromise) return bathyPromise;
-  bathyPromise = fetch("/data/bathy-features.geojson", { cache: "force-cache" })
+  // Default cache mode so the browser revalidates with the CDN instead of
+  // serving a permanently-pinned copy from disk.
+  bathyPromise = fetch("/data/bathy-features.geojson")
     .then((r) => (r.ok ? r.json() : null))
     .catch(() => null);
   return bathyPromise;
