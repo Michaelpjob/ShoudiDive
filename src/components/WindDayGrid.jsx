@@ -280,8 +280,10 @@ export default function WindDayGrid({ sel, setSel, layout = "stack" }) {
   );
 }
 
-// Convenience helper: picks an initial selection (best_window if present,
-// else day-0 morning) the first time the wind layer is opened.
+// Convenience helper: picks an initial selection. Priority:
+//   1. summary.best_window (server-side glassiest pick)
+//   2. First day with any bucket data → its first bucket
+//   3. Last-resort hardcoded {0, morning} (lets the empty state still mount)
 export function defaultWindSelection(summary) {
   if (summary?.best_window) {
     return {
@@ -290,12 +292,34 @@ export function defaultWindSelection(summary) {
       hour:   null,
     };
   }
+  for (const d of summary?.days || []) {
+    if (d.buckets?.length) {
+      return { day: d.day, bucket: d.buckets[0].bucket, hour: null };
+    }
+  }
   return { day: 0, bucket: "morning", hour: null };
 }
 
-// Build a wind5d slot key from a selection.
-export function selToSlotKey(sel) {
-  if (!sel) return "d0_morning";
+// True iff the (day, bucket) combo exists in the loaded summary. Today's
+// morning + pre-dawn buckets are dropped once they're in the past, so this
+// has to be data-driven, not assumed-constant.
+export function selectionHasData(summary, sel) {
+  if (!summary || !sel) return false;
+  const dayInfo = summary.days?.find((d) => d.day === sel.day);
+  if (!dayInfo) return false;
+  return dayInfo.buckets?.some((b) => b.bucket === sel.bucket) || false;
+}
+
+// Build a wind5d slot key from a selection. If the requested selection
+// doesn't have data (e.g. today's morning is past), fall back to summary's
+// best_window so the map always shows *something* meaningful instead of a
+// blank no-data render.
+export function selToSlotKey(sel, summary = null) {
+  if (!sel) sel = defaultWindSelection(summary);
+  if (summary && !selectionHasData(summary, sel) && sel.hour == null) {
+    const fallback = defaultWindSelection(summary);
+    if (fallback) sel = fallback;
+  }
   if (sel.hour != null) return hourKey(sel.day, sel.hour);
   return bucketKey(sel.day, sel.bucket);
 }

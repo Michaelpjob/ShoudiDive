@@ -37,6 +37,7 @@ import {
 } from "./lib/dataSource.js";
 import WindDayGrid, {
   defaultWindSelection,
+  selectionHasData,
   selToSlotKey,
 } from "./components/WindDayGrid.jsx";
 
@@ -173,17 +174,21 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const dataState = useDataVersion();
 
-  // Once wind5d data lands, anchor the initial selection on best_window so
-  // a user opening the wind layer for the first time immediately sees the
-  // glassiest forecast. Only runs once (when summary first becomes available).
-  const sawSummaryRef = useRef(false);
+  // Reconcile windSel against the loaded forecast. Today's morning + pre-
+  // dawn buckets get dropped from summary.json once they're past, so a
+  // hardcoded initial selection often points at a non-existent slot. We
+  // re-validate whenever the data state changes — if windSel doesn't have
+  // a corresponding bucket in summary, swap to summary.best_window (which
+  // the pipeline guarantees is a real bucket).
   useEffect(() => {
-    if (sawSummaryRef.current) return;
     const summary = getWind5dSummary();
     if (!summary) return;
-    sawSummaryRef.current = true;
+    if (selectionHasData(summary, windSel)) return;
     setWindSel(defaultWindSelection(summary));
-  }, [dataState?.ready]);
+    // dataState.ready is the trigger; intentionally NOT depending on
+    // windSel so this doesn't loop after we update the state above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataState?.ready, dataState?.manifest?.generated_at]);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", prefs.theme);
@@ -344,8 +349,13 @@ function SettingsPopover({ prefs, setPref }) {
 
 function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWindSel, opacity, units, dataState, mpaOn, setMpaOn, bathyOn, setBathyOn }) {
   // For the wind layer the active "composite" is a slot-key string derived
-  // from windSel. For all other layers it stays the legacy 1/2/3 integer.
-  const activeComposite = layer === "wind" ? selToSlotKey(windSel) : composite;
+  // from windSel. selToSlotKey takes the loaded summary so it can fall back
+  // to best_window if the requested slot has no data (e.g. today's morning
+  // bucket is past). For other layers, stick with the legacy 1/2/3 integer.
+  const activeComposite =
+    layer === "wind"
+      ? selToSlotKey(windSel, getWind5dSummary())
+      : composite;
   const isMobile = useIsMobile();
   const stageRef = useRef(null);
   const [size, setSize] = useState({ w: 1200, h: 700 });
