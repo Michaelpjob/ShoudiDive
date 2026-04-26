@@ -536,7 +536,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
                 <h4 className="info-h">Sea Surface Temperature</h4>
                 <p className="info-p">
                   <span className="swatch" style={{ background: "rgb(40,130,210)" }}></span>
-                  <strong>Blue</strong> means cold — typical Central Coast (12–14°C) and
+                  <strong>Blue</strong> means cold — typical Central Coast (54–57°F) and
                   upwelling near Pt. Conception.
                 </p>
                 <p className="info-p">
@@ -546,7 +546,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
                 </p>
                 <p className="info-p">
                   <span className="swatch" style={{ background: "rgb(240,220,110)" }}></span>
-                  <strong>Yellow</strong> is warm SoCal summer water (19–21°C). Trunks weather.
+                  <strong>Yellow</strong> is warm SoCal summer water (66–70°F). Trunks weather.
                 </p>
                 <p className="info-p">
                   <span className="swatch" style={{ background: "rgb(170,20,35)" }}></span>
@@ -704,16 +704,22 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
               : "Wind Speed (10 m)"}
           </span>
           <span className="panel-title mono" style={{ color: "var(--ink-3)" }}>
-            {layer === "sst" ? "°C" : layer === "chl" ? "mg/m³" : "kt"}
+            {layer === "sst" ? `°${units}` : layer === "chl" ? "mg/m³" : "kt"}
           </span>
         </div>
         <div className="panel-body">
           <div className={`legend-bar ${layer}`}></div>
           <div className="legend-ticks">
             {layer === "sst" ? (
-              <>
-                <span>9</span><span>13</span><span>16</span><span>19</span><span>22</span><span>25</span>
-              </>
+              units === "F" ? (
+                <>
+                  <span>48</span><span>55</span><span>61</span><span>66</span><span>72</span><span>77</span>
+                </>
+              ) : (
+                <>
+                  <span>9</span><span>13</span><span>16</span><span>19</span><span>22</span><span>25</span>
+                </>
+              )
             ) : layer === "chl" ? (
               <>
                 <span>0.05</span><span>0.3</span><span>1.0</span><span>3.5</span><span>20+</span>
@@ -761,13 +767,15 @@ function Tooltip({ x, y, layer, val, lng, lat, units }) {
   let title, big, sub;
   if (layer === "sst") {
     title = "Sea Surface Temp";
-    if (units === "F") {
-      big = `${(val * 9 / 5 + 32).toFixed(1)}°F`;
-      sub = `${val.toFixed(1)}°C`;
-    } else {
-      big = `${val.toFixed(1)}°C`;
-      sub = `${(val * 9 / 5 + 32).toFixed(1)}°F`;
-    }
+    const f = val * 9 / 5 + 32;
+    big = units === "F" ? `${f.toFixed(1)}°F` : `${val.toFixed(1)}°C`;
+    sub =
+      f < 55 ? "Frigid · drysuit"
+      : f < 60 ? "Cold · 7 mm"
+      : f < 65 ? "Cool · 5 mm"
+      : f < 70 ? "Mild · 3 mm"
+      : f < 75 ? "Warm · springsuit"
+      : "Hot · trunks";
   } else if (layer === "chl") {
     title = "Chl-a · Water Clarity";
     big = `${val.toFixed(2)} mg/m³`;
