@@ -860,7 +860,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
               onClick={() => setLayer("sst")}
               title="Sea-surface temperature from MUR satellite"
             >
-              <span className="lt-label">Sea Temp</span>
+              <span className="lt-label">Temp</span>
               <span className="lt-sub">°{units}</span>
             </button>
             <button
@@ -868,7 +868,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
               onClick={() => setLayer("chl")}
               title="Chlorophyll-a concentration from VIIRS — visibility proxy"
             >
-              <span className="lt-label">Chlorophyll</span>
+              <span className="lt-label">Chl</span>
               <span className="lt-sub">mg/m³</span>
             </button>
             <button
@@ -877,7 +877,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
               title="10 m wind from HRRR + GFS"
             >
               <span className="lt-label">Wind</span>
-              <span className="lt-sub">10 m · kt</span>
+              <span className="lt-sub">kt</span>
             </button>
             <button
               className={layer === "swell" ? "active" : ""}
@@ -885,15 +885,15 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
               title="Significant wave height + period + direction from NOAA WaveWatch III"
             >
               <span className="lt-label">Swell</span>
-              <span className="lt-sub">Hs · ft</span>
+              <span className="lt-sub">ft Hs</span>
             </button>
             <button
               className={layer === "viz" ? "active" : ""}
               onClick={() => setLayer("viz")}
               title="Predicted dive visibility — model output in feet, not a direct measurement"
             >
-              <span className="lt-label">Visibility</span>
-              <span className="lt-sub">ft · forecast</span>
+              <span className="lt-label">Vis</span>
+              <span className="lt-sub">ft</span>
             </button>
           </div>
           {layer === "wind" ? (
@@ -1031,6 +1031,48 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
                   for the exact knots and compass bearing.
                 </p>
               </div>
+            ) : layer === "swell" ? (
+              <div className="info-section">
+                <h4 className="info-h">Swell · Hs / Tp / Dp</h4>
+                <p className="info-p">
+                  Three numbers per cell — significant wave height (<strong>Hs</strong>, the
+                  headline ft), peak period (<strong>Tp</strong>, seconds), and primary
+                  direction (<strong>Dp</strong>, "from" compass). Color shows Hs.
+                </p>
+                <p className="info-p">
+                  <span className="swatch" style={{ background: "rgb(236,254,255)" }}></span>
+                  <strong>Glassy</strong> — 0–1 ft. Flat. Perfect for novices and freedivers.
+                </p>
+                <p className="info-p">
+                  <span className="swatch" style={{ background: "rgb(103,232,249)" }}></span>
+                  <strong>Calm</strong> — 1–3 ft. Easy nearshore conditions.
+                </p>
+                <p className="info-p">
+                  <span className="swatch" style={{ background: "rgb(132,204,22)" }}></span>
+                  <strong>Workable</strong> — 3–5 ft. Manageable surge, fun-size surf.
+                </p>
+                <p className="info-p">
+                  <span className="swatch" style={{ background: "rgb(234,179,8)" }}></span>
+                  <strong>Sketchy</strong> — 5–8 ft. OK offshore; rough nearshore.
+                </p>
+                <p className="info-p">
+                  <span className="swatch" style={{ background: "rgb(249,115,22)" }}></span>
+                  <strong>Big</strong> — 8–12 ft. Stay deep; advanced surf only.
+                </p>
+                <p className="info-p">
+                  <span className="swatch" style={{ background: "rgb(220,38,38)" }}></span>
+                  <strong>XL</strong> — 12–20 ft. Don't dive. Gnarly surf.
+                </p>
+                <p className="info-p">
+                  <span className="swatch" style={{ background: "rgb(127,29,29)" }}></span>
+                  <strong>Storm seas</strong> — 20+ ft. Mavericks/Cortes territory.
+                </p>
+                <p className="info-p" style={{ fontSize: 11, color: "var(--ink-3)" }}>
+                  Period flips the feel: a 4 ft / <strong>16 s</strong> day is a clean
+                  long-period groundswell; same 4 ft / <strong>8 s</strong> is choppy
+                  windswell. Tooltip + the timeline badge expose Tp and Dp directly.
+                </p>
+              </div>
             ) : (
               <div className="info-section">
                 <h4 className="info-h">Predicted Visibility · model output</h4>
@@ -1063,15 +1105,18 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
             )}
             <div className="info-section">
               <h4 className="info-h">{
-                layer === "wind"  ? "Forecast slots"
-                : layer === "viz" ? "How the model works"
+                layer === "wind"   ? "Forecast slots"
+                : layer === "viz"  ? "How the model works"
+                : layer === "swell"? "Period vs height"
                 : "Why composite windows?"
               }</h4>
               <p className="info-p">
                 {layer === "wind"
-                  ? "HRRR is NOAA's hourly 3-km weather model. Now is the freshest analysis. +6h is your afternoon look-ahead. +24h is tomorrow morning. Updated every hour."
+                  ? "HRRR is NOAA's hourly 3-km weather model. Drag the timeline to scrub through the 5-day window — every cell on the heatmap reflects the wind speed at that exact hour."
                   : layer === "viz"
                   ? "A zone-aware stack (3 latitude × 3 distance-from-shore) translates today's chl-a into a Secchi depth, then nudges it for storm-driven bottom stir, river/precip runoff, tidal mixing, kelp shading, and substrate. The 'best estimate' is the median; hover any cell to see the value."
+                  : layer === "swell"
+                  ? "Hs (height) is the headline number; Tp (period) tells you whether the wave train is a clean groundswell or short-period chop. 12+ s is groundswell, 8–12 s is mixed, <8 s is windswell. Direction (Dp) is reported \"from\" — a NW swell at 295° is propagating SE toward the shore."
                   : "Clouds wipe out single-day satellite imagery off CA, especially the summer marine layer. A 2- or 3-day window backfills with the most recent valid pixel — 1-day is freshest, 3-day has the best coverage."}
               </p>
             </div>
@@ -1085,6 +1130,8 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
                   ? "NOAA HRRR (3-km, hourly). 10-m UGRD/VGRD via NOMADS byte-range fetch. Regridded to ~5 km."
                   : layer === "viz"
                   ? "MUR SST · VIIRS chl-a · HRRR + GFS wind (5d) · WaveWatch III (3d max) · CPC precip · USGS river discharge · NOAA CO-OPS tides · MODIS-Aqua climatology. Recomputed daily."
+                  : layer === "swell"
+                  ? "NOAA WaveWatch III (gfswave wcoast 0.16°). HTSGW + PERPW + DIRPW pulled per hour via NOMADS byte-range fetch. 5-day forecast with hourly resolution; refreshed every cycle."
                   : "NOAA Coral Reef Watch · NASA OB.DAAC MODIS-Aqua · Copernicus GLO-MFC. Daily L3 composites, ~1 km grid, regridded to bounding box."}
               </p>
             </div>
@@ -1178,12 +1225,17 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
             {layer === "sst" ? "Sea Surface Temperature"
               : layer === "chl" ? "Water Clarity (Chlorophyll-a)"
               : layer === "wind" ? "Wind Speed (10 m)"
+              : layer === "swell" ? "Swell · Hs / Tp / Dp"
               : "Predicted Visibility"}
             {layer === "viz" && <span className="predicted-badge">PREDICTED</span>}
           </span>
           <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span className="panel-title mono" style={{ color: "var(--ink-3)" }}>
-              {layer === "sst" ? `°${units}` : layer === "chl" ? "mg/m³" : layer === "wind" ? "kt" : "ft"}
+              {layer === "sst" ? `°${units}`
+                : layer === "chl" ? "mg/m³"
+                : layer === "wind" ? "kt"
+                : layer === "swell" ? "ft Hs"
+                : "ft"}
             </span>
             <Chevron open={legendOpen} />
           </span>
@@ -1209,6 +1261,10 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
               <>
                 <span>0</span><span>5</span><span>10</span><span>15</span><span>20</span><span>25</span><span>35+</span>
               </>
+            ) : layer === "swell" ? (
+              <>
+                <span>0</span><span>1</span><span>3</span><span>5</span><span>8</span><span>12</span><span>20+</span>
+              </>
             ) : (
               <>
                 <span>0</span><span>10</span><span>20</span><span>30</span><span>50+</span>
@@ -1220,6 +1276,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
               {layer === "sst" ? "Cold upwelling → Heatwave"
                 : layer === "chl" ? "Gin-clear → Bloom"
                 : layer === "wind" ? "Calm → Gale"
+                : layer === "swell" ? "Glassy → Storm seas"
                 : "Poor → Excellent"}
             </span>
             <span>
@@ -1228,6 +1285,8 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
                 ? ` · ${windSource(activeComposite) || "HRRR"}`
                 : layer === "viz"
                 ? ` · model output`
+                : layer === "swell"
+                ? ` · WaveWatch III`
                 : ` · ${composite}-day composite`}
               {!layerIsReal && dataState?.ready && " · no data"}
             </span>
