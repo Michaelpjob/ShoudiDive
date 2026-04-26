@@ -48,6 +48,14 @@ jobs:
         continue-on-error: true
         run: python pipeline/fetch_wind_5day.py
 
+      - name: Fetch 5-day hourly swell (gfswave f00-f120)
+        # WaveWatch III via gfswave wcoast 0.16°. Same byte-range trick;
+        # 121 small GRIB extracts. New gfswave runs every 6h, so the
+        # hourly cron mostly hits the .grib2 cache. Output: per-day ×
+        # per-bucket Hs/Tp/Dp PNGs + swell/summary.json.
+        continue-on-error: true
+        run: python pipeline/fetch_swell_5day.py
+
       - name: Install JS dependencies
         run: npm ci
 
