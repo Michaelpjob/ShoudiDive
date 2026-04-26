@@ -1,0 +1,44 @@
+name: Refresh ocean data
+
+# Pulls fresh SST + chl from NOAA CoastWatch ERDDAP, commits the new
+# manifest + PNGs to main. Cloudflare Pages picks up the push and redeploys
+# the site automatically.
+
+on:
+  schedule:
+    # 06:00 UTC daily (~23:00 PT prior day) — after MUR L4 typically publishes.
+    - cron: "0 6 * * *"
+  workflow_dispatch: # manual run from the Actions tab
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+
+      - name: Install pipeline dependencies
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Fetch latest ocean data
+        run: python pipeline/fetch.py
+
+      - name: Commit if data changed
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/data/
+          if git diff --staged --quiet; then
+            echo "No data changes — nothing to commit."
+          else
+            git commit -m "data: refresh $(date -u +%Y-%m-%d)"
+            git push
+          fi
