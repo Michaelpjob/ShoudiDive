@@ -388,23 +388,9 @@ export function WindCurrentSelectionCard({ sel, setSel }) {
   const meanKt = stats?.kt ?? bucket?.mean_kt;
   const meanDir = stats?.dir ?? bucket?.mean_dir_deg;
   const cardinal = Number.isFinite(meanDir) ? windCardinal(meanDir) : "—";
-  const bw = summary.best_window;
-  const bwDay = bw && summary.days?.find((d) => d.day === bw.day);
 
   return (
     <div className="wind-current-card">
-      {bw && bwDay && (
-        <button
-          type="button"
-          className="wind-best-window"
-          onClick={() => setSel({ day: bw.day, bucket: bw.bucket, hour: null })}
-        >
-          <span className="best-dot" />
-          <span className="best-text">
-            Best: <strong>{bwDay.weekday} {bw.bucket}</strong> · {bw.mean_kt} kt
-          </span>
-        </button>
-      )}
       <div className="wind-current-stats">
         <div className="wcs-time">
           {sel.hour != null && dayInfo
