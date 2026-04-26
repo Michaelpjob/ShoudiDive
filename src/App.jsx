@@ -1,9 +1,15 @@
-import { useEffect, useRef, useState } from "react";
-import { SeaBasemap, LandBasemap } from "./components/Basemap.jsx";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { SeaBasemap, LandBasemap, PLACE_LABELS } from "./components/Basemap.jsx";
 import DataOverlay from "./components/DataOverlay.jsx";
 import WindParticles from "./components/WindParticles.jsx";
 import MpaLayer, { styleForType } from "./components/MpaLayer.jsx";
-import BathyLayer, { styleForClass } from "./components/BathyLayer.jsx";
+import BathyLayer, {
+  styleForClass,
+  loadBathyFeatures,
+  visibleBathyFeatures,
+  bathyLabels,
+} from "./components/BathyLayer.jsx";
+import MapLabels from "./components/MapLabels.jsx";
 import {
   project,
   unproject,
@@ -276,6 +282,19 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
   const [legendOpen, setLegendOpen] = useState(true);
   const [selectedMpa, setSelectedMpa] = useState(null);
   const [selectedBathy, setSelectedBathy] = useState(null);
+  const [bathyFeatures, setBathyFeatures] = useState(null);
+
+  // Lazy-load bathy features whenever the layer flips on (used for both the
+  // SVG markers and the screen-space labels).
+  useEffect(() => {
+    if (!bathyOn || bathyFeatures) return;
+    let cancelled = false;
+    loadBathyFeatures().then((fc) => {
+      if (cancelled || !fc) return;
+      setBathyFeatures(fc.features || []);
+    });
+    return () => { cancelled = true; };
+  }, [bathyOn, bathyFeatures]);
 
   // Pan/zoom state — viewBox in original svg coords. Initial = full extent.
   const [vb, setVb] = useState({ x: 0, y: 0, w: 1, h: 1 });
@@ -408,6 +427,36 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
   const layerIsReal = isReal(layer, composite);
   const timeOpts = TIME_OPTIONS[layer];
 
+  // Current zoom factor: ratio of full-extent width to visible viewBox width.
+  const zoomLevel = size.w > 0 && vb.w > 0 ? size.w / vb.w : 1;
+
+  // Assemble all labels for the screen-space overlay (constant size + collision).
+  const allLabels = useMemo(() => {
+    const out = PLACE_LABELS.map((l) => ({ ...l }));
+    // Saved spots — always shown, slightly higher priority than place labels.
+    for (const s of SAVED_SPOTS) {
+      out.push({
+        key: "spot-" + s.id,
+        lng: s.lng,
+        lat: s.lat,
+        text: s.name,
+        fontSize: 10.5,
+        weight: 500,
+        color: "var(--ink)",
+        priority: s.id === activeSpot ? 80 : 50,
+        anchor: "left",
+        offsetX: 9,
+        offsetY: -3,
+      });
+    }
+    // Bathy labels when the layer is on.
+    if (bathyOn && bathyFeatures) {
+      const visible = visibleBathyFeatures(bathyFeatures, zoomLevel);
+      out.push(...bathyLabels(visible));
+    }
+    return out;
+  }, [activeSpot, bathyOn, bathyFeatures, zoomLevel]);
+
   return (
     <div
       className="map-stage"
@@ -460,7 +509,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
           width={size.w}
           height={size.h}
           active={bathyOn}
-          zoomLevel={size.w > 0 && vb.w > 0 ? size.w / vb.w : 1}
+          zoomLevel={zoomLevel}
           onSelect={setSelectedBathy}
         />
 
@@ -483,27 +532,13 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
                   strokeWidth={isActive ? 2.2 : 1.4}
                 />
                 {isActive && <circle cx={x} cy={y} r="3" fill="var(--ink)" />}
-                <text
-                  x={x + 10}
-                  y={y + 4}
-                  fontSize="10.5"
-                  fill="var(--ink)"
-                  fontFamily="Inter, sans-serif"
-                  fontWeight="500"
-                  style={{
-                    paintOrder: "stroke",
-                    stroke: "var(--bg)",
-                    strokeWidth: 3,
-                    strokeLinejoin: "round",
-                  }}
-                >
-                  {s.name}
-                </text>
               </g>
             );
           })}
         </g>
       </svg>
+
+      <MapLabels labels={allLabels} vb={vb} size={size} />
 
       {hover && (
         <Tooltip

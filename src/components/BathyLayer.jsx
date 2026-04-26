@@ -27,13 +27,52 @@ const TIER_MIN_ZOOM = {
   detail:  4.0,
 };
 
+const TIER_PRIORITY = {
+  marquee: 100,
+  major:   60,
+  minor:   30,
+  detail:  10,
+};
+
 let bathyPromise = null;
-function loadBathyFeatures() {
+export function loadBathyFeatures() {
   if (bathyPromise) return bathyPromise;
   bathyPromise = fetch("/data/bathy-features.geojson", { cache: "force-cache" })
     .then((r) => (r.ok ? r.json() : null))
     .catch(() => null);
   return bathyPromise;
+}
+
+export function visibleBathyFeatures(features, zoomLevel) {
+  if (!features) return [];
+  const z = Number.isFinite(zoomLevel) ? zoomLevel : 1;
+  return features.filter((f) => {
+    const tier = f.properties.importanceTier || "minor";
+    const minZ = TIER_MIN_ZOOM[tier] ?? 0;
+    return z >= minZ;
+  });
+}
+
+// Produces label entries for the screen-space MapLabels overlay.
+// Anchored "left" so the label sits to the right of the marker glyph.
+export function bathyLabels(features) {
+  return features.map((f) => {
+    const sty = styleForClass(f.properties.class);
+    const tier = f.properties.importanceTier || "minor";
+    return {
+      key: "bathy-" + f.properties.id,
+      lng: f.geometry.coordinates[0],
+      lat: f.geometry.coordinates[1],
+      text: f.properties.shortName || f.properties.name,
+      fontSize: tier === "marquee" ? 11 : 10,
+      weight: tier === "marquee" ? 600 : 500,
+      color: sty.color,
+      priority: TIER_PRIORITY[tier] || 30,
+      anchor: "left",
+      offsetX: 9,
+      offsetY: -4,
+    };
+  });
 }
 
 export default function BathyLayer({ width, height, active, zoomLevel, onSelect }) {
@@ -51,15 +90,10 @@ export default function BathyLayer({ width, height, active, zoomLevel, onSelect 
     };
   }, [active]);
 
-  const visible = useMemo(() => {
-    if (!features) return [];
-    const z = Number.isFinite(zoomLevel) ? zoomLevel : 1;
-    return features.filter((f) => {
-      const tier = f.properties.importanceTier || "minor";
-      const minZ = TIER_MIN_ZOOM[tier] ?? 0;
-      return z >= minZ;
-    });
-  }, [features, zoomLevel]);
+  const visible = useMemo(
+    () => visibleBathyFeatures(features, zoomLevel),
+    [features, zoomLevel]
+  );
 
   if (!active || !visible.length) return null;
 
@@ -82,40 +116,15 @@ export default function BathyLayer({ width, height, active, zoomLevel, onSelect 
           >
             {/* Tap target */}
             <circle cx={x} cy={y} r="14" fill="transparent" />
-            {/* Glyph marker */}
-            <text
-              x={x}
-              y={y + 4}
-              fontSize="12"
+            {/* Marker dot — small, doesn't scale-explode on zoom */}
+            <circle
+              cx={x}
+              cy={y}
+              r="3.2"
               fill={sty.color}
-              textAnchor="middle"
-              fontFamily="Inter, sans-serif"
-              style={{
-                paintOrder: "stroke",
-                stroke: "var(--bg)",
-                strokeWidth: 3,
-                strokeLinejoin: "round",
-              }}
-            >
-              {sty.glyph}
-            </text>
-            {/* Label to the right */}
-            <text
-              x={x + 9}
-              y={y + 3}
-              fontSize="10.5"
-              fill={sty.color}
-              fontFamily="Inter, sans-serif"
-              fontWeight="500"
-              style={{
-                paintOrder: "stroke",
-                stroke: "var(--bg)",
-                strokeWidth: 3,
-                strokeLinejoin: "round",
-              }}
-            >
-              {props.shortName || props.name}
-            </text>
+              stroke="var(--bg)"
+              strokeWidth="1.6"
+            />
           </g>
         );
       })}

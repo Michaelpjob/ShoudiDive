@@ -56,53 +56,24 @@ function geomBoundsArea(geom, w, h) {
 
 // ---- Place labels (independent of geometry) --------------------------------
 
-const LABELS = [
-  { text: "MONTEREY BAY",       lng: -121.95, lat: 36.78, size: 9, weight: 500 },
-  { text: "BIG SUR",            lng: -121.65, lat: 36.10, size: 9 },
-  { text: "MORRO BAY",          lng: -120.82, lat: 35.36, size: 9 },
-  { text: "PT. CONCEPTION",     lng: -120.42, lat: 34.46, size: 9, weight: 500 },
-  { text: "SANTA BARBARA",      lng: -119.70, lat: 34.46, size: 9 },
-  { text: "LOS ANGELES",        lng: -118.20, lat: 34.10, size: 10, weight: 500 },
-  { text: "LA JOLLA",           lng: -117.20, lat: 32.86, size: 9 },
-  { text: "SAN DIEGO",          lng: -117.10, lat: 32.65, size: 9, weight: 500 },
-  { text: "TIJUANA",            lng: -116.95, lat: 32.50, size: 9 },
-  { text: "LAS CORONADOS",      lng: -117.32, lat: 32.30, size: 8.5, italic: true, color: "var(--ink-3)" },
-  { text: "CHANNEL ISLANDS",    lng: -119.85, lat: 33.78, size: 8.5, italic: true, color: "var(--ink-3)" },
-  { text: "SOUTHERN CA BIGHT",  lng: -118.95, lat: 33.20, size: 9, italic: true, color: "var(--ink-3)" },
-  { text: "PACIFIC OCEAN",      lng: -122.40, lat: 35.20, size: 11, italic: true, color: "var(--ink-3)", letterSpacing: "0.2em" },
+// Place labels exported for the screen-space MapLabels overlay; we don't
+// render them in SVG anymore (they grew too big at zoom and overlapped).
+// `priority`: bigger ones win collisions (cities > regions > water).
+export const PLACE_LABELS = [
+  { key: "lbl-monterey-bay",      text: "MONTEREY BAY",       lng: -121.95, lat: 36.78, fontSize: 11, weight: 500, priority: 6 },
+  { key: "lbl-big-sur",           text: "BIG SUR",            lng: -121.65, lat: 36.10, fontSize: 11, priority: 5 },
+  { key: "lbl-morro-bay",         text: "MORRO BAY",          lng: -120.82, lat: 35.36, fontSize: 11, priority: 5 },
+  { key: "lbl-pt-conception",     text: "PT. CONCEPTION",     lng: -120.42, lat: 34.46, fontSize: 11, weight: 500, priority: 6 },
+  { key: "lbl-santa-barbara",     text: "SANTA BARBARA",      lng: -119.70, lat: 34.46, fontSize: 11, priority: 5 },
+  { key: "lbl-los-angeles",       text: "LOS ANGELES",        lng: -118.20, lat: 34.10, fontSize: 12, weight: 500, priority: 7 },
+  { key: "lbl-la-jolla",          text: "LA JOLLA",           lng: -117.20, lat: 32.86, fontSize: 11, priority: 5 },
+  { key: "lbl-san-diego",         text: "SAN DIEGO",          lng: -117.10, lat: 32.65, fontSize: 11, weight: 500, priority: 6 },
+  { key: "lbl-tijuana",           text: "TIJUANA",            lng: -116.95, lat: 32.50, fontSize: 11, priority: 5 },
+  { key: "lbl-las-coronados",     text: "LAS CORONADOS",      lng: -117.32, lat: 32.30, fontSize: 10, italic: true, color: "var(--ink-3)", priority: 4 },
+  { key: "lbl-channel-islands",   text: "CHANNEL ISLANDS",    lng: -119.85, lat: 33.78, fontSize: 10, italic: true, color: "var(--ink-3)", priority: 4 },
+  { key: "lbl-socal-bight",       text: "SOUTHERN CA BIGHT",  lng: -118.95, lat: 33.20, fontSize: 11, italic: true, color: "var(--ink-3)", priority: 3 },
+  { key: "lbl-pacific",           text: "PACIFIC OCEAN",      lng: -122.40, lat: 35.20, fontSize: 13, italic: true, color: "var(--ink-3)", letterSpacing: "0.2em", priority: 2 },
 ];
-
-function PlaceLabels({ width, height }) {
-  return (
-    <g className="map-labels">
-      {LABELS.map((lab, i) => {
-        const [x, y] = project(lab.lng, lab.lat, width, height);
-        return (
-          <text
-            key={i}
-            x={x}
-            y={y}
-            fontSize={lab.size || 9}
-            fontWeight={lab.weight || 400}
-            fontStyle={lab.italic ? "italic" : "normal"}
-            fontFamily="Inter, sans-serif"
-            fill={lab.color || "var(--ink-2)"}
-            letterSpacing={lab.letterSpacing || "0.05em"}
-            textAnchor="middle"
-            style={{
-              paintOrder: "stroke",
-              stroke: "var(--bg)",
-              strokeWidth: 3,
-              strokeLinejoin: "round",
-            }}
-          >
-            {lab.text}
-          </text>
-        );
-      })}
-    </g>
-  );
-}
 
 // ---- Sea (drawn UNDER the data overlay) ------------------------------------
 
@@ -214,7 +185,6 @@ export function LandBasemap({ width, height }) {
           strokeWidth="1"
         />
       ))}
-      <PlaceLabels width={width} height={height} />
     </g>
   );
 }
