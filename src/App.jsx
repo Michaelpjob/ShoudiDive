@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { SeaBasemap, LandBasemap, PLACE_LABELS } from "./components/Basemap.jsx";
 import DataOverlay from "./components/DataOverlay.jsx";
 import WindParticles from "./components/WindParticles.jsx";
@@ -10,6 +10,7 @@ import BathyLayer, {
   bathyLabels,
 } from "./components/BathyLayer.jsx";
 import MapLabels from "./components/MapLabels.jsx";
+import MobileSheet from "./components/MobileSheet.jsx";
 import {
   project,
   unproject,
@@ -31,6 +32,21 @@ import {
   isReal,
   getDataState,
 } from "./lib/dataSource.js";
+
+// Reactive viewport-width hook. Returns true at <760 px so we can branch the
+// layout between the floating-panel desktop UI and a bottom-sheet mobile UI.
+const MOBILE_QUERY = "(max-width: 760px)";
+function subscribeMatchMedia(cb) {
+  const mql = window.matchMedia(MOBILE_QUERY);
+  mql.addEventListener("change", cb);
+  return () => mql.removeEventListener("change", cb);
+}
+function getMobileSnapshot() {
+  return window.matchMedia(MOBILE_QUERY).matches;
+}
+function useIsMobile() {
+  return useSyncExternalStore(subscribeMatchMedia, getMobileSnapshot, () => false);
+}
 
 // Minimal stroke-based freediver — head, body streamlined diagonally,
 // monofin chevron at the tail. Inherits color from `currentColor` so it
@@ -300,6 +316,7 @@ function SettingsPopover({ prefs, setPref }) {
 }
 
 function DesktopView({ layer, setLayer, composite, setComposite, opacity, units, dataState, mpaOn, setMpaOn, bathyOn, setBathyOn }) {
+  const isMobile = useIsMobile();
   const stageRef = useRef(null);
   const [size, setSize] = useState({ w: 1200, h: 700 });
   const [hover, setHover] = useState(null);
@@ -696,6 +713,21 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
           lng={hover.lng}
           lat={hover.lat}
           units={units}
+        />
+      )}
+
+      {isMobile && (
+        <MobileSheet
+          layer={layer} setLayer={setLayer}
+          composite={composite} setComposite={setComposite}
+          units={units}
+          dataState={dataState}
+          mpaOn={mpaOn} setMpaOn={setMpaOn}
+          bathyOn={bathyOn} setBathyOn={setBathyOn}
+          activeSpot={activeSpot} setActiveSpot={setActiveSpot}
+          timeOpts={timeOpts}
+          compositeText={compositeText}
+          layerIsReal={layerIsReal}
         />
       )}
 

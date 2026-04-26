@@ -1117,65 +1117,227 @@ body {
 
 /* ---------- Responsive layout (no phone-frame, real mobile) ---------- */
 
+/* ---------- Mobile bottom-sheet ---------- */
+
+.mobile-sheet-tabs {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  background: var(--bg-panel-solid);
+  border-top: 1px solid var(--line);
+  z-index: 30;
+  padding: env(safe-area-inset-bottom) 0 0 0;
+}
+.mobile-tab {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 12px 4px calc(12px + env(safe-area-inset-bottom)) 4px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-3);
+  cursor: pointer;
+  border-top: 2px solid transparent;
+}
+.mobile-tab.active {
+  color: var(--ink);
+  border-top-color: var(--accent);
+}
+
+.mobile-sheet-body {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 50px; /* sit above the tab bar */
+  max-height: 56vh;
+  overflow-y: auto;
+  background: var(--bg-panel-solid);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  z-index: 29;
+  padding: 14px 14px 16px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ms-row-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  margin: 0 0 6px;
+}
+.ms-row-label + .ms-row-label,
+.ms-overlay-row + .ms-row-label,
+.ms-time-row + .ms-row-label,
+.ms-window + .ms-row-label {
+  margin-top: 14px;
+}
+
+.ms-layer-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+.ms-layer-toggle button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  padding: 10px 4px;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.ms-layer-toggle button.active {
+  background: var(--bg-panel-solid);
+  color: var(--ink);
+  box-shadow: var(--shadow-1);
+}
+.ms-lt-label { font-size: 13px; font-weight: 600; }
+.ms-lt-sub { font-size: 10px; color: var(--ink-3); }
+
+.ms-time-row {
+  display: grid;
+  gap: 4px;
+}
+.ms-time-row button {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: var(--bg-panel-solid);
+  font: inherit;
+  padding: 9px 4px;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  color: var(--ink-2);
+  cursor: pointer;
+  min-width: 60px;
+}
+.ms-time-row button.active {
+  background: var(--ink);
+  color: var(--bg-panel-solid);
+  border-color: var(--ink);
+}
+.ms-time-label { font-size: 12px; font-weight: 600; }
+.ms-time-tag { font-size: 9.5px; opacity: 0.7; }
+
+.ms-window {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--bg-sunken);
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--ink-3);
+  display: flex;
+  justify-content: space-between;
+}
+.ms-window .mono { color: var(--ink-2); }
+
+.ms-overlay-row {
+  display: flex;
+  gap: 8px;
+}
+.ms-overlay-row .mpa-pill {
+  flex: 1;
+  padding: 9px 8px;
+  font-size: 11px;
+}
+
+.ms-spots {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ms-spot {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 8px;
+  border-radius: 6px;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+}
+.ms-spot.active { background: var(--bg-sunken); }
+.ms-spot-pin {
+  width: 9px; height: 9px; border-radius: 50%;
+  border: 1.5px solid currentColor;
+  display: inline-block;
+}
+.ms-spot-name { font-size: 13px; font-weight: 500; }
+.ms-spot-val { font-size: 13px; font-weight: 500; }
+.ms-spot-val .unit { color: var(--ink-3); margin-left: 2px; font-size: 10px; }
+
+.ms-legend-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+.ms-legend-head strong { font-size: 13px; }
+
+.ms-info .info-section + .info-section {
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+/* ---------- Responsive overrides ---------- */
+
 @media (max-width: 760px) {
   .topbar { padding: 0 10px; }
   .brand-tag { display: none; }
   .topbar-meta > span:nth-child(2) { display: none; }
 
-  .controls-tl {
-    top: auto;
-    bottom: 12px;
-    left: 12px;
-    right: 12px;
-    width: auto;
-    max-width: none;
-  }
-  /* 4 forecast-step buttons need room; let them scroll horizontally if tight. */
-  .composite-buttons { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .composite-buttons button { min-width: 64px; }
-
-  .info-tr {
-    top: 50px;
-    right: 8px;
-    left: 8px;
-    width: auto;
-    max-height: 40vh;
-  }
-  .info-tr.collapsed {
-    left: auto;
-    width: auto;
-  }
-  .spots-bl {
-    bottom: auto;
-    top: 50px;
-    left: 8px;
-    width: 200px;
-    max-height: 38vh;
-    overflow-y: auto;
-  }
+  /* Hide the desktop floating panels — MobileSheet replaces them. */
+  .controls-tl,
+  .info-tr,
+  .info-toggle,
+  .spots-bl,
   .legend-br {
-    bottom: 200px;
-    left: 12px;
-    right: 12px;
-    width: auto;
+    display: none !important;
   }
-  .zoom-ctl {
-    bottom: 360px;
-    right: 8px;
-  }
-  /* Bigger touch targets. */
-  .zoom-ctl button { width: 40px; height: 40px; }
-  .mpa-pill { padding: 5px 10px; font-size: 11px; }
 
-  /* Popups become bottom sheets on phones. */
+  /* Zoom controls float above the tab bar. */
+  .zoom-ctl {
+    right: 8px;
+    bottom: 64px;
+  }
+  .zoom-ctl button { width: 40px; height: 40px; }
+  .attribution { display: none; }
+  .tooltip { font-size: 11px; }
+
+  /* Popups become bottom sheets on phones (above the tab bar). */
   .mpa-popup-overlay { padding: 0; align-items: flex-end; }
   .mpa-popup {
     width: 100%;
     max-width: none;
-    max-height: 80vh;
+    max-height: 70vh;
+    margin-bottom: 50px;  /* clear the tab bar */
     border-radius: 16px 16px 0 0;
     border-bottom: none;
     padding-top: 22px;
+    position: relative;
   }
   .mpa-popup::before {
     content: "";
@@ -1188,18 +1350,4 @@ body {
     border-radius: 2px;
     background: var(--line);
   }
-
-  .attribution { display: none; }
-  .tooltip { font-size: 11px; }
-}
-
-@media (max-width: 480px) {
-  .spots-bl { display: none; }
-  .info-tr { display: none; }
-  .info-tr.collapsed { display: block; }
-  .legend-br { bottom: 180px; }
-  .zoom-ctl { bottom: 340px; }
-  /* Default-collapse the layer panel so the map dominates — user can tap to expand. */
-  .controls-tl .panel-body { display: none; }
-  .controls-tl.expanded-mobile .panel-body { display: block; }
 }
