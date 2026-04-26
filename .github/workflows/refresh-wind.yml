@@ -40,6 +40,14 @@ jobs:
         continue-on-error: true
         run: python pipeline/fetch_wind.py
 
+      - name: Fetch 5-day hourly wind (HRRR f00-f48 + GFS f49-f120)
+        # New 5-day × 5-bucket forecast structure for the upcoming wind UI.
+        # Pulls 121 hourly UV slices (~1.5 GB total over the wire), so it's
+        # the heavy step in the cycle. continue-on-error keeps the deploy
+        # alive if NOMADS is having a moment.
+        continue-on-error: true
+        run: python pipeline/fetch_wind_5day.py
+
       - name: Install JS dependencies
         run: npm ci
 
