@@ -45,6 +45,10 @@ jobs:
         continue-on-error: true
         run: python pipeline/fetch_waves.py
 
+      - name: Fetch 7-day precipitation (NOAA CPC)
+        continue-on-error: true
+        run: python pipeline/fetch_precip.py
+
       - name: Run visibility prediction
         # Runs after the satellite/wave fetches so the prediction sees the
         # freshest inputs. Wind PNGs are committed in the wind workflow.

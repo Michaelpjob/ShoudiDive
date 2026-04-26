@@ -116,10 +116,26 @@ def bilinear_sample(src_arr, src_w, src_h, lng_grid, lat_grid):
 
 # ---- Static fields from land.geojson --------------------------------------
 
+# Major CA river mouths within the bbox. Coordinates are approximate but
+# good enough for the runoff_index decay (e-folding scale 5 km, so the
+# precise mouth doesn't matter much beyond a few km).
+RIVER_MOUTHS = [
+    ("salinas",      36.747, -121.808),  # Salinas River, Monterey Bay
+    ("santa-clara",  34.236, -119.265),  # Santa Clara River, Ventura
+    ("ventura",      34.275, -119.302),  # Ventura River
+    ("la-river",     33.748, -118.205),  # Los Angeles River
+    ("santa-ana",    33.633, -117.953),  # Santa Ana River, Newport
+    ("san-luis-rey", 33.215, -117.395),  # San Luis Rey River, Oceanside
+    ("san-diego",    32.756, -117.221),  # San Diego River
+    ("tijuana",      32.555, -117.130),  # Tijuana River
+    ("carmel",       36.539, -121.929),  # Carmel River
+    ("santa-ynez",   34.701, -120.597),  # Santa Ynez River, Lompoc
+]
+
+
 def static_fields(grid_lat, grid_lng):
-    """Compute coast_normal_deg, dist_to_shore_km, dist_to_island_km
-    from the bundled land.geojson. dist_to_river_km is not yet wired
-    (pass 100 km — effectively 'no river effect')."""
+    """Compute coast_normal_deg, dist_to_shore_km, dist_to_island_km,
+    dist_to_river_km from the bundled land.geojson + the RIVER_MOUTHS list."""
     land = json.loads((OUT_DIR / "land.geojson").read_text())
 
     # Mainland is feature[0] (the largest by point count).
@@ -190,7 +206,14 @@ def static_fields(grid_lat, grid_lng):
     coast_normal_deg = (np.rad2deg(np.arctan2(nx_km, ny_km)) + 360.0) % 360.0
     coast_normal_deg = coast_normal_deg.reshape(grid_lat.shape)
 
-    return dts_km, dti_km, coast_normal_deg
+    # 4) distance to nearest known river mouth
+    river_pts = np.array([[r[2], r[1]] for r in RIVER_MOUTHS])  # (N, 2) lng/lat
+    river_km = to_km(river_pts)
+    tree_river = cKDTree(river_km)
+    dtr_km, _ = tree_river.query(grid_km, k=1)
+    dtr_km = dtr_km.reshape(grid_lat.shape)
+
+    return dts_km, dti_km, coast_normal_deg, dtr_km
 
 
 def _geom_point_count(geom):
@@ -245,9 +268,8 @@ def main():
     lng_grid, lat_grid = np.meshgrid(lng_axis, lat_axis)
 
     # Static fields (one-shot every run; cheap enough at 140x110)
-    print("Computing static fields (coast normal + distances)...")
-    dts_km, dti_km, coast_normal_deg = static_fields(lat_grid, lng_grid)
-    dist_to_river_km = np.full(lat_grid.shape, 100.0, dtype=float)  # not yet wired
+    print("Computing static fields (coast normal + distances + river mouths)...")
+    dts_km, dti_km, coast_normal_deg, dist_to_river_km = static_fields(lat_grid, lng_grid)
 
     # Existing PNG inputs
     sst_path = OUT_DIR / "sst_1d.png"
@@ -318,7 +340,23 @@ def main():
         swell_height = np.zeros(n)
         print("  wave_now.png missing — passing zero swell (run pipeline/fetch_waves.py first for full prediction)")
 
-    precip_7d = np.zeros(n)
+    # Precip from CPC US Unified Daily (7-day cumulative), if present.
+    precip_path = OUT_DIR / "precip_7d.png"
+    if precip_path.exists():
+        precip_src = decode_linear_png(precip_path, 0.0, 200.0)  # mm
+        precip_grid = bilinear_sample(precip_src, precip_src.shape[1], precip_src.shape[0], lng_grid, lat_grid)
+        # Land cells beyond the CPC grid (e.g. Mexican waters) come back NaN —
+        # treat as 0 mm rather than fake. The runoff_index decays with
+        # distance to a river mouth anyway, so far-from-river NaN cells
+        # contribute zero either way.
+        precip_7d = flat(np.where(np.isfinite(precip_grid), precip_grid, 0.0))
+        if np.nanmax(precip_grid) > 0.5:
+            print(f"  using CPC precip: max {np.nanmax(precip_grid):.1f} mm, mean {np.nanmean(precip_grid):.1f} mm")
+        else:
+            print("  using CPC precip: dry week, all <0.5 mm")
+    else:
+        precip_7d = np.zeros(n)
+        print("  precip_7d.png missing — passing zero precip (run pipeline/fetch_precip.py first)")
     river_disch = np.full(n, 5.0)
     river_climo = np.full(n, 5.0)
     tide_range = np.full(n, 1.5)
