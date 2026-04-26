@@ -37,7 +37,13 @@ def apply_turbidity_corrections(secchi_m, zone, bottom_stir, runoff_idx,
             - c.swell     * bottom_stir[m]
             - c.runoff    * runoff_idx[m]
             - c.river     * river_idx[m]
-            - c.kelp      * is_kelp[m].astype(np.float64)
+            # Kelp penalty is now CONDITIONAL on bottom-stir: kelp forests
+            # filter particulates and shelter the water column on calm days
+            # (Pt. Loma at flat seas reads CLEARER than open water just
+            # offshore). The penalty only applies when waves are actually
+            # dislodging canopy debris, scaled by the same bottom_stir
+            # signal that drives the swell turbidity term.
+            - c.kelp      * is_kelp[m].astype(np.float64) * bottom_stir[m]
             - c.substrate * substrate_term[m]
             - c.tide      * tide_idx[m]
         )
