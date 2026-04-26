@@ -58,15 +58,27 @@ class DriverCoefficients:
 
 
 DRIVER_COEFFS: Dict[str, DriverCoefficients] = {
+    # Nearshore zones unchanged — observed mismatch with Tempbreak was
+    # confined to offshore + islands (model was too pessimistic out there).
     "central_nearshore":  DriverCoefficients(upwell=0.18, swell=0.30, precip=0.20, river=0.30, sst=-0.06, seasonal=0.40, exposure=0.20, tide=0.10, substrate=0.15, cloud=-0.08),
     "central_islands":    DriverCoefficients(upwell=0.12, swell=0.10, precip=0.05, river=0.05, sst=-0.05, seasonal=0.35, exposure=0.30, tide=0.02, substrate=0.05, cloud=-0.06),
-    "central_offshore":   DriverCoefficients(upwell=0.10, swell=0.02, precip=0.00, river=0.00, sst=-0.04, seasonal=0.30, exposure=0.05, tide=0.00, substrate=0.00, cloud=-0.04),
+
+    # Offshore + islands: seasonal / upwell / exposure dialed down. The
+    # California Current keeps offshore pixels decoupled from spring
+    # nearshore upwelling, so the seasonal climatology signal was
+    # over-weighted; exposure was the largest single coefficient and was
+    # over-penalising deep-water pixels that just happen to fall inside
+    # the 10 km island radius. See offshore-calibration.md for the full
+    # before/after table and rationale.
+    "central_offshore":   DriverCoefficients(upwell=0.08, swell=0.02, precip=0.00, river=0.00, sst=-0.04, seasonal=0.18, exposure=0.03, tide=0.00, substrate=0.00, cloud=-0.04),
+
     "transition_nearshore": DriverCoefficients(upwell=0.10, swell=0.25, precip=0.18, river=0.28, sst=-0.04, seasonal=0.30, exposure=0.18, tide=0.08, substrate=0.12, cloud=-0.06),
-    "transition_islands":   DriverCoefficients(upwell=0.08, swell=0.08, precip=0.04, river=0.04, sst=-0.03, seasonal=0.25, exposure=0.32, tide=0.02, substrate=0.05, cloud=-0.05),
-    "transition_offshore":  DriverCoefficients(upwell=0.06, swell=0.02, precip=0.00, river=0.00, sst=-0.02, seasonal=0.20, exposure=0.06, tide=0.00, substrate=0.00, cloud=-0.03),
+    "transition_islands":   DriverCoefficients(upwell=0.06, swell=0.08, precip=0.04, river=0.04, sst=-0.03, seasonal=0.16, exposure=0.22, tide=0.02, substrate=0.05, cloud=-0.05),
+    "transition_offshore":  DriverCoefficients(upwell=0.04, swell=0.02, precip=0.00, river=0.00, sst=-0.02, seasonal=0.12, exposure=0.03, tide=0.00, substrate=0.00, cloud=-0.03),
+
     "bight_nearshore":  DriverCoefficients(upwell=0.05, swell=0.20, precip=0.16, river=0.25, sst=-0.02, seasonal=0.20, exposure=0.15, tide=0.10, substrate=0.18, cloud=-0.04),
-    "bight_islands":    DriverCoefficients(upwell=0.04, swell=0.06, precip=0.03, river=0.03, sst=-0.02, seasonal=0.18, exposure=0.28, tide=0.02, substrate=0.05, cloud=-0.03),
-    "bight_offshore":   DriverCoefficients(upwell=0.03, swell=0.01, precip=0.00, river=0.00, sst=-0.01, seasonal=0.15, exposure=0.04, tide=0.00, substrate=0.00, cloud=-0.02),
+    "bight_islands":    DriverCoefficients(upwell=0.03, swell=0.06, precip=0.03, river=0.03, sst=-0.02, seasonal=0.12, exposure=0.20, tide=0.02, substrate=0.05, cloud=-0.03),
+    "bight_offshore":   DriverCoefficients(upwell=0.02, swell=0.01, precip=0.00, river=0.00, sst=-0.01, seasonal=0.08, exposure=0.02, tide=0.00, substrate=0.00, cloud=-0.02),
 }
 
 
@@ -84,15 +96,20 @@ class SecchiCoefficients:
 
 
 SECCHI_COEFFS: Dict[str, SecchiCoefficients] = {
-    "central_nearshore":    SecchiCoefficients(a=4.0, b=0.28),
-    "central_islands":      SecchiCoefficients(a=6.5, b=0.30),
-    "central_offshore":     SecchiCoefficients(a=8.5, b=0.32),
-    "transition_nearshore": SecchiCoefficients(a=4.5, b=0.28),
-    "transition_islands":   SecchiCoefficients(a=7.0, b=0.30),
-    "transition_offshore":  SecchiCoefficients(a=8.5, b=0.32),
-    "bight_nearshore":      SecchiCoefficients(a=5.0, b=0.28),
-    "bight_islands":        SecchiCoefficients(a=7.5, b=0.30),
-    "bight_offshore":       SecchiCoefficients(a=8.5, b=0.32),
+    # secchi_m = a · chl^(-b). The exponent `b` comes from coastal-CA
+    # literature and is left alone; only the multiplier `a` is tuned.
+    # Offshore + islands bumped up so the baseline at chl=0.15 mg/m³ lands
+    # at ~17 m / 56 ft instead of ~14 m / 47 ft — closer to what divers
+    # actually report on stable offshore days.
+    "central_nearshore":    SecchiCoefficients(a=4.0,  b=0.28),
+    "central_islands":      SecchiCoefficients(a=6.5,  b=0.30),
+    "central_offshore":     SecchiCoefficients(a=10.0, b=0.32),  # was 8.5
+    "transition_nearshore": SecchiCoefficients(a=4.5,  b=0.28),
+    "transition_islands":   SecchiCoefficients(a=8.5,  b=0.30),  # was 7.0
+    "transition_offshore":  SecchiCoefficients(a=10.0, b=0.32),  # was 8.5
+    "bight_nearshore":      SecchiCoefficients(a=5.0,  b=0.28),
+    "bight_islands":        SecchiCoefficients(a=9.0,  b=0.30),  # was 7.5
+    "bight_offshore":       SecchiCoefficients(a=10.0, b=0.32),  # was 8.5
 }
 
 
