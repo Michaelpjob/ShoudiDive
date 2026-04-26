@@ -1,11 +1,5 @@
-import { useEffect, useMemo, useRef } from "react";
-import {
-  unproject,
-  sstColor,
-  chlColor,
-  COASTLINE,
-  project,
-} from "../lib/mapData.js";
+import { useEffect, useRef } from "react";
+import { unproject, sstColor, chlColor } from "../lib/mapData.js";
 import {
   getSST,
   getChl,
@@ -109,30 +103,9 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
     ctx.putImageData(img, 0, 0);
   }, [width, height, layer, composite, dataReady]);
 
-  const seaClipPath = useMemo(() => {
-    const pts = COASTLINE.map(([lng, lat]) => project(lng, lat, width, height));
-    const path = ["M " + pts[0].join(" ")];
-    for (let i = 1; i < pts.length; i++) path.push("L " + pts[i].join(" "));
-    path.push(`L -40 ${pts[pts.length - 1][1]}`);
-    path.push(`L -40 -40`);
-    path.push(`L ${pts[0][0]} -40 Z`);
-    return path.join(" ");
-  }, [width, height]);
-
   return (
     <g className="data-overlay" opacity={opacity}>
-      <defs>
-        <clipPath id="oceanMask">
-          <path d={seaClipPath} />
-        </clipPath>
-      </defs>
-      <foreignObject
-        x="0"
-        y="0"
-        width={width}
-        height={height}
-        clipPath="url(#oceanMask)"
-      >
+      <foreignObject x="0" y="0" width={width} height={height}>
         <canvas
           ref={canvasRef}
           style={{

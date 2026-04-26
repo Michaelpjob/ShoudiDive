@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import Basemap from "./components/Basemap.jsx";
+import { SeaBasemap, LandBasemap } from "./components/Basemap.jsx";
 import DataOverlay from "./components/DataOverlay.jsx";
 import WindParticles from "./components/WindParticles.jsx";
 import MpaLayer, { styleForType } from "./components/MpaLayer.jsx";
@@ -420,7 +420,10 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
         viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
         preserveAspectRatio="none"
       >
-        <Basemap width={size.w} height={size.h} />
+        {/* Sea + graticule under everything */}
+        <SeaBasemap width={size.w} height={size.h} />
+
+        {/* Data overlay sits on the sea; land on top will clip it visually */}
         <DataOverlay
           width={size.w}
           height={size.h}
@@ -438,6 +441,9 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
             active={layer === "wind"}
           />
         </foreignObject>
+
+        {/* Real coastline + islands on top of data — naturally masks the overlay */}
+        <LandBasemap width={size.w} height={size.h} />
 
         <MpaLayer
           width={size.w}
