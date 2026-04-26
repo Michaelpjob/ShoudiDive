@@ -171,14 +171,31 @@ export async function loadManifest() {
           const decoded = await decodePng(w.url, "linear", range);
           state.layers.viz[slot] = { ...decoded, valid_at: w.valid_at };
         }
-      } else {
+      } else if (layer === "sst" || layer === "chl") {
+        // Only the layers the frontend actually renders go through the
+        // generic decoder. wave + precip live in the manifest as inputs
+        // to the visibility pipeline (server-side); the frontend has no
+        // wave/precip overlays to paint, so trying to decode them would
+        // just throw on the missing `range` field and take down the
+        // entire loader's outer try/catch — which is exactly the bug
+        // that nuked every layer including wind5d.
         const scale = info.scale || "linear";
         const range = info.range;
-        for (const [win, w] of Object.entries(info.windows || {})) {
-          const decoded = await decodePng(w.url, scale, range);
-          state.layers[layer][win] = { ...decoded, dates: w.dates || [] };
+        if (!range) {
+          console.warn(`dataSource: ${layer} has no range, skipping`);
+        } else {
+          for (const [win, w] of Object.entries(info.windows || {})) {
+            try {
+              const decoded = await decodePng(w.url, scale, range);
+              state.layers[layer][win] = { ...decoded, dates: w.dates || [] };
+            } catch (e) {
+              console.warn(`dataSource: ${layer}/${win} decode failed`, e);
+            }
+          }
         }
       }
+      // Anything else (wave, precip, future server-only inputs) is ignored
+      // by the frontend on purpose.
     }
   } catch (e) {
     console.warn("dataSource: manifest load failed, using mock data", e);
@@ -386,6 +403,37 @@ export function hasWind5dHourly(day) {
     if (w5.hourly[hourKey(day, h)]) return true;
   }
   return false;
+}
+
+// bbox-aggregate stats for one hour, computed off the loaded UV grid.
+// Returns null if the grid hasn't been fetched yet (caller falls back to
+// bucket means or a placeholder). kt = scalar mean of per-pixel |v| (kt);
+// dir = "from" compass bearing of the vector mean wind.
+export function getWind5dHourlyStats(day, hour) {
+  const grid = state.layers.wind5d?.hourly?.[hourKey(day, hour)];
+  if (!grid) return null;
+  const speeds = grid.data;
+  const us = grid.uvU;
+  const vs = grid.uvV;
+  let sumKt = 0;
+  let sumU = 0, sumV = 0;
+  let n = 0;
+  for (let i = 0; i < speeds.length; i++) {
+    const s = speeds[i];
+    const u = us[i];
+    const v = vs[i];
+    if (Number.isFinite(s) && Number.isFinite(u) && Number.isFinite(v)) {
+      sumKt += s;
+      sumU += u;
+      sumV += v;
+      n++;
+    }
+  }
+  if (n === 0) return null;
+  const meanU = sumU / n;
+  const meanV = sumV / n;
+  const dirDeg = ((Math.atan2(-meanU, -meanV) * 180) / Math.PI + 360) % 360;
+  return { kt: sumKt / n, dir: dirDeg };
 }
 
 // Source name for the active wind slot ("HRRR" / "GFS" / "HRRR+GFS"), or null

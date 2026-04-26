@@ -3,6 +3,7 @@ import {
   getWind5dSummary,
   loadWind5dHourly,
   hasWind5dHourly,
+  getWind5dHourlyStats,
   windCardinal,
   bucketKey,
   hourKey,
@@ -100,14 +101,15 @@ function HourlyStrip({ day }) {
   const hours = Array.from({ length: 18 }, (_, i) => i + 4); // 4 am – 9 pm
   if (!dayInfo) return null;
 
-  // Bucket-aggregate stats interpolated across hours so we have something
-  // to show without waiting on the hourly fetch. Once `loadWind5dHourly`
-  // resolves we'll have higher-resolution per-hour values; right now this
-  // is just the bucket means painted across their hour range.
+  // Seed every hour with the relevant bucket's mean as a placeholder. Once
+  // loadWind5dHourly(day) resolves, getWind5dHourlyStats() returns real
+  // per-hour means computed from the freshly-decoded UV grids and we
+  // overwrite the placeholders.
   const hourSpeed = new Array(24).fill(NaN);
   const hourDir = new Array(24).fill(NaN);
+  const hourReal = new Array(24).fill(false);
+
   for (const b of dayInfo.buckets || []) {
-    const meta = BUCKET_META[b.bucket];
     const range = bucketHourRange(b.bucket);
     if (!range) continue;
     for (let h = range[0]; h < range[1]; h++) {
@@ -115,14 +117,31 @@ function HourlyStrip({ day }) {
       hourDir[h] = b.mean_dir_deg;
     }
   }
+
+  let realHourCount = 0;
+  for (const h of hours) {
+    const stats = getWind5dHourlyStats(day, h);
+    if (stats && Number.isFinite(stats.kt)) {
+      hourSpeed[h] = +stats.kt.toFixed(1);
+      hourDir[h] = stats.dir;
+      hourReal[h] = true;
+      realHourCount++;
+    }
+  }
+
   return (
     <div className="hourly-strip">
       <div className="hourly-row">
         {hours.map((h) => {
           const kt = hourSpeed[h];
           const isCalm = !Number.isFinite(kt) || kt < 1;
+          const real = hourReal[h];
           return (
-            <div className="hourly-cell" key={h}>
+            <div
+              className={`hourly-cell ${real ? "real" : "estimate"}`}
+              key={h}
+              title={real ? "HRRR/GFS hourly forecast" : "Bucket mean (hourly grid loading…)"}
+            >
               <span className="hourly-time">{formatHour(h)}</span>
               <span className="hourly-bar-wrap">
                 <span
@@ -130,6 +149,7 @@ function HourlyStrip({ day }) {
                   style={{
                     height: Number.isFinite(kt) ? `${Math.min(100, (kt / 30) * 100)}%` : "0%",
                     background: ktColor(kt),
+                    opacity: real ? 1 : 0.55,
                   }}
                 />
               </span>
@@ -140,8 +160,11 @@ function HourlyStrip({ day }) {
         })}
       </div>
       <div className="hourly-note">
-        Bucket means painted across each hour. Higher-resolution hourly model
-        output will replace this when it loads.
+        {realHourCount === hours.length
+          ? "Per-hour HRRR/GFS forecast."
+          : realHourCount > 0
+          ? `Showing ${realHourCount}/${hours.length} hourly samples · rest are bucket means while remaining hours load.`
+          : "Hourly grids loading… showing bucket-mean placeholders."}
       </div>
     </div>
   );
@@ -244,7 +267,19 @@ export default function WindDayGrid({ sel, setSel, layout = "stack" }) {
   const summary = getWind5dSummary();
   const [expandedDay, setExpandedDay] = useState(null);
 
-  // Lazy-load the hourly grids for whichever day's drill-down is open.
+  // Background-load every day's hourly UV grids the moment the wind layer
+  // opens, so per-hour data is ready by the time the user expands any day
+  // card. ~1.2 MB total across all 5 days; loadWind5dHourly() is idempotent
+  // and dedupes in-flight requests so this is safe to run repeatedly.
+  useEffect(() => {
+    if (!summary) return;
+    for (const d of summary.days || []) {
+      loadWind5dHourly(d.day);
+    }
+  }, [summary]);
+
+  // Force the active day's hourly to the front of the load queue if the
+  // user explicitly expands its card.
   useEffect(() => {
     if (expandedDay == null) return;
     if (hasWind5dHourly(expandedDay)) return;
