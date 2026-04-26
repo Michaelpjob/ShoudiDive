@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Basemap from "./components/Basemap.jsx";
 import DataOverlay from "./components/DataOverlay.jsx";
+import WindParticles from "./components/WindParticles.jsx";
 import {
   project,
   unproject,
@@ -13,10 +14,21 @@ import {
   subscribe,
   getSST,
   getChl,
+  getWindSpeed,
+  getWindUV,
+  windCompass,
+  windCardinal,
   dataDates,
   isReal,
   getDataState,
 } from "./lib/dataSource.js";
+
+// Time filter is layer-aware: SST/chl use composite windows, wind uses forecast slots.
+const TIME_OPTIONS = {
+  sst:  { label: "Composite",      helper: "rolling window",      buttons: ["1 Day", "2 Day", "3 Day"], tags: ["freshest", "balanced", "best cover"] },
+  chl:  { label: "Composite",      helper: "rolling window",      buttons: ["1 Day", "2 Day", "3 Day"], tags: ["freshest", "balanced", "best cover"] },
+  wind: { label: "Forecast Step",  helper: "HRRR hourly model",   buttons: ["Now",   "+6h",   "+24h"],  tags: ["analysis", "afternoon", "tomorrow"] },
+};
 
 function useDataVersion() {
   const [, setTick] = useState(0);
@@ -28,8 +40,20 @@ function useDataVersion() {
   return getDataState();
 }
 
-function formatWindow(dates, fallback) {
+function formatWindow(dates, fallback, layer) {
   if (!dates || dates.length === 0) return fallback;
+  if (layer === "wind") {
+    // dates is a single ISO timestamp like "2026-04-26T06:00:00Z".
+    const d = new Date(dates[0]);
+    return d.toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "UTC",
+      timeZoneName: "short",
+    });
+  }
   const parse = (iso) => {
     const d = new Date(iso + "T00:00:00Z");
     return {
@@ -238,7 +262,10 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
     const x = e.clientX - r.left;
     const y = e.clientY - r.top;
     const [lng, lat] = unproject(x, y, size.w, size.h);
-    const val = layer === "sst" ? getSST(lng, lat, composite) : getChl(lng, lat, composite);
+    let val;
+    if (layer === "sst") val = getSST(lng, lat, composite);
+    else if (layer === "chl") val = getChl(lng, lat, composite);
+    else val = { ...getWindUV(lng, lat, composite), kt: getWindSpeed(lng, lat, composite) };
     setHover({ x, y, lng, lat, val });
   }
   function onLeave() {
@@ -246,13 +273,16 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
   }
 
   const fallbackText =
-    composite === 1
+    layer === "wind"
+      ? "now"
+      : composite === 1
       ? "Apr 24, 2026"
       : composite === 2
       ? "Apr 23–24, 2026"
       : "Apr 22–24, 2026";
-  const compositeText = formatWindow(dataDates(layer, composite), fallbackText);
+  const compositeText = formatWindow(dataDates(layer, composite), fallbackText, layer);
   const layerIsReal = isReal(layer, composite);
+  const timeOpts = TIME_OPTIONS[layer];
 
   return (
     <div className="map-stage" ref={stageRef} onMouseMove={onMove} onMouseLeave={onLeave}>
@@ -266,6 +296,15 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
           opacity={opacity}
           dataReady={dataState?.ready}
         />
+        <foreignObject x="0" y="0" width={size.w} height={size.h}>
+          <WindParticles
+            width={size.w}
+            height={size.h}
+            composite={composite}
+            dataReady={dataState?.ready}
+            active={layer === "wind"}
+          />
+        </foreignObject>
 
         <g className="spot-pins">
           {SAVED_SPOTS.map((s) => {
@@ -328,43 +367,48 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
           </span>
         </div>
         <div className="panel-body">
-          <div className="layer-toggle" role="tablist">
+          <div className="layer-toggle layer-toggle-3" role="tablist">
             <button
               className={layer === "sst" ? "active" : ""}
               onClick={() => setLayer("sst")}
             >
               <span className="lt-label">Sea Temp</span>
-              <span className="lt-sub">Surface · °{units}</span>
+              <span className="lt-sub">°{units}</span>
             </button>
             <button
               className={layer === "chl" ? "active" : ""}
               onClick={() => setLayer("chl")}
             >
               <span className="lt-label">Visibility</span>
-              <span className="lt-sub">Water clarity · mg/m³</span>
+              <span className="lt-sub">mg/m³</span>
+            </button>
+            <button
+              className={layer === "wind" ? "active" : ""}
+              onClick={() => setLayer("wind")}
+            >
+              <span className="lt-label">Wind</span>
+              <span className="lt-sub">10 m · kt</span>
             </button>
           </div>
           <div className="composite">
             <div className="composite-label">
-              <span>Composite</span>
-              <span className="hint">rolling window</span>
+              <span>{timeOpts.label}</span>
+              <span className="hint">{timeOpts.helper}</span>
             </div>
             <div className="composite-buttons">
-              {[1, 2, 3].map((d) => (
+              {[1, 2, 3].map((d, i) => (
                 <button
                   key={d}
                   className={composite === d ? "active" : ""}
                   onClick={() => setComposite(d)}
                 >
-                  <span className="cb-num">{d} Day</span>
-                  <span className="cb-tag">
-                    {d === 1 ? "freshest" : d === 2 ? "balanced" : "best cover"}
-                  </span>
+                  <span className="cb-num">{timeOpts.buttons[i]}</span>
+                  <span className="cb-tag">{timeOpts.tags[i]}</span>
                 </button>
               ))}
             </div>
             <div className="composite-window">
-              <span>Window</span>
+              <span>{layer === "wind" ? "Valid" : "Window"}</span>
               <span className="mono">{compositeText}</span>
             </div>
           </div>
@@ -409,7 +453,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
                   kelp stress and harmful algal blooms.
                 </p>
               </div>
-            ) : (
+            ) : layer === "chl" ? (
               <div className="info-section">
                 <h4 className="info-h">Water Clarity (Chlorophyll-a)</h4>
                 <p className="info-p">
@@ -430,13 +474,41 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
                   <strong>Dense green</strong> = bloom or red tide. Avoid if water smells off.
                 </p>
               </div>
+            ) : (
+              <div className="info-section">
+                <h4 className="info-h">Wind Speed (10 m)</h4>
+                <p className="info-p">
+                  <span className="swatch" style={{ background: "rgb(170,210,240)" }}></span>
+                  <strong>Light blue</strong> = 5 kt or less. Glassy. Paddleable, divable.
+                </p>
+                <p className="info-p">
+                  <span className="swatch" style={{ background: "rgb(120,200,160)" }}></span>
+                  <strong>Green</strong> = ~10 kt. Light breeze. Surface texture, still mellow.
+                </p>
+                <p className="info-p">
+                  <span className="swatch" style={{ background: "rgb(220,220,100)" }}></span>
+                  <strong>Yellow</strong> = ~15 kt. Moderate chop. Boat-handling matters.
+                </p>
+                <p className="info-p">
+                  <span className="swatch" style={{ background: "rgb(240,160,70)" }}></span>
+                  <strong>Orange</strong> = ~20 kt. Small craft advisory territory.
+                </p>
+                <p className="info-p">
+                  <span className="swatch" style={{ background: "rgb(140,30,90)" }}></span>
+                  <strong>Magenta</strong> = 35 kt+. Gale. Stay home.
+                </p>
+                <p className="info-p">
+                  Particles trace direction (the line is "from where wind is coming"). Hover
+                  for the exact knots and compass bearing.
+                </p>
+              </div>
             )}
             <div className="info-section">
-              <h4 className="info-h">Why composite windows?</h4>
+              <h4 className="info-h">{layer === "wind" ? "Forecast slots" : "Why composite windows?"}</h4>
               <p className="info-p">
-                Clouds wipe out single-day satellite imagery off CA, especially the summer
-                marine layer. A 2- or 3-day window backfills with the most recent valid
-                pixel — 1-day is freshest, 3-day has the best coverage.
+                {layer === "wind"
+                  ? "HRRR is NOAA's hourly 3-km weather model. Now is the freshest analysis. +6h is your afternoon look-ahead. +24h is tomorrow morning. Updated every hour."
+                  : "Clouds wipe out single-day satellite imagery off CA, especially the summer marine layer. A 2- or 3-day window backfills with the most recent valid pixel — 1-day is freshest, 3-day has the best coverage."}
               </p>
             </div>
             <div className="info-section">
@@ -445,8 +517,9 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
                 className="info-p"
                 style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 10.5 }}
               >
-                NOAA Coral Reef Watch · NASA OB.DAAC MODIS-Aqua · Copernicus GLO-MFC.
-                Daily L3 composites, ~1 km grid, regridded to bounding box.
+                {layer === "wind"
+                  ? "NOAA HRRR (3-km, hourly). 10-m UGRD/VGRD via NOMADS byte-range fetch. Regridded to ~5 km."
+                  : "NOAA Coral Reef Watch · NASA OB.DAAC MODIS-Aqua · Copernicus GLO-MFC. Daily L3 composites, ~1 km grid, regridded to bounding box."}
               </p>
             </div>
           </div>
@@ -479,18 +552,23 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
         <div className="panel-body">
           <div className="spots-list">
             {SAVED_SPOTS.map((s) => {
-              const v =
-                layer === "sst"
-                  ? getSST(s.lng, s.lat, composite)
-                  : getChl(s.lng, s.lat, composite);
-              const valTxt =
-                layer === "sst"
-                  ? units === "F"
-                    ? `${(v * 9 / 5 + 32).toFixed(1)}`
-                    : `${v.toFixed(1)}`
-                  : `${v.toFixed(2)}`;
-              const unit = layer === "sst" ? `°${units}` : "mg/m³";
-              const col = layer === "sst" ? sstColor(v) : chlColor(v);
+              let v, valTxt, unit, col;
+              if (layer === "sst") {
+                v = getSST(s.lng, s.lat, composite);
+                valTxt = units === "F" ? `${(v * 9 / 5 + 32).toFixed(1)}` : `${v.toFixed(1)}`;
+                unit = `°${units}`;
+                col = sstColor(v);
+              } else if (layer === "chl") {
+                v = getChl(s.lng, s.lat, composite);
+                valTxt = `${v.toFixed(2)}`;
+                unit = "mg/m³";
+                col = chlColor(v);
+              } else {
+                v = getWindSpeed(s.lng, s.lat, composite);
+                valTxt = Number.isFinite(v) ? `${v.toFixed(1)}` : "—";
+                unit = "kt";
+                col = "var(--ink-2)";
+              }
               return (
                 <div
                   key={s.id}
@@ -520,10 +598,12 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
       <div className="panel legend-br">
         <div className="panel-header">
           <span className="panel-title">
-            {layer === "sst" ? "Sea Surface Temperature" : "Water Clarity (Chlorophyll-a)"}
+            {layer === "sst" ? "Sea Surface Temperature"
+              : layer === "chl" ? "Water Clarity (Chlorophyll-a)"
+              : "Wind Speed (10 m)"}
           </span>
           <span className="panel-title mono" style={{ color: "var(--ink-3)" }}>
-            {layer === "sst" ? "°C" : "mg/m³"}
+            {layer === "sst" ? "°C" : layer === "chl" ? "mg/m³" : "kt"}
           </span>
         </div>
         <div className="panel-body">
@@ -531,27 +611,27 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
           <div className="legend-ticks">
             {layer === "sst" ? (
               <>
-                <span>9</span>
-                <span>13</span>
-                <span>16</span>
-                <span>19</span>
-                <span>22</span>
-                <span>25</span>
+                <span>9</span><span>13</span><span>16</span><span>19</span><span>22</span><span>25</span>
+              </>
+            ) : layer === "chl" ? (
+              <>
+                <span>0.05</span><span>0.3</span><span>1.0</span><span>3.5</span><span>20+</span>
               </>
             ) : (
               <>
-                <span>0.05</span>
-                <span>0.3</span>
-                <span>1.0</span>
-                <span>3.5</span>
-                <span>20+</span>
+                <span>0</span><span>5</span><span>10</span><span>15</span><span>20</span><span>25</span><span>35+</span>
               </>
             )}
           </div>
           <div className="legend-meta">
-            <span>{layer === "sst" ? "Cold upwelling → Heatwave" : "Gin-clear → Bloom"}</span>
             <span>
-              <strong>{compositeText}</strong> · {composite}-day composite
+              {layer === "sst" ? "Cold upwelling → Heatwave"
+                : layer === "chl" ? "Gin-clear → Bloom"
+                : "Calm → Gale"}
+            </span>
+            <span>
+              <strong>{compositeText}</strong>
+              {layer === "wind" ? " · HRRR" : ` · ${composite}-day composite`}
               {!layerIsReal && dataState?.ready && " · demo"}
             </span>
           </div>
@@ -587,20 +667,26 @@ function Tooltip({ x, y, layer, val, lng, lat, units }) {
       big = `${val.toFixed(1)}°C`;
       sub = `${(val * 9 / 5 + 32).toFixed(1)}°F`;
     }
-  } else {
+  } else if (layer === "chl") {
     title = "Chl-a · Water Clarity";
     big = `${val.toFixed(2)} mg/m³`;
     const tier =
-      val < 0.3
-        ? "Gin clear"
-        : val < 1.0
-        ? "Clear"
-        : val < 3.5
-        ? "Moderate"
-        : val < 10
-        ? "Productive"
-        : "Bloom";
+      val < 0.3 ? "Gin clear"
+      : val < 1.0 ? "Clear"
+      : val < 3.5 ? "Moderate"
+      : val < 10  ? "Productive"
+      : "Bloom";
     sub = tier;
+  } else {
+    title = "Wind · 10 m";
+    if (Number.isFinite(val.kt) && Number.isFinite(val.u) && Number.isFinite(val.v)) {
+      const deg = windCompass(val.u, val.v);
+      big = `${val.kt.toFixed(1)} kt`;
+      sub = `from ${windCardinal(deg)} (${Math.round(deg)}°)`;
+    } else {
+      big = "—";
+      sub = "no data";
+    }
   }
   return (
     <div className="tooltip" style={{ left: x, top: y }}>

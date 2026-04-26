@@ -6,7 +6,32 @@ import {
   COASTLINE,
   project,
 } from "../lib/mapData.js";
-import { getSST, getChl } from "../lib/dataSource.js";
+import { getSST, getChl, getWindSpeed } from "../lib/dataSource.js";
+
+// Beaufort-aligned wind ramp (knots → "rgb(r,g,b)"); same stops as the legend.
+const WIND_RAMP = [
+  { kt: 0,  c: [230, 240, 250] },
+  { kt: 5,  c: [170, 210, 240] },
+  { kt: 10, c: [120, 200, 160] },
+  { kt: 15, c: [220, 220, 100] },
+  { kt: 20, c: [240, 160, 70]  },
+  { kt: 25, c: [220, 90, 60]   },
+  { kt: 35, c: [140, 30, 90]   },
+];
+function windColorRGB(kt) {
+  if (!Number.isFinite(kt)) return "rgb(220,220,220)";
+  for (let i = 0; i < WIND_RAMP.length - 1; i++) {
+    const a = WIND_RAMP[i], b = WIND_RAMP[i + 1];
+    if (kt >= a.kt && kt <= b.kt) {
+      const k = (kt - a.kt) / (b.kt - a.kt);
+      const r = Math.round(a.c[0] + (b.c[0] - a.c[0]) * k);
+      const g = Math.round(a.c[1] + (b.c[1] - a.c[1]) * k);
+      const bl = Math.round(a.c[2] + (b.c[2] - a.c[2]) * k);
+      return `rgb(${r},${g},${bl})`;
+    }
+  }
+  return `rgb(${WIND_RAMP[WIND_RAMP.length - 1].c.join(",")})`;
+}
 
 export default function DataOverlay({ width, height, layer, composite, opacity, dataReady }) {
   const canvasRef = useRef(null);
@@ -28,10 +53,10 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
         const x = px / scale;
         const y = py / scale;
         const [lng, lat] = unproject(x, y, width, height);
-        const rgb =
-          layer === "sst"
-            ? sstColor(getSST(lng, lat, composite))
-            : chlColor(getChl(lng, lat, composite));
+        let rgb;
+        if (layer === "sst") rgb = sstColor(getSST(lng, lat, composite));
+        else if (layer === "chl") rgb = chlColor(getChl(lng, lat, composite));
+        else rgb = windColorRGB(getWindSpeed(lng, lat, composite));
         const m = rgb.match(/(\d+),\s*(\d+),\s*(\d+)/);
         const r = +m[1], g = +m[2], b = +m[3];
         const idx = (py * cw + px) * 4;

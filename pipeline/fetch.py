@@ -203,14 +203,20 @@ def main() -> None:
         print("Nothing fetched. Exiting.", file=sys.stderr)
         sys.exit(1)
 
-    manifest = {
-        "generated_at": datetime.now(timezone.utc)
-        .isoformat(timespec="seconds")
-        .replace("+00:00", "Z"),
-        "bbox": [BBOX["lng_min"], BBOX["lat_min"], BBOX["lng_max"], BBOX["lat_max"]],
-        "layers": manifest_layers,
-    }
-    (OUT_DIR / "manifest.json").write_text(json.dumps(manifest, indent=2))
+    # Merge into existing manifest so layers we didn't touch (e.g. wind) survive.
+    manifest_path = OUT_DIR / "manifest.json"
+    if manifest_path.exists():
+        manifest = json.loads(manifest_path.read_text())
+    else:
+        manifest = {
+            "bbox": [BBOX["lng_min"], BBOX["lat_min"], BBOX["lng_max"], BBOX["lat_max"]],
+            "layers": {},
+        }
+    manifest["generated_at"] = (
+        datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    )
+    manifest.setdefault("layers", {}).update(manifest_layers)
+    manifest_path.write_text(json.dumps(manifest, indent=2))
     print("wrote manifest.json")
 
 

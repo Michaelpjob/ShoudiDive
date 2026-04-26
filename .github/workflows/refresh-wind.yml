@@ -1,0 +1,63 @@
+name: Refresh wind + deploy
+
+# Pulls fresh 10-m wind from NOAA HRRR via NOMADS, builds the site, and
+# uploads to Cloudflare Pages via wrangler. Runs hourly to pick up the
+# freshest extended HRRR run (00/06/12/18z).
+
+on:
+  schedule:
+    # Every hour at :15 — gives NOMADS a buffer to publish the freshest run.
+    - cron: "15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  refresh-wind:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      # cfgrib needs eccodes; the wheel bundles it on Linux.
+      - name: Install pipeline dependencies
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Fetch latest wind (HRRR now/+6h/+24h)
+        run: python pipeline/fetch_wind.py
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=shouldidive --branch=main --commit-dirty=true
+
+      - name: Commit refreshed data
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/data/
+          if git diff --staged --quiet; then
+            echo "No data changes to commit."
+          else
+            git commit -m "wind: refresh $(date -u +%Y-%m-%dT%H:%MZ)"
+            git push
+          fi
