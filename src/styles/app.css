@@ -1629,3 +1629,212 @@ body {
   color: var(--ink-3);
   font-style: italic;
 }
+
+/* ---------- Wind current-selection card (panel summary above timeline) ---- */
+
+.wind-current-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wind-current-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  background: var(--bg-panel-solid);
+}
+.wcs-time {
+  font-size: 11px;
+  color: var(--ink-3);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.wcs-kt-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.wcs-kt {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.wcs-kt-unit {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-3);
+  margin-left: 2px;
+}
+.wcs-dir {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.wcs-confidence {
+  font-size: 10.5px;
+  color: var(--warn);
+  font-style: italic;
+}
+
+/* ---------- Wind timeline (Windy-style scrubber, sticky bottom of map) ---- */
+
+.wind-timeline {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(900px, calc(100% - 24px));
+  height: 64px;
+  background: var(--bg-panel);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  box-shadow: var(--shadow-2);
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  z-index: 18;
+  overflow: visible;
+}
+.wind-timeline.dragging { cursor: grabbing; }
+
+.tl-days {
+  position: absolute;
+  inset: 0 0 32px 0;        /* leaves bottom 32px for ticks */
+  border-bottom: 1px solid var(--line-2);
+}
+.tl-day-cell {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  padding: 5px 8px;
+  border-right: 1px solid var(--line-2);
+}
+.tl-day-cell:last-child { border-right: none; }
+.tl-day-cell.odd  { background: rgb(255 255 255 / 0.02); }
+.tl-day-cell.conf-medium .tl-day-label::after {
+  content: " ~";
+  color: var(--warn);
+}
+.tl-day-cell.conf-low .tl-day-label::after {
+  content: " ~~";
+  color: var(--warn);
+}
+.tl-day-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-2);
+  letter-spacing: 0.02em;
+}
+
+.tl-tickrow {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 32px;
+  pointer-events: none;
+}
+.tl-tick {
+  position: absolute;
+  bottom: 0;
+  transform: translateX(-50%);
+}
+.tl-tick.day {
+  width: 1.5px;
+  height: 32px;
+  background: var(--line);
+}
+.tl-tick.major {
+  width: 1px;
+  height: 14px;
+  background: var(--ink-3);
+  opacity: 0.6;
+}
+.tl-tick.minor {
+  width: 1px;
+  height: 6px;
+  background: var(--ink-3);
+  opacity: 0.3;
+}
+.tl-hour-label {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  font-family: "JetBrains Mono", monospace;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.tl-playhead {
+  position: absolute;
+  top: -10px;
+  bottom: 0;
+  pointer-events: none;
+}
+.tl-playhead-stem {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  background: var(--accent);
+  transform: translateX(-50%);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.18);
+}
+.tl-playhead-badge {
+  position: absolute;
+  top: -28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-panel-solid);
+  border: 1px solid var(--accent);
+  color: var(--ink);
+  padding: 4px 8px;
+  border-radius: var(--r-1);
+  font-size: 11px;
+  white-space: nowrap;
+  box-shadow: var(--shadow-1);
+  font-family: "JetBrains Mono", monospace;
+}
+.tl-playhead-badge.align-center { left: 50%; transform: translateX(-50%); }
+.tl-playhead-badge.align-left   { left: 0;   transform: translateX(-4px); }
+.tl-playhead-badge.align-right  { right: 0;  transform: translateX(4px); left: auto; }
+.tl-pb-time { font-weight: 600; }
+.tl-pb-kt {
+  color: rgb(15 23 42);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 600;
+  font-size: 10.5px;
+}
+.tl-pb-dir { font-size: 10.5px; color: var(--ink-2); }
+.tl-pb-est { color: var(--ink-3); font-style: italic; margin-left: 2px; }
+
+@media (max-width: 760px) {
+  .wind-timeline {
+    bottom: 70px;            /* clear the mobile tab bar */
+    height: 60px;
+    width: calc(100% - 12px);
+  }
+  .tl-day-label {
+    font-size: 10px;
+  }
+  .tl-hour-label {
+    font-size: 8px;
+  }
+  .tl-playhead-badge {
+    font-size: 10px;
+    padding: 3px 6px;
+  }
+}

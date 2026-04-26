@@ -15,7 +15,7 @@ import {
   windSource,
 } from "../lib/dataSource.js";
 import { styleForClass } from "./BathyLayer.jsx";
-import WindDayGrid from "./WindDayGrid.jsx";
+import WindDayGrid, { WindCurrentSelectionCard } from "./WindDayGrid.jsx";
 
 const TABS = [
   { id: "layers", label: "Layers" },
@@ -131,8 +131,8 @@ function LayerSection({
 
       {layer === "wind" ? (
         <>
-          <div className="ms-row-label">5-day forecast</div>
-          <WindDayGrid sel={windSel} setSel={setWindSel} layout="row" />
+          <div className="ms-row-label">5-day forecast · drag the timeline</div>
+          <WindCurrentSelectionCard sel={windSel} setSel={setWindSel} />
         </>
       ) : (
         <>

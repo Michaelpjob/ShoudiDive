@@ -358,3 +358,88 @@ export function selToSlotKey(sel, summary = null) {
   if (sel.hour != null) return hourKey(sel.day, sel.hour);
   return bucketKey(sel.day, sel.bucket);
 }
+
+// Compact card showing the currently-scrubbed selection's headline stats
+// and the best_window jump button. Replaces the heavier 5-card stack
+// when the timeline is the primary control.
+function fmtSelTime(dayInfo, hour) {
+  if (!dayInfo) return "";
+  const h12 = hour % 12 === 0 ? 12 : hour % 12;
+  const ampm = hour < 12 ? "am" : "pm";
+  return `${dayInfo.weekday} ${h12} ${ampm}`;
+}
+
+export function WindCurrentSelectionCard({ sel, setSel }) {
+  const summary = getWind5dSummary();
+  if (!summary) {
+    return (
+      <div className="wind-day-grid empty">
+        <p>5-day forecast not loaded yet.</p>
+      </div>
+    );
+  }
+  const dayInfo = summary.days?.find((d) => d.day === sel.day);
+  const bucketName =
+    sel.hour != null
+      ? hourBucketLookup(sel.hour)
+      : sel.bucket;
+  const bucket = dayInfo?.buckets?.find((b) => b.bucket === bucketName);
+  const stats = sel.hour != null ? getHourlyStatsFromCache(sel.day, sel.hour) : null;
+  const meanKt = stats?.kt ?? bucket?.mean_kt;
+  const meanDir = stats?.dir ?? bucket?.mean_dir_deg;
+  const cardinal = Number.isFinite(meanDir) ? windCardinal(meanDir) : "—";
+  const bw = summary.best_window;
+  const bwDay = bw && summary.days?.find((d) => d.day === bw.day);
+
+  return (
+    <div className="wind-current-card">
+      {bw && bwDay && (
+        <button
+          type="button"
+          className="wind-best-window"
+          onClick={() => setSel({ day: bw.day, bucket: bw.bucket, hour: null })}
+        >
+          <span className="best-dot" />
+          <span className="best-text">
+            Best: <strong>{bwDay.weekday} {bw.bucket}</strong> · {bw.mean_kt} kt
+          </span>
+        </button>
+      )}
+      <div className="wind-current-stats">
+        <div className="wcs-time">
+          {sel.hour != null && dayInfo
+            ? fmtSelTime(dayInfo, sel.hour)
+            : `${dayInfo?.weekday} ${sel.bucket}`}
+        </div>
+        <div className="wcs-kt-row">
+          <span className="wcs-kt">
+            {Number.isFinite(meanKt) ? meanKt.toFixed(1) : "—"}
+            <span className="wcs-kt-unit"> kt</span>
+          </span>
+          <span className="wcs-dir">
+            {dirArrow(meanDir)} {cardinal}
+          </span>
+        </div>
+        {dayInfo && dayInfo.confidence !== "high" && (
+          <div className="wcs-confidence">
+            {dayInfo.confidence === "medium" ? "~ medium-confidence GFS" : "~ low-confidence GFS"}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Maps an hour to the bucket it belongs to. Mirrors hourToBucket() in
+// WindTimeline.jsx — kept inline here to avoid a cross-file import dance.
+function hourBucketLookup(h) {
+  if (h >= 4 && h < 6) return "predawn";
+  if (h >= 6 && h < 10) return "morning";
+  if (h >= 10 && h < 14) return "midday";
+  if (h >= 14 && h < 19) return "afternoon";
+  if (h >= 19 && h < 21) return "evening";
+  return "evening";
+}
+function getHourlyStatsFromCache(day, hour) {
+  return getWind5dHourlyStats(day, hour);
+}

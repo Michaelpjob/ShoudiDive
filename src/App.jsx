@@ -36,10 +36,12 @@ import {
   getWind5dSummary,
 } from "./lib/dataSource.js";
 import WindDayGrid, {
+  WindCurrentSelectionCard,
   defaultWindSelection,
   selectionHasData,
   selToSlotKey,
 } from "./components/WindDayGrid.jsx";
+import WindTimeline from "./components/WindTimeline.jsx";
 
 // Reactive viewport-width hook. Returns true at <760 px so we can branch the
 // layout between the floating-panel desktop UI and a bottom-sheet mobile UI.
@@ -776,6 +778,12 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
 
       <MapLabels labels={allLabels} vb={vb} size={size} />
 
+      {/* Wind scrubber — sticky bottom bar, scrolls through 5 days × 24
+          hours. The map heatmap + particles update on every drag tick. */}
+      {layer === "wind" && (
+        <WindTimeline sel={windSel} setSel={setWindSel} />
+      )}
+
       {hover && (
         <Tooltip
           x={hover.x}
@@ -870,9 +878,12 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
             <div className="composite wind-grid-host">
               <div className="composite-label">
                 <span>5-day forecast</span>
-                <span className="hint">HRRR + GFS · Pacific time</span>
+                <span className="hint">drag the timeline below</span>
               </div>
-              <WindDayGrid sel={windSel} setSel={setWindSel} layout="stack" />
+              <WindCurrentSelectionCard
+                sel={windSel}
+                setSel={setWindSel}
+              />
             </div>
           ) : (
             <div className="composite">
