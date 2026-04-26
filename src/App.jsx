@@ -1445,12 +1445,6 @@ function BathyPopup({ feature, onClose }) {
           <p className="mpa-popup-body">{feature.description}</p>
         )}
 
-        {Array.isArray(feature.commonSpecies) && feature.commonSpecies.length > 0 && (
-          <p className="mpa-popup-body" style={{ marginTop: -4 }}>
-            <strong>Commonly targeted:</strong> {feature.commonSpecies.join(", ")}.
-          </p>
-        )}
-
         <p className="mpa-popup-meta mono">
           Source: {feature.source || "n/a"}
         </p>
