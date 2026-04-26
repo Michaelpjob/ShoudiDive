@@ -98,9 +98,21 @@ def open_first_array(nc_path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]
     if arr.ndim == 0 or not np.isfinite(arr).any():
         ds.close()
         return None
+    # ERDDAP sometimes returns extra singleton dims that .squeeze() misses
+    # when there are >1 leading axes (e.g. (1, 1, lat, lon) from VIIRS with
+    # an altitude axis). Force-reduce to 2D by collapsing leading axes.
+    while arr.ndim > 2 and arr.shape[0] == 1:
+        arr = arr[0]
+    if arr.ndim != 2:
+        print(f"  unexpected shape {arr.shape} for {nc_path.name}, skipping")
+        ds.close()
+        return None
     lat = np.asarray(ds["latitude"].values) if "latitude" in ds else np.asarray(ds["lat"].values)
     lng = np.asarray(ds["longitude"].values) if "longitude" in ds else np.asarray(ds["lon"].values)
     ds.close()
+    if lat.ndim != 1 or lng.ndim != 1:
+        print(f"  unexpected coord shape lat={lat.shape} lng={lng.shape}, skipping")
+        return None
     # Want row 0 = lat_max (south-down) for PNG row order.
     if lat[0] < lat[-1]:
         lat = lat[::-1]
@@ -186,22 +198,28 @@ def main() -> None:
             monthly_samples.append(date(sample_year, now.month, d))
 
     print(f"SST climo for {now.year}-{now.month:02d}: averaging {monthly_samples}")
-    sst_mean, sst_lat, sst_lng = mean_stack(
-        monthly_samples,
-        "jplMURSST41", "analysed_sst", stride=2, pre_xy="",
-    )
-    sst_mean = kelvin_to_c(sst_mean)
-    print(f"  SST climo: {np.nanmin(sst_mean):.2f}–{np.nanmax(sst_mean):.2f} °C")
-    encode_linear(sst_mean, *SST_RANGE, OUT_DIR / "sst_climo.png")
+    try:
+        sst_mean, sst_lat, sst_lng = mean_stack(
+            monthly_samples,
+            "jplMURSST41", "analysed_sst", stride=2, pre_xy="",
+        )
+        sst_mean = kelvin_to_c(sst_mean)
+        print(f"  SST climo: {np.nanmin(sst_mean):.2f}–{np.nanmax(sst_mean):.2f} °C")
+        encode_linear(sst_mean, *SST_RANGE, OUT_DIR / "sst_climo.png")
+    except Exception as e:
+        print(f"  SST climo failed — {e!s}")
 
     print(f"chl climo for {now.year}-{now.month:02d}: averaging {monthly_samples}")
-    chl_mean, _, _ = mean_stack(
-        monthly_samples,
-        "nesdisVHNnoaaSNPPnoaa20NRTchlaGapfilledDaily", "chlor_a",
-        stride=1, pre_xy="[0]",
-    )
-    print(f"  chl climo: {np.nanmin(chl_mean):.3f}–{np.nanmax(chl_mean):.3f} mg/m³")
-    encode_log10(chl_mean, *CHL_RANGE, OUT_DIR / "chl_climo.png")
+    try:
+        chl_mean, _, _ = mean_stack(
+            monthly_samples,
+            "nesdisVHNnoaaSNPPnoaa20NRTchlaGapfilledDaily", "chlor_a",
+            stride=1, pre_xy="[0]",
+        )
+        print(f"  chl climo: {np.nanmin(chl_mean):.3f}–{np.nanmax(chl_mean):.3f} mg/m³")
+        encode_log10(chl_mean, *CHL_RANGE, OUT_DIR / "chl_climo.png")
+    except Exception as e:
+        print(f"  chl climo failed — {e!s}")
 
     annual_samples = [date(sample_year, m, d) for m, d in ANNUAL_SAMPLE_MMDD]
     print(f"chl annual mean: averaging {annual_samples}")
