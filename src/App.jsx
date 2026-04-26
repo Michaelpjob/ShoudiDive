@@ -16,6 +16,7 @@ import {
   unproject,
   sstColor,
   chlColor,
+  getFitted,
   SAVED_SPOTS,
 } from "./lib/mapData.js";
 import {
@@ -640,38 +641,53 @@ function DesktopView({ layer, setLayer, composite, setComposite, opacity, units,
           </pattern>
         </defs>
 
-        {/* Sea + graticule under everything */}
+        {/* Sea + graticule under everything (full-bleed: open ocean fills
+            the pillarbox/letterbox margins as well, which reads correctly). */}
         <SeaBasemap width={size.w} height={size.h} />
 
-        {/* No-data hatch — visible only where the data overlay has
-            transparent cells (i.e. NaN / missing satellite data). */}
-        <rect
-          x="0"
-          y="0"
-          width={size.w}
-          height={size.h}
-          fill="url(#noDataHatch)"
-          pointerEvents="none"
-        />
+        {(() => {
+          // Letterbox/pillarbox the geographic content so x and y always
+          // represent the same on-the-ground distance regardless of the
+          // window aspect ratio. The data overlay, no-data hatch, and wind
+          // particles all live in this fitted rect; coastlines + spot pins
+          // come from project() which already uses it.
+          const f = getFitted(size.w, size.h);
+          return (
+            <>
+              {/* No-data hatch — only inside the bbox area; outside is just sea. */}
+              <rect
+                x={f.marginX}
+                y={f.marginY}
+                width={f.innerW}
+                height={f.innerH}
+                fill="url(#noDataHatch)"
+                pointerEvents="none"
+              />
 
-        {/* Data overlay sits on the sea; land on top will clip it visually */}
-        <DataOverlay
-          width={size.w}
-          height={size.h}
-          layer={layer}
-          composite={composite}
-          opacity={opacity}
-          dataReady={dataState?.ready}
-        />
-        <foreignObject x="0" y="0" width={size.w} height={size.h}>
-          <WindParticles
-            width={size.w}
-            height={size.h}
-            composite={composite}
-            dataReady={dataState?.ready}
-            active={layer === "wind"}
-          />
-        </foreignObject>
+              {/* Data overlay (positions itself inside the fitted box). */}
+              <DataOverlay
+                width={size.w}
+                height={size.h}
+                layer={layer}
+                composite={composite}
+                opacity={opacity}
+                dataReady={dataState?.ready}
+              />
+
+              {/* Wind particles — confined to fitted box so streamlines
+                  don't fly off into the empty pillarbox margins. */}
+              <foreignObject x={f.marginX} y={f.marginY} width={f.innerW} height={f.innerH}>
+                <WindParticles
+                  width={f.innerW}
+                  height={f.innerH}
+                  composite={composite}
+                  dataReady={dataState?.ready}
+                  active={layer === "wind"}
+                />
+              </foreignObject>
+            </>
+          );
+        })()}
 
         {/* Real coastline + islands on top of data — naturally masks the overlay */}
         <LandBasemap width={size.w} height={size.h} />

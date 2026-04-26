@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { sstColor, chlColor } from "../lib/mapData.js";
+import { sstColor, chlColor, getFitted } from "../lib/mapData.js";
 import { getLayerGrid } from "../lib/dataSource.js";
 
 // Beaufort-aligned wind ramp (knots → [r,g,b]); same stops as the legend.
@@ -107,9 +107,15 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
     ctx.putImageData(img, 0, 0);
   }, [width, height, layer, composite, dataReady]);
 
+  // The overlay's pixel grid is a linear lng/lat raster across the bbox, so
+  // it has to live inside the same fitted rectangle that project() uses.
+  // Otherwise the canvas stretches one way while the coastline geometry
+  // stays correctly proportioned and they visibly drift apart.
+  const { marginX, marginY, innerW, innerH } = getFitted(width, height);
+
   return (
     <g className="data-overlay" opacity={opacity}>
-      <foreignObject x="0" y="0" width={width} height={height}>
+      <foreignObject x={marginX} y={marginY} width={innerW} height={innerH}>
         <canvas
           ref={canvasRef}
           style={{

@@ -4,15 +4,55 @@
 
 export const BBOX = { latMin: 31.8, latMax: 37.6, lngMin: -124.0, lngMax: -116.8 };
 
+// Geographic aspect ratio (lng-degrees-as-distance / lat-degrees) at the
+// bbox's mid latitude. Lng degrees shrink by cos(lat); we compute it once
+// against the centre so 1 unit of x and y on the map represent the same
+// distance on the ground. ~1.03 for our CA bbox — almost square.
+const _MID_LAT_RAD = ((BBOX.latMin + BBOX.latMax) / 2) * Math.PI / 180;
+const _COS_MID_LAT = Math.cos(_MID_LAT_RAD);
+export const GEO_ASPECT =
+  ((BBOX.lngMax - BBOX.lngMin) * _COS_MID_LAT) /
+  (BBOX.latMax - BBOX.latMin);
+
+// Pillarbox / letterbox the bbox inside an arbitrary container so x and y
+// pixels both represent the same on-the-ground distance regardless of the
+// container's aspect ratio. Returns the rectangle inside (0..w, 0..h) that
+// the geographic content should occupy.
+export function getFitted(w, h) {
+  if (!(w > 0) || !(h > 0)) {
+    return { marginX: 0, marginY: 0, innerW: w || 0, innerH: h || 0 };
+  }
+  const containerAspect = w / h;
+  let innerW;
+  let innerH;
+  if (containerAspect > GEO_ASPECT) {
+    // Wider than geography → pillarbox: height fills, sides have margin.
+    innerH = h;
+    innerW = h * GEO_ASPECT;
+  } else {
+    // Taller than geography → letterbox: width fills, top/bottom have margin.
+    innerW = w;
+    innerH = w / GEO_ASPECT;
+  }
+  return {
+    marginX: (w - innerW) / 2,
+    marginY: (h - innerH) / 2,
+    innerW,
+    innerH,
+  };
+}
+
 export function project(lng, lat, w, h) {
-  const x = ((lng - BBOX.lngMin) / (BBOX.lngMax - BBOX.lngMin)) * w;
-  const y = ((BBOX.latMax - lat) / (BBOX.latMax - BBOX.latMin)) * h;
+  const { marginX, marginY, innerW, innerH } = getFitted(w, h);
+  const x = marginX + ((lng - BBOX.lngMin) / (BBOX.lngMax - BBOX.lngMin)) * innerW;
+  const y = marginY + ((BBOX.latMax - lat) / (BBOX.latMax - BBOX.latMin)) * innerH;
   return [x, y];
 }
 
 export function unproject(x, y, w, h) {
-  const lng = BBOX.lngMin + (x / w) * (BBOX.lngMax - BBOX.lngMin);
-  const lat = BBOX.latMax - (y / h) * (BBOX.latMax - BBOX.latMin);
+  const { marginX, marginY, innerW, innerH } = getFitted(w, h);
+  const lng = BBOX.lngMin + ((x - marginX) / innerW) * (BBOX.lngMax - BBOX.lngMin);
+  const lat = BBOX.latMax - ((y - marginY) / innerH) * (BBOX.latMax - BBOX.latMin);
   return [lng, lat];
 }
 
