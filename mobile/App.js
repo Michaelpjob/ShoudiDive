@@ -4,7 +4,11 @@
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
-import MapScreen from "./src/components/MapScreen.jsx";
+// No extension on the import path so Metro can resolve to
+// MapScreen.web.jsx on web and MapScreen.jsx on iOS / Android. With
+// the .jsx suffix Metro picks that file verbatim and the web build
+// fails because react-native-maps is iOS / Android only.
+import MapScreen from "./src/components/MapScreen";
 
 export default function App() {
   return (

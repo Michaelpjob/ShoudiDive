@@ -69,7 +69,7 @@ endpoint or a small grid JSON, not in-JS PNG decoding.
 ## Validation — `npm run validate`
 
 Before pushing any non-trivial change to `mobile/`, run the full
-4-layer validation pipeline from the `mobile/` directory:
+5-layer validation pipeline from the `mobile/` directory:
 
 ```bash
 npm run validate
@@ -81,21 +81,52 @@ What each layer catches:
 |---|------------------------|-------------------------------------------------------------------------|-------|
 | 1 | `expo install --check` | SDK / package version drift (e.g. wrong jest version)                   | ~2s   |
 | 2 | `expo-doctor`          | Project-wide config (entry point, peer-deps, scheme conflicts, …)       | ~10s  |
-| 3 | `expo export`          | Babel transform errors, missing imports, bundle compile failures        | ~15s  |
-| 4 | `jest`                 | Data-layer regressions (manifest fetch, URL resolution, subscribers)    | ~3s   |
+| 3 | `expo export ios`      | iOS Hermes bundle compile — Babel + import errors                       | ~15s  |
+| 4 | `expo export web`      | Web fallback compiles (so the app can be rendered in a browser, see below) | ~10s  |
+| 5 | `jest`                 | Data-layer regressions (manifest fetch, URL resolution, subscribers)    | ~3s   |
 
 A clean run looks like:
 
-    ▶ Layer 1/4 — expo install --check        Dependencies are up to date
-    ▶ Layer 2/4 — expo-doctor                  17/17 checks passed
-    ▶ Layer 3/4 — expo export                  Bundled 6545ms (938 modules, 2.43 MB)
-    ▶ Layer 4/4 — jest                         26 passed, 0 failed (2.0s)
-    ✓ All 4 validation layers passed.
+    ▶ Layer 1/5 — expo install --check        Dependencies are up to date
+    ▶ Layer 2/5 — expo-doctor                  17/17 checks passed
+    ▶ Layer 3/5 — expo export                  Bundled 6339ms (938 modules, 2.43 MB)
+    ▶ Layer 4/5 — expo export web              Bundled 4204ms (413 modules, 745 kB)
+    ▶ Layer 5/5 — jest                         26 passed, 0 failed (1.2s)
+    ✓ All 5 validation layers passed.
       Mobile bundle is in a deployable state.
 
 If any layer fails, the script exits non-zero and skips remaining
 layers — you fix the failure locally before involving a device or
 TestFlight.
+
+## The autonomous render loop
+
+The whole reason web target exists in this repo is so the dev (me,
+Claude, in agent mode) can render the app, click chips, and screenshot
+the result without ever asking the human to scan a QR code on their
+phone. The web build uses platform-specific shims:
+
+* `MapScreen.jsx`     — native (iOS / Android), uses `react-native-maps` + Skia
+* `MapScreen.web.jsx` — web stand-in, no real map, just the layer PNG as a stretched `<Image>`
+
+Metro picks the right file via the `.web.jsx` suffix when
+`platform=web`. App.js intentionally imports without a file extension
+so this resolution works.
+
+Workflow:
+
+```bash
+cd mobile
+npx expo start --web --port 8083    # boots Metro on the web target
+# then in a second terminal / via Claude Preview:
+#   open http://localhost:8083
+```
+
+Then click chips, change composites, etc. — the same state machine
+runs as on iOS/Android, the only thing missing is the actual
+GPU-rendered map under the heatmap. That gap is acceptable for
+catching UI/state bugs but is the reason a real iPhone / iOS
+Simulator is still part of the loop for visual sign-off.
 
 ### What the validator can NOT catch (intentional gap)
 
