@@ -17,6 +17,7 @@ import sys
 from datetime import datetime, timezone
 
 from .cdip import CDIPScraper
+from .diveviz import DiveVizScraper
 from .eagle4 import Eagle4Scraper
 from .justgetwet import JustGetWetScraper
 
@@ -28,14 +29,23 @@ from .justgetwet import JustGetWetScraper
 SCRAPERS = [
     # Tier 1 — structured data, highest confidence
     CDIPScraper(),         # 6 CA buoys: Hs + SST,  conf 0.95
-    # Tier 1 — labelled prose, regex-extractable
+
+    # Tier 1 — labelled prose, regex-extractable, no LLM dependency
     JustGetWetScraper(),   # SD dive shop, La Jolla / Pt Loma / Coronados, conf 0.85
+
+    # Tier 2 — prose, LLM-extracted (no-ops gracefully without API key)
+    DiveVizScraper(),      # SD + LA + OC dive shop, two-blog feed, conf 0.85
+
     # Tier 1/2 — best-effort URL probe; URL in handoff didn't resolve
     Eagle4Scraper(),       # Channel Islands dive shop, conf 0.85
-    # Future: LLM-extracted sportfishing landings (22nd Street, H&M,
-    # Davey's, Seaforth) — handoff URLs are stale and the live pages
-    # are JS-rendered SPAs. Will add once we either find a real RSS
-    # feed or stand up a headless-Chromium fetcher.
+
+    # Sources evaluated and skipped this round:
+    #   aquariusdivers.com/conditions    — link farm to CDIP/buoy widgets, no own data
+    #   beachcitiescuba.com/pages/...    — JS-rendered, BS4 sees empty body
+    #   spectreboat.com/weather          — affiliate widget linking to vizfinder.com
+    #   22ndstreet / H&M / Davey's       — JS-rendered SPAs (no RSS endpoint found)
+    # Re-evaluate quarterly; a working URL or a static fallback would
+    # let any of these slot into the same scraper pattern.
 ]
 
 # Where the normalized observation table lives. Versioned in git.
