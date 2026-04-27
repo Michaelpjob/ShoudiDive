@@ -15,10 +15,16 @@
  * fingerprinted asset filenames already invalidate the bundle on every
  * deploy without a SW change.
  */
-// Bump this to evict every previously-cached shell. v1 shipped a build
-// with broken wheel/touch zoom; v2 forces every existing client to drop
-// that cache and grab the working build on next launch.
-const CACHE_VERSION = "v2";
+// Bump this on any cache-strategy change so existing clients evict
+// their old caches on next launch.
+//   v1 — first PWA shell (had broken zoom)
+//   v2 — fixed shell, stale-while-revalidate for data
+//   v3 — data path switched to network-first; old SWR caches were
+//        leaving Chrome showing pre-fill swell PNGs even after the
+//        nearshore-fill pipeline landed. Network-first + cache
+//        fallback gets fresh data when online and graceful offline
+//        without holding users one cycle behind on each visit.
+const CACHE_VERSION = "v3";
 const SHELL_CACHE = `shouldidive-shell-${CACHE_VERSION}`;
 const DATA_CACHE  = `shouldidive-data-${CACHE_VERSION}`;
 
@@ -76,17 +82,22 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
 
   if (isDataRequest(url)) {
-    // Stale-while-revalidate for the live data plane.
+    // Network-first for the live data plane. The pipeline regenerates
+    // these PNGs / JSON every cron cycle, so stale-while-revalidate was
+    // showing users the version *previous to* their last visit (the
+    // background fetch updated the cache for NEXT time, not now). Go
+    // network-first; only fall back to cache when offline.
     event.respondWith(
       caches.open(DATA_CACHE).then(async (cache) => {
-        const cached = await cache.match(req);
-        const networkPromise = fetch(req)
-          .then((res) => {
-            if (res && res.ok) cache.put(req, res.clone());
-            return res;
-          })
-          .catch(() => cached);
-        return cached || networkPromise;
+        try {
+          const res = await fetch(req);
+          if (res && res.ok) cache.put(req, res.clone());
+          return res;
+        } catch {
+          const cached = await cache.match(req);
+          if (cached) return cached;
+          throw new Error("offline and no cache for " + req.url);
+        }
       }),
     );
     return;
