@@ -1582,11 +1582,21 @@ body {
      the layer name. Hide it to reclaim vertical space. */
   .topbar-meta .mobile-status { display: none !important; }
 
-  /* MPA Coronados disclaimer — float just above the peek strip
-     (~108 px tall including safe-area-inset-bottom). */
+  /* Make the map stage end ABOVE the peek strip on phones so the
+     SVG bbox (and its pillarboxing) gets recomputed for the actually-
+     visible vertical space. Without this the map renders thinking it
+     has the full viewport height, shoves all the pillarbox to the
+     top, and ends up hiding Catalina/SD/Coronados behind the strip. */
+  .map-stage {
+    bottom: calc(94px + env(safe-area-inset-bottom));
+  }
+
+  /* MPA Coronados disclaimer — float just above the peek strip.
+     Map-stage now ends above the strip, so a small inset reads as
+     the line directly above the chips. */
   .mpa-banner {
     top: auto;
-    bottom: calc(108px + env(safe-area-inset-bottom));
+    bottom: 8px;
     left: 8px;
     right: 8px;
     max-width: none;
@@ -1604,23 +1614,26 @@ body {
     display: none !important;
   }
 
-  /* Zoom controls float above the peek strip, clear of safe-area. */
+  /* Zoom controls float at the bottom of the (shorter) map-stage —
+     i.e. just above the peek strip. */
   .zoom-ctl {
     right: 8px;
-    bottom: calc(108px + env(safe-area-inset-bottom));
+    bottom: 8px;
   }
   .zoom-ctl button { width: 40px; height: 40px; }
   .attribution { display: none; }
   .tooltip { font-size: 11px; }
 
   /* Popups become bottom sheets on phones (anchored above the peek
-     strip so the layer chips remain reachable). */
+     strip so the layer chips remain reachable). The .mpa-popup-overlay
+     fills the whole .map-stage which already excludes the strip; no
+     extra margin needed. */
   .mpa-popup-overlay { padding: 0; align-items: flex-end; }
   .mpa-popup {
     width: 100%;
     max-width: none;
     max-height: 70vh;
-    margin-bottom: calc(96px + env(safe-area-inset-bottom));
+    margin-bottom: 0;
     border-radius: 16px 16px 0 0;
     border-bottom: none;
     padding-top: 22px;
@@ -2069,9 +2082,10 @@ body {
 
 @media (max-width: 760px) {
   .wind-timeline {
-    /* Float above MobileShell's peek strip (~108 px incl. safe-area)
-       with an extra 6 px breathing room. */
-    bottom: calc(114px + env(safe-area-inset-bottom));
+    /* Map-stage now ends above the peek strip on mobile, so the
+       timeline at bottom: 8 sits just above the chip row with a few
+       px of breathing room. */
+    bottom: 8px;
     height: 56px;
     width: calc(100% - 12px);
     left: 6px;

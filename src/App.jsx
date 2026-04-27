@@ -730,6 +730,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
   }, [activeSpot, bathyOn, bathyFeatures, zoomLevel]);
 
   return (
+    <>
     <div
       className="map-stage"
       ref={stageRef}
@@ -898,26 +899,6 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
           lng={hover.lng}
           lat={hover.lat}
           units={units}
-        />
-      )}
-
-      {isMobile && (
-        <MobileSheet
-          layer={layer} setLayer={setLayer}
-          composite={composite} setComposite={setComposite}
-          windSel={windSel} setWindSel={setWindSel}
-          swellSel={swellSel} setSwellSel={setSwellSel}
-          activeComposite={activeComposite}
-          units={units}
-          dataState={dataState}
-          mpaOn={mpaOn} setMpaOn={setMpaOn}
-          bathyOn={bathyOn} setBathyOn={setBathyOn}
-          activeSpot={activeSpot} setActiveSpot={setActiveSpot}
-          timeOpts={timeOpts}
-          compositeText={compositeText}
-          layerIsReal={layerIsReal}
-          hover={hover}
-          setHover={setHover}
         />
       )}
 
@@ -1427,6 +1408,30 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
         <BathyPopup feature={selectedBathy} onClose={() => setSelectedBathy(null)} />
       )}
     </div>
+    {/* MobileShell sits OUTSIDE .map-stage so the map can shrink to
+        leave room for the peek strip on phones (without the strip
+        overlapping the bottom of the bbox). On desktop this branch
+        doesn't mount at all. */}
+    {isMobile && (
+      <MobileSheet
+        layer={layer} setLayer={setLayer}
+        composite={composite} setComposite={setComposite}
+        windSel={windSel} setWindSel={setWindSel}
+        swellSel={swellSel} setSwellSel={setSwellSel}
+        activeComposite={activeComposite}
+        units={units}
+        dataState={dataState}
+        mpaOn={mpaOn} setMpaOn={setMpaOn}
+        bathyOn={bathyOn} setBathyOn={setBathyOn}
+        activeSpot={activeSpot} setActiveSpot={setActiveSpot}
+        timeOpts={timeOpts}
+        compositeText={compositeText}
+        layerIsReal={layerIsReal}
+        hover={hover}
+        setHover={setHover}
+      />
+    )}
+    </>
   );
 }
 
