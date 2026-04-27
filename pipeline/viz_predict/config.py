@@ -111,15 +111,20 @@ SECCHI_COEFFS: Dict[str, SecchiCoefficients] = {
     #   bight_nearshore       5.0  →  7.5  →  6.5
     #   bight_islands         7.5  →  9.0  →  8.0
     #   *_offshore            8.5  → 10.0  →  9.0
-    # Central CA pulled back further than transition / bight in v3.1 to
-    # reflect the upwelling regime — this zone is structurally cloudier
-    # than the SoCal Bight, so the same chl reading translates to less
-    # clarity here. central_offshore drops 9.0 → 8.0 (between v0.2's 8.5
-    # and v3's 9.0 but biased toward the conservative end);
-    # central_nearshore goes 5.5 → 4.5 (just above v0.2's 4.0).
-    "central_nearshore":    SecchiCoefficients(a=4.5, b=0.28),
-    "central_islands":      SecchiCoefficients(a=6.5, b=0.30),
-    "central_offshore":     SecchiCoefficients(a=8.0, b=0.32),
+    # v3.2 — central CA pushed BELOW v0.2 because even the legacy
+    # multipliers were too optimistic for that latitude band. Side-by-
+    # side with Tempbreak the open-ocean offshore was reading ~45 ft
+    # (Very Good) when reality is mid-Good (~25–35 ft) on a normal
+    # day, dropping to Excellent only on the genuinely calm days that
+    # punch through the bloom regime. The drop is ~30–40% from v3.1.
+    #
+    #                     v0.2  v3.1  v3.2
+    #   central_nearshore  4.0   4.5   3.5    (kelp at chl 2 → ~9 ft, Poor/Fair edge)
+    #   central_islands    6.5   6.5   5.0
+    #   central_offshore   8.5   8.0   5.5    (chl 0.2 → ~31 ft, mid-Good)
+    "central_nearshore":    SecchiCoefficients(a=3.5, b=0.28),
+    "central_islands":      SecchiCoefficients(a=5.0, b=0.30),
+    "central_offshore":     SecchiCoefficients(a=5.5, b=0.32),
     "transition_nearshore": SecchiCoefficients(a=6.0, b=0.28),
     "transition_islands":   SecchiCoefficients(a=7.5, b=0.30),
     "transition_offshore":  SecchiCoefficients(a=9.0, b=0.32),
