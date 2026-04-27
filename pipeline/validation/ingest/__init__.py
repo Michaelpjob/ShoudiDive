@@ -20,6 +20,7 @@ from .cdip import CDIPScraper
 from .diveviz import DiveVizScraper
 from .eagle4 import Eagle4Scraper
 from .justgetwet import JustGetWetScraper
+from .ndbc import NDBCScraper
 
 
 # Scraper roster for the hourly cron. Order doesn't matter — each
@@ -28,7 +29,12 @@ from .justgetwet import JustGetWetScraper
 # then append it here.
 SCRAPERS = [
     # Tier 1 — structured data, highest confidence
-    CDIPScraper(),         # 6 CA buoys: Hs + SST,  conf 0.95
+    CDIPScraper(),         # 6 CDIP buoys: Hs + SST,  conf 0.95
+    NDBCScraper(),         # 6 NDBC buoys (federal): adds Cape San Martin /
+                           # Santa Maria / Santa Monica Basin / Tanner Bank /
+                           # San Clemente Basin / Monterey, conf 0.95.
+                           # Fills central-coast + LA-County zones where CDIP
+                           # has no nearby station.
 
     # Tier 1 — labelled prose, regex-extractable, no LLM dependency
     JustGetWetScraper(),   # SD dive shop, La Jolla / Pt Loma / Coronados, conf 0.85
@@ -44,6 +50,15 @@ SCRAPERS = [
     #   beachcitiescuba.com/pages/...    — JS-rendered, BS4 sees empty body
     #   spectreboat.com/weather          — affiliate widget linking to vizfinder.com
     #   22ndstreet / H&M / Davey's       — JS-rendered SPAs (no RSS endpoint found)
+    #   vizfinder.com / spearfactor.com  — peer forecasters (Tier 1.5),
+    #     JS-rendered SPAs. Per the handoff: "reach out before scraping —
+    #     these are friendly small teams." Better as a partnership / API
+    #     ask than a scrape. When an RSS or JSON endpoint exists, drop in
+    #     a PeerForecasterScraper that writes to a SEPARATE
+    #     peer_forecasts.jsonl (NOT observations.jsonl) so score.py can
+    #     compute the three-way agreement metric documented in
+    #     01-architecture.md without conflating peer forecasts with
+    #     ground-truth.
     # Re-evaluate quarterly; a working URL or a static fallback would
     # let any of these slot into the same scraper pattern.
 ]
