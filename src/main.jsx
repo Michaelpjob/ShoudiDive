@@ -18,4 +18,14 @@ if ("serviceWorker" in navigator && import.meta.env.PROD) {
       console.warn("Service worker registration failed", err);
     });
   });
+  // When a new SW activates and takes control (e.g. we shipped a fix and
+  // bumped the cache version), reload so the live tab picks up the
+  // fresh shell instead of the stale cached one. Without this, users
+  // keep seeing the old cached bundle until they manually reload.
+  let reloading = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (reloading) return;
+    reloading = true;
+    window.location.reload();
+  });
 }

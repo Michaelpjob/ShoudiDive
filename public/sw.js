@@ -15,7 +15,10 @@
  * fingerprinted asset filenames already invalidate the bundle on every
  * deploy without a SW change.
  */
-const CACHE_VERSION = "v1";
+// Bump this to evict every previously-cached shell. v1 shipped a build
+// with broken wheel/touch zoom; v2 forces every existing client to drop
+// that cache and grab the working build on next launch.
+const CACHE_VERSION = "v2";
 const SHELL_CACHE = `shouldidive-shell-${CACHE_VERSION}`;
 const DATA_CACHE  = `shouldidive-data-${CACHE_VERSION}`;
 
