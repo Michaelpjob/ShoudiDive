@@ -101,19 +101,31 @@ class SecchiCoefficients:
 SECCHI_COEFFS: Dict[str, SecchiCoefficients] = {
     # secchi_m = a · chl^(-b). The exponent `b` comes from coastal-CA
     # literature and is left alone; only the multiplier `a` is tuned.
-    # Nearshore zones bumped substantially in v2 (Pt. Loma kelp on a calm
-    # day was reading 14 ft when divers reported 20–25 ft). Offshore +
-    # islands also bumped so chl=0.15 mg/m³ lands at ~17 m / 56 ft instead
-    # of ~14 m / 47 ft.
-    "central_nearshore":    SecchiCoefficients(a=6.5,  b=0.28),  # v2: was 4.0
-    "central_islands":      SecchiCoefficients(a=6.5,  b=0.30),
-    "central_offshore":     SecchiCoefficients(a=10.0, b=0.32),
-    "transition_nearshore": SecchiCoefficients(a=7.0,  b=0.28),  # v2: was 4.5
-    "transition_islands":   SecchiCoefficients(a=8.5,  b=0.30),
-    "transition_offshore":  SecchiCoefficients(a=10.0, b=0.32),
-    "bight_nearshore":      SecchiCoefficients(a=7.5,  b=0.28),  # v2: was 5.0
-    "bight_islands":        SecchiCoefficients(a=9.0,  b=0.30),
-    "bight_offshore":       SecchiCoefficients(a=10.0, b=0.32),
+    #
+    # v3 calibration: v2 over-corrected — side-by-side with Tempbreak's
+    # chlorophyll observations the visibility map was running too blue
+    # (a typical bbox-mean of ~45 ft put a normal day in Very Good /
+    # Excellent territory instead of Good / Very Good). Walked every
+    # bumped multiplier ~halfway back toward v0.2. Genuinely calm
+    # offshore days still hit Excellent at chl ≤ 0.15 mg/m³, but a
+    # mid-range chl reading no longer floats into the deep-blue band.
+    #
+    # v0.2 → v2 → v3 trajectory for reference:
+    #   central_nearshore     4.0  →  6.5  →  5.5
+    #   transition_nearshore  4.5  →  7.0  →  6.0
+    #   transition_islands    7.0  →  8.5  →  7.5
+    #   bight_nearshore       5.0  →  7.5  →  6.5
+    #   bight_islands         7.5  →  9.0  →  8.0
+    #   *_offshore            8.5  → 10.0  →  9.0
+    "central_nearshore":    SecchiCoefficients(a=5.5, b=0.28),
+    "central_islands":      SecchiCoefficients(a=6.5, b=0.30),
+    "central_offshore":     SecchiCoefficients(a=9.0, b=0.32),
+    "transition_nearshore": SecchiCoefficients(a=6.0, b=0.28),
+    "transition_islands":   SecchiCoefficients(a=7.5, b=0.30),
+    "transition_offshore":  SecchiCoefficients(a=9.0, b=0.32),
+    "bight_nearshore":      SecchiCoefficients(a=6.5, b=0.28),
+    "bight_islands":        SecchiCoefficients(a=8.0, b=0.30),
+    "bight_offshore":       SecchiCoefficients(a=9.0, b=0.32),
 }
 
 
