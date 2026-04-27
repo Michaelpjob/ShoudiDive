@@ -34,7 +34,15 @@
 //        apple-touch-icon.png + favicon-32.png all changed). The shell
 //        cache was holding the old freediver-silhouette PNGs; bump
 //        forces eviction so home-screen icons refresh on next launch.
-const CACHE_VERSION = "v5";
+//   v6 — wind streamlines no longer flow over land. The fix is
+//        WindParticles internal (no shell asset change), but the
+//        cache-first shell handler holds users on the OLD bundle for
+//        one cycle after each deploy unless we bump. Without v6,
+//        Michael saw "same issues" because his Safari served the
+//        previous index.html from cache, referencing the previous JS
+//        bundle, with no land mask. Bumping forces controllerchange +
+//        auto-reload onto the fixed bundle on next launch.
+const CACHE_VERSION = "v6";
 const SHELL_CACHE = `shouldidive-shell-${CACHE_VERSION}`;
 const DATA_CACHE  = `shouldidive-data-${CACHE_VERSION}`;
 
