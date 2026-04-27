@@ -24,6 +24,11 @@
 #   4. expo export web       — web fallback bundle compile (so I can
 #                              render the app myself in a browser)
 #   5. jest                  — JS unit tests for the data layer
+#   6. smoke-web.js          — Puppeteer boots the app on web,
+#                              watches for runtime errors. The only
+#                              layer that catches "compiles but
+#                              throws on mount" bugs (e.g. Skia v2's
+#                              lazy reanimated proxy).
 #
 # What this canNOT catch (intentional gap, requires a Mac+simulator
 # or a real device):
@@ -83,7 +88,7 @@ rm -rf dist 2>/dev/null || true
 npx expo export --platform web --output-dir dist
 
 echo ""
-echo "▶ Layer 5/5 — jest (data-layer unit tests)"
+echo "▶ Layer 5/6 — jest (data-layer unit tests)"
 echo "──────────────────────────────────────────────────"
 npx jest --silent --colors
 
@@ -92,7 +97,22 @@ npx jest --silent --colors
 rm -rf dist 2>/dev/null || true
 
 echo ""
+echo "▶ Layer 6/6 — runtime smoke test (Puppeteer mounts the app)"
 echo "──────────────────────────────────────────────────"
-echo "✓ All 5 validation layers passed."
-echo "  Mobile bundle is in a deployable state."
+# Boots Metro on the web target, headless-Chromium-loads the page,
+# observes for runtime errors during the first few seconds. Catches
+# class of bug that compiles fine but throws on mount — e.g. Skia v2
+# Canvas's lazy reanimated proxy, which we previously shipped to a
+# real device because no compile-time check could see it.
+#
+# Explicit `|| exit 1` because `set -e` doesn't always halt on
+# child-process failures wrapped through node's exit handling on
+# Windows; better to be loud about a smoke regression than to print
+# a misleading "all green" footer.
+node scripts/smoke-web.js || { echo ""; echo "✖ Layer 6 (runtime smoke) FAILED."; exit 1; }
+
+echo ""
+echo "──────────────────────────────────────────────────"
+echo "✓ All 6 validation layers passed."
+echo "  Mobile bundle compiles AND boots without runtime errors."
 echo "──────────────────────────────────────────────────"
