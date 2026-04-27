@@ -1174,51 +1174,238 @@ body {
 
 /* ---------- Responsive layout (no phone-frame, real mobile) ---------- */
 
-/* ---------- Mobile bottom-sheet ---------- */
+/* ---------- Mobile shell (peek strip + pull-up sheet) ----------
+ *
+ * The shell is a single bottom-anchored container. Its peek strip
+ * (status row + drag handle + layer chips) is always visible and reads
+ * the map at a glance. Tap the handle to slide a full-height sheet up
+ * with time controls, spots, legend, and info — no tabs, single
+ * scrollable column.
+ *
+ * Heights:
+ *   ms-status  ~28 px
+ *   ms-handle  ~14 px (12 px bar + click padding)
+ *   ms-chips   ~52 px
+ *   total peek ~94 px + safe-area-inset-bottom
+ *
+ * Anything that floats above the strip (zoom-ctl, mpa-banner, the
+ * wind/swell timeline) needs a `bottom` offset of ~108 px on phones.
+ */
 
-.mobile-sheet-tabs {
+.mobile-shell {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  z-index: 30;
+  pointer-events: none; /* let map gestures through gaps */
+}
+
+.ms-peek {
+  pointer-events: auto;
   background: var(--bg-panel-solid);
   border-top: 1px solid var(--line);
-  z-index: 30;
-  padding: env(safe-area-inset-bottom) 0 0 0;
+  padding-bottom: env(safe-area-inset-bottom);
+  /* prevent iOS rubber-band gesture from dragging the shell */
+  overscroll-behavior: contain;
+  box-shadow: 0 -2px 12px rgb(0 0 0 / 0.06);
 }
-.mobile-tab {
+
+.ms-status {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  font-size: 11.5px;
+  color: var(--ink-2);
+  border-bottom: 1px solid var(--line-2);
+  min-height: 28px;
+}
+.ms-status-layer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+}
+.ms-status-layer .dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: rgb(34 197 94);
+  box-shadow: 0 0 0 3px rgb(34 197 94 / 0.18);
+}
+.ms-status-val {
+  text-align: center;
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ms-status-where {
+  color: var(--ink-3);
+  font-weight: 400;
+  font-size: 11px;
+  margin-left: 6px;
+}
+.ms-status-time {
+  text-align: right;
+  color: var(--ink-3);
+  font-size: 10.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 38vw;
+}
+
+.ms-handle {
   appearance: none;
   border: 0;
   background: transparent;
-  padding: 12px 4px calc(12px + env(safe-area-inset-bottom)) 4px;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--ink-3);
+  width: 100%;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  border-top: 2px solid transparent;
+  padding: 0;
 }
-.mobile-tab.active {
-  color: var(--ink);
-  border-top-color: var(--accent);
+.ms-handle-bar {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  transition: background 0.15s, width 0.15s;
+}
+.mobile-shell.open .ms-handle-bar {
+  background: var(--ink-2);
+  width: 48px;
 }
 
-.mobile-sheet-body {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 50px; /* sit above the tab bar */
-  max-height: 56vh;
+.ms-chips {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  padding: 4px 8px 8px;
+}
+.ms-chip {
+  appearance: none;
+  border: 1px solid transparent;
+  background: var(--bg-sunken);
+  font: inherit;
+  padding: 7px 4px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--ink-2);
+  cursor: pointer;
+  min-height: 44px; /* iOS HIG min tap target */
+}
+.ms-chip.active {
+  background: var(--ink);
+  color: var(--bg-panel-solid);
+  border-color: var(--ink);
+}
+.ms-chip-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.ms-chip-sub {
+  font-size: 10px;
+  opacity: 0.75;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.ms-chip.active .ms-chip-sub {
+  opacity: 0.85;
+}
+
+.ms-sheet {
+  pointer-events: auto;
+  position: relative;
+  max-height: 78vh;
   overflow-y: auto;
   background: var(--bg-panel-solid);
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
-  z-index: 29;
-  padding: 14px 14px 16px;
+  padding: 14px 14px 18px;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  /* slide-up animation */
+  animation: ms-slide-up 0.18s ease-out;
 }
+@keyframes ms-slide-up {
+  from { transform: translateY(20%); opacity: 0; }
+  to   { transform: translateY(0);   opacity: 1; }
+}
+
+.ms-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--ink-3);
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+.ms-close:hover { background: var(--bg-sunken); color: var(--ink); }
+
+.ms-section + .ms-section {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-2);
+}
+.ms-section-h {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  margin: 0 0 8px;
+}
+.ms-section-sub {
+  font-size: 10px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink-3);
+  opacity: 0.8;
+}
+.ms-pin-clear {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: transparent;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+  color: var(--ink-2);
+  cursor: pointer;
+  margin-left: auto;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.ms-pin-clear:hover { background: var(--bg-sunken); color: var(--ink); }
 
 .ms-row-label {
   font-size: 10.5px;
@@ -1365,26 +1552,20 @@ body {
   .topbar { padding: env(safe-area-inset-top) 10px 0 10px; }
   .brand-tag { display: none; }
   /* Sources line + the long Last-update line both vanish on phones —
-     the green dot is enough liveness signal. The Settings cog (the
-     button at the end of .topbar-meta) stays. */
+     the new MobileShell peek strip carries layer/value/time info, so
+     the topbar only needs the brand mark + a settings cog. */
   .topbar-meta > span { display: none; }
-  /* Show just the dot + "Live" word as a compact chip on the right. */
-  .topbar-meta {
-    gap: 8px;
-  }
-  .topbar-meta .mobile-status {
-    display: inline-flex !important;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    color: var(--ink-2);
-  }
+  .topbar-meta { gap: 8px; }
+  /* The old `Live` chip in the topbar is now redundant — MobileShell's
+     own status row shows the same liveness via the green dot next to
+     the layer name. Hide it to reclaim vertical space. */
+  .topbar-meta .mobile-status { display: none !important; }
 
-  /* MPA Coronados disclaimer — make the banner unobtrusive on phones:
-     stick it just above the bottom tab bar, narrow, dismissable. */
+  /* MPA Coronados disclaimer — float just above the peek strip
+     (~108 px tall including safe-area-inset-bottom). */
   .mpa-banner {
     top: auto;
-    bottom: calc(60px + env(safe-area-inset-bottom));
+    bottom: calc(108px + env(safe-area-inset-bottom));
     left: 8px;
     right: 8px;
     max-width: none;
@@ -1393,7 +1574,7 @@ body {
     padding: 6px 10px;
   }
 
-  /* Hide the desktop floating panels — MobileSheet replaces them. */
+  /* Hide the desktop floating panels — MobileShell replaces them. */
   .controls-tl,
   .info-tr,
   .info-toggle,
@@ -1402,22 +1583,23 @@ body {
     display: none !important;
   }
 
-  /* Zoom controls float above the tab bar. */
+  /* Zoom controls float above the peek strip, clear of safe-area. */
   .zoom-ctl {
     right: 8px;
-    bottom: 64px;
+    bottom: calc(108px + env(safe-area-inset-bottom));
   }
   .zoom-ctl button { width: 40px; height: 40px; }
   .attribution { display: none; }
   .tooltip { font-size: 11px; }
 
-  /* Popups become bottom sheets on phones (above the tab bar). */
+  /* Popups become bottom sheets on phones (anchored above the peek
+     strip so the layer chips remain reachable). */
   .mpa-popup-overlay { padding: 0; align-items: flex-end; }
   .mpa-popup {
     width: 100%;
     max-width: none;
     max-height: 70vh;
-    margin-bottom: 50px;  /* clear the tab bar */
+    margin-bottom: calc(96px + env(safe-area-inset-bottom));
     border-radius: 16px 16px 0 0;
     border-bottom: none;
     padding-top: 22px;
@@ -1866,9 +2048,13 @@ body {
 
 @media (max-width: 760px) {
   .wind-timeline {
-    bottom: 70px;            /* clear the mobile tab bar */
-    height: 60px;
+    /* Float above MobileShell's peek strip (~108 px incl. safe-area)
+       with an extra 6 px breathing room. */
+    bottom: calc(114px + env(safe-area-inset-bottom));
+    height: 56px;
     width: calc(100% - 12px);
+    left: 6px;
+    right: 6px;
   }
   .tl-day-label {
     font-size: 10px;

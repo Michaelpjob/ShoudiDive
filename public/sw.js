@@ -24,7 +24,13 @@
 //        nearshore-fill pipeline landed. Network-first + cache
 //        fallback gets fresh data when online and graceful offline
 //        without holding users one cycle behind on each visit.
-const CACHE_VERSION = "v3";
+//   v4 — mobile shell rebuild (peek-strip + pull-up sheet, tap-to-pin,
+//        always-visible layer chips). Bundle hash changes anyway, but
+//        bumping evicts the old shell cache on first launch so the
+//        controllerchange auto-reload kicks users straight onto the
+//        new layout instead of showing them yesterday's UI for one
+//        more tab cycle.
+const CACHE_VERSION = "v4";
 const SHELL_CACHE = `shouldidive-shell-${CACHE_VERSION}`;
 const DATA_CACHE  = `shouldidive-data-${CACHE_VERSION}`;
 

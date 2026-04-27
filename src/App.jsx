@@ -348,14 +348,10 @@ function TopBar({ onSettings, settingsOpen, dataState }) {
         <span>
           Sources: <strong>NOAA · NASA OB.DAAC · Copernicus</strong>
         </span>
-        {/* Compact chip used only on mobile (display flipped via the
-            @media (max-width: 760px) block in app.css). Keeps the
-            green-dot liveness indicator visible without the long
-            timestamp string that was wrapping under the Dynamic Island. */}
-        <span className="mobile-status" style={{ display: "none" }}>
-          <span className="dot"></span>
-          <strong>{status}</strong>
-        </span>
+        {/* The MobileShell peek strip carries layer/value/time info on
+            phones — the topbar just keeps the brand mark + settings cog
+            on small screens (timestamp + sources are hidden via the
+            @media (max-width: 760px) block in app.css). */}
         <button
           className="icon-btn"
           aria-label="Settings"
@@ -588,20 +584,36 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
     setVb({ x: 0, y: 0, w: size.w, h: size.h });
   }
 
-  // ---- Touch handlers: 1-finger pan, 2-finger pinch zoom -----------------
+  // ---- Touch handlers: 1-finger pan, 2-finger pinch zoom, tap-to-pin ----
+  // touchStateRef drives pan/pinch geometry. touchTapRef is a separate
+  // tracker for tap-to-pin: phones don't fire mousemove, so without an
+  // explicit tap → setHover, mobile users have no way to read the value
+  // at a location on the map. A tap is "1 finger, <12 px movement, <350 ms"
+  // — anything else is a pan or a pinch.
   const touchStateRef = useRef(null);
+  const touchTapRef = useRef(null);
 
   function onTouchStart(e) {
     const r = stageRef.current.getBoundingClientRect();
     if (e.touches.length === 1) {
       const t = e.touches[0];
+      const startX = t.clientX - r.left;
+      const startY = t.clientY - r.top;
       touchStateRef.current = {
         kind: "pan",
-        startScreenX: t.clientX - r.left,
-        startScreenY: t.clientY - r.top,
+        startScreenX: startX,
+        startScreenY: startY,
         startVb: vb,
       };
-      setHover(null);
+      touchTapRef.current = {
+        startX,
+        startY,
+        startTime: Date.now(),
+        moved: false,
+      };
+      // Don't clear hover on touchstart — keep the prior pin visible until
+      // the gesture resolves into a pan (we'll clear on first move) or a
+      // tap (we'll re-pin to the new location).
     } else if (e.touches.length === 2) {
       const a = e.touches[0];
       const b = e.touches[1];
@@ -614,6 +626,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
         startDist: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
         startVb: vb,
       };
+      touchTapRef.current = null; // 2-finger gesture → never a tap
       setHover(null);
     }
   }
@@ -629,6 +642,16 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
       const t = e.touches[0];
       const x = t.clientX - r.left;
       const y = t.clientY - r.top;
+      // Promote tap → pan once the finger has wandered. 12 px is enough
+      // slack to forgive jittery thumbs but tight enough to feel decisive.
+      if (touchTapRef.current) {
+        const dx = x - touchTapRef.current.startX;
+        const dy = y - touchTapRef.current.startY;
+        if (Math.hypot(dx, dy) > 12) {
+          touchTapRef.current.moved = true;
+          setHover(null);
+        }
+      }
       const dxScreen = x - ts.startScreenX;
       const dyScreen = y - ts.startScreenY;
       const dxVb = (dxScreen / r.width) * ts.startVb.w;
@@ -657,7 +680,18 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
 
   function onTouchEnd(e) {
     if (e.touches.length === 0) {
+      // All fingers up. If the gesture was actually a tap, drop a pin so
+      // the value is readable on phones (which have no hover state).
+      const tap = touchTapRef.current;
+      if (tap && !tap.moved && Date.now() - tap.startTime < 350) {
+        const r = stageRef.current.getBoundingClientRect();
+        const vbX = vb.x + (tap.startX / r.width) * vb.w;
+        const vbY = vb.y + (tap.startY / r.height) * vb.h;
+        const [lng, lat] = unproject(vbX, vbY, size.w, size.h);
+        setHover({ x: tap.startX, y: tap.startY, lng, lat, pinned: true });
+      }
       touchStateRef.current = null;
+      touchTapRef.current = null;
     } else if (e.touches.length === 1 && touchStateRef.current?.kind === "pinch") {
       // Released one finger out of a pinch → restart as a pan from the remaining touch.
       const r = stageRef.current.getBoundingClientRect();
@@ -668,6 +702,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
         startScreenY: t.clientY - r.top,
         startVb: vb,
       };
+      touchTapRef.current = null; // already a multi-touch, never a tap
     }
   }
 
@@ -892,6 +927,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
           layer={layer} setLayer={setLayer}
           composite={composite} setComposite={setComposite}
           windSel={windSel} setWindSel={setWindSel}
+          swellSel={swellSel} setSwellSel={setSwellSel}
           activeComposite={activeComposite}
           units={units}
           dataState={dataState}
@@ -901,6 +937,8 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
           timeOpts={timeOpts}
           compositeText={compositeText}
           layerIsReal={layerIsReal}
+          hover={hover}
+          setHover={setHover}
         />
       )}
 
