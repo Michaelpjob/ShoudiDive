@@ -1,0 +1,116 @@
+/* ShouldIDive service worker.
+ *
+ * Strategy:
+ *   - Bumping CACHE_VERSION evicts every old cache on the next visit, so
+ *     we never serve a stale JS bundle paired with a fresh manifest.
+ *   - App shell (HTML + JS + CSS + icons + fonts): cache-first, falls back
+ *     to network. The shell is small and we want offline launches to work.
+ *   - /data/* (PNGs + JSON): stale-while-revalidate. The page renders
+ *     instantly from whatever we last had, then quietly upgrades to the
+ *     newest pipeline output in the background. If the network is gone,
+ *     we keep serving what's cached and the app shows it as stale.
+ *   - Everything else: network-first with cache fallback.
+ *
+ * Bump CACHE_VERSION whenever the cache strategy needs to change. Vite's
+ * fingerprinted asset filenames already invalidate the bundle on every
+ * deploy without a SW change.
+ */
+const CACHE_VERSION = "v1";
+const SHELL_CACHE = `shouldidive-shell-${CACHE_VERSION}`;
+const DATA_CACHE  = `shouldidive-data-${CACHE_VERSION}`;
+
+// Files to pre-cache so a cold offline launch shows something. Vite's
+// hashed bundle paths are added on first fetch instead — adding them
+// here would mean updating SW on every deploy.
+const SHELL_PRECACHE = [
+  "/",
+  "/index.html",
+  "/manifest.webmanifest",
+  "/icon.svg",
+  "/icon-192.png",
+  "/icon-512.png",
+  "/apple-touch-icon.png",
+  "/favicon-32.png",
+];
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open(SHELL_CACHE).then((cache) => cache.addAll(SHELL_PRECACHE)),
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(
+        keys
+          .filter((k) => k !== SHELL_CACHE && k !== DATA_CACHE)
+          .map((k) => caches.delete(k)),
+      ),
+    ),
+  );
+  self.clients.claim();
+});
+
+function isShellRequest(url) {
+  if (url.origin !== self.location.origin) return false;
+  if (url.pathname === "/" || url.pathname === "/index.html") return true;
+  if (url.pathname.startsWith("/assets/")) return true;
+  if (/\.(svg|png|ico|webmanifest)$/.test(url.pathname)) return true;
+  return false;
+}
+
+function isDataRequest(url) {
+  if (url.origin !== self.location.origin) return false;
+  return url.pathname.startsWith("/data/");
+}
+
+self.addEventListener("fetch", (event) => {
+  const req = event.request;
+  if (req.method !== "GET") return;
+
+  const url = new URL(req.url);
+
+  if (isDataRequest(url)) {
+    // Stale-while-revalidate for the live data plane.
+    event.respondWith(
+      caches.open(DATA_CACHE).then(async (cache) => {
+        const cached = await cache.match(req);
+        const networkPromise = fetch(req)
+          .then((res) => {
+            if (res && res.ok) cache.put(req, res.clone());
+            return res;
+          })
+          .catch(() => cached);
+        return cached || networkPromise;
+      }),
+    );
+    return;
+  }
+
+  if (isShellRequest(url)) {
+    // Cache-first for the app shell, with network upgrade in the background.
+    event.respondWith(
+      caches.open(SHELL_CACHE).then(async (cache) => {
+        const cached = await cache.match(req);
+        if (cached) {
+          // Refresh in background so the next visit gets the latest shell.
+          fetch(req).then((res) => {
+            if (res && res.ok) cache.put(req, res.clone());
+          }).catch(() => {});
+          return cached;
+        }
+        const res = await fetch(req);
+        if (res && res.ok) cache.put(req, res.clone());
+        return res;
+      }),
+    );
+    return;
+  }
+
+  // Default: network-first, cache fallback.
+  event.respondWith(
+    fetch(req).catch(() => caches.match(req)),
+  );
+});

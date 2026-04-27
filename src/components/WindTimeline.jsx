@@ -103,7 +103,9 @@ export default function WindTimeline({ sel, setSel }) {
   }
 
   function onPointerDown(e) {
-    e.preventDefault();
+    // touch-action: none on .wind-timeline already prevents the default
+    // page scroll on touch devices; calling preventDefault() here only
+    // tripped the "passive listener" warning on iOS Safari.
     setDragging(true);
     setHour(xToHour(e.clientX));
     e.currentTarget.setPointerCapture?.(e.pointerId);

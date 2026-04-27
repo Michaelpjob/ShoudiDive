@@ -169,7 +169,9 @@ export default function SwellTimeline({ sel, setSel }) {
   }
 
   function onPointerDown(e) {
-    e.preventDefault();
+    // touch-action: none on .wind-timeline already prevents page scroll;
+    // calling preventDefault() here tripped the iOS Safari passive-listener
+    // warning without doing any extra work.
     setDragging(true);
     setHour(xToHour(e.clientX));
     e.currentTarget.setPointerCapture?.(e.pointerId);

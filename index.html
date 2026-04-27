@@ -2,8 +2,34 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>CA Coast Conditions</title>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+    />
+    <meta name="theme-color" content="#0369a1" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)" />
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      name="description"
+      content="Live ocean conditions for the California coast: sea temp, water clarity, wind, swell, and a predicted-visibility model. Built for divers, freedivers, surfers, and anglers."
+    />
+
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <!-- iOS standalone behaviour: render edge-to-edge, hide the status bar
+         tint we don't control, set a friendly title for the home-screen icon. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="ShouldIDive" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="format-detection" content="telephone=no" />
+
+    <title>ShouldIDive — CA Coast Conditions</title>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

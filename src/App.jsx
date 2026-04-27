@@ -703,6 +703,28 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
     return out;
   }, [activeSpot, bathyOn, bathyFeatures, zoomLevel]);
 
+  // React's synthetic touchmove + wheel listeners are passive by default
+  // in modern browsers (especially iOS Safari), so the e.preventDefault()
+  // calls inside onWheel / onTouchMove get silently ignored — pinch-zoom
+  // would still scroll the page, etc. Bind them imperatively here with
+  // { passive: false } so preventDefault actually fires.
+  const wheelRef    = useRef(onWheel);
+  const touchMoveRef = useRef(onTouchMove);
+  wheelRef.current = onWheel;
+  touchMoveRef.current = onTouchMove;
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const wheel    = (e) => wheelRef.current(e);
+    const touchmv  = (e) => touchMoveRef.current(e);
+    el.addEventListener("wheel",     wheel,   { passive: false });
+    el.addEventListener("touchmove", touchmv, { passive: false });
+    return () => {
+      el.removeEventListener("wheel",     wheel);
+      el.removeEventListener("touchmove", touchmv);
+    };
+  }, []);
+
   return (
     <div
       className="map-stage"
@@ -711,9 +733,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
       onMouseLeave={onLeave}
       onMouseDown={onMouseDown}
       onMouseUp={onMouseUp}
-      onWheel={onWheel}
       onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
       onTouchCancel={onTouchEnd}
       style={{
