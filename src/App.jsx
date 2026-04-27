@@ -514,7 +514,9 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
   }
 
   function onWheel(e) {
-    e.preventDefault?.();
+    // No preventDefault — body has overflow:hidden so there's nothing to
+    // scroll anyway, and calling it inside React's passive wheel listener
+    // just produced an iOS Safari warning without doing useful work.
     const r = stageRef.current.getBoundingClientRect();
     const x = e.clientX - r.left;
     const y = e.clientY - r.top;
@@ -611,7 +613,9 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
   function onTouchMove(e) {
     const ts = touchStateRef.current;
     if (!ts) return;
-    e.preventDefault();
+    // touch-action: none on .map-stage already prevents the default page
+    // pan/zoom on touch devices, so calling preventDefault() here only
+    // tripped iOS Safari's passive-listener warning. Not needed.
     const r = stageRef.current.getBoundingClientRect();
     if (ts.kind === "pan" && e.touches.length === 1) {
       const t = e.touches[0];
@@ -703,28 +707,6 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
     return out;
   }, [activeSpot, bathyOn, bathyFeatures, zoomLevel]);
 
-  // React's synthetic touchmove + wheel listeners are passive by default
-  // in modern browsers (especially iOS Safari), so the e.preventDefault()
-  // calls inside onWheel / onTouchMove get silently ignored — pinch-zoom
-  // would still scroll the page, etc. Bind them imperatively here with
-  // { passive: false } so preventDefault actually fires.
-  const wheelRef    = useRef(onWheel);
-  const touchMoveRef = useRef(onTouchMove);
-  wheelRef.current = onWheel;
-  touchMoveRef.current = onTouchMove;
-  useEffect(() => {
-    const el = stageRef.current;
-    if (!el) return;
-    const wheel    = (e) => wheelRef.current(e);
-    const touchmv  = (e) => touchMoveRef.current(e);
-    el.addEventListener("wheel",     wheel,   { passive: false });
-    el.addEventListener("touchmove", touchmv, { passive: false });
-    return () => {
-      el.removeEventListener("wheel",     wheel);
-      el.removeEventListener("touchmove", touchmv);
-    };
-  }, []);
-
   return (
     <div
       className="map-stage"
@@ -733,7 +715,9 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
       onMouseLeave={onLeave}
       onMouseDown={onMouseDown}
       onMouseUp={onMouseUp}
+      onWheel={onWheel}
       onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
       onTouchCancel={onTouchEnd}
       style={{

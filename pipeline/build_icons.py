@@ -40,55 +40,72 @@ def hex_to_rgb(hx: str) -> tuple[int, int, int]:
     return tuple(int(hx[i:i+2], 16) for i in (0, 2, 4))
 
 
+# Bezier sampler — PIL has no native bezier-fill, so we sample curves at
+# many points and feed those into ImageDraw.polygon. With supersampling
+# (rendering at 4× then LANCZOS-downsampling), the result is visually
+# indistinguishable from a true vector renderer at icon sizes.
+def _cubic(p0, p1, p2, p3, n: int):
+    out = []
+    for i in range(n + 1):
+        t = i / n
+        u = 1 - t
+        x = u * u * u * p0[0] + 3 * u * u * t * p1[0] + 3 * u * t * t * p2[0] + t * t * t * p3[0]
+        y = u * u * u * p0[1] + 3 * u * u * t * p1[1] + 3 * u * t * t * p2[1] + t * t * t * p3[1]
+        out.append((x, y))
+    return out
+
+
 def render_diver_to_canvas(size: int, *, padding: float = 0.20,
-                            bg_rgb=(3, 105, 161), fg_rgb=(255, 255, 255)) -> Image.Image:
-    """Draw the freediver silhouette onto a square canvas, centred and
-    scaled to leave the requested padding ratio (0 = touch edges, 0.20
-    = 20% inset on each side, used for the maskable safe area)."""
-    img = Image.new("RGBA", (size, size), bg_rgb + (255,))
+                            bg_rgb=(3, 105, 161), fg_rgb=(255, 255, 255),
+                            supersample: int = 4) -> Image.Image:
+    """Draw the freediver silhouette onto a square canvas. Renders at
+    `size * supersample` then LANCZOS-downsamples — gives smooth
+    anti-aliased edges without needing cairo. Cubic-bezier paths match
+    the in-app FreediverLogo SVG so the home-screen icon and the brand
+    mark stay visually aligned."""
+    big = size * supersample
+    img = Image.new("RGBA", (big, big), bg_rgb + (255,))
     draw = ImageDraw.Draw(img)
 
-    # Effective area for the silhouette after padding.
-    inset = int(size * padding)
-    avail_w = size - 2 * inset
-    avail_h = size - 2 * inset
-
-    # The silhouette is taller than wide; scale to fit by height,
-    # centre horizontally.
+    inset = int(big * padding)
     vb_w, vb_h = FREEDIVER_VIEWBOX
+    avail_h = big - 2 * inset
     scale = avail_h / vb_h
     fig_w = vb_w * scale
     fig_h = vb_h * scale
-    ox = (size - fig_w) / 2
-    oy = (size - fig_h) / 2
+    ox = (big - fig_w) / 2
+    oy = (big - fig_h) / 2
 
-    def p(x: float, y: float) -> tuple[float, float]:
-        return ox + x * scale, oy + y * scale
+    def p(x, y):
+        return (ox + x * scale, oy + y * scale)
 
-    # ---- Left fin blade — teardrop fanning up-left from (12, 13).
-    draw.polygon(
-        [p(12, 13), p(11.6, 12.0), p(10.4, 9.0), p(8.6, 5.0), p(7.5, 1.2),
-         p(8.0, 1.0), p(9.5, 5.0), p(10.7, 8.5), p(11.4, 11.0)],
-        fill=fg_rgb,
+    N = 32  # bezier samples per segment
+
+    # Left fin blade — same control points as the SVG path.
+    left = (
+        _cubic(p(12, 13), p(10.8, 9), p(9.4, 4.5), p(7.5, 1.2), N)
+      + _cubic(p(7.5, 1.2), p(7.6, 4), p(9.1, 9), p(11.6, 13), N)
     )
-    # ---- Right fin blade — mirror.
-    draw.polygon(
-        [p(12, 13), p(12.4, 12.0), p(13.6, 9.0), p(15.4, 5.0), p(16.5, 1.2),
-         p(16.0, 1.0), p(14.5, 5.0), p(13.3, 8.5), p(12.6, 11.0)],
-        fill=fg_rgb,
+    draw.polygon(left, fill=fg_rgb)
+
+    # Right fin blade — mirror.
+    right = (
+        _cubic(p(12, 13), p(13.2, 9), p(14.6, 4.5), p(16.5, 1.2), N)
+      + _cubic(p(16.5, 1.2), p(16.4, 4), p(14.9, 9), p(12.4, 13), N)
     )
-    # ---- Body — slender torso with a slight waist taper. Approximated
-    #     by a polygon since PIL doesn't natively render bezier curves;
-    #     the silhouette reads cleanly even with straight edges.
-    draw.polygon(
-        [p(11.2, 12.5), p(10.7, 17.0), p(10.5, 22.0), p(10.7, 26.0),
-         p(11.0, 29.0), p(11.5, 31.5),
-         p(12.5, 31.5),
-         p(13.0, 29.0), p(13.3, 26.0), p(13.5, 22.0), p(13.3, 17.0),
-         p(12.8, 12.5)],
-        fill=fg_rgb,
+    draw.polygon(right, fill=fg_rgb)
+
+    # Body — slender torso with the slight waist taper.
+    body = (
+        _cubic(p(11.2, 12.5), p(10.7, 17), p(10.5, 22), p(10.9, 27), N)
+      + _cubic(p(10.9, 27), p(11.0, 29), p(11.2, 30.5), p(11.5, 31.5), N)
+      + [p(12.5, 31.5)]
+      + _cubic(p(12.5, 31.5), p(12.8, 30.5), p(13.0, 29), p(13.1, 27), N)
+      + _cubic(p(13.1, 27), p(13.5, 22), p(13.3, 17), p(12.8, 12.5), N)
     )
-    # ---- Head — ellipse at the bottom tip.
+    draw.polygon(body, fill=fg_rgb)
+
+    # Head — ellipse at the bottom tip.
     head_cx, head_cy = p(12, 33.5)
     head_rx = 1.7 * scale
     head_ry = 1.9 * scale
@@ -97,6 +114,9 @@ def render_diver_to_canvas(size: int, *, padding: float = 0.20,
          head_cx + head_rx, head_cy + head_ry],
         fill=fg_rgb,
     )
+
+    if supersample > 1:
+        img = img.resize((size, size), Image.LANCZOS)
     return img
 
 
