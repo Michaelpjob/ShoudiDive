@@ -6,7 +6,10 @@
 // renders. Skia gives us GPU-accelerated drawing and full control
 // over coordinate transforms.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+// useMemo caches the colourised SkImage so we don't rebuild it on
+// every map pan/zoom. useRef is reserved for upcoming work; not
+// strictly needed today.
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -18,6 +21,7 @@ import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import { Canvas, Image as SkiaImage, useImage } from "@shopify/react-native-skia";
 
 import { BBOX, BBOX_REGION, SAVED_SPOTS } from "../lib/mapData.js";
+import { colorizeImage } from "../lib/colors.js";
 import {
   loadManifest,
   subscribe,
@@ -62,7 +66,15 @@ export default function MapScreen() {
   // Skia loads + decodes the PNG natively. `useImage` returns null
   // while loading, then the SkImage handle when ready. Re-runs when
   // pngUrl changes (different layer / composite).
-  const skiaImage = useImage(pngUrl);
+  const grayImage = useImage(pngUrl);
+
+  // The pipeline writes mode='L' grayscale PNGs (R = encoded value,
+  // 0 = no data). Apply the layer's color ramp once per image change
+  // so the GPU draws a proper coloured heatmap instead of grey blob.
+  const skiaImage = useMemo(
+    () => colorizeImage(grayImage, layer),
+    [grayImage, layer]
+  );
 
   // Compute the screen rectangle the heatmap should occupy by
   // mapping the bbox corners into pixel space using the current
