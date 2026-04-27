@@ -647,6 +647,21 @@ def main():
     manifest_path.write_text(json.dumps(manifest, indent=2))
     print("wrote manifest.json")
 
+    # ---- Validation archive snapshot ----------------------------------
+    # Persist the per-cell prediction (with the active config's SHA) so
+    # the validation pipeline can later compare ground-truth observations
+    # against this run. Adds ~700 KB gzipped per day; non-fatal if it
+    # fails — the live site doesn't depend on the archive.
+    try:
+        from validation import archive as _viz_archive
+        _viz_archive.write_snapshot(
+            grid_lat=flat(lat_grid),
+            grid_lng=flat(lng_grid),
+            predict_result=result,
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(f"  archive snapshot failed (non-fatal): {exc}")
+
 
 if __name__ == "__main__":
     main()

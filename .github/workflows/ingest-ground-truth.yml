@@ -1,0 +1,61 @@
+name: Ingest ground-truth observations
+
+# Hourly cron that runs every scraper in pipeline/validation/ingest,
+# dedupes against observations.jsonl, and commits new rows. Per-source
+# failures are isolated by the orchestrator — a broken dive shop URL
+# doesn't take down the CDIP buoy ingest.
+#
+# v1 sources:
+#   * CDIP coastal-buoy parameter feeds (Hs, Tp, Dp, SST)  — confidence 0.95
+#   * Eagle 4 dive shop reports (visibility, water temp)   — confidence 0.85
+#
+# Adding a source = drop a new file in pipeline/validation/ingest/
+# and append it to SCRAPERS in __init__.py. The cron picks it up
+# automatically.
+
+on:
+  schedule:
+    # Hourly at :15 — clear of the :00 NOAA refresh cron and the
+    # :30 wind refresh.
+    - cron: "15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+
+      - name: Install pipeline dependencies
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Run ingest orchestrator
+        # The orchestrator catches per-scraper exceptions and continues,
+        # so this step succeeds as long as the orchestrator itself is
+        # importable. continue-on-error covers the import bomb case.
+        continue-on-error: true
+        run: python -m pipeline.validation.ingest
+
+      - name: Commit new observations
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add pipeline/validation/data/observations.jsonl
+          if git diff --staged --quiet; then
+            echo "No new observations this cycle."
+          else
+            git commit -m "ingest: $(date -u +%Y-%m-%dT%H:%MZ)"
+            # Pull --rebase first so we don't conflict with concurrent
+            # refresh-data / wind crons that also push to main.
+            git pull --rebase origin main || true
+            git push
+          fi

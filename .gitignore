@@ -17,3 +17,9 @@ pipeline/__pycache__/
 .vscode/
 .idea/
 .claude/
+
+# Validation per-cell archive — too big to commit (~700 KB/day gzipped,
+# ~250 MB/year) and only used by the inline scoring step on the same CI
+# disk. observations.jsonl, residuals.jsonl, and per_zone_metrics.json
+# ARE committed (small, durable signal).
+pipeline/validation/data/archive/

@@ -65,9 +65,18 @@ jobs:
       - name: Run visibility prediction
         # Runs after the satellite/wave/river/tide/climo fetches so the
         # prediction sees the freshest inputs. Wind PNGs are committed in
-        # the wind workflow.
+        # the wind workflow. Also writes a per-cell archive snapshot to
+        # pipeline/validation/data/archive/ for the scoring step below.
         continue-on-error: true
         run: python pipeline/fetch_visibility.py
+
+      - name: Score visibility predictions against ground-truth
+        # Joins observations.jsonl (collected by ingest-ground-truth.yml)
+        # against today's archive snapshot, dumps per-zone metrics. Runs
+        # in this workflow so the ephemeral archive is still on disk —
+        # the gzipped per-cell records are gitignored.
+        continue-on-error: true
+        run: python -m pipeline.validation.score
 
       - name: Install JS dependencies
         run: npm ci
@@ -87,7 +96,13 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          # Stage the prediction PNGs + the validation outputs that we
+          # actually want versioned (residuals.jsonl + per_zone_metrics
+          # are small and high-signal; the per-cell archive is huge and
+          # gitignored).
           git add public/data/
+          git add pipeline/validation/data/per_zone_metrics.json \
+                  pipeline/validation/data/residuals.jsonl 2>/dev/null || true
           if git diff --staged --quiet; then
             echo "No data changes to commit."
           else
