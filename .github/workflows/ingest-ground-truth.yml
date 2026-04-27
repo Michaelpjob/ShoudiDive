@@ -42,7 +42,12 @@ jobs:
         # The orchestrator catches per-scraper exceptions and continues,
         # so this step succeeds as long as the orchestrator itself is
         # importable. continue-on-error covers the import bomb case.
+        # ANTHROPIC_API_KEY is consumed by validation.ingest._llm_extract
+        # for prose sources; if unset, those scrapers gracefully no-op
+        # (the regex-extracted sources keep working regardless).
         continue-on-error: true
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python -m pipeline.validation.ingest
 
       - name: Commit new observations

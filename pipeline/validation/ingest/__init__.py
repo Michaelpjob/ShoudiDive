@@ -18,11 +18,24 @@ from datetime import datetime, timezone
 
 from .cdip import CDIPScraper
 from .eagle4 import Eagle4Scraper
+from .justgetwet import JustGetWetScraper
 
 
+# Scraper roster for the hourly cron. Order doesn't matter — each
+# scraper's failures are isolated by the orchestrator. To add a
+# source: drop a file in this directory subclassing ``BaseScraper``,
+# then append it here.
 SCRAPERS = [
-    CDIPScraper(),
-    Eagle4Scraper(),
+    # Tier 1 — structured data, highest confidence
+    CDIPScraper(),         # 6 CA buoys: Hs + SST,  conf 0.95
+    # Tier 1 — labelled prose, regex-extractable
+    JustGetWetScraper(),   # SD dive shop, La Jolla / Pt Loma / Coronados, conf 0.85
+    # Tier 1/2 — best-effort URL probe; URL in handoff didn't resolve
+    Eagle4Scraper(),       # Channel Islands dive shop, conf 0.85
+    # Future: LLM-extracted sportfishing landings (22nd Street, H&M,
+    # Davey's, Seaforth) — handoff URLs are stale and the live pages
+    # are JS-rendered SPAs. Will add once we either find a real RSS
+    # feed or stand up a headless-Chromium fetcher.
 ]
 
 # Where the normalized observation table lives. Versioned in git.

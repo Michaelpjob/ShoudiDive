@@ -59,9 +59,10 @@ class CDIPScraper(BaseScraper):
     source_confidence = 0.95
     source_root_url = "https://cdip.ucsd.edu/data_access/justdar.cdip"
 
-    # Override: justdar is a public ASCII API, hammering it once per
-    # buoy with 5-minute pauses between would block the entire ingest
-    # cron for half an hour. 10 s between buoys is plenty polite.
+    # Override BaseScraper's 5-minute floor: justdar is a public ASCII
+    # API designed for automated downloads. 10 s between requests is
+    # the cadence CDIP themselves recommend in their script examples.
+    host_rate_limit_s = 10
     _CDIP_INTRA_PAUSE_S = 10
 
     def fetch(self) -> list[dict]:

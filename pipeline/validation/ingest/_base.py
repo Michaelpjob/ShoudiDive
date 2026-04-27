@@ -51,11 +51,24 @@ class BaseScraper(ABC):
     ``01-architecture.md`` (lat, lng, observed_*_ft / _f, source,
     source_url, source_confidence, extraction_method, raw_excerpt,
     notes).
+
+    Rate-limit override: a scraper that needs to make multiple
+    requests to the same host within one ``fetch()`` call (e.g. Just
+    Get Wet's index → top-3-posts walk) sets
+    ``host_rate_limit_s`` lower than the default 300 s. The base
+    class still enforces it, so this can never accidentally bypass
+    polite cadence — only tighten it for sources we know tolerate it.
     """
 
     source_id: str = "unset"
     source_confidence: float = 0.0
     source_root_url: str = ""
+
+    # How long to wait between requests to the same host. Defaults to
+    # the conservative 5-minute floor; well-known APIs (CDIP) and
+    # cooperative content shops (Just Get Wet) override this to a
+    # lower cadence so a single fetch() can walk multiple URLs.
+    host_rate_limit_s: float = float(DEFAULT_RATE_LIMIT_S)
 
     def __init__(self):
         # Per-host last-fetch time so even multi-URL scrapers respect
@@ -68,8 +81,9 @@ class BaseScraper(ABC):
         host = urlparse(url).netloc
         now = time.time()
         last = self._last_fetch.get(host, 0)
-        if now - last < DEFAULT_RATE_LIMIT_S:
-            time.sleep(DEFAULT_RATE_LIMIT_S - (now - last))
+        wait_floor = float(self.host_rate_limit_s)
+        if now - last < wait_floor:
+            time.sleep(wait_floor - (now - last))
         self._last_fetch[host] = time.time()
 
         headers = dict(kwargs.pop("headers", {}) or {})
