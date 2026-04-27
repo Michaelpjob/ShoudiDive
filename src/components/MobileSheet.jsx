@@ -29,7 +29,7 @@ import {
   windCompass,
   windCardinal,
 } from "../lib/dataSource.js";
-import { WindCurrentSelectionCard } from "./WindDayGrid.jsx";
+import WindDayGrid from "./WindDayGrid.jsx";
 import { SwellCurrentCard } from "./SwellTimeline.jsx";
 
 const LAYERS = [
@@ -135,7 +135,7 @@ export default function MobileShell({
               <span className="ms-section-sub">{timeOpts.helper}</span>
             </div>
             {layer === "wind" ? (
-              <WindCurrentSelectionCard sel={windSel} setSel={setWindSel} />
+              <WindDayGrid sel={windSel} setSel={setWindSel} layout="stack" />
             ) : layer === "swell" ? (
               <SwellCurrentCard sel={swellSel} />
             ) : (

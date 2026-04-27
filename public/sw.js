@@ -30,7 +30,11 @@
 //        controllerchange auto-reload kicks users straight onto the
 //        new layout instead of showing them yesterday's UI for one
 //        more tab cycle.
-const CACHE_VERSION = "v4";
+//   v5 — dive flag icon set (icon.svg + icon-{192,512}.png +
+//        apple-touch-icon.png + favicon-32.png all changed). The shell
+//        cache was holding the old freediver-silhouette PNGs; bump
+//        forces eviction so home-screen icons refresh on next launch.
+const CACHE_VERSION = "v5";
 const SHELL_CACHE = `shouldidive-shell-${CACHE_VERSION}`;
 const DATA_CACHE  = `shouldidive-data-${CACHE_VERSION}`;
 

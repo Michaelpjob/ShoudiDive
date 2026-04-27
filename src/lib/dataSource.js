@@ -35,6 +35,37 @@ function loadImage(url) {
   });
 }
 
+// Iterative dilation: each pass replaces NaN cells with the mean of
+// their finite 8-neighbours. K passes propagate valid data K cells
+// outward — fills small holes (cloud-shadowed satellite pixels) and
+// smears valid SoCal coverage into the marine-layer gaps that wipe out
+// the viz model otherwise. Mutates the grid in place.
+function fillNearestInPlace(grid, maxIters = 8) {
+  const { data, width, height } = grid;
+  for (let iter = 0; iter < maxIters; iter++) {
+    let changed = 0;
+    const snapshot = new Float32Array(data);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = y * width + x;
+        if (Number.isFinite(snapshot[i])) continue;
+        let sum = 0, n = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const nx = x + dx, ny = y + dy;
+            if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+            const v = snapshot[ny * width + nx];
+            if (Number.isFinite(v)) { sum += v; n++; }
+          }
+        }
+        if (n > 0) { data[i] = sum / n; changed++; }
+      }
+    }
+    if (changed === 0) break;
+  }
+}
+
 async function decodePng(url, scale, range) {
   const img = await loadImage(url);
   const c = document.createElement("canvas");
@@ -237,6 +268,17 @@ export async function loadManifest() {
         const range = info.range_ft;
         for (const [slot, w] of Object.entries(info.windows || {})) {
           const decoded = await decodePng(w.url, "linear", range);
+          // SoCal coverage is patchy: chl-a satellite passes get nuked
+          // by the marine layer over Catalina/SD/Coronados most cycles,
+          // and the viz model returns NaN wherever any input is missing.
+          // Smear valid neighbours into NaN cells (BFS-style up to 30
+          // iterations) so the user actually sees a colored map instead
+          // of a hatched bight. 8 iterations was leaving La Jolla and
+          // San Diego still NaN on heavy-marine-layer days; 30 reaches
+          // convergence on every cycle we've seen so far. LandBasemap
+          // paints over the land cells filled by the same pass, so
+          // coastline accuracy is unaffected.
+          fillNearestInPlace(decoded, 30);
           state.layers.viz[slot] = { ...decoded, valid_at: w.valid_at };
         }
       } else if (layer === "sst" || layer === "chl") {

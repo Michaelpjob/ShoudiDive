@@ -63,47 +63,26 @@ function useIsMobile() {
   return useSyncExternalStore(subscribeMatchMedia, getMobileSnapshot, () => false);
 }
 
-// Head-down freediver: two splayed fin blades at top, slender torso,
-// small head at the bottom. Solid currentColor fills so it inherits
-// `.brand-mark { color: var(--ink) }` and flips automatically between
-// dark and light themes.
+// Dive flag — the universal "diver below" maritime symbol. Red square,
+// white diagonal stripe. Reads instantly at any size (the previous
+// freediver silhouette degraded into a fuzzy Y at the topbar's ~20 px
+// rendering). Explicit colors so it stays legible in both light and
+// dark themes without depending on currentColor.
 function FreediverLogo() {
   return (
     <svg
       className="brand-mark"
-      viewBox="0 0 24 36"
-      fill="currentColor"
-      stroke="none"
+      viewBox="0 0 32 32"
       aria-hidden="true"
       role="img"
     >
-      {/* Left fin blade — curved teardrop fanning up-left from the
-          ankles at (12, 13). */}
-      <path d="
-        M 12 13
-        C 10.8 9, 9.4 4.5, 7.5 1.2
-        C 7.6 4, 9.1 9, 11.6 13
-        Z
-      " />
-      {/* Right fin blade — mirror of the left. */}
-      <path d="
-        M 12 13
-        C 13.2 9, 14.6 4.5, 16.5 1.2
-        C 16.4 4, 14.9 9, 12.4 13
-        Z
-      " />
-      {/* Body — slender torso with a slight waist taper. */}
-      <path d="
-        M 11.2 12.5
-        C 10.7 17, 10.5 22, 10.9 27
-        C 11.0 29, 11.2 30.5, 11.5 31.5
-        L 12.5 31.5
-        C 12.8 30.5, 13.0 29, 13.1 27
-        C 13.5 22, 13.3 17, 12.8 12.5
-        Z
-      " />
-      {/* Head — clearly rounded at the bottom tip. */}
-      <ellipse cx="12" cy="33.5" rx="1.7" ry="1.9" />
+      <rect x="3" y="3" width="26" height="26" rx="5" fill="#dc2626" />
+      <path
+        d="M27 6 L 6 27"
+        stroke="#ffffff"
+        strokeWidth="5.2"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
@@ -1516,15 +1495,30 @@ function BathyPopup({ feature, onClose }) {
 
 // US-Mexico maritime boundary is at ~32.534°N. When the MPA layer is on
 // AND the visible viewBox dips below that, surface a small disclaimer.
+// Dismissable: an × button hides it for the rest of the page session
+// (mobile users repeatedly hit it covering the bottom strip when
+// they're zoomed in on Coronados, which is half the reason to look at
+// that part of the map).
 function CoronadosBanner({ vb, size }) {
+  const [dismissed, setDismissed] = useState(false);
   if (!vb || !size.h) return null;
+  if (dismissed) return null;
   const [, visibleSouthLat] = unproject(0, vb.y + vb.h, size.w, size.h);
   if (visibleSouthLat > 32.534) return null;
   return (
     <div className="mpa-banner">
-      MPA data covers California waters only. The Coronados sit inside Mexico's
-      Islas del Pacífico Biosphere Reserve — see{" "}
-      <a href="https://www.gob.mx/conanp" target="_blank" rel="noreferrer">CONANP</a>.
+      <span>
+        MPA data covers California waters only. The Coronados sit inside
+        Mexico's Islas del Pacífico Biosphere Reserve — see{" "}
+        <a href="https://www.gob.mx/conanp" target="_blank" rel="noreferrer">CONANP</a>.
+      </span>
+      <button
+        className="mpa-banner-close"
+        onClick={() => setDismissed(true)}
+        aria-label="Dismiss notice"
+      >
+        ×
+      </button>
     </div>
   );
 }

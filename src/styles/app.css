@@ -987,16 +987,37 @@ body {
   -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--line);
   border-radius: 100px;
-  padding: 6px 14px;
+  padding: 6px 8px 6px 14px;
   font-size: 11px;
   color: var(--ink-2);
   z-index: 25;
   box-shadow: var(--shadow-1);
   max-width: 92vw;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
 }
 .mpa-banner a { color: var(--accent); text-decoration: none; }
 .mpa-banner a:hover { text-decoration: underline; }
+.mpa-banner-close {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--ink-3);
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.mpa-banner-close:hover { background: var(--bg-sunken); color: var(--ink); }
 
 .mpa-popup-overlay {
   position: absolute;
