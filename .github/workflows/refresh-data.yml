@@ -78,6 +78,16 @@ jobs:
         continue-on-error: true
         run: python -m pipeline.validation.score
 
+      - name: Regression guard — fail build if RMSE jumps >20% in any zone
+        # Compares the just-written per_zone_metrics.json against
+        # per_zone_metrics_baseline.json. Sleeps until each zone has
+        # n >= 30 obs and a baseline exists; until then it's a no-op.
+        # Promote a baseline manually once the model is in a state
+        # you want to lock against drift:
+        #   python -m pipeline.validation.check_regression --promote-baseline
+        # Then commit per_zone_metrics_baseline.json.
+        run: python -m pipeline.validation.check_regression
+
       - name: Install JS dependencies
         run: npm ci
 
@@ -99,7 +109,9 @@ jobs:
           # Stage the prediction PNGs + the validation outputs that we
           # actually want versioned (residuals.jsonl + per_zone_metrics
           # are small and high-signal; the per-cell archive is huge and
-          # gitignored).
+          # gitignored). The baseline file is committed manually after
+          # `check_regression --promote-baseline`, not auto-overwritten
+          # by every refresh.
           git add public/data/
           git add pipeline/validation/data/per_zone_metrics.json \
                   pipeline/validation/data/residuals.jsonl 2>/dev/null || true
