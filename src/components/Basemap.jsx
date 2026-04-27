@@ -156,6 +156,60 @@ export function SeaBasemap({ width, height }) {
 
 // ---- Land (drawn ON TOP of data overlay so land naturally clips it) --------
 
+// ---- Ocean mask (defs only) ---------------------------------------------
+//
+// SVG mask that hides land cells inside any group it's applied to.
+// White = visible (ocean), black = hidden (land). Used by App.jsx to
+// constrain the data-overlay canvas + wind-particle foreignObject so
+// neither paints over land.
+//
+// This exists because iOS Safari has a long-standing compositing bug:
+// `<foreignObject>` content paints in its own layer that ignores
+// subsequent SVG sibling z-order. Without this mask, a heatmap canvas
+// or particle canvas drawn via foreignObject renders ABOVE the
+// LandBasemap that comes after it in the document, even though normal
+// SVG painting order should put land on top. The mask is applied at
+// the parent `<g>` level, which is one of the few z-ordering primitives
+// Safari does respect across foreignObject boundaries.
+//
+// Loads the same /data/land.geojson that LandBasemap loads — the
+// fetch is module-level memoised in `loadLand()` so this is a free
+// reuse, not a duplicate network round-trip.
+export function OceanMaskDefs({ width, height }) {
+  const [features, setFeatures] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadLand().then((fc) => {
+      if (cancelled || !fc) return;
+      setFeatures(fc.features);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const paths = useMemo(() => {
+    if (!features) return [];
+    return features.map((f, i) => ({
+      id: `ocean-mask-land-${i}`,
+      d: geomToPath(f.geometry, width, height),
+    }));
+  }, [features, width, height]);
+
+  return (
+    <mask id="ocean-mask" maskUnits="userSpaceOnUse">
+      {/* White over the entire stage = visible by default. */}
+      <rect x={0} y={0} width={width} height={height} fill="white" />
+      {/* Land polygons in black = hidden inside the masked group. */}
+      {paths.map((p) => (
+        <path key={p.id} d={p.d} fill="black" />
+      ))}
+    </mask>
+  );
+}
+
+
 export function LandBasemap({ width, height }) {
   const [features, setFeatures] = useState(null);
 

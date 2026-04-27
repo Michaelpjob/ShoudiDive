@@ -88,6 +88,70 @@ jobs:
         # Then commit per_zone_metrics_baseline.json.
         run: python -m pipeline.validation.check_regression
 
+      - name: Watchdog — analyse metrics, flag anomalies
+        # Reads per_zone_metrics.json + residuals.jsonl + observations.jsonl,
+        # runs four anomaly rules, writes pipeline/validation/data/
+        # watchdog_summary.md. Exits 1 when any rule fires (which the
+        # next step uses to open/update a rolling GitHub Issue), exits
+        # 0 otherwise. continue-on-error: the watchdog firing is
+        # informational, not a deploy blocker.
+        id: watchdog
+        continue-on-error: true
+        run: python -m pipeline.validation.watchdog
+
+      - name: Sync watchdog GitHub Issue
+        # Opens / updates / closes a single rolling Issue tagged
+        # `validation-watchdog` based on the watchdog's outcome:
+        #   findings    → upsert the issue with the latest summary
+        #   no findings → close any open issue
+        # The ${{ secrets.GITHUB_TOKEN }} is auto-provided by Actions
+        # and has the issues:write scope on this repo only.
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          # Make sure the label exists. The 2>/dev/null swallows the
+          # "already exists" error on subsequent runs.
+          gh label create validation-watchdog \
+            --color C1880F \
+            --description "Auto-managed by pipeline/validation/watchdog.py" \
+            2>/dev/null || true
+
+          summary_file=pipeline/validation/data/watchdog_summary.md
+          existing=$(gh issue list \
+            --label validation-watchdog \
+            --state open \
+            --json number \
+            --jq '.[0].number')
+
+          if [ "${{ steps.watchdog.outcome }}" = "failure" ]; then
+            # Findings present — open or update the issue.
+            count=$(grep -c '^### ' "$summary_file" || true)
+            title="Validation watchdog — ${count} finding(s)"
+            if [ -n "$existing" ]; then
+              gh issue edit "$existing" \
+                --title "$title" \
+                --body-file "$summary_file"
+              echo "Updated existing watchdog issue #$existing"
+            else
+              gh issue create \
+                --label validation-watchdog \
+                --title "$title" \
+                --body-file "$summary_file"
+              echo "Opened new watchdog issue"
+            fi
+          else
+            # No findings — close any open issue.
+            if [ -n "$existing" ]; then
+              gh issue close "$existing" \
+                --comment "All findings cleared as of $(date -u +%Y-%m-%dT%H:%MZ)."
+              echo "Closed watchdog issue #$existing"
+            else
+              echo "No watchdog issue open; nothing to close"
+            fi
+          fi
+
       - name: Install JS dependencies
         run: npm ci
 
@@ -114,7 +178,8 @@ jobs:
           # by every refresh.
           git add public/data/
           git add pipeline/validation/data/per_zone_metrics.json \
-                  pipeline/validation/data/residuals.jsonl 2>/dev/null || true
+                  pipeline/validation/data/residuals.jsonl \
+                  pipeline/validation/data/watchdog_summary.md 2>/dev/null || true
           if git diff --staged --quiet; then
             echo "No data changes to commit."
           else
