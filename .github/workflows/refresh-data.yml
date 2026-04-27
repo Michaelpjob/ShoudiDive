@@ -17,6 +17,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # `issues: write` is what the watchdog needs to create the
+      # `validation-watchdog` label and open/edit/close the rolling
+      # issue. Without it, the Sync step fails with "could not add
+      # label: ... not found" because gh label create silently no-ops.
+      issues: write
 
     steps:
       - uses: actions/checkout@v4
@@ -106,7 +111,14 @@ jobs:
         #   no findings → close any open issue
         # The ${{ secrets.GITHUB_TOKEN }} is auto-provided by Actions
         # and has the issues:write scope on this repo only.
+        #
+        # continue-on-error: this step is purely about surfacing
+        # findings to the user. If the GitHub API has a hiccup or a
+        # permission misconfig, we don't want it to block the actual
+        # deploy. The watchdog's exit-1 already encoded the signal —
+        # at worst we lose a notification cycle, not a deploy.
         if: always()
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
