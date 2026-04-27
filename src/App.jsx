@@ -348,6 +348,14 @@ function TopBar({ onSettings, settingsOpen, dataState }) {
         <span>
           Sources: <strong>NOAA · NASA OB.DAAC · Copernicus</strong>
         </span>
+        {/* Compact chip used only on mobile (display flipped via the
+            @media (max-width: 760px) block in app.css). Keeps the
+            green-dot liveness indicator visible without the long
+            timestamp string that was wrapping under the Dynamic Island. */}
+        <span className="mobile-status" style={{ display: "none" }}>
+          <span className="dot"></span>
+          <strong>{status}</strong>
+        </span>
         <button
           className="icon-btn"
           aria-label="Settings"

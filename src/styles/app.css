@@ -85,11 +85,14 @@ body {
 .topbar {
   position: absolute;
   top: 0; left: 0; right: 0;
-  height: 44px;
+  /* Bar always rises to clear the iOS Dynamic Island / notch (status bar),
+     plus the desktop 44 px content row underneath. env(...) is 0 on
+     desktop and ~50 px on iPhone 14 Pro+, so this is a no-op on web. */
+  height: calc(44px + env(safe-area-inset-top));
+  padding: env(safe-area-inset-top) 14px 0 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 14px;
   background: var(--bg-panel);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
@@ -1359,9 +1362,36 @@ body {
 /* ---------- Responsive overrides ---------- */
 
 @media (max-width: 760px) {
-  .topbar { padding: 0 10px; }
+  .topbar { padding: env(safe-area-inset-top) 10px 0 10px; }
   .brand-tag { display: none; }
-  .topbar-meta > span:nth-child(2) { display: none; }
+  /* Sources line + the long Last-update line both vanish on phones —
+     the green dot is enough liveness signal. The Settings cog (the
+     button at the end of .topbar-meta) stays. */
+  .topbar-meta > span { display: none; }
+  /* Show just the dot + "Live" word as a compact chip on the right. */
+  .topbar-meta {
+    gap: 8px;
+  }
+  .topbar-meta .mobile-status {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--ink-2);
+  }
+
+  /* MPA Coronados disclaimer — make the banner unobtrusive on phones:
+     stick it just above the bottom tab bar, narrow, dismissable. */
+  .mpa-banner {
+    top: auto;
+    bottom: calc(60px + env(safe-area-inset-bottom));
+    left: 8px;
+    right: 8px;
+    max-width: none;
+    transform: none;
+    font-size: 10.5px;
+    padding: 6px 10px;
+  }
 
   /* Hide the desktop floating panels — MobileSheet replaces them. */
   .controls-tl,
