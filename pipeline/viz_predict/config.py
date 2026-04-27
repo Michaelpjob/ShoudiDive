@@ -58,24 +58,30 @@ class DriverCoefficients:
 
 
 DRIVER_COEFFS: Dict[str, DriverCoefficients] = {
-    # Central CA (Monterey ↑ — anything above 34.45°N) is an upwelling-
-    # dominated zone: cold water, persistent spring/summer blooms, often
-    # green nearshore even on otherwise calm days. v2's optimistic
-    # seasonal/upwell cuts didn't make sense for this region — Tempbreak
-    # consistently shows greener water here than v3 was predicting. v3.1
-    # restores upwell + seasonal coefficients to ~v0.2 levels for ALL
-    # central zones (the productivity assumption is real, not a bug).
-    "central_nearshore":  DriverCoefficients(upwell=0.18, swell=0.30, precip=0.20, river=0.30, sst=-0.06, seasonal=0.40, exposure=0.20, tide=0.10, substrate=0.15, cloud=-0.08),
-    "central_islands":    DriverCoefficients(upwell=0.12, swell=0.10, precip=0.05, river=0.05, sst=-0.05, seasonal=0.35, exposure=0.30, tide=0.02, substrate=0.05, cloud=-0.06),
-    "central_offshore":   DriverCoefficients(upwell=0.10, swell=0.02, precip=0.00, river=0.00, sst=-0.04, seasonal=0.30, exposure=0.05, tide=0.00, substrate=0.00, cloud=-0.04),
+    # v2 calibration handoff: side-by-side comparison against tempbreak.com
+    # chl maps and CA dive-shop reports showed the previous defaults were
+    # too pessimistic in two ways:
+    #   * Offshore zones (Cortes/Tanner/60-Mile/Osborn) rendered green/
+    #     yellow when Tempbreak showed deep-blue clear (chl <0.15).
+    #   * Nearshore zones (Pt. Loma, La Jolla, kelp) under-predicted by
+    #     5–6 ft vs dive-shop reports.
+    # Both biases traced back to seasonal climatology + exposure firing
+    # too hard. Cuts here on `seasonal` (~30%) and `exposure` (~25%)
+    # across 8 of 9 zones, plus matching `upwell` trims, recenter the
+    # nearshore + offshore baseline. central_islands left alone — Central
+    # CA Channel Islands had less observed mismatch on the SoCal Bight
+    # side. swell/precip/river/sst/tide/substrate/cloud unchanged.
+    "central_nearshore":    DriverCoefficients(upwell=0.14, swell=0.30, precip=0.20, river=0.30, sst=-0.06, seasonal=0.28, exposure=0.15, tide=0.10, substrate=0.15, cloud=-0.08),
+    "central_islands":      DriverCoefficients(upwell=0.12, swell=0.10, precip=0.05, river=0.05, sst=-0.05, seasonal=0.35, exposure=0.30, tide=0.02, substrate=0.05, cloud=-0.06),
+    "central_offshore":     DriverCoefficients(upwell=0.08, swell=0.02, precip=0.00, river=0.00, sst=-0.04, seasonal=0.18, exposure=0.03, tide=0.00, substrate=0.00, cloud=-0.04),
 
     "transition_nearshore": DriverCoefficients(upwell=0.08, swell=0.25, precip=0.18, river=0.28, sst=-0.04, seasonal=0.22, exposure=0.13, tide=0.08, substrate=0.12, cloud=-0.06),
     "transition_islands":   DriverCoefficients(upwell=0.06, swell=0.08, precip=0.04, river=0.04, sst=-0.03, seasonal=0.16, exposure=0.22, tide=0.02, substrate=0.05, cloud=-0.05),
     "transition_offshore":  DriverCoefficients(upwell=0.04, swell=0.02, precip=0.00, river=0.00, sst=-0.02, seasonal=0.12, exposure=0.03, tide=0.00, substrate=0.00, cloud=-0.03),
 
-    "bight_nearshore":  DriverCoefficients(upwell=0.04, swell=0.20, precip=0.16, river=0.25, sst=-0.02, seasonal=0.15, exposure=0.10, tide=0.10, substrate=0.18, cloud=-0.04),
-    "bight_islands":    DriverCoefficients(upwell=0.03, swell=0.06, precip=0.03, river=0.03, sst=-0.02, seasonal=0.12, exposure=0.20, tide=0.02, substrate=0.05, cloud=-0.03),
-    "bight_offshore":   DriverCoefficients(upwell=0.02, swell=0.01, precip=0.00, river=0.00, sst=-0.01, seasonal=0.08, exposure=0.02, tide=0.00, substrate=0.00, cloud=-0.02),
+    "bight_nearshore":      DriverCoefficients(upwell=0.04, swell=0.20, precip=0.16, river=0.25, sst=-0.02, seasonal=0.15, exposure=0.10, tide=0.10, substrate=0.18, cloud=-0.04),
+    "bight_islands":        DriverCoefficients(upwell=0.03, swell=0.06, precip=0.03, river=0.03, sst=-0.02, seasonal=0.12, exposure=0.20, tide=0.02, substrate=0.05, cloud=-0.03),
+    "bight_offshore":       DriverCoefficients(upwell=0.02, swell=0.01, precip=0.00, river=0.00, sst=-0.01, seasonal=0.08, exposure=0.02, tide=0.00, substrate=0.00, cloud=-0.02),
 }
 
 
@@ -96,41 +102,24 @@ SECCHI_COEFFS: Dict[str, SecchiCoefficients] = {
     # secchi_m = a · chl^(-b). The exponent `b` comes from coastal-CA
     # literature and is left alone; only the multiplier `a` is tuned.
     #
-    # v3 calibration: v2 over-corrected — side-by-side with Tempbreak's
-    # chlorophyll observations the visibility map was running too blue
-    # (a typical bbox-mean of ~45 ft put a normal day in Very Good /
-    # Excellent territory instead of Good / Very Good). Walked every
-    # bumped multiplier ~halfway back toward v0.2. Genuinely calm
-    # offshore days still hit Excellent at chl ≤ 0.15 mg/m³, but a
-    # mid-range chl reading no longer floats into the deep-blue band.
-    #
-    # v0.2 → v2 → v3 trajectory for reference:
-    #   central_nearshore     4.0  →  6.5  →  5.5
-    #   transition_nearshore  4.5  →  7.0  →  6.0
-    #   transition_islands    7.0  →  8.5  →  7.5
-    #   bight_nearshore       5.0  →  7.5  →  6.5
-    #   bight_islands         7.5  →  9.0  →  8.0
-    #   *_offshore            8.5  → 10.0  →  9.0
-    # v3.2 — central CA pushed BELOW v0.2 because even the legacy
-    # multipliers were too optimistic for that latitude band. Side-by-
-    # side with Tempbreak the open-ocean offshore was reading ~45 ft
-    # (Very Good) when reality is mid-Good (~25–35 ft) on a normal
-    # day, dropping to Excellent only on the genuinely calm days that
-    # punch through the bloom regime. The drop is ~30–40% from v3.1.
-    #
-    #                     v0.2  v3.1  v3.2
-    #   central_nearshore  4.0   4.5   3.5    (kelp at chl 2 → ~9 ft, Poor/Fair edge)
-    #   central_islands    6.5   6.5   5.0
-    #   central_offshore   8.5   8.0   5.5    (chl 0.2 → ~31 ft, mid-Good)
-    "central_nearshore":    SecchiCoefficients(a=3.5, b=0.28),
-    "central_islands":      SecchiCoefficients(a=5.0, b=0.30),
-    "central_offshore":     SecchiCoefficients(a=5.5, b=0.32),
-    "transition_nearshore": SecchiCoefficients(a=6.0, b=0.28),
-    "transition_islands":   SecchiCoefficients(a=7.5, b=0.30),
-    "transition_offshore":  SecchiCoefficients(a=9.0, b=0.32),
-    "bight_nearshore":      SecchiCoefficients(a=6.5, b=0.28),
-    "bight_islands":        SecchiCoefficients(a=8.0, b=0.30),
-    "bight_offshore":       SecchiCoefficients(a=9.0, b=0.32),
+    # v2 calibration handoff: prior multipliers were too conservative —
+    # the chl→Secchi baseline didn't have enough headroom on calm days.
+    # Tempbreak comparison + dive-shop reports both pointed at a
+    # ~50–60% baseline bump in nearshore zones and ~18% in offshore
+    # zones being needed to reach the actual Secchi a diver experiences.
+    # `a` set per-zone below; central_islands and bight_islands left
+    # unchanged on this pass. Pt. Loma kelp on a calm day with chl 0.5
+    # now bases around ~21 ft (was ~14 ft on v0.2 / v3.x), matching
+    # dive-shop reports of 20–25 ft on glassy days.
+    "central_nearshore":    SecchiCoefficients(a=6.5,  b=0.28),
+    "central_islands":      SecchiCoefficients(a=5.0,  b=0.30),
+    "central_offshore":     SecchiCoefficients(a=10.0, b=0.32),
+    "transition_nearshore": SecchiCoefficients(a=7.0,  b=0.28),
+    "transition_islands":   SecchiCoefficients(a=8.5,  b=0.30),
+    "transition_offshore":  SecchiCoefficients(a=10.0, b=0.32),
+    "bight_nearshore":      SecchiCoefficients(a=7.5,  b=0.28),
+    "bight_islands":        SecchiCoefficients(a=8.0,  b=0.30),
+    "bight_offshore":       SecchiCoefficients(a=10.0, b=0.32),
 }
 
 
