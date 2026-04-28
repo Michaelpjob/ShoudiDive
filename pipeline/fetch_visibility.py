@@ -136,6 +136,24 @@ def decode_log10_png(path: Path, lo: float, hi: float):
     return out
 
 
+def decode_age_png(path: Path):
+    """Decode an age-days sidecar PNG (mode='L'). Convention: pixel
+    value 0 = no data (encoded as 999.0 in the output to make
+    downstream conditionals cleaner — `np.isnan` checks are noisy and
+    `999.0` is well above any realistic age threshold). Pixel 1..255
+    maps to age = pixel - 1 days.
+
+    Returned array has the same orientation as the source PNG —
+    row 0 = lat_max — so it can be passed straight to
+    `bilinear_sample`.
+    """
+    img = np.array(Image.open(path))
+    out = np.full(img.shape, 999.0, dtype=np.float32)
+    valid = img > 0
+    out[valid] = img[valid].astype(np.float32) - 1.0
+    return out
+
+
 def bilinear_sample(src_arr, src_w, src_h, lng_grid, lat_grid):
     """Sample src_arr at the given lng/lat using bilinear interp.
     src_arr is shape (src_h, src_w) where row 0 = lat_max."""
@@ -566,11 +584,54 @@ def main():
     cloud_frac_grid = np.where(np.isnan(chl_today), 0.85, 0.45)
     cloud_frac = flat(cloud_frac_grid)
 
-    # No staleness info per cell yet — assume today's chl is the last valid
-    # observation (age = 0 where chl is valid; large age elsewhere).
-    chl_obs_today = flat(chl_today)
-    chl_lastvalid = np.where(np.isnan(chl_obs_today), np.nan, chl_obs_today)
-    age = np.where(np.isnan(chl_obs_today), 999.0, 0.0)
+    # ---- Per-cell chl freshness ---------------------------------------
+    # `fetch.py:build_layer` walks back up to 7 days hunting for non-cloudy
+    # chl pixels and writes whatever it found into chl_1d.png. Without
+    # the age sidecar we hardcode age=0 — telling the model "this is
+    # today's observation" even when the actual data is 4 days stale.
+    # Three downstream consequences if we lie about freshness:
+    #   * persistence_with_decay weight stays at 1.0 (should decay to
+    #     ~0.07–0.51 at real ages, blending in climatology)
+    #   * effective_sigma keeps p10/p90 narrow (calibration over-confident)
+    #   * assign_quality flags everything OBSERVED_1D (the bottom of the
+    #     audit trail — diver thinks the model has fresh satellite when
+    #     it doesn't)
+    #
+    # Read the sidecar fetch.py emits, bilinear-resample onto our prediction
+    # grid, then gate `chl_obs_today` on age==0 so assign_quality correctly
+    # downgrades stale cells to OBSERVED_3D / PREDICTED_*. `chl_lastvalid`
+    # carries the older fallback for persistence_with_decay.
+    chl_age_path = OUT_DIR / "chl_1d_age_days.png"
+    if chl_age_path.exists():
+        age_grid = decode_age_png(chl_age_path)
+        age_resampled = bilinear_sample(
+            age_grid, age_grid.shape[1], age_grid.shape[0], lng_grid, lat_grid
+        )
+        # Bilinear can interpolate an age across a NaN boundary; force
+        # 999 wherever today's chl itself is NaN so we never claim a
+        # finite age for a cell with no observation at all.
+        age_resampled = np.where(np.isnan(chl_today), 999.0, age_resampled)
+        valid_age = age_resampled < 999
+        n_total = int(valid_age.sum())
+        n_stale = int(((age_resampled > 0) & valid_age).sum())
+        mean_age = float(age_resampled[valid_age].mean()) if n_total else 0.0
+        print(
+            f"  chl freshness: {n_stale}/{n_total} cells stale, mean age {mean_age:.2f} days"
+        )
+    else:
+        # Pre-PR1 deployment — fall back to legacy behaviour (assume
+        # everything is fresh) so this path doesn't crash old runs that
+        # haven't regenerated the sidecar yet.
+        print("  chl_1d_age_days.png missing — assuming chl is fresh (legacy behaviour)")
+        age_resampled = np.where(np.isnan(chl_today), 999.0, 0.0)
+
+    # `chl_obs_today` = TODAY's actual observation (NaN if stale).
+    # `chl_lastvalid` = most recent valid obs at any age (drives
+    # persistence_with_decay).
+    chl_today_fresh_only = np.where(age_resampled == 0, chl_today, np.nan)
+    chl_obs_today = flat(chl_today_fresh_only)
+    chl_lastvalid = flat(chl_today)
+    age = flat(age_resampled)
 
     print("Running viz_predict over the grid (n=%d)..." % n)
     depth_m = flat(shelf_depth_from_dist(dts_km))

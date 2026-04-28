@@ -115,6 +115,39 @@ def composite(stack: list[np.ndarray]) -> np.ndarray:
         return np.nanmean(np.stack(stack), axis=0)
 
 
+def build_age_array(stack: list[np.ndarray], dates: list[date], end: date) -> np.ndarray:
+    """For each cell, return the age (in whole days) of the most recent
+    valid (non-NaN) value across the stack. Cells with no valid value
+    in any frame get 255 (encoded as no-data downstream).
+
+    `stack` and `dates` are chronological (oldest -> newest). We walk
+    newest-to-oldest so a cell takes the FRESHEST age it has, not the
+    first one we encounter.
+
+    The output orientation matches the input arrays — i.e. it's already
+    flipud'd if the inputs went through `fetch_day` (which they do).
+    Callers should NOT flip again before saving.
+    """
+    if not stack or not dates:
+        return None
+    h, w = stack[-1].shape
+    age = np.full((h, w), 255, dtype=np.uint8)
+    for arr, d in zip(reversed(stack), reversed(dates)):
+        delta = max(0, min(254, (end - d).days))
+        # Only fill cells that don't already carry a fresher age (255 = unset).
+        fill = np.isfinite(arr) & (age == 255)
+        age[fill] = delta
+    return age
+
+
+def encode_age_png(age_arr: np.ndarray, out: Path) -> None:
+    """Encode the age array as 8-bit grayscale PNG. Convention:
+    pixel 0 = no data, pixel 1..255 = age days (raw value - 1).
+    The +1 offset reserves 0 for the no-data sentinel."""
+    px = np.where(age_arr == 255, 0, np.minimum(age_arr.astype(np.int16) + 1, 255)).astype(np.uint8)
+    Image.fromarray(px, mode="L").save(out, optimize=True)
+
+
 def encode_png(arr: np.ndarray, cfg: dict, out: Path) -> None:
     lo, hi = cfg["range"]
     if cfg["scale"] == "log10":
@@ -170,6 +203,39 @@ def build_layer(layer: str, cfg: dict, end: date, want: int = 3, max_back: int =
             "dates": [d.isoformat() for d in actual[-len(st):]],
         }
         print(f"  wrote {out.name}  ({h}x{w})")
+
+    # Per-cell freshness sidecar — chl-family layers ONLY.
+    #
+    # Why chl-only: the visibility model (`viz_predict`) reads chl as
+    # its primary observation and applies persistence-with-decay as
+    # the obs ages. SST is gap-filled MUR L4 (always "fresh" by
+    # design); we don't need an SST age sidecar today.
+    #
+    # The 1d composite uses `stack[-1:]` (the single newest valid
+    # day). On a clean day that's `end - 0`; on a 4-day cloud streak
+    # over the SoCal Bight that's `end - 4`. Without this sidecar the
+    # downstream `fetch_visibility.py` hardcodes age=0 and the model
+    # treats stale obs as fresh — see `pipeline/TODO.md` PR1 for the
+    # full diagnosis.
+    if layer.startswith("chl"):
+        age_arr = build_age_array(stack, actual, end)
+        if age_arr is not None:
+            age_out = OUT_DIR / f"{layer}_1d_age_days.png"
+            encode_age_png(age_arr, age_out)
+            valid = age_arr < 255
+            stale = valid & (age_arr > 0)
+            n_total = int(valid.sum())
+            n_stale = int(stale.sum())
+            mean_age = float(age_arr[valid].mean()) if n_total else 0.0
+            print(
+                f"  wrote {age_out.name}  ({h}x{w}) "
+                f"— {n_stale}/{n_total} cells stale, mean age {mean_age:.2f} days"
+            )
+            if "1d" in manifest_layer["windows"]:
+                manifest_layer["windows"]["1d"]["age_days_url"] = (
+                    f"/data/{layer}_1d_age_days.png"
+                )
+
     return manifest_layer
 
 
