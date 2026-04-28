@@ -1,0 +1,39 @@
+name: Pipeline tests
+
+# Runs the unit + static layers of pipeline/scripts/validate.sh on every
+# push to main and every PR. Network-dependent layers (Layer 3 FETCH,
+# Layer 4 VISIBILITY) are exercised by refresh-data.yml on the daily
+# schedule — running them here too would just amplify NOAA flake into PR
+# noise without catching anything new.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "pipeline/**"
+      - ".github/workflows/test.yml"
+  pull_request:
+    paths:
+      - "pipeline/**"
+      - ".github/workflows/test.yml"
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          pip install -r pipeline/requirements.txt
+          pip install pytest
+
+      - name: Run pipeline validate.sh --unit
+        run: bash pipeline/scripts/validate.sh --unit

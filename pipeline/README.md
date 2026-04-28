@@ -80,3 +80,30 @@ swap the dataset ID in `LAYERS["chl"]` and add credentials handling.
 
 Raw ERDDAP NetCDF files cache to `.cache/`. Delete that directory to force
 a refetch.
+
+## Automated tests
+
+`pipeline/scripts/validate.sh` runs the full test pipeline. Four layers,
+each gates the next:
+
+| Layer | What it does | Network? |
+|---|---|---|
+| 1. STATIC | `py_compile` every pipeline `.py` + import-smoke `fetch` & `fetch_visibility`, asserting the new symbols (`build_age_array`, `decode_age_png`) are exported | no |
+| 2. UNIT | `pytest pipeline/tests/test_*.py` — round-trip + bucket assertions | no |
+| 3. FETCH | `python fetch.py --layer chl` then assert `chl_1d_age_days.png` exists, is mode='L', dims match, has valid pixels, and the manifest carries `age_days_url` | yes |
+| 4. VISIBILITY | `python fetch_visibility.py` then assert `viz_quality.png` exists with codes in 1..7 and the freshness gate downgraded at least one cell off `OBSERVED_1D` (when staleness exists) | yes |
+
+```
+bash pipeline/scripts/validate.sh             # all 4 layers (network)
+bash pipeline/scripts/validate.sh --unit      # layers 1+2 only (no network)
+bash pipeline/scripts/validate.sh --skip-fetch  # 1+2+4, reuse on-disk fetch
+```
+
+CI:
+
+* `.github/workflows/test.yml` runs `--unit` on every push to main + every
+  PR touching `pipeline/`. Fast, deterministic, no NOAA dependency.
+* `.github/workflows/refresh-data.yml` runs the equivalent of layer 3 + 4
+  via `assert_outputs.py` after the daily NOAA fetch. Soft-fail
+  (`continue-on-error: true`) so a flaky NOAA day doesn't block the
+  deploy; the watchdog surfaces the regression separately.

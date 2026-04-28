@@ -67,6 +67,14 @@ jobs:
         continue-on-error: true
         run: python pipeline/fetch_climatology.py
 
+      - name: Assert chl freshness sidecar (PR1)
+        # Soft-asserts that fetch.py emitted chl_1d_age_days.png AND
+        # wired age_days_url into the manifest. continue-on-error so a
+        # flaky NOAA day doesn't block the deploy — the daily watchdog
+        # will surface a regression too.
+        continue-on-error: true
+        run: python -m pipeline.tests.assert_outputs fetch_chl
+
       - name: Run visibility prediction
         # Runs after the satellite/wave/river/tide/climo fetches so the
         # prediction sees the freshest inputs. Wind PNGs are committed in
@@ -74,6 +82,14 @@ jobs:
         # pipeline/validation/data/archive/ for the scoring step below.
         continue-on-error: true
         run: python pipeline/fetch_visibility.py
+
+      - name: Assert visibility outputs + freshness gating (PR1)
+        # Confirms viz_quality.png reflects PR1's freshness gating —
+        # i.e. NOT every cell is OBSERVED_1D when there's actual
+        # staleness in the chl input. Soft-fail for the same reason
+        # as the chl sidecar assertion above.
+        continue-on-error: true
+        run: python -m pipeline.tests.assert_outputs visibility
 
       - name: Score visibility predictions against ground-truth
         # Joins observations.jsonl (collected by ingest-ground-truth.yml)
