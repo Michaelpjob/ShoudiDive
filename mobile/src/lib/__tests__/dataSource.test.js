@@ -224,3 +224,78 @@ describe("getGeneratedAt", () => {
     });
   });
 });
+
+
+// `mobile_url` is the manifest field the post-PR1 pipeline emits
+// alongside the canonical grayscale `url`. It points at a pre-
+// colored RGBA PNG so the mobile app can blit without doing the
+// LUT pass on-device. These tests guard the two-tier resolution:
+//
+//   1. mobile_url present → use it (fast path, no LUT)
+//   2. mobile_url missing → fall back to url (slow path, runtime LUT)
+describe("mobile_url precedence", () => {
+  const MANIFEST_WITH_MOBILE = {
+    layers: {
+      sst: {
+        windows: {
+          "2d": {
+            url: "/data/sst_2d.png",
+            mobile_url: "/data/sst_2d_color.png",
+          },
+        },
+      },
+      chl: {
+        windows: {
+          "2d": { url: "/data/chl_2d.png" }, // no mobile_url — fallback
+        },
+      },
+      viz: {
+        windows: {
+          now: {
+            url: "/data/viz_p50_ft.png",
+            mobile_url: "/data/viz_p50_ft_color.png",
+          },
+        },
+      },
+    },
+  };
+
+  it("getLayerPngUrl prefers mobile_url when present", async () => {
+    mockFetchOnce(MANIFEST_WITH_MOBILE);
+    await withFreshModule(async (ds) => {
+      await ds.loadManifest();
+      expect(ds.getLayerPngUrl("sst", 2)).toBe(
+        "https://shouldidive.com/data/sst_2d_color.png"
+      );
+      expect(ds.getLayerPngUrl("viz", null)).toBe(
+        "https://shouldidive.com/data/viz_p50_ft_color.png"
+      );
+    });
+  });
+
+  it("getLayerPngUrl falls back to url when mobile_url missing", async () => {
+    mockFetchOnce(MANIFEST_WITH_MOBILE);
+    await withFreshModule(async (ds) => {
+      await ds.loadManifest();
+      expect(ds.getLayerPngUrl("chl", 2)).toBe(
+        "https://shouldidive.com/data/chl_2d.png"
+      );
+    });
+  });
+
+  it("isPreColored mirrors the mobile_url presence", async () => {
+    mockFetchOnce(MANIFEST_WITH_MOBILE);
+    await withFreshModule(async (ds) => {
+      await ds.loadManifest();
+      expect(ds.isPreColored("sst", 2)).toBe(true);
+      expect(ds.isPreColored("viz", null)).toBe(true);
+      expect(ds.isPreColored("chl", 2)).toBe(false); // legacy fixture
+    });
+  });
+
+  it("isPreColored is false before the manifest loads", () => {
+    return withFreshModule((ds) => {
+      expect(ds.isPreColored("sst", 2)).toBe(false);
+    });
+  });
+});

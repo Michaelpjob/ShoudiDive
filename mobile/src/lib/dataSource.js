@@ -74,6 +74,13 @@ export function isReady() {
  *   composite: 1 | 2 | 3              (1d / 2d / 3d windows; sst+chl)
  *               or null (viz: only "now" exists)
  *
+ * Mobile prefers a pre-colored RGBA asset when the manifest provides
+ * one (`mobile_url`). The pipeline emits these alongside the canonical
+ * grayscale PNGs; with pre-colored input the device skips the
+ * client-side LUT pass entirely (no Skia readPixels, no per-pixel
+ * recolour). Falls back to the grayscale `url` for layers the
+ * pipeline hasn't yet pre-colorized.
+ *
  * Returns null when the manifest hasn't loaded yet or the requested
  * slot is missing.
  */
@@ -91,8 +98,22 @@ export function getLayerPngUrl(layer, composite = null) {
     return null; // wind/swell handled by their 5d feeds, not addressed here
   }
   const w = windows[key];
-  if (!w?.url) return null;
-  return resolveAssetUrl(w.url);
+  const assetUrl = w?.mobile_url || w?.url;
+  if (!assetUrl) return null;
+  return resolveAssetUrl(assetUrl);
+}
+
+
+/** True when the URL `getLayerPngUrl` would return is a pre-colored
+ * RGBA asset (manifest's `mobile_url`). Lets the renderer skip the
+ * client-side LUT pass when the pipeline already did the work. */
+export function isPreColored(layer, composite = null) {
+  if (!manifest) return false;
+  const info = manifest.layers?.[layer];
+  if (!info) return false;
+  const windows = info.windows || {};
+  const key = layer === "viz" ? "now" : `${composite ?? 2}d`;
+  return Boolean(windows[key]?.mobile_url);
 }
 
 

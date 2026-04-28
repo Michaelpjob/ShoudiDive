@@ -1,14 +1,27 @@
 // Day-1 map screen. Renders Apple Maps zoomed to the model's bbox,
-// with the active layer's heatmap PNG painted on top via a Skia
-// overlay synced to the map camera. We use Skia (not the built-in
-// react-native-maps <Overlay>) because Overlay with remote URIs is
-// flaky on Apple Maps — onLoad never fires and the image never
-// renders. Skia gives us GPU-accelerated drawing and full control
-// over coordinate transforms.
-
-// useMemo caches the colourised SkImage so we don't rebuild it on
-// every map pan/zoom. useRef is reserved for upcoming work; not
-// strictly needed today.
+// with the active layer's pre-colored RGBA heatmap PNG painted on
+// top via a Skia overlay synced to the map camera.
+//
+// Why Skia (not <Overlay>):
+//   * `react-native-maps` <Overlay> with a remote URI is flaky on
+//     Apple Maps. Codex's branch tried it and the app crashed when
+//     switching layers — the `key={pngUrl}` pattern force-remounts
+//     the native overlay every change, which `MKMapView` doesn't
+//     handle gracefully.
+//   * Skia gives us full control over coordinate transforms,
+//     opacity, and image lifecycle. Drawing one image into a Canvas
+//     has no native-bridge surprises.
+//
+// Why no client-side LUT:
+//   * The pipeline now emits pre-colored RGBA PNGs (manifest's
+//     `mobile_url`). `useImage` decodes them directly. We just blit.
+//   * The previous "grey box" failure was the LUT path — Skia
+//     readPixels + recolour was returning early on certain image
+//     decode states. With pre-colored input, that whole code path is
+//     gone. The render path is now equivalent to drawing any other
+//     remote image: load, draw, done.
+//   * Web fallback (MapScreen.web.jsx) still uses plain <Image>
+//     against the same `mobile_url`; no Skia on web at all.
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -27,6 +40,7 @@ import {
   subscribe,
   isReady,
   getLayerPngUrl,
+  isPreColored,
 } from "../lib/dataSource.js";
 
 
@@ -61,20 +75,30 @@ export default function MapScreen() {
 
   const ready = isReady();
   const pngUrl = getLayerPngUrl(layer, composite);
+  const preColored = isPreColored(layer, composite);
   const compositeButtonsActive = layer === "sst" || layer === "chl";
 
   // Skia loads + decodes the PNG natively. `useImage` returns null
   // while loading, then the SkImage handle when ready. Re-runs when
   // pngUrl changes (different layer / composite).
-  const grayImage = useImage(pngUrl);
+  const loadedImage = useImage(pngUrl);
 
-  // The pipeline writes mode='L' grayscale PNGs (R = encoded value,
-  // 0 = no data). Apply the layer's color ramp once per image change
-  // so the GPU draws a proper coloured heatmap instead of grey blob.
-  const skiaImage = useMemo(
-    () => colorizeImage(grayImage, layer),
-    [grayImage, layer]
-  );
+  // Fast path: when `mobile_url` is present in the manifest the
+  // pipeline already colourised the PNG into RGBA — Skia draws it
+  // directly. This is the post-PR (mobile/skia-with-precolored-png)
+  // shape; it avoids the readPixels + LUT pass that historically
+  // showed a grey blob when readPixels mis-interacted with image
+  // decode lifecycle.
+  //
+  // Slow path: if `mobile_url` is missing (e.g. mid-deploy when the
+  // pipeline manifest is fresh but the colour PNG hasn't propagated
+  // yet) we fall back to the legacy LUT colourise. Same correctness,
+  // does extra work per image change, but it's a transient state.
+  const skiaImage = useMemo(() => {
+    if (!loadedImage) return null;
+    if (preColored) return loadedImage;
+    return colorizeImage(loadedImage, layer);
+  }, [loadedImage, preColored, layer]);
 
   // Compute the screen rectangle the heatmap should occupy by
   // mapping the bbox corners into pixel space using the current
