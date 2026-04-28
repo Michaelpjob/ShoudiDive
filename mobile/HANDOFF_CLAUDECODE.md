@@ -10,10 +10,26 @@ the current `react-native-maps` `Overlay` path is not shippable.
 
 - Repo: `Michaelpjob/ShoudiDive`
 - Working branch: `codex/mobile-overlay-rollout`
-- Current commit: `4ae21c4`
+- Reset checkpoint commit: `4ae21c4`
 - Draft PR: `https://github.com/Michaelpjob/ShoudiDive/pull/4`
 - Mobile app path: `mobile/`
 - User test surface: Expo Go on a real iPhone
+
+## Force-run command
+
+If the next agent says they changed anything meaningful, make them run:
+
+```bash
+cd mobile
+npm run validate:strict
+```
+
+That command now covers:
+
+- the existing 7-layer local validation stack
+- native `MapScreen` behavior tests
+- source-contract tests banning the old brittle paths
+- a live contract against the deployed manifest and raster assets
 
 ## What Codex already changed
 

@@ -109,7 +109,7 @@ async function main() {
   ]);
 
   console.log("");
-  console.log(">> Layer 5/7 - jest (data-layer unit tests)");
+  console.log(">> Layer 5/7 - jest (unit + native screen tests)");
   divider();
   await run(commandName("npx"), ["jest", "--silent", "--colors"]);
 
