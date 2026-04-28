@@ -23,12 +23,18 @@
 #   3. expo export ios       — iOS Hermes bundle compile
 #   4. expo export web       — web fallback bundle compile (so I can
 #                              render the app myself in a browser)
-#   5. jest                  — JS unit tests for the data layer
+#   5. jest                  — JS unit tests for the data layer +
+#                              colormap correctness (LUT-level)
 #   6. smoke-web.js          — Puppeteer boots the app on web,
 #                              watches for runtime errors. The only
 #                              layer that catches "compiles but
 #                              throws on mount" bugs (e.g. Skia v2's
 #                              lazy reanimated proxy).
+#   7. visual-tests.js       — Puppeteer asserts 11 explicit visual
+#                              criteria + saves a screenshot per test
+#                              under test-output/<utc>/, so I can
+#                              eyeball changes without pinging the
+#                              human for an iPhone screenshot.
 #
 # What this canNOT catch (intentional gap, requires a Mac+simulator
 # or a real device):
@@ -97,22 +103,30 @@ npx jest --silent --colors
 rm -rf dist 2>/dev/null || true
 
 echo ""
-echo "▶ Layer 6/6 — runtime smoke test (Puppeteer mounts the app)"
+echo "▶ Layer 6/7 — runtime smoke test (Puppeteer mounts the app)"
 echo "──────────────────────────────────────────────────"
 # Boots Metro on the web target, headless-Chromium-loads the page,
 # observes for runtime errors during the first few seconds. Catches
 # class of bug that compiles fine but throws on mount — e.g. Skia v2
 # Canvas's lazy reanimated proxy, which we previously shipped to a
 # real device because no compile-time check could see it.
-#
-# Explicit `|| exit 1` because `set -e` doesn't always halt on
-# child-process failures wrapped through node's exit handling on
-# Windows; better to be loud about a smoke regression than to print
-# a misleading "all green" footer.
 node scripts/smoke-web.js || { echo ""; echo "✖ Layer 6 (runtime smoke) FAILED."; exit 1; }
 
 echo ""
+echo "▶ Layer 7/7 — visual test suite (layout + state assertions)"
 echo "──────────────────────────────────────────────────"
-echo "✓ All 6 validation layers passed."
-echo "  Mobile bundle compiles AND boots without runtime errors."
+# 11 explicit visual criteria executed against the live web target,
+# one screenshot per test saved under test-output/<utc>/. Catches
+# layout regressions (chip count / labels / position), state
+# transitions (chip clicks update status pill, Vis hides the
+# composite picker), and presence of every UI surface we care about.
+#
+# When this fails, look at the screenshots — the file path is
+# printed for each test in the report.
+node scripts/visual-tests.js || { echo ""; echo "✖ Layer 7 (visual tests) FAILED."; exit 1; }
+
+echo ""
+echo "──────────────────────────────────────────────────"
+echo "✓ All 7 validation layers passed."
+echo "  Mobile bundle compiles, boots, AND meets visual criteria."
 echo "──────────────────────────────────────────────────"

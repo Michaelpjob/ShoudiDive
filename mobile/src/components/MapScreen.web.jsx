@@ -1,15 +1,26 @@
 // Web fallback for the map screen. react-native-maps is iOS/Android
-// only — it fails to bundle for web because it imports
-// codegenNativeCommands. We DON'T need a real map on web; the only
-// reason web exists is so the dev (me) can render the app in a
-// browser via Claude Preview to validate layout / state / chip
-// behaviour without touching a real device.
+// only (it imports codegenNativeCommands which Metro can't bundle for
+// web). The web version exists for ONE reason: so the dev (Claude in
+// agent mode) can render the app in a browser via Claude Preview to
+// validate layout / state / chip behaviour without touching a real
+// device.
 //
-// What's identical to the native screen: chip strip, status pill,
-// composite picker, manifest fetch, the layer-PNG URL resolver.
-// What's different: the "map" area is just an <Image> showing the
-// PNG, no pan/zoom, no Skia overlay, no native pins. That's good
-// enough for layout validation and lets the rest of the JS run.
+// Color rendering is INTENTIONALLY skipped on web. Why:
+//   - Skia on web requires CanvasKit (WASM) be loaded explicitly via
+//     LoadSkiaWeb before any Skia primitive is touched. Adding that
+//     setup creates a real source of bugs (load timing, WASM URL
+//     resolution) for a target that's only there to validate layout.
+//   - Color correctness is already proven at the unit-test layer —
+//     `src/lib/__tests__/colors.test.js` exercises the LUT against
+//     known anchors (px=1 → deep blue for SST, px=255 → deep red,
+//     etc). If the LUT is right and Skia.MakeImage is called with
+//     the right buffer (which is mockable in jest), the rendered
+//     output IS right. Native side proves the integration; visual
+//     tests on web prove the layout.
+//
+// So: web shows the raw grayscale PNG. Visual tests on web verify
+// LAYOUT + STATE. Native shows colourised heatmap via Skia.
+
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -55,14 +66,11 @@ export default function MapScreen() {
   return (
     <View style={styles.root}>
       <View style={styles.fakeMap}>
-        {/* Banner explaining this is the web fallback. */}
         <View style={styles.webBanner} pointerEvents="none">
           <Text style={styles.webBannerText}>
             Web preview · iOS / Android show a real native map here
           </Text>
         </View>
-        {/* Stretched PNG of the active layer so we can at least see
-            colours + composition without the map. */}
         {pngUrl && (
           <Image
             source={{ uri: pngUrl }}
@@ -72,7 +80,6 @@ export default function MapScreen() {
         )}
       </View>
 
-      {/* Status pill — matches the native screen exactly. */}
       <View style={styles.statusPill} pointerEvents="none">
         <View
           style={[
@@ -152,9 +159,6 @@ export default function MapScreen() {
         </View>
       )}
 
-      {/* On native, saved-spot pins live as Markers on the MapView.
-          The web preview just lists the count to confirm SAVED_SPOTS
-          imported correctly. */}
       <View style={styles.spotsBadge} pointerEvents="none">
         <Text style={styles.spotsBadgeText}>{SAVED_SPOTS.length} saved spots</Text>
       </View>
