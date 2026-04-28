@@ -34,6 +34,7 @@ import numpy as np
 from PIL import Image
 from scipy.spatial import cKDTree
 
+from color_ramps import encode_color_png
 from viz_predict import predict as viz_predict
 
 # Match the existing app's bbox.
@@ -613,8 +614,9 @@ def main():
     encode_linear_png(viz_p50_ft, *VIZ_RANGE_FT, OUT_DIR / "viz_p50_ft.png")
     encode_linear_png(viz_p10_ft, *VIZ_RANGE_FT, OUT_DIR / "viz_p10_ft.png")
     encode_linear_png(viz_p90_ft, *VIZ_RANGE_FT, OUT_DIR / "viz_p90_ft.png")
+    encode_color_png(viz_p50_ft, "viz", OUT_DIR / "viz_p50_ft_color.png")
     encode_quality_png(quality, OUT_DIR / "viz_quality.png")
-    print("  wrote viz_{p10,p50,p90}_ft.png + viz_quality.png")
+    print("  wrote viz_{p10,p50,p90}_ft.png + viz_p50_ft_color.png + viz_quality.png")
 
     # Merge into manifest
     manifest_path = OUT_DIR / "manifest.json"
@@ -637,6 +639,7 @@ def main():
         "windows": {
             "now": {
                 "url":      "/data/viz_p50_ft.png",
+                "mobile_url": "/data/viz_p50_ft_color.png",
                 "p10_url":  "/data/viz_p10_ft.png",
                 "p90_url":  "/data/viz_p90_ft.png",
                 "quality_url": "/data/viz_quality.png",

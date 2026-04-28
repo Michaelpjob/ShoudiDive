@@ -74,6 +74,10 @@ export function isReady() {
  *   composite: 1 | 2 | 3              (1d / 2d / 3d windows; sst+chl)
  *               or null (viz: only "now" exists)
  *
+ * Mobile prefers a pre-colourized asset when the manifest provides one
+ * (`mobile_url` or `color_url`), and falls back to the canonical
+ * grayscale PNG otherwise.
+ *
  * Returns null when the manifest hasn't loaded yet or the requested
  * slot is missing.
  */
@@ -91,8 +95,9 @@ export function getLayerPngUrl(layer, composite = null) {
     return null; // wind/swell handled by their 5d feeds, not addressed here
   }
   const w = windows[key];
-  if (!w?.url) return null;
-  return resolveAssetUrl(w.url);
+  const assetUrl = w?.mobile_url || w?.color_url || w?.url;
+  if (!assetUrl) return null;
+  return resolveAssetUrl(assetUrl);
 }
 
 

@@ -29,6 +29,8 @@ import requests
 import xarray as xr
 from PIL import Image
 
+from color_ramps import encode_color_png
+
 BBOX = dict(lat_min=31.8, lat_max=37.6, lng_min=-124.0, lng_max=-116.8)
 ERDDAP_BASE = "https://coastwatch.pfeg.noaa.gov/erddap/griddap"
 
@@ -164,12 +166,15 @@ def build_layer(layer: str, cfg: dict, end: date, want: int = 3, max_back: int =
             continue
         c = composite(st)
         out = OUT_DIR / f"{layer}_{win}.png"
+        color_out = OUT_DIR / f"{layer}_{win}_color.png"
         encode_png(c, cfg, out)
+        encode_color_png(c, layer, color_out)
         manifest_layer["windows"][win] = {
             "url": f"/data/{layer}_{win}.png",
+            "mobile_url": f"/data/{layer}_{win}_color.png",
             "dates": [d.isoformat() for d in actual[-len(st):]],
         }
-        print(f"  wrote {out.name}  ({h}x{w})")
+        print(f"  wrote {out.name} + {color_out.name}  ({h}x{w})")
     return manifest_layer
 
 

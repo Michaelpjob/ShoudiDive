@@ -24,12 +24,13 @@ export const BBOX_CENTER = {
   longitude: (BBOX.lngMin + BBOX.lngMax) / 2,
 };
 
-// Camera deltas for the initial fit. These pad slightly outside the
-// bbox so the user can see the open ocean on either side at launch.
+// Camera deltas for the initial fit. Keep these matched to the model
+// bbox itself; view chrome padding belongs in the screen's fit logic,
+// not baked into the geographic extent.
 export const BBOX_REGION = {
   ...BBOX_CENTER,
-  latitudeDelta:  BBOX.latMax - BBOX.latMin + 0.4,
-  longitudeDelta: BBOX.lngMax - BBOX.lngMin + 0.4,
+  latitudeDelta:  BBOX.latMax - BBOX.latMin,
+  longitudeDelta: BBOX.lngMax - BBOX.lngMin,
 };
 
 // Same diver-curated saved spots as the web app. Kept verbatim so
@@ -53,4 +54,11 @@ export const BBOX_RING = [
   { latitude: BBOX.latMax, longitude: BBOX.lngMax },
   { latitude: BBOX.latMin, longitude: BBOX.lngMax },
   { latitude: BBOX.latMin, longitude: BBOX.lngMin },
+];
+
+// `react-native-maps` image overlays want southwest + northeast bounds,
+// not the clockwise corner ring above.
+export const BBOX_BOUNDS = [
+  [BBOX.latMin, BBOX.lngMin],
+  [BBOX.latMax, BBOX.lngMax],
 ];

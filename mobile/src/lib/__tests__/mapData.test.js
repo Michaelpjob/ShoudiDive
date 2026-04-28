@@ -1,4 +1,11 @@
-import { BBOX, BBOX_CENTER, BBOX_REGION, BBOX_RING, SAVED_SPOTS } from "../mapData.js";
+import {
+  BBOX,
+  BBOX_BOUNDS,
+  BBOX_CENTER,
+  BBOX_REGION,
+  BBOX_RING,
+  SAVED_SPOTS,
+} from "../mapData.js";
 
 
 // These are guardrails for the constants the rest of the app depends
@@ -32,9 +39,9 @@ describe("BBOX_CENTER", () => {
 });
 
 describe("BBOX_REGION", () => {
-  it("pads beyond the raw bbox so the user sees ocean on either side", () => {
-    expect(BBOX_REGION.latitudeDelta).toBeGreaterThan(BBOX.latMax - BBOX.latMin);
-    expect(BBOX_REGION.longitudeDelta).toBeGreaterThan(BBOX.lngMax - BBOX.lngMin);
+  it("matches the raw bbox span exactly", () => {
+    expect(BBOX_REGION.latitudeDelta).toBeCloseTo(BBOX.latMax - BBOX.latMin, 6);
+    expect(BBOX_REGION.longitudeDelta).toBeCloseTo(BBOX.lngMax - BBOX.lngMin, 6);
   });
 });
 
@@ -46,6 +53,15 @@ describe("BBOX_RING", () => {
     expect(ne).toEqual({ latitude: BBOX.latMax, longitude: BBOX.lngMax });
     expect(se).toEqual({ latitude: BBOX.latMin, longitude: BBOX.lngMax });
     expect(sw).toEqual({ latitude: BBOX.latMin, longitude: BBOX.lngMin });
+  });
+});
+
+describe("BBOX_BOUNDS", () => {
+  it("stores southwest and northeast corners for native image overlays", () => {
+    expect(BBOX_BOUNDS).toEqual([
+      [BBOX.latMin, BBOX.lngMin],
+      [BBOX.latMax, BBOX.lngMax],
+    ]);
   });
 });
 

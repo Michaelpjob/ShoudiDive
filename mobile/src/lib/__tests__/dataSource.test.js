@@ -11,8 +11,8 @@ const SAMPLE_MANIFEST = {
   layers: {
     sst: {
       windows: {
-        "1d": { url: "/data/sst_1d.png", dates: ["2026-04-26"] },
-        "2d": { url: "/data/sst_2d.png", dates: ["2026-04-25", "2026-04-26"] },
+        "1d": { url: "/data/sst_1d.png", mobile_url: "/data/sst_1d_color.png", dates: ["2026-04-26"] },
+        "2d": { url: "/data/sst_2d.png", mobile_url: "/data/sst_2d_color.png", dates: ["2026-04-25", "2026-04-26"] },
         "3d": { url: "/data/sst_3d.png" },
       },
     },
@@ -149,16 +149,23 @@ describe("getLayerPngUrl", () => {
     await withFreshModule(async (ds) => {
       await ds.loadManifest();
       const url = ds.getLayerPngUrl("sst", 2);
-      expect(url).toBe("https://shouldidive.com/data/sst_2d.png");
+      expect(url).toBe("https://shouldidive.com/data/sst_2d_color.png");
     });
   });
 
   it("supports all three composites for sst", async () => {
     await withFreshModule(async (ds) => {
       await ds.loadManifest();
-      expect(ds.getLayerPngUrl("sst", 1)).toBe("https://shouldidive.com/data/sst_1d.png");
-      expect(ds.getLayerPngUrl("sst", 2)).toBe("https://shouldidive.com/data/sst_2d.png");
+      expect(ds.getLayerPngUrl("sst", 1)).toBe("https://shouldidive.com/data/sst_1d_color.png");
+      expect(ds.getLayerPngUrl("sst", 2)).toBe("https://shouldidive.com/data/sst_2d_color.png");
       expect(ds.getLayerPngUrl("sst", 3)).toBe("https://shouldidive.com/data/sst_3d.png");
+    });
+  });
+
+  it("falls back to the canonical url when no mobile asset is present", async () => {
+    await withFreshModule(async (ds) => {
+      await ds.loadManifest();
+      expect(ds.getLayerPngUrl("viz", 1)).toBe("https://shouldidive.com/data/viz_p50_ft.png");
     });
   });
 
