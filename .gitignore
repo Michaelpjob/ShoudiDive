@@ -17,7 +17,13 @@ __pycache__/
 # IDE
 .vscode/
 .idea/
-.claude/
+
+# Claude Code: ignore personal/local config under .claude/, but keep
+# the repo-wide subagent definitions in .claude/agents/ tracked so
+# every contributor gets the same QA tooling (e.g. the verifier).
+.claude/*
+!.claude/agents/
+!.claude/agents/**
 
 # Validation per-cell archive — too big to commit (~700 KB/day gzipped,
 # ~250 MB/year) and only used by the inline scoring step on the same CI
