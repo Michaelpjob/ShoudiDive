@@ -2,11 +2,13 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import 'bbox.dart';
+import 'forecast.dart';
 import 'geojson_loader.dart';
 import 'grid.dart';
 import 'manifest.dart';
 import 'map_view.dart';
 import 'static_data.dart';
+import 'time_slider.dart';
 import 'wind_particles.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -20,7 +22,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Manifest? _manifest;
   GeoFeatureCollection? _land;
   GeoFeatureCollection? _mpa;
+  ForecastSummary? _windSummary;
+  ForecastSummary? _swellSummary;
   Object? _error;
+
   bool _showMpa = true;
   bool _showLabels = true;
   bool _showSpots = true;
@@ -28,11 +33,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String _layerId = 'sst';
   String _windowKey = '1d';
+  int _windSlotIdx = 0;
+  int _swellSlotIdx = 0;
 
   Grid? _layerGrid;
   UVGrid? _uvGrid;
   bool _loadingGrid = false;
   Object? _gridLoadKey;
+
+  final Map<String, UVGrid> _uvCache = {};
+  final Map<String, WaveGrid> _waveCache = {};
 
   MapPin? _pin;
 
@@ -44,22 +54,73 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _bootstrap() async {
     try {
-      final results = await Future.wait([
-        fetchManifest(),
-        fetchFeatureCollection(kLandUrl).then<Object?>((v) => v).catchError((_) => null),
-        fetchFeatureCollection(kMpaUrl).then<Object?>((v) => v).catchError((_) => null),
-      ]);
+      final manifest = await fetchManifest();
       if (!mounted) return;
-      setState(() {
-        _manifest = results[0] as Manifest;
-        _land = results[1] as GeoFeatureCollection?;
-        _mpa = results[2] as GeoFeatureCollection?;
-      });
+      setState(() => _manifest = manifest);
+      // Fire summary + geojson fetches in parallel; none of them are fatal
+      // for the rest of the app, so swallow errors individually.
+      final futures = <Future<void>>[
+        fetchFeatureCollection(kLandUrl).then(
+            (v) => mounted ? setState(() => _land = v) : null,
+            onError: (_) {}),
+        fetchFeatureCollection(kMpaUrl).then(
+            (v) => mounted ? setState(() => _mpa = v) : null,
+            onError: (_) {}),
+        if (manifest.wind5d != null)
+          fetchWindSummary(manifest.wind5d!).then(
+              (v) {
+                if (!mounted) return;
+                setState(() {
+                  _windSummary = v;
+                  _windSlotIdx = _findNowIdx(v);
+                });
+                if (_layerId == 'wind') _loadCurrentGrid();
+              },
+              onError: (e) => debugPrint('wind summary failed: $e')),
+        if (manifest.swell5d != null)
+          fetchSwellSummary(manifest.swell5d!).then(
+              (v) {
+                if (!mounted) return;
+                setState(() {
+                  _swellSummary = v;
+                  _swellSlotIdx = _findNowIdx(v);
+                });
+                if (_layerId == 'wave') _loadCurrentGrid();
+              },
+              onError: (e) => debugPrint('swell summary failed: $e')),
+      ];
       _loadCurrentGrid();
+      await Future.wait(futures);
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = e);
     }
+  }
+
+  // Choose a reasonable initial slider position: the bucket whose hours
+  // straddle "now" (in the summary's tz), falling back to the 0th slot.
+  int _findNowIdx(ForecastSummary summary) {
+    if (summary.slots.isEmpty) return 0;
+    // Use UTC since we don't know the offset exactly. Pick the slot
+    // whose date matches today's UTC date and whose mid-hour is closest
+    // to now's UTC hour minus 7 (rough PT). Good enough for a default.
+    final now = DateTime.now().toUtc();
+    final approxLocalHour = (now.hour - 7) % 24;
+    final today = '${now.year}-'
+        '${now.month.toString().padLeft(2, '0')}-'
+        '${now.day.toString().padLeft(2, '0')}';
+    int bestIdx = 0;
+    int bestDist = 1 << 30;
+    for (var i = 0; i < summary.slots.length; i++) {
+      final s = summary.slots[i];
+      if (s.date != today) continue;
+      final dist = (s.bucketDef.midHourLocal - approxLocalHour).abs();
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestIdx = i;
+      }
+    }
+    return bestIdx;
   }
 
   Future<void> _loadCurrentGrid() async {
@@ -67,47 +128,86 @@ class _HomeScreenState extends State<HomeScreen> {
     if (manifest == null) return;
     final layer = manifest.layers[_layerId];
     if (layer == null) return;
-    if (!layer.windows.containsKey(_windowKey)) {
-      _windowKey = layer.windows.keys.first;
-    }
-    final window = layer.windows[_windowKey]!;
-    final range = layer.range;
-    if (range == null || range.length != 2) {
-      setState(() => _layerGrid = null);
-      return;
-    }
+
     final key = Object();
     _gridLoadKey = key;
     setState(() => _loadingGrid = true);
+
     try {
       Grid grid;
       UVGrid? uvGrid;
-      if (layer.kind == LayerKind.wave) {
-        final pRange = layer.rangePeriodS ?? const [0.0, 25.0];
-        final wave = await fetchWaveGrid(
-          window.absoluteUrl,
-          hLo: range[0],
-          hHi: range[1],
-          pLo: pRange[0],
-          pHi: pRange[1],
-        );
-        grid = wave.hsGrid;
-      } else if (layer.id == 'wind' && window.absoluteUvUrl != null) {
-        final uv = await fetchUVGrid(
-          window.absoluteUvUrl!,
-          uvLo: -30,
-          uvHi: 30,
-        );
+
+      if (layer.id == 'wind' && _windSummary != null) {
+        final slot = _windSummary!.slots[_windSlotIdx
+            .clamp(0, _windSummary!.slots.length - 1)];
+        final url = slot.absoluteGridUrl;
+        UVGrid uv;
+        if (_uvCache.containsKey(url)) {
+          uv = _uvCache[url]!;
+        } else {
+          uv = await fetchUVGrid(url, uvLo: -30, uvHi: 30);
+          _uvCache[url] = uv;
+        }
         grid = uv.speedGrid;
         uvGrid = uv;
+      } else if (layer.id == 'wave' && _swellSummary != null) {
+        final slot = _swellSummary!.slots[_swellSlotIdx
+            .clamp(0, _swellSummary!.slots.length - 1)];
+        final url = slot.absoluteGridUrl;
+        WaveGrid wave;
+        if (_waveCache.containsKey(url)) {
+          wave = _waveCache[url]!;
+        } else {
+          final src = manifest.swell5d!;
+          wave = await fetchWaveGrid(
+            url,
+            hLo: src.primaryRange[0],
+            hHi: src.primaryRange[1],
+            pLo: src.secondaryRange?[0] ?? 0.0,
+            pHi: src.secondaryRange?[1] ?? 25.0,
+          );
+          _waveCache[url] = wave;
+        }
+        grid = wave.hsGrid;
       } else {
-        grid = await fetchScalarGrid(
-          window.absoluteUrl,
-          lo: range[0],
-          hi: range[1],
-          scale: layer.scale,
-        );
+        // Fallback path: chip-based windows for layers without 5d data
+        // (sst, chl, viz, or wind/wave when summary fetch failed).
+        if (!layer.windows.containsKey(_windowKey)) {
+          _windowKey = layer.windows.keys.first;
+        }
+        final window = layer.windows[_windowKey]!;
+        final range = layer.range;
+        if (range == null || range.length != 2) {
+          if (mounted && _gridLoadKey == key) {
+            setState(() {
+              _layerGrid = null;
+              _uvGrid = null;
+              _loadingGrid = false;
+            });
+          }
+          return;
+        }
+        if (layer.kind == LayerKind.wave) {
+          final pRange = layer.rangePeriodS ?? const [0.0, 25.0];
+          final wave = await fetchWaveGrid(
+            window.absoluteUrl,
+            hLo: range[0],
+            hHi: range[1],
+            pLo: pRange[0],
+            pHi: pRange[1],
+          );
+          grid = wave.hsGrid;
+        } else if (layer.id == 'wind' && window.absoluteUvUrl != null) {
+          final uv = await fetchUVGrid(window.absoluteUvUrl!,
+              uvLo: -30, uvHi: 30);
+          grid = uv.speedGrid;
+          uvGrid = uv;
+        } else {
+          grid = await fetchScalarGrid(window.absoluteUrl,
+              lo: range[0], hi: range[1], scale: layer.scale);
+        }
       }
+
       if (!mounted || _gridLoadKey != key) return;
       setState(() {
         _layerGrid = grid;
@@ -129,6 +229,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _layerId = id;
       _layerGrid = null;
+      _uvGrid = null;
     });
     _loadCurrentGrid();
   }
@@ -138,6 +239,18 @@ class _HomeScreenState extends State<HomeScreen> {
       _windowKey = key;
       _layerGrid = null;
     });
+    _loadCurrentGrid();
+  }
+
+  void _setWindSlot(int idx) {
+    if (idx == _windSlotIdx) return;
+    setState(() => _windSlotIdx = idx);
+    _loadCurrentGrid();
+  }
+
+  void _setSwellSlot(int idx) {
+    if (idx == _swellSlotIdx) return;
+    setState(() => _swellSlotIdx = idx);
     _loadCurrentGrid();
   }
 
@@ -268,11 +381,13 @@ class _HomeScreenState extends State<HomeScreen> {
     if (layer == null) {
       return const Center(child: Text('Layer not found in manifest'));
     }
-    final window = layer.windows[_windowKey] ?? layer.windows.values.first;
     final mapper = colorMapperForLayerId(layer.id);
     final spec = _layerGrid == null
         ? null
         : MapLayerSpec(grid: _layerGrid!, colorMapper: mapper);
+
+    final usingWindSlider = layer.id == 'wind' && _windSummary != null;
+    final usingSwellSlider = layer.id == 'wave' && _swellSummary != null;
 
     return SafeArea(
       child: Column(
@@ -366,7 +481,21 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
-          if (layer.windows.length > 1)
+          if (usingWindSlider)
+            TimeSlider(
+              summary: _windSummary!,
+              activeIndex: _windSlotIdx,
+              onChanged: _setWindSlot,
+              unit: 'kt',
+            )
+          else if (usingSwellSlider)
+            TimeSlider(
+              summary: _swellSummary!,
+              activeIndex: _swellSlotIdx,
+              onChanged: _setSwellSlot,
+              unit: 'm',
+            )
+          else if (layer.windows.length > 1)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Wrap(
@@ -380,7 +509,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 }).toList(),
               ),
             ),
-          _InfoPanel(layer: layer, window: window, manifest: manifest),
+          _InfoPanel(
+            layer: layer,
+            window: layer.windows[_windowKey] ?? layer.windows.values.first,
+            manifest: manifest,
+          ),
         ],
       ),
     );
@@ -503,10 +636,11 @@ class _PinReadout extends StatelessWidget {
                       layer.id == 'sst' || layer.id == 'wave'
                           ? formatted
                           : '$formatted ${layer.unit}',
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600)),
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600),
+                    ),
                     const SizedBox(height: 2),
                     Text(
                       '${pin.lat.toStringAsFixed(3)}°N, '

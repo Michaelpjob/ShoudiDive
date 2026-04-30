@@ -61,12 +61,34 @@ class Layer {
   });
 }
 
+class ForecastSource {
+  final String summaryUrl;
+  final List<double> primaryRange; // wind: speed_range; swell: height_range_m
+  final List<double>? secondaryRange; // wind: uv_range; swell: period_range_s
+  ForecastSource({
+    required this.summaryUrl,
+    required this.primaryRange,
+    this.secondaryRange,
+  });
+
+  String get absoluteSummaryUrl =>
+      summaryUrl.startsWith('http') ? summaryUrl : '$kBaseUrl$summaryUrl';
+}
+
 class Manifest {
   final DateTime generatedAt;
   final BBox bbox;
   final Map<String, Layer> layers;
+  final ForecastSource? wind5d;
+  final ForecastSource? swell5d;
 
-  Manifest({required this.generatedAt, required this.bbox, required this.layers});
+  Manifest({
+    required this.generatedAt,
+    required this.bbox,
+    required this.layers,
+    this.wind5d,
+    this.swell5d,
+  });
 
   static const _spec = <String, ({String name, String unit, LayerKind kind})>{
     'sst':  (name: 'Sea Surface Temp', unit: '°C',     kind: LayerKind.scalar),
@@ -123,10 +145,45 @@ class Manifest {
         windows: windows,
       );
     }
+    ForecastSource? wind5d;
+    final w5 = rawLayers['wind5d'];
+    if (w5 is Map<String, dynamic> && w5['summary_url'] is String) {
+      wind5d = ForecastSource(
+        summaryUrl: w5['summary_url'] as String,
+        primaryRange: (w5['speed_range'] as List?)
+                ?.cast<num>()
+                .map((n) => n.toDouble())
+                .toList() ??
+            const [0.0, 50.0],
+        secondaryRange: (w5['uv_range'] as List?)
+            ?.cast<num>()
+            .map((n) => n.toDouble())
+            .toList(),
+      );
+    }
+    ForecastSource? swell5d;
+    final s5 = rawLayers['swell5d'];
+    if (s5 is Map<String, dynamic> && s5['summary_url'] is String) {
+      swell5d = ForecastSource(
+        summaryUrl: s5['summary_url'] as String,
+        primaryRange: (s5['height_range_m'] as List?)
+                ?.cast<num>()
+                .map((n) => n.toDouble())
+                .toList() ??
+            const [0.0, 12.0],
+        secondaryRange: (s5['period_range_s'] as List?)
+            ?.cast<num>()
+            .map((n) => n.toDouble())
+            .toList() ??
+            const [0.0, 25.0],
+      );
+    }
     return Manifest(
       generatedAt: DateTime.parse(j['generated_at'] as String),
       bbox: BBox.fromList(j['bbox'] as List),
       layers: layers,
+      wind5d: wind5d,
+      swell5d: swell5d,
     );
   }
 }
