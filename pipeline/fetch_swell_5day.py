@@ -301,8 +301,13 @@ def main() -> None:
     cycle = datetime(run_d.year, run_d.month, run_d.day, run_h, tzinfo=timezone.utc)
     print(f"gfswave cycle: {cycle.isoformat()}  (f000..f120, wcoast 0.16°)")
 
-    anchor_pt_date = cycle.astimezone(PT).date()
-    print(f"Day anchor: {anchor_pt_date} (Pacific)")
+    # Anchor to the *current* Pacific date, not the cycle's PT date —
+    # see the matching comment in fetch_wind_5day.py for full reasoning.
+    # tl;dr: cycle-anchored labels lag by ~12 h, so day 0's "Today" label
+    # points at yesterday for most of the day. Filtering past hours is
+    # already handled by the day_offset < 0 check below.
+    anchor_pt_date = datetime.now(PT).date()
+    print(f"Day anchor: {anchor_pt_date} (Pacific, today)")
 
     # 2) Pull each hourly step. gfswave wcoast is published at 1-hour
     #    spacing through f120, so we just iterate. Failures are logged

@@ -283,11 +283,16 @@ def main() -> None:
     print(f"HRRR cycle: {hrrr_cycle.isoformat()}  (f00..f48)")
     print(f"GFS  cycle: {gfs_cycle.isoformat()}  (f49..f120)")
 
-    # 2) Anchor "today" to the cycle's *Pacific* date so day_offset stays
-    #    consistent within a single run (otherwise an early-morning UTC
-    #    cron could disagree with itself if the run straddles PT midnight).
-    anchor_pt_date = hrrr_cycle.astimezone(PT).date()
-    print(f"Day anchor: {anchor_pt_date} (Pacific)")
+    # 2) Anchor "today" to the *current* Pacific date, NOT the cycle's PT
+    #    date. The cycle is gated on f48/f120 being published (~12 h after
+    #    cycle issue), so cycle-anchored labels lag behind real time and a
+    #    user viewing at mid-day on day X sees day 0 labeled "Today" but
+    #    pointing at day X-1's data. Anchoring on now keeps the label
+    #    truthful; forecast hours older than midnight PT today are filtered
+    #    out by the day_offset < 0 check below, so day 0 just truncates to
+    #    "from now → PT midnight tonight".
+    anchor_pt_date = datetime.now(PT).date()
+    print(f"Day anchor: {anchor_pt_date} (Pacific, today)")
 
     # 3) Fetch + decode every hourly step, indexed by Pacific (day, hour).
     hourly: dict[tuple[int, int], dict] = {}
