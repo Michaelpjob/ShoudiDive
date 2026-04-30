@@ -37,6 +37,11 @@ jobs:
           node-version: "20"
           cache: npm
 
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
       - name: Install pipeline dependencies
         run: pip install -r pipeline/requirements.txt
 
@@ -182,6 +187,21 @@ jobs:
 
       - name: Install JS dependencies
         run: npm ci
+
+      - name: Build Flutter app (served at /app/)
+        # Compiles flutter_app/ → flutter_app/build/web/, then drops the
+        # bundle into public/app/ so Vite copies it through to dist/app/
+        # in the next step. public/app/ is gitignored — the deploy is
+        # the only place these artifacts exist outside this CI runner.
+        working-directory: flutter_app
+        run: |
+          flutter --version
+          flutter pub get
+          flutter test
+          flutter build web --release --base-href /app/
+          rm -rf ../public/app
+          mkdir -p ../public/app
+          cp -r build/web/. ../public/app/
 
       - name: Build
         run: npm run build
