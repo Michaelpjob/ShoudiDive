@@ -1,4 +1,4 @@
-# Validation watchdog — 2026-05-02T22:47Z
+# Validation watchdog — 2026-05-02T23:22Z
 
 **1 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
@@ -20,7 +20,7 @@ Multiple scrapers may be silently broken.
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `dive-shop-diveviz` | 1 | -10.09 ft |
+| `dive-shop-diveviz` | 1 | -10.08 ft |
 | `dive-shop-justgetwet` | 3 | +11.38 ft |
 
 ## How to act on this issue
