@@ -1,4 +1,4 @@
-# Validation watchdog — 2026-05-02T22:40Z
+# Validation watchdog — 2026-05-02T22:47Z
 
 **1 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
@@ -14,14 +14,14 @@ Multiple scrapers may be silently broken.
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_islands` | 4 | 11.30 | +6.00 | 75% | -0.04 |
+| `bight_islands` | 4 | 11.31 | +6.01 | 75% | -0.04 |
 
 ## Per-source bias (informational)
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `dive-shop-diveviz` | 1 | -10.10 ft |
-| `dive-shop-justgetwet` | 3 | +11.37 ft |
+| `dive-shop-diveviz` | 1 | -10.09 ft |
+| `dive-shop-justgetwet` | 3 | +11.38 ft |
 
 ## How to act on this issue
 
