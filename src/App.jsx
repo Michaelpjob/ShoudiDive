@@ -43,6 +43,7 @@ import WindDayGrid, {
 } from "./components/WindDayGrid.jsx";
 import WindTimeline from "./components/WindTimeline.jsx";
 import SwellTimeline, { SwellCurrentCard } from "./components/SwellTimeline.jsx";
+import MoonIcon from "./components/MoonIcon.jsx";
 import {
   getSwell5dSummary,
   getSwell5dStats,
@@ -258,12 +259,18 @@ export default function App() {
     setPrefs((p) => ({ ...p, [key]: val }));
   }
 
+  // Moon-phase icon should track the wind/swell time slider when those
+  // layers are active, otherwise show "now". Computed at render time
+  // so it updates whenever windSel/swellSel/layer changes.
+  const viewingDate = selToDate(layer, windSel, swellSel);
+
   return (
     <div className="app">
       <TopBar
         onSettings={() => setSettingsOpen((v) => !v)}
         settingsOpen={settingsOpen}
         dataState={dataState}
+        viewingDate={viewingDate}
       />
       {settingsOpen && (
         <SettingsPopover prefs={prefs} setPref={setPref} onClose={() => setSettingsOpen(false)} />
@@ -289,7 +296,39 @@ export default function App() {
   );
 }
 
-function TopBar({ onSettings, settingsOpen, dataState }) {
+// Map a wind/swell {day, bucket, hour} selection to a real Date so the
+// moon icon can update with the time slider. Returns null when the
+// active layer isn't a 5-day forecast layer (sst/chl/viz) — caller
+// then falls back to "now".
+function selToDate(layer, windSel, swellSel) {
+  let sel = null;
+  let summary = null;
+  if (layer === "wind") {
+    sel = windSel;
+    summary = getWind5dSummary();
+  } else if (layer === "swell") {
+    sel = swellSel;
+    summary = getSwell5dSummary();
+  }
+  if (!sel || !summary) return null;
+  const dayInfo = summary.days?.find((d) => d.day === sel.day);
+  if (!dayInfo?.date) return null;
+  const [y, m, d] = dayInfo.date.split("-").map(Number);
+  if (!y || !m || !d) return null;
+  // Use the selected hour, or the bucket's mid-hour. Phase computation
+  // is precise to ~1 part in 30 per hour so the exact hour barely
+  // matters for icon display, but staying honest about the choice
+  // keeps debug logging sane.
+  const hour =
+    sel.hour != null
+      ? sel.hour
+      : { predawn: 5, morning: 8, midday: 12, afternoon: 16, evening: 20 }[
+          sel.bucket
+        ] ?? 12;
+  return new Date(y, m - 1, d, hour, 0, 0);
+}
+
+function TopBar({ onSettings, settingsOpen, dataState, viewingDate }) {
   const generated = dataState?.manifest?.generated_at;
   const lastUpdate = generated
     ? new Date(generated).toLocaleString("en-US", {
@@ -331,6 +370,7 @@ function TopBar({ onSettings, settingsOpen, dataState }) {
             phones — the topbar just keeps the brand mark + settings cog
             on small screens (timestamp + sources are hidden via the
             @media (max-width: 760px) block in app.css). */}
+        <MoonIcon date={viewingDate} size={22} />
         <button
           className="icon-btn"
           aria-label="Settings"

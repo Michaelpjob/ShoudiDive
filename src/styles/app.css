@@ -1574,8 +1574,9 @@ body {
   .brand-tag { display: none; }
   /* Sources line + the long Last-update line both vanish on phones —
      the new MobileShell peek strip carries layer/value/time info, so
-     the topbar only needs the brand mark + a settings cog. */
-  .topbar-meta > span { display: none; }
+     the topbar only needs the brand mark + a settings cog (and the
+     moon-icon, which is small enough to keep in the corner). */
+  .topbar-meta > span:not(.moon-icon) { display: none; }
   .topbar-meta { gap: 8px; }
   /* The old `Live` chip in the topbar is now redundant — MobileShell's
      own status row shows the same liveness via the green dot next to
