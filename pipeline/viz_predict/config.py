@@ -170,6 +170,32 @@ SECCHI_MIN_M  = 1.0
 SECCHI_MAX_M  = 25.0
 
 
+# ---- Kd_490 → Secchi blend (Phase 2) -----------------------------------
+#
+# The viz model's foundation is chl→Secchi via per-zone secchi = a·chl^(−b)
+# coefficients. Kd_490 is a directly measured optical property (diffuse
+# attenuation at 490 nm, 1/m); the Poole–Atkins / Tyler relation gives
+# Secchi ≈ 1.7 / Kd_490. When a fresh Kd observation is available we
+# blend its Secchi with the chl-derived Secchi, weighted toward Kd
+# because it's a measurement rather than an inference.
+#
+# Weight schedule:
+#   w(age) = KD_BLEND_WEIGHT_FRESH · exp(−age / KD_BLEND_TAU_DAYS)
+#
+# Rationale for the defaults:
+#   * 1.7   — long-standing Poole-Atkins constant. ±15% by water type;
+#             smaller than the per-zone secchi_a swing (3.5..9.0).
+#   * 0.7   — Kd is the more direct measurement, so it should dominate
+#             when fresh. Reserves 0.3 for the chl prior so per-zone
+#             calibration still anchors the result.
+#   * tau=2 — half-weight at ~1.4 days. Faster decay than chl's
+#             persistence-with-decay (which uses tau=4) because Kd is
+#             a same-day instantaneous reading vs chl's smoothed climo.
+KD_TO_SECCHI_FACTOR  = 1.7
+KD_BLEND_WEIGHT_FRESH = 0.7
+KD_BLEND_TAU_DAYS    = 2.0
+
+
 # 0-100 clarity score
 SCORE_FULL_SECCHI_M = 30.0
 

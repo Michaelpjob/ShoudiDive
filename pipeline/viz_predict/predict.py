@@ -7,6 +7,7 @@ from __future__ import annotations
 import numpy as np
 from typing import Optional
 
+from . import config
 from . import zones
 from . import features
 from . import model
@@ -28,6 +29,14 @@ def predict_all(
     chl_obs_today:      np.ndarray = None,
     chl_lastvalid:      np.ndarray = None,
     chl_lastvalid_age_days: np.ndarray = None,
+
+    # Phase-2 Kd_490 channel. Optional; when both arrays are present the
+    # final Secchi gets blended with the Kd-derived value at a per-cell
+    # weight that decays with kd490_age_days. When either is None or
+    # everything is NaN/stale the blend collapses to the existing chl
+    # path — zero regression risk.
+    kd490_obs_today:    Optional[np.ndarray] = None,
+    kd490_age_days:     Optional[np.ndarray] = None,
 
     chl_climo_doy:      np.ndarray = None,
     chl_climo_annual:   np.ndarray = None,
@@ -115,6 +124,65 @@ def predict_all(
         substrate_term=drivers["substrate"],
         is_kelp=is_kelp,
     )
+
+    # ---- Kd_490 blend ---------------------------------------------------
+    # When fresh Kd is available, blend its Secchi (= 1.7/Kd) with the
+    # chl-derived Secchi at a per-cell weight that decays with age.
+    # Apply the same per-zone turbidity penalties to the Kd branch so
+    # both branches are on equal footing for what-the-diver-sees calibration.
+    if kd490_obs_today is not None and kd490_age_days is not None:
+        kd_arr = np.asarray(kd490_obs_today, dtype=np.float64)
+        age = np.asarray(kd490_age_days, dtype=np.float64)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            secchi_kd_raw = config.KD_TO_SECCHI_FACTOR / kd_arr
+        secchi_kd_raw = np.where(np.isfinite(secchi_kd_raw), secchi_kd_raw, np.nan)
+
+        secchi_kd = visibility.apply_turbidity_corrections(
+            secchi_kd_raw,
+            zone=zone,
+            bottom_stir=drivers["swell"],
+            runoff_idx=drivers["precip"],
+            river_idx=drivers["river"],
+            tide_idx=drivers["tide"],
+            substrate_term=drivers["substrate"],
+            is_kelp=is_kelp,
+        )
+        secchi_kd = np.clip(secchi_kd, config.SECCHI_MIN_M, config.SECCHI_MAX_M)
+
+        has_kd = np.isfinite(secchi_kd) & np.isfinite(kd_arr) & (age < 999)
+        w_kd = np.where(
+            has_kd,
+            config.KD_BLEND_WEIGHT_FRESH * np.exp(-age / config.KD_BLEND_TAU_DAYS),
+            0.0,
+        )
+        w_kd = np.clip(w_kd, 0.0, config.KD_BLEND_WEIGHT_FRESH)
+
+        # Blend each percentile with the same Kd value — this shrinks the
+        # uncertainty band when Kd is fresh (an observation is narrower
+        # than a prior), which is the correct Bayesian behaviour.
+        for key_m, key_ft in (
+            ("viz_p10_m", "viz_p10_ft"),
+            ("viz_p50_m", "viz_p50_ft"),
+            ("viz_p90_m", "viz_p90_ft"),
+        ):
+            chl_m = viz[key_m]
+            blended = np.where(has_kd, w_kd * secchi_kd + (1.0 - w_kd) * chl_m, chl_m)
+            viz[key_m] = np.clip(blended, config.SECCHI_MIN_M, config.SECCHI_MAX_M)
+            viz[key_ft] = viz[key_m] * 3.281
+
+        # Re-enforce p10 ≤ p50 ≤ p90 after blend.
+        viz["viz_p10_m"] = np.minimum(viz["viz_p10_m"], viz["viz_p50_m"])
+        viz["viz_p90_m"] = np.maximum(viz["viz_p90_m"], viz["viz_p50_m"])
+        viz["viz_p10_ft"] = viz["viz_p10_m"] * 3.281
+        viz["viz_p90_ft"] = viz["viz_p90_m"] * 3.281
+
+        # Recompute score + category from blended p50.
+        viz["score"]     = visibility.secchi_to_score(viz["viz_p50_m"])
+        viz["score_p10"] = visibility.secchi_to_score(viz["viz_p10_m"])
+        viz["score_p90"] = visibility.secchi_to_score(viz["viz_p90_m"])
+        label, color = visibility.score_to_category(viz["score"])
+        viz["category"] = label
+        viz["color"]    = color
 
     return {
         "zone":         zone,

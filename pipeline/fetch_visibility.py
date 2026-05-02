@@ -633,6 +633,42 @@ def main():
     chl_lastvalid = flat(chl_today)
     age = flat(age_resampled)
 
+    # ---- Kd_490 (Phase 2) -----------------------------------------------
+    # Mirror the chl freshness pipeline: decode log10 PNG + age sidecar,
+    # bilinear-resample onto our grid, gate by age. The model blends Kd
+    # against the chl-derived Secchi (predict.py) when fresh and falls
+    # back to the chl-only path when Kd is missing/stale — so a
+    # missing kd490_1d.png is a graceful no-op, not an error.
+    kd490_path = OUT_DIR / "kd490_1d.png"
+    kd490_age_path = OUT_DIR / "kd490_1d_age_days.png"
+    if kd490_path.exists() and kd490_age_path.exists():
+        kd_src = decode_log10_png(kd490_path, 0.02, 10.0)
+        kd_grid = bilinear_sample(kd_src, kd_src.shape[1], kd_src.shape[0], lng_grid, lat_grid)
+        kd_age_src = decode_age_png(kd490_age_path)
+        kd_age_grid = bilinear_sample(
+            kd_age_src, kd_age_src.shape[1], kd_age_src.shape[0], lng_grid, lat_grid
+        )
+        # Same defensive clamp as chl: bilinear can interpolate an age
+        # across a NaN boundary; force 999 wherever Kd itself is NaN.
+        kd_age_grid = np.where(np.isnan(kd_grid), 999.0, kd_age_grid)
+        valid_kd = kd_age_grid < 999
+        n_kd_valid = int(valid_kd.sum())
+        if n_kd_valid:
+            mean_age_kd = float(kd_age_grid[valid_kd].mean())
+            n_fresh = int((kd_age_grid == 0).sum())
+            print(
+                f"  kd490: {n_kd_valid}/{kd_grid.size} valid cells, "
+                f"mean age {mean_age_kd:.2f} days, {n_fresh} fresh (age=0)"
+            )
+        else:
+            print("  kd490: PNGs present but no valid cells — blend will no-op")
+        kd490_obs_today = flat(kd_grid)
+        kd490_age_days = flat(kd_age_grid)
+    else:
+        print("  kd490 PNGs missing — falling back to chl-only model path")
+        kd490_obs_today = None
+        kd490_age_days = None
+
     print("Running viz_predict over the grid (n=%d)..." % n)
     depth_m = flat(shelf_depth_from_dist(dts_km))
     result = viz_predict.predict_all(
@@ -661,6 +697,8 @@ def main():
         river_discharge_cfs=river_disch, river_climo_cfs=river_climo,
         tide_range_today_m=tide_range,
         cloud_fraction_7d=cloud_frac,
+        kd490_obs_today=kd490_obs_today,
+        kd490_age_days=kd490_age_days,
     )
 
     viz_p50_ft = result["viz_p50_ft"].reshape(shape2d)
