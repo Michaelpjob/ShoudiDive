@@ -22,6 +22,7 @@ from .diveviz import DiveVizScraper
 from .eagle4 import Eagle4Scraper
 from .justgetwet import JustGetWetScraper
 from .ndbc import NDBCScraper
+from .reddit import RedditCAScraper
 
 
 # Scraper roster for the hourly cron. Order doesn't matter — each
@@ -47,6 +48,9 @@ SCRAPERS = [
                            # spearfishing. First central-CA signal in the
                            # roster. Pre-filters posts on spot/viz keywords
                            # before paying for LLM, conf 0.85.
+    RedditCAScraper(),     # r/scuba + r/spearfishing CA-keyword search.
+                           # Posts only (comments are 10x cost; revisit
+                           # once we see the post-only signal). conf 0.80.
 
     # Tier 1/2 — best-effort URL probe; URL in handoff didn't resolve
     Eagle4Scraper(),       # Channel Islands dive shop, conf 0.85
