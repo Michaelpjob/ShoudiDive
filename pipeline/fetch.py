@@ -64,9 +64,12 @@ LAYERS: dict[str, dict] = {
         # giving Kd priority weight when fresh.
         #
         # Source: NOAA CoastWatch ERDDAP — NRT VIIRS-SNPP, 4 km global daily.
-        # Same auth model + dimensions order as our chl product, so the rest of
-        # build_layer's machinery just works.
-        "dataset": "nesdisVHNkd490Daily",
+        # Same dimensions order as our chl product. Hits coastwatch.noaa.gov
+        # directly: the pfeg.noaa.gov mirror serves the same data under
+        # `nesdisVHNkd490Daily` but 403s GitHub Actions egress IPs (other
+        # datasets on the same mirror work; this one is blocked specifically).
+        "host":    "https://coastwatch.noaa.gov/erddap/griddap",
+        "dataset": "noaacwNPPVIIRSkd490Daily",
         "variable": "kd_490",
         # Coastal CA: ~0.04 (clear offshore SoCal Bight ~40 m Secchi) to ~3
         # (turbid river plumes ~0.6 m Secchi). 0.02–10 gives one bit of
@@ -88,8 +91,14 @@ LAYERS: dict[str, dict] = {
 
 
 def erddap_url(cfg: dict, d: date, stride: int) -> str:
+    """Build an ERDDAP griddap URL. Layer can override `host` to point at
+    a different ERDDAP mirror — e.g. Kd_490 must hit coastwatch.noaa.gov
+    directly because the pfeg.noaa.gov mirror 403s GitHub Actions egress
+    IPs for that specific dataset (other layers on pfeg.noaa.gov work
+    fine; the blocking is dataset-specific, not host-wide)."""
+    base = cfg.get("host", ERDDAP_BASE)
     return (
-        f"{ERDDAP_BASE}/{cfg['dataset']}.nc"
+        f"{base}/{cfg['dataset']}.nc"
         f"?{cfg['variable']}"
         f"[({d}T00:00:00Z):1:({d}T23:59:59Z)]"
         f"{cfg.get('pre_xy_dims', '')}"
