@@ -57,6 +57,33 @@ LAYERS: dict[str, dict] = {
         # VIIRS gap-filled has a single-element altitude dim at index 0
         "pre_xy_dims": "[0]",
     },
+    "kd490": {
+        # Diffuse attenuation coefficient at 490 nm — direct light-penetration
+        # measure, far closer to "what a diver sees" than chl alone. The model
+        # (Phase 2) blends Secchi = 1.7/Kd_490 against the chl-derived path,
+        # giving Kd priority weight when fresh.
+        #
+        # Source: NOAA CoastWatch ERDDAP — NRT VIIRS-SNPP, 4 km global daily.
+        # Same auth model + dimensions order as our chl product, so the rest of
+        # build_layer's machinery just works.
+        "dataset": "nesdisVHNkd490Daily",
+        "variable": "kd_490",
+        # Coastal CA: ~0.04 (clear offshore SoCal Bight ~40 m Secchi) to ~3
+        # (turbid river plumes ~0.6 m Secchi). 0.02–10 gives one bit of
+        # headroom on each end; log10 keeps quantization even across 500x.
+        "range": (0.02, 10.0),
+        "scale": "log10",
+        "unit": "m^-1",
+        "stride": 1,
+        # Same altitude length-1 axis as VIIRS chl.
+        "pre_xy_dims": "[0]",
+        # NRT publication lag is typically 5-7 days (worse than chl gap-fill);
+        # widen the age-walk so a single bad week doesn't blank the layer.
+        "max_back": 10,
+        # Mandatory for the Phase-2 model: age sidecar is consumed by
+        # fetch_visibility.py to gate "today's Kd observation" on age==0.
+        "emit_age_sidecar": True,
+    },
 }
 
 
@@ -163,8 +190,11 @@ def encode_png(arr: np.ndarray, cfg: dict, out: Path) -> None:
 
 def build_layer(layer: str, cfg: dict, end: date, want: int = 3, max_back: int = 7) -> dict | None:
     """Fetch up to `want` valid days walking back from `end`. Different layers
-    publish on different lags, so each layer finds its own latest 3."""
-    print(f"[{layer}] looking for {want} day(s) ending {end} (stride={cfg['stride']})")
+    publish on different lags, so each layer finds its own latest 3.
+    Per-layer override via cfg["max_back"] for products with longer NRT lag
+    (Kd_490 commonly publishes 5-7 days behind today)."""
+    max_back = int(cfg.get("max_back", max_back))
+    print(f"[{layer}] looking for {want} day(s) ending {end} (stride={cfg['stride']}, max_back={max_back})")
     stack_rev: list[np.ndarray] = []
     actual_rev: list[date] = []
     for i in range(max_back):
@@ -204,20 +234,19 @@ def build_layer(layer: str, cfg: dict, end: date, want: int = 3, max_back: int =
         }
         print(f"  wrote {out.name}  ({h}x{w})")
 
-    # Per-cell freshness sidecar — chl-family layers ONLY.
+    # Per-cell freshness sidecar.
     #
-    # Why chl-only: the visibility model (`viz_predict`) reads chl as
-    # its primary observation and applies persistence-with-decay as
-    # the obs ages. SST is gap-filled MUR L4 (always "fresh" by
-    # design); we don't need an SST age sidecar today.
-    #
-    # The 1d composite uses `stack[-1:]` (the single newest valid
-    # day). On a clean day that's `end - 0`; on a 4-day cloud streak
-    # over the SoCal Bight that's `end - 4`. Without this sidecar the
+    # The visibility model (`viz_predict`) reads observation layers
+    # (chl, kd490) as today's-observation channels and applies
+    # persistence-with-decay as the obs ages. Without the sidecar the
     # downstream `fetch_visibility.py` hardcodes age=0 and the model
     # treats stale obs as fresh — see `pipeline/TODO.md` PR1 for the
-    # full diagnosis.
-    if layer.startswith("chl"):
+    # full diagnosis. SST is gap-filled MUR L4 (always "fresh" by
+    # design) and doesn't need a sidecar.
+    #
+    # Layer-driven via cfg["emit_age_sidecar"]; chl-family is grandfathered
+    # by the prefix check so we don't have to set the flag in two places.
+    if cfg.get("emit_age_sidecar") or layer.startswith("chl"):
         age_arr = build_age_array(stack, actual, end)
         if age_arr is not None:
             age_out = OUT_DIR / f"{layer}_1d_age_days.png"
