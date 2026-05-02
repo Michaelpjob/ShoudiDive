@@ -44,6 +44,11 @@ Rules:
 - Skip observations older than 24 hours (only include today / this trip).
 - Visibility values must be plausible: 1-100 ft. Reject anything outside that.
 - Water temp must be plausible: 50-80 °F. Reject anything outside that.
+- A spot must be paired with at least one quantitative observation
+  (visibility, water temp, or swell). If a post only mentions a spot
+  in passing — "I caught a fish at the cove", "we saw kelp at the wall" —
+  do NOT emit a row. The downstream scoring only uses rows with at least
+  one observed_* number; spot-only rows are pure noise.
 - If no quantitative observations exist, return an empty array [].
 - Output ONLY the JSON array, no preamble or markdown fences.
 """
@@ -129,12 +134,21 @@ def extract_from_prose(report_text: str) -> list[dict]:
 
 
 def validate_extraction(obs) -> bool:
-    """Reject anything that doesn't match the prompt's contract."""
+    """Reject anything that doesn't match the prompt's contract.
+
+    A row passes only if (a) the spot name is non-empty, (b) every
+    populated observed_* field is in plausible range, and (c) at
+    least one observed_* field is populated. Without (c), forum
+    posts that *mention* a spot in passing — "fly-lining sardines
+    in front of the cove" — generate spot-only rows that pollute
+    the obs table without producing any score-able signal.
+    """
     if not isinstance(obs, dict):
         return False
     name = obs.get("spot_name")
     if not isinstance(name, str) or not name.strip():
         return False
+    populated = 0
     for field, lo, hi in (
         ("observed_secchi_ft", 1.0, 100.0),
         ("observed_sst_f",     50.0, 80.0),
@@ -147,6 +161,9 @@ def validate_extraction(obs) -> bool:
             return False
         if not (lo <= v <= hi):
             return False
+        populated += 1
+    if populated == 0:
+        return False
     excerpt = obs.get("raw_excerpt")
     if excerpt is not None and not isinstance(excerpt, str):
         return False
