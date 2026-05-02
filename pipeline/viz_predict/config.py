@@ -188,12 +188,14 @@ SECCHI_MAX_M  = 25.0
 #   * 0.7   — Kd is the more direct measurement, so it should dominate
 #             when fresh. Reserves 0.3 for the chl prior so per-zone
 #             calibration still anchors the result.
-#   * tau=2 — half-weight at ~1.4 days. Faster decay than chl's
-#             persistence-with-decay (which uses tau=4) because Kd is
-#             a same-day instantaneous reading vs chl's smoothed climo.
+#   * tau=5 — the DINEOF gap-filled Kd_490 SQ product publishes ~11 days
+#             behind today; tau=5 gives weight 0.7·exp(-11/5) ≈ 0.077
+#             at typical age, so Kd still nudges the chl prior even
+#             when stale. Drops to ≈ 0.5 at age=2 (a fresher day) and
+#             0.7 if it ever lands the same day.
 KD_TO_SECCHI_FACTOR  = 1.7
 KD_BLEND_WEIGHT_FRESH = 0.7
-KD_BLEND_TAU_DAYS    = 2.0
+KD_BLEND_TAU_DAYS    = 5.0
 
 
 # 0-100 clarity score

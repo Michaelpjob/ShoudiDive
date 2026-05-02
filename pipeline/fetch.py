@@ -63,13 +63,18 @@ LAYERS: dict[str, dict] = {
         # (Phase 2) blends Secchi = 1.7/Kd_490 against the chl-derived path,
         # giving Kd priority weight when fresh.
         #
-        # Source: NOAA CoastWatch ERDDAP — NRT VIIRS-SNPP, 4 km global daily.
-        # Same dimensions order as our chl product. Hits coastwatch.noaa.gov
-        # directly: the pfeg.noaa.gov mirror serves the same data under
-        # `nesdisVHNkd490Daily` but 403s GitHub Actions egress IPs (other
-        # datasets on the same mirror work; this one is blocked specifically).
+        # Source: NOAA CoastWatch ERDDAP — DINEOF-gap-filled multi-sensor
+        # (S-NPP + NOAA-20 VIIRS + Copernicus S-3A OLCI), 2 km global daily.
+        # Same dimensions order as our chl product. We tried the NRT VIIRS-only
+        # product (`noaacwNPPVIIRSkd490Daily`, 4 km, ~7 day lag) first; on a
+        # typical day under coastal marine layer it has only ~11% non-NaN
+        # pixels over the CA bbox, and bilinear-interp through NaN holes
+        # collapsed the resampled grid to all-NaN. The DINEOF product is
+        # specifically designed to fill those holes via empirical orthogonal
+        # functions — covers 100% of pixels at the cost of an extra ~4 days
+        # of latency (NRT 7d → SQ-DINEOF 11d).
         "host":    "https://coastwatch.noaa.gov/erddap/griddap",
-        "dataset": "noaacwNPPVIIRSkd490Daily",
+        "dataset": "noaacwNPPN20S3AkdSCIDINEOF2kmDaily",
         "variable": "kd_490",
         # Coastal CA: ~0.04 (clear offshore SoCal Bight ~40 m Secchi) to ~3
         # (turbid river plumes ~0.6 m Secchi). 0.02–10 gives one bit of
@@ -77,12 +82,13 @@ LAYERS: dict[str, dict] = {
         "range": (0.02, 10.0),
         "scale": "log10",
         "unit": "m^-1",
+        # 2 km native resolution gives ~290×290 pixels over our bbox.
         "stride": 1,
         # Same altitude length-1 axis as VIIRS chl.
         "pre_xy_dims": "[0]",
-        # NRT publication lag is typically 5-7 days (worse than chl gap-fill);
-        # widen the age-walk so a single bad week doesn't blank the layer.
-        "max_back": 10,
+        # SQ DINEOF product publishes ~11 days behind today; widen age-walk
+        # to 14 so a single bad fortnight doesn't blank the layer.
+        "max_back": 14,
         # Mandatory for the Phase-2 model: age sidecar is consumed by
         # fetch_visibility.py to gate "today's Kd observation" on age==0.
         "emit_age_sidecar": True,
