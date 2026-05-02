@@ -1,17 +1,26 @@
-"""5-day hourly wind forecast → per-day × per-bucket summaries.
+"""7-day hourly wind forecast → per-day × per-bucket summaries.
 
 Pulls every hourly forecast step the public NOAA models expose:
   * HRRR f00..f48  (3 km, 1-hour spacing) for the high-confidence near term.
-  * GFS  f49..f120 (25 km, 1-hour spacing) to fill out days 3–5.
+  * GFS  f49..f168 (25 km, 1-hour spacing) to fill out days 3–7.
+
+Filename is `fetch_wind_5day.py` for historical reasons; behavior is
+now 7-day. Renaming touches `refresh-wind.yml` and the sibling
+`fetch_swell_5day.py` so it's deferred to a coordinated rollout.
 
 Each hourly slice is byte-range-fetched from NOMADS via its `.idx` index
 so we only download the UGRD + VGRD bands at 10 m above ground (~5 MB
-per file instead of ~500 MB for the full GRIB2). Total per cycle: ~120
-slices × ~5 MB = ~600 MB pulled from NOMADS.
+per file instead of ~500 MB for the full GRIB2). Total per cycle: ~170
+slices × ~5 MB = ~850 MB pulled from NOMADS.
+
+Day 5–6 confidence: GFS deterministic at lead 120–168 h has surface-
+wind RMSE ~3–5 m/s (8–10 kt). Useful for "calm week vs windy week"
+trend, NOT for hour-of-day planning. Tagged "low" in CONFIDENCE_BY_DAY
+so the UI can downplay these days.
 
 Outputs in `public/data/wind/`:
-  hourly/d{0..4}_h{00..23}_uv.png   — RGBA U/V per Pacific-local hour
-  buckets/d{0..4}_{bucket}_uv.png   — RGBA U/V averaged across each bucket
+  hourly/d{0..6}_h{00..23}_uv.png   — RGBA U/V per Pacific-local hour
+  buckets/d{0..6}_{bucket}_uv.png   — RGBA U/V averaged across each bucket
   summary.json                      — per-bucket stats + best_window
 
 Buckets (Pacific Time, DST-aware):
@@ -54,10 +63,13 @@ BUCKETS: list[tuple[str, int, int]] = [
     ("afternoon", 14, 19),
     ("evening",   19, 21),
 ]
-DAY_LABELS_REL = ["Today", "+1", "+2", "+3", "+4"]
+DAY_LABELS_REL = ["Today", "+1", "+2", "+3", "+4", "+5", "+6"]
 # HRRR covers 0–48h — that overlaps roughly day 0 + most of day 1. Days
-# 2 onward come from GFS, which is lower-confidence. Map day_offset → tag.
-CONFIDENCE_BY_DAY = ["high", "high", "medium", "medium", "low"]
+# 2 onward come from GFS, which is lower-confidence. Days 5–6 (GFS lead
+# 120–168h) drift toward climatology — tag "low" so the UI can dim them.
+# Future: blend GEFS ensemble mean for days 5–6 to recover some skill.
+CONFIDENCE_BY_DAY = ["high", "high", "medium", "medium", "low", "low", "low"]
+HORIZON_DAYS = len(DAY_LABELS_REL)  # 7
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = ROOT / "public" / "data" / "wind"
@@ -277,14 +289,14 @@ def main() -> None:
 
     # 1) Latest published runs.
     hrrr_d, hrrr_h = find_latest_hrrr_run_with_horizon(48)
-    gfs_d,  gfs_h  = find_latest_gfs_run_with_horizon(120)
+    gfs_d,  gfs_h  = find_latest_gfs_run_with_horizon(168)
     hrrr_cycle = datetime(hrrr_d.year, hrrr_d.month, hrrr_d.day, hrrr_h, tzinfo=timezone.utc)
     gfs_cycle  = datetime(gfs_d.year,  gfs_d.month,  gfs_d.day,  gfs_h,  tzinfo=timezone.utc)
     print(f"HRRR cycle: {hrrr_cycle.isoformat()}  (f00..f48)")
-    print(f"GFS  cycle: {gfs_cycle.isoformat()}  (f49..f120)")
+    print(f"GFS  cycle: {gfs_cycle.isoformat()}  (f49..f168)")
 
     # 2) Anchor "today" to the *current* Pacific date, NOT the cycle's PT
-    #    date. The cycle is gated on f48/f120 being published (~12 h after
+    #    date. The cycle is gated on f48/f168 being published (~14 h after
     #    cycle issue), so cycle-anchored labels lag behind real time and a
     #    user viewing at mid-day on day X sees day 0 labeled "Today" but
     #    pointing at day X-1's data. Anchoring on now keeps the label
@@ -300,7 +312,7 @@ def main() -> None:
     def store(valid_at_utc, u_grid, v_grid, source):
         valid_pt = valid_at_utc.astimezone(PT)
         day_offset = (valid_pt.date() - anchor_pt_date).days
-        if day_offset < 0 or day_offset > 4:
+        if day_offset < 0 or day_offset >= HORIZON_DAYS:
             return
         key = (day_offset, valid_pt.hour)
         # Prefer HRRR if both sources cover the same hour.
@@ -308,9 +320,18 @@ def main() -> None:
             return
         hourly[key] = {"u": u_grid, "v": v_grid, "source": source, "valid_at": valid_at_utc}
 
+    # GFS goes to f168 (7 days) at 1-hour spacing through f120, then 3-hour
+    # spacing f120–f240. We pull every step but the f120–f168 slices that
+    # don't exist (GFS only emits f123, f126, f129, ...) will fail
+    # individually and just leave hourly gaps for those hours, which
+    # nanmean handles cleanly when bucketing.
+    GFS_HORIZON_HRS = 168
+    HRRR_END = 49  # exclusive
+    GFS_END = GFS_HORIZON_HRS + 1  # exclusive
+
     fetched = 0
     failed  = 0
-    for fhour in range(0, 49):
+    for fhour in range(0, HRRR_END):
         try:
             grib = fetch_hrrr_slice(hrrr_d, hrrr_h, fhour)
             lat2d, lng2d, u_native, v_native = open_uv(grib)
@@ -320,7 +341,7 @@ def main() -> None:
         except Exception as e:
             print(f"  HRRR f{fhour:02d}: {e!s}")
             failed += 1
-    for fhour in range(49, 121):
+    for fhour in range(HRRR_END, GFS_END):
         try:
             grib = fetch_gfs_slice(gfs_d, gfs_h, fhour)
             lat2d, lng2d, u_native, v_native = open_uv(grib)
@@ -328,9 +349,13 @@ def main() -> None:
             store(gfs_cycle + timedelta(hours=fhour), u_grid, v_grid, "gfs")
             fetched += 1
         except Exception as e:
-            print(f"  GFS  f{fhour:03d}: {e!s}")
+            # f120+ runs in 3-hour spacing on GFS, so 2/3 of these will
+            # 404 — that's expected, not a bug. The gaps are tolerated.
+            if fhour <= 120:
+                print(f"  GFS  f{fhour:03d}: {e!s}")
             failed += 1
-    print(f"fetched {fetched}/121 forecast hours ({failed} failed); "
+    total_attempted = HRRR_END + (GFS_END - HRRR_END)
+    print(f"fetched {fetched}/{total_attempted} forecast hours ({failed} failed); "
           f"{len(hourly)} unique (day, hour) slots stored")
 
     # 4) Write per-hour PNGs.
@@ -340,9 +365,9 @@ def main() -> None:
             HOURLY_DIR / f"d{day_offset}_h{hour_pt:02d}_uv.png",
         )
 
-    # 5) Aggregate to 5×5 buckets.
+    # 5) Aggregate to N×5 buckets (N = HORIZON_DAYS).
     bucket_summaries: list[dict] = []
-    for day_offset in range(5):
+    for day_offset in range(HORIZON_DAYS):
         for bucket_name, h0, h1 in BUCKETS:
             us, vs = [], []
             sources_in_bucket = set()
@@ -427,7 +452,7 @@ def main() -> None:
 
     # 7) Per-day shells with confidence + Pacific date label.
     days = []
-    for d in range(5):
+    for d in range(HORIZON_DAYS):
         date_pt = anchor_pt_date + timedelta(days=d)
         days.append({
             "day":          d,
