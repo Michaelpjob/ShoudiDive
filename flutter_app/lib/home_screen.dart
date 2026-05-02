@@ -8,7 +8,11 @@ import 'grid.dart';
 import 'manifest.dart';
 import 'map_view.dart';
 import 'static_data.dart';
+import 'theme/sid_tokens.dart';
 import 'time_slider.dart';
+import 'widgets/sid_header.dart';
+import 'widgets/sid_layer_chips.dart';
+import 'widgets/sid_overlay_row.dart';
 import 'wind_particles.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -27,6 +31,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Object? _error;
 
   bool _showMpa = true;
+  bool _showBanks = true;
   bool _showLabels = true;
   bool _showSpots = true;
   double _layerOpacity = 0.85;
@@ -270,6 +275,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     Text('Display',
                         style: Theme.of(ctx).textTheme.titleMedium),
                     const SizedBox(height: 8),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.refresh),
+                      title: const Text('Refresh data'),
+                      onTap: () {
+                        Navigator.of(ctx).pop();
+                        _bootstrap();
+                      },
+                    ),
                     Row(
                       children: [
                         const SizedBox(
@@ -293,15 +307,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                       ],
-                    ),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Marine Protected Areas'),
-                      value: _showMpa,
-                      onChanged: (v) {
-                        setSheetState(() {});
-                        setState(() => _showMpa = v);
-                      },
                     ),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
@@ -349,30 +354,58 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  String _regionSubtitle(Manifest? manifest) {
+    if (manifest == null) return '';
+    final b = manifest.bbox;
+    String fmt(double lat) {
+      final hemi = lat >= 0 ? 'N' : 'S';
+      return '${lat.abs().toStringAsFixed(1)}°$hemi';
+    }
+    return 'CA Coast · ${fmt(b.latMin)}–${fmt(b.latMax)}';
+  }
+
+  /// What date should the moon-phase icon reflect?
+  /// On wind/swell screens, we follow the time slider — the moon
+  /// updates as the user scrubs into the future. On other layers
+  /// (sst/chl/viz), there's no scrubber, so show "now".
+  DateTime? _forecastViewingTime() {
+    if (_layerId == 'wind' && _windSummary != null) {
+      final slots = _windSummary!.slots;
+      if (slots.isEmpty) return null;
+      final idx = _windSlotIdx.clamp(0, slots.length - 1);
+      return slots[idx].localAnchor();
+    }
+    if (_layerId == 'wave' && _swellSummary != null) {
+      final slots = _swellSummary!.slots;
+      if (slots.isEmpty) return null;
+      final idx = _swellSlotIdx.clamp(0, slots.length - 1);
+      return slots[idx].localAnchor();
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final manifest = _manifest;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('ShoudiDive'),
-        actions: [
-          IconButton(
-            tooltip: 'Settings',
-            onPressed: _openSettings,
-            icon: const Icon(Icons.tune),
-          ),
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: _bootstrap,
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
+      body: SafeArea(
+        child: Column(
+          children: [
+            SidHeader(
+              regionSubtitle: _regionSubtitle(manifest),
+              onInfo: manifest == null ? null : _openSettings,
+              forecastTime: _forecastViewingTime(),
+            ),
+            Expanded(
+              child: _error != null
+                  ? _ErrorView(error: _error.toString(), onRetry: _bootstrap)
+                  : manifest == null
+                      ? const Center(child: CircularProgressIndicator())
+                      : _buildLoaded(manifest),
+            ),
+          ],
+        ),
       ),
-      body: _error != null
-          ? _ErrorView(error: _error.toString(), onRetry: _bootstrap)
-          : manifest == null
-              ? const Center(child: CircularProgressIndicator())
-              : _buildLoaded(manifest),
     );
   }
 
@@ -389,36 +422,30 @@ class _HomeScreenState extends State<HomeScreen> {
     final usingWindSlider = layer.id == 'wind' && _windSummary != null;
     final usingSwellSlider = layer.id == 'wave' && _swellSummary != null;
 
-    return SafeArea(
-      child: Column(
-        children: [
-          SizedBox(
-            height: 44,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              children: [
-                for (final l in manifest.layers.values) ...[
-                  ChoiceChip(
-                    label: Text(l.name),
-                    selected: l.id == _layerId,
-                    onSelected: (_) => _selectLayer(l.id),
-                  ),
-                  const SizedBox(width: 6),
-                ],
-              ],
-            ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Stack(
+    return Column(
+      children: [
+        SidLayerChips(
+          activeId: _layerId,
+          onChange: _selectLayer,
+          layerIds: manifest.layers.keys.toSet(),
+        ),
+        SidOverlayRow(
+          source: SidSources.forId(layer.id),
+          mpaOn: _showMpa,
+          banksOn: _showBanks,
+          onMpaToggle: (v) => setState(() => _showMpa = v),
+          onBanksToggle: (v) => setState(() => _showBanks = v),
+        ),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: SidSpacing.mapPadH),
+            child: Stack(
                 children: [
                   Positioned.fill(
                     child: Container(
                       decoration: BoxDecoration(
-                        border: Border.all(color: Colors.white24),
-                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: SidColors.hairline),
+                        borderRadius: BorderRadius.circular(SidRadius.card),
                       ),
                       clipBehavior: Clip.antiAlias,
                       child: Stack(
@@ -515,7 +542,6 @@ class _HomeScreenState extends State<HomeScreen> {
             manifest: manifest,
           ),
         ],
-      ),
     );
   }
 }

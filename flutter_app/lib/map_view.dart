@@ -8,6 +8,7 @@ import 'colormap.dart';
 import 'geojson_loader.dart';
 import 'grid.dart';
 import 'static_data.dart';
+import 'theme/sid_tokens.dart';
 
 typedef ColorMapper = Color Function(double v);
 
@@ -183,37 +184,43 @@ class _MapPainter extends CustomPainter {
     required this.showSpots,
   });
 
-  static const _seaDeeper = Color(0xFF071017);
-  static const _seaDeep = Color(0xFF0B1B26);
-  static const _sea = Color(0xFF12313F);
-  static const _land = Color(0xFF1F2A37);
-  static const _landEdge = Color(0xFF263241);
-  static const _grid = Color(0x1FFFFFFF);
-  static const _mpaFill = Color(0x1AFFB347);
-  static const _mpaEdge = Color(0x66FFB347);
+  // Light-theme sea + land tokens. Outer "page" wash is cream so the map
+  // appears as an inset card; inner rect is the actual ocean.
+  static const _pageWash = SidColors.bgPage;
+  static const _oceanTop = SidColors.oceanShallow;
+  static const _oceanMid = SidColors.ocean;
+  static const _oceanBottom = SidColors.oceanDeep;
+  static const _land = SidColors.land;
+  static const _landEdge = SidColors.landEdge;
+  static const _grid = SidColors.graticule;
+  static const _mpaFill = SidColors.mpaFill;
+  static const _mpaEdge = SidColors.mpaEdge;
 
   @override
   void paint(Canvas canvas, Size size) {
     final fitted = fitToBox(bbox, size);
 
-    // Background sea fill (full canvas, not just inner rect)
+    // Background page wash (full canvas, outside the fitted ocean rect)
     canvas.drawRect(
       Rect.fromLTWH(0, 0, size.width, size.height),
-      Paint()..color = _seaDeeper,
+      Paint()..color = _pageWash,
     );
 
-    // Inner-rect ocean gradient
+    // Inner-rect ocean — very subtle vertical gradient for a hint of depth
+    // without competing with the data overlay.
     final innerRect = fitted.toRect();
     canvas.drawRect(
       innerRect,
       Paint()
         ..shader = const LinearGradient(
-          colors: [_seaDeeper, _seaDeep, _sea],
-          stops: [0.0, 0.6, 1.0],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [_oceanTop, _oceanMid, _oceanBottom],
+          stops: [0.0, 0.55, 1.0],
         ).createShader(innerRect),
     );
 
-    // Graticule
+    // Graticule — soft dark-slate dashes on the pale ocean
     final gridPaint = Paint()
       ..color = _grid
       ..strokeWidth = 0.6
@@ -274,21 +281,24 @@ class _MapPainter extends CustomPainter {
       }
     }
 
-    // Saved spots
+    // Saved spots — green fill, white ring for definition, thin ink hairline
     if (showSpots) {
-      final ringPaint = Paint()
-        ..color = const Color(0xCCFFFFFF)
+      final haloPaint = Paint()..color = SidColors.card;
+      final fillPaint = Paint()..color = SidColors.live;
+      final hairlinePaint = Paint()
+        ..color = SidColors.ink
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5;
-      final fillPaint = Paint()..color = const Color(0xFF22C55E);
+        ..strokeWidth = 0.8;
       for (final s in kSavedSpots) {
         final p = project(bbox, fitted, s.lng, s.lat);
+        canvas.drawCircle(p, 5, haloPaint);
         canvas.drawCircle(p, 4, fillPaint);
-        canvas.drawCircle(p, 4, ringPaint);
+        canvas.drawCircle(p, 5, hairlinePaint);
       }
     }
 
-    // Place labels
+    // Place labels — dark text with a soft cream halo for legibility over
+    // both the pale ocean and saturated data tiles.
     if (showLabels) {
       for (final lbl in kPlaceLabels) {
         final p = project(bbox, fitted, lbl.lng, lbl.lat);
@@ -296,15 +306,14 @@ class _MapPainter extends CustomPainter {
           text: TextSpan(
             text: lbl.text,
             style: TextStyle(
-              color: lbl.muted
-                  ? const Color(0xCCB0BCC8)
-                  : const Color(0xFFE7EEF4),
+              color: lbl.muted ? SidColors.ink2 : SidColors.ink,
               fontSize: lbl.fontSize,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w600,
               fontStyle: lbl.italic ? FontStyle.italic : FontStyle.normal,
               letterSpacing: 0.4,
               shadows: const [
-                Shadow(color: Color(0xFF000000), offset: Offset(0, 1), blurRadius: 2),
+                Shadow(color: Color(0xCCFFFFFF), offset: Offset(0, 0), blurRadius: 4),
+                Shadow(color: Color(0x80FFFFFF), offset: Offset(0, 1), blurRadius: 1.5),
               ],
             ),
           ),
@@ -318,14 +327,16 @@ class _MapPainter extends CustomPainter {
       }
     }
 
-    // Pin marker
+    // Pin marker — ink ring with logo-red center
     if (pin != null) {
       final p = project(bbox, fitted, pin!.lng, pin!.lat);
       final ringPaint = Paint()
-        ..color = const Color(0xFFFFFFFF)
+        ..color = SidColors.ink
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.0;
-      final fillPaint = Paint()..color = const Color(0xFFFF4D4F);
+      final haloPaint = Paint()..color = SidColors.card;
+      final fillPaint = Paint()..color = SidColors.logoRed;
+      canvas.drawCircle(p, 8, haloPaint);
       canvas.drawCircle(p, 7, ringPaint);
       canvas.drawCircle(p, 5, fillPaint);
       canvas.drawLine(p.translate(-12, 0), p.translate(-3, 0), ringPaint);
