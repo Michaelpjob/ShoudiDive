@@ -1619,9 +1619,9 @@ function Tooltip({ x, y, layer, composite, lng, lat, units }) {
       sub =
         f < 55 ? "Frigid · drysuit"
         : f < 60 ? "Cold · 7 mm"
-        : f < 65 ? "Cool · 5 mm"
-        : f < 70 ? "Mild · 3 mm"
-        : f < 75 ? "Warm · springsuit"
+        : f < 70 ? "Cool · 5 mm"
+        : f < 75 ? "Mild · 3 mm"
+        : f < 80 ? "Warm · springsuit"
         : "Hot · trunks";
     }
   } else if (layer === "chl") {
