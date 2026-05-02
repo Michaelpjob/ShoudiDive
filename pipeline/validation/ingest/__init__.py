@@ -16,6 +16,7 @@ import pathlib
 import sys
 from datetime import datetime, timezone
 
+from .bdoutdoors import BdOutdoorsScraper
 from .cdip import CDIPScraper
 from .diveviz import DiveVizScraper
 from .eagle4 import Eagle4Scraper
@@ -41,6 +42,11 @@ SCRAPERS = [
 
     # Tier 2 — prose, LLM-extracted (no-ops gracefully without API key)
     DiveVizScraper(),      # SD + LA + OC dive shop, two-blog feed, conf 0.85
+    BdOutdoorsScraper(),   # XenForo fishing/spear forum RSS — 4 feeds:
+                           # central-CA fishing, SoCal offshore, CA sport,
+                           # spearfishing. First central-CA signal in the
+                           # roster. Pre-filters posts on spot/viz keywords
+                           # before paying for LLM, conf 0.85.
 
     # Tier 1/2 — best-effort URL probe; URL in handoff didn't resolve
     Eagle4Scraper(),       # Channel Islands dive shop, conf 0.85
