@@ -269,8 +269,9 @@ export default function WindDayGrid({ sel, setSel, layout = "stack" }) {
 
   // Background-load every day's hourly UV grids the moment the wind layer
   // opens, so per-hour data is ready by the time the user expands any day
-  // card. ~1.2 MB total across all 5 days; loadWind5dHourly() is idempotent
-  // and dedupes in-flight requests so this is safe to run repeatedly.
+  // card. ~1.7 MB total across all 7 days (days 5–6 are sparse — GFS
+  // 3-hour spacing past f120). loadWind5dHourly() is idempotent and
+  // dedupes in-flight requests so this is safe to run repeatedly.
   useEffect(() => {
     if (!summary) return;
     for (const d of summary.days || []) {

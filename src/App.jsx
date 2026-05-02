@@ -881,8 +881,9 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
 
       <MapLabels labels={allLabels} vb={vb} size={size} />
 
-      {/* Wind scrubber — sticky bottom bar, scrolls through 5 days × 24
-          hours. The map heatmap + particles update on every drag tick. */}
+      {/* Wind scrubber — sticky bottom bar, scrolls through 7 days × 24
+          hours (HRRR f00–f48 + GFS f49–f168; days 5–6 are GFS 3-hour).
+          The map heatmap + particles update on every drag tick. */}
       {layer === "wind" && (
         <WindTimeline sel={windSel} setSel={setWindSel} />
       )}
@@ -977,7 +978,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
           {layer === "wind" ? (
             <div className="composite wind-grid-host">
               <div className="composite-label">
-                <span>5-day forecast</span>
+                <span>7-day forecast</span>
                 <span className="hint">drag the timeline below</span>
               </div>
               <WindCurrentSelectionCard
@@ -1190,7 +1191,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
               }</h4>
               <p className="info-p">
                 {layer === "wind"
-                  ? "HRRR is NOAA's hourly 3-km weather model. Drag the timeline to scrub through the 5-day window — every cell on the heatmap reflects the wind speed at that exact hour."
+                  ? "HRRR is NOAA's hourly 3-km weather model for the first 48 h, then GFS (25 km) extends out to 7 days. Drag the timeline to scrub through any hour — every cell on the heatmap reflects the wind speed at that exact hour. Days 5–6 are tagged 'low' confidence (trend, not gospel)."
                   : layer === "viz"
                   ? "A zone-aware stack (3 latitude × 3 distance-from-shore) translates today's chl-a into a Secchi depth, then nudges it for storm-driven bottom stir, river/precip runoff, tidal mixing, kelp shading, and substrate. The 'best estimate' is the median; hover any cell to see the value."
                   : layer === "swell"
@@ -1207,7 +1208,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
                 {layer === "wind"
                   ? "NOAA HRRR (3-km, hourly). 10-m UGRD/VGRD via NOMADS byte-range fetch. Regridded to ~5 km."
                   : layer === "viz"
-                  ? "MUR SST · VIIRS chl-a · HRRR + GFS wind (5d) · WaveWatch III (3d max) · CPC precip · USGS river discharge · NOAA CO-OPS tides · MODIS-Aqua climatology. Recomputed daily."
+                  ? "MUR SST · VIIRS chl-a · HRRR + GFS wind (7d) · WaveWatch III (3d max) · CPC precip · USGS river discharge · NOAA CO-OPS tides · MODIS-Aqua climatology. Recomputed daily."
                   : layer === "swell"
                   ? "NOAA WaveWatch III (gfswave wcoast 0.16°). HTSGW + PERPW + DIRPW pulled per hour via NOMADS byte-range fetch. 5-day forecast with hourly resolution; refreshed every cycle."
                   : "NOAA Coral Reef Watch · NASA OB.DAAC MODIS-Aqua · Copernicus GLO-MFC. Daily L3 composites, ~1 km grid, regridded to bounding box."}
