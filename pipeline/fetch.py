@@ -48,7 +48,18 @@ LAYERS: dict[str, dict] = {
         "pre_xy_dims": "",
     },
     "chl": {
-        "dataset": "nesdisVHNnoaaSNPPnoaa20NRTchlaGapfilledDaily",
+        # Source moved off the deprecating coastwatch.pfeg.noaa.gov mirror:
+        # PFEG is now redirecting (302) to coastwatch.noaa.gov, where the
+        # SNPP/N20 NRT gap-filled product lives under a different dataset
+        # name (DINEOF gap-fill instead of "Gapfilled"). Same data, same
+        # 4 km grid, same dimensions order — only the host + dataset name
+        # change. PFEG was returning intermittent 503s + 404s for recent
+        # dates (5-2 → 503; 5-1, 4-30 → 404) before this switch; the
+        # underlying NRT publication lag (typically 2-3 days) is set by
+        # NOAA upstream and is unchanged. Same fix pattern as the Kd_490
+        # reroute in c407e1b.
+        "host":    "https://coastwatch.noaa.gov/erddap/griddap",
+        "dataset": "noaacwNPPN20VIIRSDINEOFDaily",
         "variable": "chlor_a",
         "range": (0.05, 20.0),
         "scale": "log10",
