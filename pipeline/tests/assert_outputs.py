@@ -125,13 +125,14 @@ def assert_fetch_chl() -> int:
     )
 
     if n_valid > 0:
-        # pixel value 1..255 → age 0..254 days. fetch.py walks back at
-        # most max_back=7 days, so the highest realistic raw pixel is
-        # 8 (age=7). Anything higher means orientation or encoding bug.
+        # pixel value 1..255 → age 0..254 days. The blender's deepest
+        # source is NOAA DINEOF SCI 2km with NOAA_SCI_MAX_BACK=18, so
+        # the highest realistic raw pixel is 19 (age=18). Anything
+        # higher means orientation or encoding bug.
         max_age = int(arr[arr > 0].max()) - 1
         r.check(
-            "sidecar max age <= 7 days (fetch.py max_back)",
-            max_age <= 7,
+            "sidecar max age <= 18 days (blender deepest source max_back)",
+            max_age <= 18,
             f"max_age={max_age}",
         )
         n_stale = int(((arr > 1) & (arr <= 255)).sum())
@@ -148,6 +149,38 @@ def assert_fetch_chl() -> int:
                 f"({pct_stale:.1f}%); the freshness gate will fire downstream"
             )
 
+    # Multi-source blender sidecar (chl_blend.py emits this alongside
+    # chl_1d_age_days.png). Each pixel = source priority that won the
+    # cell; 0 = no-data sentinel, 1..N = source.priority.
+    src_sidecar = DATA / "chl_1d_source.png"
+    r.check("chl_1d_source.png exists (blender provenance sidecar)",
+            src_sidecar.exists(), str(src_sidecar))
+    if src_sidecar.exists():
+        s_img = Image.open(src_sidecar)
+        r.check(
+            "source sidecar mode is L",
+            s_img.mode == "L",
+            f"got {s_img.mode}",
+        )
+        r.check(
+            "source sidecar dims match chl_1d.png",
+            s_img.size == chl_img.size,
+            f"chl={chl_img.size}, source={s_img.size}",
+        )
+        s_arr = np.array(s_img)
+        contributing = sorted(int(p) for p in np.unique(s_arr) if int(p) != 0)
+        r.check(
+            "at least one source contributed",
+            len(contributing) >= 1,
+            f"contributing priorities: {contributing}",
+        )
+        # Per-source cell counts — useful for spotting "1 source did 100%
+        # of the work" which usually means the others are broken.
+        for p in contributing:
+            n = int((s_arr == p).sum())
+            print(f"  INFO  [fetch_chl] source priority {p}: {n} cells "
+                  f"({100.0 * n / s_arr.size:.1f}%)")
+
     # Manifest wiring.
     manifest = _load_manifest()
     chl_layer = manifest.get("layers", {}).get("chl", {})
@@ -157,6 +190,38 @@ def assert_fetch_chl() -> int:
         win_1d.get("age_days_url") == "/data/chl_1d_age_days.png",
         f"got {win_1d.get('age_days_url')!r}",
     )
+    # Blender additions to the manifest. Tolerated as missing on the
+    # legacy single-source path (no blender = no source_url field).
+    if chl_layer.get("blended"):
+        r.check(
+            "manifest.layers.chl.windows.1d.source_url present",
+            win_1d.get("source_url") == "/data/chl_1d_source.png",
+            f"got {win_1d.get('source_url')!r}",
+        )
+        r.check(
+            "manifest.layers.chl.windows.1d.sources has at least 1 source",
+            isinstance(win_1d.get("sources"), dict) and len(win_1d["sources"]) >= 1,
+            f"got {list((win_1d.get('sources') or {}).keys())!r}",
+        )
+        cov = win_1d.get("coverage_frac")
+        r.check(
+            "manifest.layers.chl.windows.1d.coverage_frac >= 0.30",
+            isinstance(cov, (int, float)) and cov >= 0.30,
+            f"got {cov!r}",
+        )
+        # Provenance freshness: the freshest source listed must be ≤4 days
+        # old; if it isn't, every NRT source is failing.
+        ages = [
+            s.get("age_days") for s in (win_1d.get("sources") or {}).values()
+            if isinstance(s.get("age_days"), int)
+        ]
+        if ages:
+            freshest = min(ages)
+            r.check(
+                "freshest contributing source <= 4 days old",
+                freshest <= 4,
+                f"freshest={freshest}d (NRT may be down)",
+            )
 
     return r.exit()
 

@@ -316,7 +316,16 @@ def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     manifest_layers: dict[str, dict] = {}
     for layer in selected:
-        out = build_layer(layer, LAYERS[layer], end)
+        if layer == "chl":
+            # Multi-source blender — see pipeline/chl_blend.py for the full
+            # source roster + per-cell freshest-wins algorithm. Falls back
+            # gracefully to NOAA-only when EARTHDATA_TOKEN is unset.
+            from chl_blend import build_blended_chl  # local import — avoids
+                                                     # importing xarray etc.
+                                                     # when --layer != chl
+            out = build_blended_chl(end)
+        else:
+            out = build_layer(layer, LAYERS[layer], end)
         if out is not None:
             manifest_layers[layer] = out
 

@@ -48,7 +48,13 @@ jobs:
       - name: Fetch latest ocean data
         # Don't block the deploy on a flaky NOMADS/ERDDAP — the previously
         # committed PNGs in public/data/ are still valid for the build.
+        # EARTHDATA_TOKEN unlocks NASA OB.DAAC sources for chl_blend.py
+        # (AQUA_MODIS, SNPP_VIIRS, S3A_OLCI — all ~1-2 day lag). Without
+        # it the chl blender silently falls back to NOAA-only sources
+        # (~4 day lag floor).
         continue-on-error: true
+        env:
+          EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
         run: python pipeline/fetch.py
 
       - name: Fetch latest WaveWatch III
