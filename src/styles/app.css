@@ -211,7 +211,9 @@ body {
   z-index: 20;
 }
 
-/* Moon-phase legend — anchored to the map-stage's upper-right.
+/* Moon-phase legend — anchored to the map-stage's upper-right and
+   stacked above the .info-tr ("How to read this") panel. Width
+   matches .info-tr so the two read as a single right-side column.
    Same glassy panel treatment as .panel so it picks up theme vars
    (--bg-panel/--line/--ink) automatically. The moon disc inside uses
    its own hardcoded dark/cream colors so the silhouette always reads
@@ -220,6 +222,7 @@ body {
   position: absolute;
   top: 12px;
   right: 12px;
+  width: 280px;
   z-index: 22;
   background: var(--bg-panel);
   backdrop-filter: blur(16px) saturate(1.2);
@@ -228,9 +231,9 @@ body {
   border-radius: var(--r-3);
   box-shadow: var(--shadow-2);
   padding: 8px 10px 9px;
-  min-width: 132px;
   pointer-events: auto;
   user-select: none;
+  box-sizing: border-box;
 }
 .moon-widget-header {
   font-size: 10.5px;
@@ -283,7 +286,8 @@ body {
     top: 8px;
     right: 8px;
     padding: 6px 8px 7px;
-    min-width: 0;
+    width: auto;
+    max-width: calc(50vw - 16px);
   }
   .moon-widget-header { display: none; }
   .moon-widget-name { font-size: 12px; }
@@ -414,10 +418,12 @@ body {
 
 /* Top-right info panel */
 .info-tr {
-  top: 56px;
+  /* Stacks below the .moon-widget which lives at top: 12 with ~80px
+     height + 12px gap. Adjust here if the moon-widget grows. */
+  top: 104px;
   right: 12px;
   width: 280px;
-  max-height: calc(100vh - 80px);
+  max-height: calc(100vh - 128px);
   overflow: hidden;
   display: flex;
   flex-direction: column;
