@@ -43,7 +43,7 @@ import WindDayGrid, {
 } from "./components/WindDayGrid.jsx";
 import WindTimeline from "./components/WindTimeline.jsx";
 import SwellTimeline, { SwellCurrentCard } from "./components/SwellTimeline.jsx";
-import MoonIcon from "./components/MoonIcon.jsx";
+import { MoonWidget } from "./components/MoonIcon.jsx";
 import {
   getSwell5dSummary,
   getSwell5dStats,
@@ -270,7 +270,6 @@ export default function App() {
         onSettings={() => setSettingsOpen((v) => !v)}
         settingsOpen={settingsOpen}
         dataState={dataState}
-        viewingDate={viewingDate}
       />
       {settingsOpen && (
         <SettingsPopover prefs={prefs} setPref={setPref} onClose={() => setSettingsOpen(false)} />
@@ -291,6 +290,7 @@ export default function App() {
         setMpaOn={(v) => setPref("mpaOn", v)}
         bathyOn={prefs.bathyOn}
         setBathyOn={(v) => setPref("bathyOn", v)}
+        viewingDate={viewingDate}
       />
     </div>
   );
@@ -328,7 +328,7 @@ function selToDate(layer, windSel, swellSel) {
   return new Date(y, m - 1, d, hour, 0, 0);
 }
 
-function TopBar({ onSettings, settingsOpen, dataState, viewingDate }) {
+function TopBar({ onSettings, settingsOpen, dataState }) {
   const generated = dataState?.manifest?.generated_at;
   const lastUpdate = generated
     ? new Date(generated).toLocaleString("en-US", {
@@ -370,7 +370,6 @@ function TopBar({ onSettings, settingsOpen, dataState, viewingDate }) {
             phones — the topbar just keeps the brand mark + settings cog
             on small screens (timestamp + sources are hidden via the
             @media (max-width: 760px) block in app.css). */}
-        <MoonIcon date={viewingDate} size={22} />
         <button
           className="icon-btn"
           aria-label="Settings"
@@ -449,7 +448,7 @@ function SettingsPopover({ prefs, setPref }) {
   );
 }
 
-function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWindSel, swellSel, setSwellSel, opacity, units, dataState, mpaOn, setMpaOn, bathyOn, setBathyOn }) {
+function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWindSel, swellSel, setSwellSel, opacity, units, dataState, mpaOn, setMpaOn, bathyOn, setBathyOn, viewingDate }) {
   // Wind + swell layers use a slot-key string derived from their respective
   // 5-day selection state; selToSlotKey falls back to a valid slot if the
   // requested one has no data. SST/chl/viz keep the legacy integer composite.
@@ -920,6 +919,11 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
       </svg>
 
       <MapLabels labels={allLabels} vb={vb} size={size} />
+
+      {/* Moon-phase legend — anchored top-right of the map. On wind/swell
+          layers it tracks the time slider (the parent passes the active
+          slot's anchor as viewingDate); other layers show "now". */}
+      <MoonWidget date={viewingDate} />
 
       {/* Wind scrubber — sticky bottom bar, scrolls through 7 days × 24
           hours (HRRR f00–f48 + GFS f49–f168; days 5–6 are GFS 3-hour).

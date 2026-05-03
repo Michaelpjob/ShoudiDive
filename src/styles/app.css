@@ -211,6 +211,85 @@ body {
   z-index: 20;
 }
 
+/* Moon-phase legend — anchored to the map-stage's upper-right.
+   Same glassy panel treatment as .panel so it picks up theme vars
+   (--bg-panel/--line/--ink) automatically. The moon disc inside uses
+   its own hardcoded dark/cream colors so the silhouette always reads
+   regardless of which theme surrounds it. */
+.moon-widget {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 22;
+  background: var(--bg-panel);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  box-shadow: var(--shadow-2);
+  padding: 8px 10px 9px;
+  min-width: 132px;
+  pointer-events: auto;
+  user-select: none;
+}
+.moon-widget-header {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  margin-bottom: 4px;
+}
+.moon-widget-body {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.moon-widget-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.moon-widget-name {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.1px;
+  color: var(--ink);
+  line-height: 1.15;
+}
+.moon-widget-meta {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-2);
+  line-height: 1.2;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.moon-widget-meta .dot-sep {
+  color: var(--ink-3);
+}
+.moon-widget-date {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--ink-3);
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 760px) {
+  .moon-widget {
+    top: 8px;
+    right: 8px;
+    padding: 6px 8px 7px;
+    min-width: 0;
+  }
+  .moon-widget-header { display: none; }
+  .moon-widget-name { font-size: 12px; }
+  .moon-widget-meta { font-size: 10.5px; }
+}
+
 .panel-header {
   display: flex;
   align-items: center;
@@ -1574,9 +1653,8 @@ body {
   .brand-tag { display: none; }
   /* Sources line + the long Last-update line both vanish on phones —
      the new MobileShell peek strip carries layer/value/time info, so
-     the topbar only needs the brand mark + a settings cog (and the
-     moon-icon, which is small enough to keep in the corner). */
-  .topbar-meta > span:not(.moon-icon) { display: none; }
+     the topbar only needs the brand mark + a settings cog. */
+  .topbar-meta > span { display: none; }
   .topbar-meta { gap: 8px; }
   /* The old `Live` chip in the topbar is now redundant — MobileShell's
      own status row shows the same liveness via the green dot next to

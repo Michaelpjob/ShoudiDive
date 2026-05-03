@@ -8,19 +8,17 @@ import { useId, useMemo } from "react";
 const SYNODIC_DAYS = 29.530588853;
 
 // Reference new moon: 2000-01-06 18:14 UTC (well-documented epoch).
-// Note JS Date.UTC months are 0-indexed.
+// JS Date.UTC months are 0-indexed.
 const REF_NEW_MOON_MS = Date.UTC(2000, 0, 6, 18, 14);
 
-/**
- * Returns the moon phase as a fraction in [0, 1):
- *   0.00 — new moon (dark)
- *   0.25 — first quarter (right half lit, growing)
- *   0.50 — full moon (fully lit)
- *   0.75 — last quarter (left half lit, shrinking)
- *   1.00 — back to new moon
- *
- * Mirrors lib/moon_phase.dart in the Flutter app — keep in sync.
- */
+// Hardcoded "moon" colors so the icon ALWAYS reads as a moon
+// (dark night-side, warm cream lit-side) regardless of which theme
+// is active around it. The surrounding card uses CSS theme vars.
+const MOON_DARK = "#0F172A";    // night side
+const MOON_LIT  = "#F5EDD8";    // warm cream
+const MOON_RING = "rgba(245, 237, 216, 0.55)"; // cream @ ~55% — keeps silhouette visible at new moon
+
+/** Mirrors lib/moon_phase.dart in the Flutter app — keep in sync. */
 export function moonPhase(when) {
   const t = when instanceof Date ? when : new Date();
   const deltaDays = (t.getTime() - REF_NEW_MOON_MS) / 86400000;
@@ -40,22 +38,31 @@ export function moonPhaseName(phase) {
   return "Waning crescent";
 }
 
+/** Fraction of disc illuminated, 0..1. New = 0, full = 1, quarters = 0.5. */
+export function illuminationFraction(phase) {
+  return (1 - Math.cos(phase * 2 * Math.PI)) / 2;
+}
+
+/** Days to next new moon (going forward from `phase`). */
+export function daysToNextNew(phase) {
+  return ((1 - phase) % 1) * SYNODIC_DAYS;
+}
+
+/** Days to next full moon (going forward from `phase`). */
+export function daysToNextFull(phase) {
+  // Full is at phase 0.5
+  const delta = (0.5 - phase + 1) % 1;
+  return delta * SYNODIC_DAYS;
+}
+
 /**
- * Small disc rendering the moon phase at a given moment.
+ * Just the moon disc as inline SVG. Used both inside MoonWidget and
+ * standalone wherever a small moon indicator is needed.
  *
- * `date` defaults to the current instant. Pass a forecast date
- * (e.g. the active wind/swell slot anchor) and the icon updates
- * to match that future date as the user scrubs the time slider.
- *
- * Rendering: a dark disc, then a lit semicircle on the
- * waxing/waning side (via clip-path), then an elliptical
- * terminator that either subtracts (crescent) or adds (gibbous)
- * lit area. Hairline ring inset slightly so the stroke isn't
- * clipped by the viewBox edge.
+ * Renders dark/cream regardless of the surrounding theme so the
+ * moon shape always reads correctly on both light and dark backgrounds.
  */
 export default function MoonIcon({ date = null, size = 22 }) {
-  // Stable id for the SVG clip-path. useId prevents collisions
-  // when multiple MoonIcons exist on the page.
   const reactId = useId();
   const clipId = `moon-lit-${reactId.replace(/[^a-z0-9]/gi, "")}`;
 
@@ -66,13 +73,6 @@ export default function MoonIcon({ date = null, size = 22 }) {
   const cx = r;
   const cy = r;
 
-  // CSS-var hooks so the moon picks up the active theme. Falls back
-  // to the v2 ink/card hexes if the variables aren't defined.
-  const dark = "var(--ink, #0f172a)";
-  const lit = "var(--card, #ffffff)";
-  const ring = "rgba(71, 85, 105, 0.30)"; // ink2 @ 30%
-
-  // New-moon shortcut: pure dark disc + ring, no terminator math.
   const isNew = phase < 0.005 || phase > 0.995;
   const isWaxing = phase < 0.5;
   const phaseAngle = phase * 2 * Math.PI;
@@ -99,41 +99,81 @@ export default function MoonIcon({ date = null, size = 22 }) {
             </clipPath>
           </defs>
         )}
-
-        {/* 1) Full dark disc */}
-        <circle cx={cx} cy={cy} r={r} fill={dark} />
-
+        <circle cx={cx} cy={cy} r={r} fill={MOON_DARK} />
         {!isNew && (
           <>
-            {/* 2) Lit semicircle on the appropriate side */}
-            <circle
-              cx={cx}
-              cy={cy}
-              r={r}
-              fill={lit}
-              clipPath={`url(#${clipId})`}
-            />
-            {/* 3) Elliptical terminator: dark for crescent, lit for gibbous */}
+            <circle cx={cx} cy={cy} r={r} fill={MOON_LIT} clipPath={`url(#${clipId})`} />
             <ellipse
               cx={cx}
               cy={cy}
               rx={ellipseRx}
               ry={r}
-              fill={terminatorIsDark ? dark : lit}
+              fill={terminatorIsDark ? MOON_DARK : MOON_LIT}
             />
           </>
         )}
-
-        {/* 4) Hairline ring inset to keep stroke inside the viewBox */}
+        {/* Cream outline so the silhouette stays visible at new moon
+            on dark themes (where MOON_DARK blends into the bg). */}
         <circle
           cx={cx}
           cy={cy}
           r={r - 0.5}
           fill="none"
-          stroke={ring}
+          stroke={MOON_RING}
           strokeWidth="0.8"
         />
       </svg>
     </span>
+  );
+}
+
+/**
+ * Floating card combining the moon icon with a label legend.
+ * Designed to anchor in the map's upper-right corner via
+ * `.moon-widget` positioning.
+ *
+ * Shows phase name, illumination %, and days to the next phase
+ * milestone (new or full, whichever's closer). When `date` is a
+ * scrubbed forecast time, also shows the date being displayed.
+ */
+export function MoonWidget({ date = null }) {
+  const isScrubbed = date instanceof Date;
+  const t = date || new Date();
+  const phase = useMemo(() => moonPhase(t), [t]);
+  const phaseName = moonPhaseName(phase);
+  const illum = Math.round(illuminationFraction(phase) * 100);
+
+  // "X days to full" or "X days to new" — pick the closer milestone.
+  const dToFull = daysToNextFull(phase);
+  const dToNew = daysToNextNew(phase);
+  const nextLabel = dToFull < dToNew
+    ? `${Math.max(1, Math.round(dToFull))}d to full`
+    : `${Math.max(1, Math.round(dToNew))}d to new`;
+  // Suppress the "X days to" line when we're already at full or new
+  // (within ~6 hours either side).
+  const atMilestone = dToFull < 0.25 || dToNew < 0.25;
+
+  const dateLabel = isScrubbed
+    ? t.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
+    : null;
+
+  return (
+    <div className="moon-widget" role="figure" aria-label={`Moon phase: ${phaseName}, ${illum}% illuminated`}>
+      <div className="moon-widget-header">MOON</div>
+      <div className="moon-widget-body">
+        <MoonIcon date={t} size={36} />
+        <div className="moon-widget-text">
+          <div className="moon-widget-name">{phaseName}</div>
+          <div className="moon-widget-meta">
+            <span>{illum}% lit</span>
+            {!atMilestone && <span className="dot-sep">·</span>}
+            {!atMilestone && <span>{nextLabel}</span>}
+          </div>
+          {dateLabel && (
+            <div className="moon-widget-date">{dateLabel}</div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
