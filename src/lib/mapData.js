@@ -162,14 +162,31 @@ export const SST_STOPS = [
 ];
 export const SST_RANGE = [9, 25]; // °C
 
+// Value-anchored chl stops (matches Flutter SidPalettes.chl + v2 prototype).
+// Anchored at the diving-relevant 0.1–5 mg/m³ range so the coastal upwelling
+// band (~0.5–3 mg/m³) gets the full color spectrum instead of being squashed
+// into the bottom 30% of a 0.05–20 log10 scale (which made every upwelling
+// state look "navy" — see the 2026-05-03 user report).
+//
+// Stops are in mg/m³, lerped in log10 space (matches the underlying PNG
+// encoding which is also log10):
+//   0.10 → deep navy (Gin-clear oligotrophic)
+//   0.30 → blue (still very clean)
+//   0.80 → mid blue (typical clear nearshore)
+//   2.00 → green (upwelling territory)
+//   5.00 → warm brown (peak upwelling / mild bloom)
+//
+// Below 0.10 clamps to the deepest navy; above 5 clamps to brown.
+// Open-ocean cells at 0.05–0.10 mg/m³ all render as one solid deep
+// navy (correct: that IS gin-clear, no actionable variation), but the
+// coastal 0.5–3 mg/m³ range now shows real differentiation.
 export const CHL_STOPS = [
-  { t: 0.00, c: [10, 50, 140] },
-  { t: 0.25, c: [30, 130, 200] },
-  { t: 0.50, c: [60, 200, 180] },
-  { t: 0.75, c: [110, 210, 90] },
-  { t: 1.00, c: [50, 130, 40] },
+  { mg: 0.10, c: [31, 58, 85] },     // #1F3A55 Gin
+  { mg: 0.30, c: [45, 84, 120] },    // #2D5478 Blue
+  { mg: 0.80, c: [91, 141, 181] },   // #5B8DB5 Clear
+  { mg: 2.00, c: [127, 160, 90] },   // #7FA05A Green
+  { mg: 5.00, c: [122, 90, 60] },    // #7A5A3C Murky
 ];
-const CHL_RANGE_LOG = [Math.log10(0.05), Math.log10(20)];
 
 const lerp = (a, b, t) => a + (b - a) * t;
 const rgbStr = (c) => `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`;
@@ -196,8 +213,26 @@ export function sstColor(c) {
 }
 
 export function chlColor(mg) {
-  const t = (Math.log10(mg) - CHL_RANGE_LOG[0]) / (CHL_RANGE_LOG[1] - CHL_RANGE_LOG[0]);
-  return rgbStr(rampColor(CHL_STOPS, t));
+  // Lerp directly across the value-anchored CHL_STOPS in log10 mg/m³ space.
+  // Clamps below 0.10 to the navy floor and above 5.0 to the brown ceiling.
+  if (!Number.isFinite(mg) || mg <= 0) return rgbStr(CHL_STOPS[0].c);
+  if (mg <= CHL_STOPS[0].mg) return rgbStr(CHL_STOPS[0].c);
+  const last = CHL_STOPS[CHL_STOPS.length - 1];
+  if (mg >= last.mg) return rgbStr(last.c);
+  for (let i = 0; i < CHL_STOPS.length - 1; i++) {
+    const a = CHL_STOPS[i], b = CHL_STOPS[i + 1];
+    if (mg >= a.mg && mg <= b.mg) {
+      const k =
+        (Math.log10(mg) - Math.log10(a.mg)) /
+        (Math.log10(b.mg) - Math.log10(a.mg));
+      return rgbStr([
+        lerp(a.c[0], b.c[0], k),
+        lerp(a.c[1], b.c[1], k),
+        lerp(a.c[2], b.c[2], k),
+      ]);
+    }
+  }
+  return rgbStr(CHL_STOPS[0].c);
 }
 
 function hash(x, y, seed) {
