@@ -17,18 +17,18 @@ const WIND_RAMP = [
 // edge of each category bin (Poor 0–10, Fair 10–20, Good 20–30,
 // Very Good 30–50, Excellent 50+) so cells between bins interpolate smoothly.
 //
-// Mono-blue progression mirroring Flutter SidPalettes.vis + the v2 prototype.
-// Same value-anchored stop pattern we just shipped for chl, so the two
-// "water quality" layers (chl + viz) speak the same visual language:
-// pale-blue = sub-optimal, deep navy = best. Wind/swell keep their
-// multi-hue safety ramps because those communicate physical risk, not
-// quality.
+// Hybrid semantics — warm "danger" floor for unsafe-to-dive viz, then a
+// cool blue ramp climbing from green ("ok, go") through deepening blues
+// to deep navy at Excellent. Keeps the at-a-glance traffic-light reading
+// (orange = avoid, green = go) that pure mono-blue lost. Excellent
+// matches Flutter SidPalettes.vis' deep navy for cross-app visual
+// continuity at the high end.
 const VIZ_RAMP = [
-  { ft: 0,  c: [168, 184, 200] },  // Poor       — gray-blue   #A8B8C8
-  { ft: 10, c: [127, 163, 192] },  // Fair       — light blue  #7FA3C0
-  { ft: 20, c: [91,  141, 181] },  // Good       — mid blue    #5B8DB5
-  { ft: 30, c: [58,  110, 149] },  // Very Good  — deeper blue #3A6E95
-  { ft: 50, c: [31,   77, 117] },  // Excellent  — deep navy   #1F4D75
+  { ft: 0,  c: [194,  65,  12] },  // Poor       — burnt orange #C2410C
+  { ft: 10, c: [34,  197,  94] },  // Fair       — green        #22C55E
+  { ft: 20, c: [6,   182, 212] },  // Good       — cyan         #06B6D4
+  { ft: 30, c: [3,   105, 161] },  // Very Good  — blue         #0369A1
+  { ft: 50, c: [31,   77, 117] },  // Excellent  — deep navy    #1F4D75
 ];
 
 // Significant wave height ramp (Hs in METRES → rgb). Gradient reads

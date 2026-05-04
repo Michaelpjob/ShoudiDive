@@ -583,15 +583,16 @@ body {
 }
 
 /* Predicted-visibility ramp: Poor → Fair → Good → Very Good → Excellent.
-   Mono-blue progression matching Flutter SidPalettes.vis + the v2 prototype.
+   Warm "danger" floor (burnt-orange Poor) → green Fair → cool blue ramp
+   deepening through cyan/blue/navy. Keeps the traffic-light reading.
    Stops match VIZ_RAMP in DataOverlay.jsx (0/10/20/30/50 ft over a 0..50 ft
    legend bar → 0/20/40/60/100%). */
 .legend-bar.viz {
   background: linear-gradient(90deg,
-    rgb(168,184,200) 0%,
-    rgb(127,163,192) 20%,
-    rgb(91,141,181) 40%,
-    rgb(58,110,149) 60%,
+    rgb(194,65,12) 0%,
+    rgb(34,197,94) 20%,
+    rgb(6,182,212) 40%,
+    rgb(3,105,161) 60%,
     rgb(31,77,117) 100%);
 }
 
