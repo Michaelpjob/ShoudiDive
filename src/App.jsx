@@ -854,17 +854,12 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
                 dataReady={dataState?.ready}
               />
 
-              {/* Wind particles — confined to fitted box so streamlines
-                  don't fly off into the empty pillarbox margins. */}
-              <foreignObject x={f.marginX} y={f.marginY} width={f.innerW} height={f.innerH}>
-                <WindParticles
-                  width={f.innerW}
-                  height={f.innerH}
-                  composite={activeComposite}
-                  dataReady={dataState?.ready}
-                  active={layer === "wind"}
-                />
-              </foreignObject>
+              {/* Wind particles used to live here as a foreignObject child
+                  of the SVG. Pulled out — see the WindParticlesHost block
+                  after </svg> below. iOS Safari doesn't apply the SVG
+                  viewBox transform to foreignObject contents, which made
+                  the streamlines stay locked to screen pixels while the
+                  rest of the map zoomed. */}
             </>
           );
         })()}
@@ -917,6 +912,49 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
           })}
         </g>
       </svg>
+
+      {/* Wind particles — moved out of the SVG (used to be a
+          foreignObject inside .map-svg, but iOS Safari doesn't honor the
+          parent SVG's viewBox transform on foreignObject contents).
+          Now an HTML canvas at fixed pixel size = full-extent fitted
+          box, with a CSS transform that mirrors the current viewBox so
+          the streamlines pan/zoom with the basemap. The land-mask
+          respawn check inside WindParticles (already there) keeps
+          streamlines from visibly crossing land now that the SVG land
+          basemap no longer naturally occludes them. */}
+      {layer === "wind" && (() => {
+        const f = getFitted(size.w, size.h);
+        const cssLeft = ((f.marginX - vb.x) / vb.w) * size.w;
+        const cssTop  = ((f.marginY - vb.y) / vb.h) * size.h;
+        const scaleX = size.w / vb.w;
+        const scaleY = size.h / vb.h;
+        return (
+          <div
+            className="wind-particles-host"
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              width: f.innerW,
+              height: f.innerH,
+              transform: `translate(${cssLeft}px, ${cssTop}px) scale(${scaleX}, ${scaleY})`,
+              transformOrigin: "0 0",
+              pointerEvents: "none",
+              // Avoid blurry rasterized scaling on retina; let the
+              // browser composite at the new scale natively.
+              willChange: "transform",
+            }}
+          >
+            <WindParticles
+              width={f.innerW}
+              height={f.innerH}
+              composite={activeComposite}
+              dataReady={dataState?.ready}
+              active
+            />
+          </div>
+        );
+      })()}
 
       <MapLabels labels={allLabels} vb={vb} size={size} />
 
