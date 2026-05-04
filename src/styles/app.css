@@ -157,7 +157,9 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px; height: 28px;
+  /* 44px is Apple HIG / WCAG 2.5.5 min for touch targets. Was 28px,
+     way too small to tap reliably on a phone. */
+  width: 44px; height: 44px;
   border-radius: var(--r-2);
   border: 1px solid transparent;
   background: transparent;
@@ -741,9 +743,11 @@ body {
   appearance: none;
   background: transparent;
   border: 0;
-  width: 32px; height: 32px;
+  /* Bumped from 32 to 44 — was below Apple HIG / WCAG 2.5.5 touch
+     target minimum, hard to tap precisely on a phone. */
+  width: 44px; height: 44px;
   font: inherit;
-  font-size: 16px;
+  font-size: 18px;
   color: var(--ink-2);
   cursor: pointer;
   display: flex;
@@ -1334,11 +1338,17 @@ body {
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 10px;
-  padding: 6px 12px;
+  /* Extra vertical padding so the status row doubles as a tap-to-open
+     zone (combined with .ms-handle's expanded hit area below, the
+     whole top of the peek strip is tappable, not just the 14px
+     visual handle bar). */
+  padding: 10px 12px;
   font-size: 11.5px;
   color: var(--ink-2);
   border-bottom: 1px solid var(--line-2);
   min-height: 28px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: rgb(15 23 42 / 0.06);
 }
 .ms-status-layer {
   display: inline-flex;
@@ -1381,12 +1391,15 @@ body {
   border: 0;
   background: transparent;
   width: 100%;
-  height: 14px;
+  /* Visual bar stays small; padding gives a 44px tappable height
+     so the button passes Apple HIG / WCAG 2.5.5. */
+  height: auto;
+  padding: 20px 0;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  padding: 0;
+  -webkit-tap-highlight-color: rgb(15 23 42 / 0.06);
 }
 .ms-handle-bar {
   width: 36px;

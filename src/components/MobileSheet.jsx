@@ -233,8 +233,24 @@ export default function MobileShell({
       <div className="ms-peek">
         {/* Status line — layer name on left, value at focal point in the
             middle, time on the right. Tells the user at a glance what
-            they're looking at without opening anything. */}
-        <div className="ms-status">
+            they're looking at without opening anything. Also doubles
+            as a tap target to open the sheet (the .ms-handle bar below
+            is just a visual affordance — most users tap the visible
+            info row, not a 14px stripe). */}
+        <div
+          className="ms-status"
+          role="button"
+          tabIndex={0}
+          aria-label={open ? "Close conditions panel" : "Open conditions panel"}
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setOpen((v) => !v);
+            }
+          }}
+        >
           <span className="ms-status-layer">
             <span className="dot" />
             <strong>{layerNameFor(layer)}</strong>
