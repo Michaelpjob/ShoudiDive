@@ -46,9 +46,14 @@ export default function MapLabels({ labels, vb, size }) {
       const sx = ((vbX - vb.x) / vb.w) * size.w;
       const sy = ((vbY - vb.y) / vb.h) * size.h;
       const fontSize = lab.fontSize || 11;
-      // Roughly estimate width so collision detection knows the label's footprint.
-      const charPx = fontSize * 0.55;
-      const w = lab.text.length * charPx + 6;
+      // Roughly estimate width so collision detection + edge-flip
+      // know the label's footprint. 0.62× fontSize is a generous-side
+      // estimate for uppercase + letter-spacing + the 3px CSS
+      // padding-x; under-counting (was 0.55) caused SAN DIEGO + LA
+      // JOLLA to still clip by a few px on a portrait phone after
+      // the edge-flip auto-correction.
+      const charPx = fontSize * 0.62;
+      const w = lab.text.length * charPx + 12;
       const h = fontSize + 6;
 
       // Auto-flip the anchor near screen edges so a label that would
