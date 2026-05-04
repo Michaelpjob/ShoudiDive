@@ -1109,21 +1109,21 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
               <div className="info-section">
                 <h4 className="info-h">Water Clarity (Chlorophyll-a)</h4>
                 <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(10,50,140)" }}></span>
-                  <strong>Deep blue</strong> = gin-clear, low-productivity water. Best
+                  <span className="swatch" style={{ background: "rgb(31,58,85)" }}></span>
+                  <strong>Deep navy</strong> = gin-clear, low-productivity water. Best
                   visibility for divers and spearos.
                 </p>
                 <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(60,200,180)" }}></span>
-                  <strong>Teal</strong> = moderate productivity. Normal coastal viz.
+                  <span className="swatch" style={{ background: "rgb(91,141,181)" }}></span>
+                  <strong>Mid blue</strong> = typical clear nearshore viz.
                 </p>
                 <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(110,210,90)" }}></span>
-                  <strong>Green</strong> = productive — fish food, but viz drops to a few feet.
+                  <span className="swatch" style={{ background: "rgb(127,160,90)" }}></span>
+                  <strong>Olive green</strong> = upwelling — fish food, but viz drops.
                 </p>
                 <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(50,130,40)" }}></span>
-                  <strong>Dense green</strong> = bloom or red tide. Avoid if water smells off.
+                  <span className="swatch" style={{ background: "rgb(122,90,60)" }}></span>
+                  <strong>Warm brown</strong> = peak upwelling or mild bloom. Avoid if water smells off.
                 </p>
               </div>
             ) : layer === "wind" ? (
@@ -1209,20 +1209,20 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
                   <strong>Poor</strong> — 0–10 ft. Burnt orange; silty / blown out.
                 </p>
                 <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(234,179,8)" }}></span>
-                  <strong>Fair</strong> — 10–20 ft. Yellow; washed out.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(132,204,22)" }}></span>
-                  <strong>Good</strong> — 20–30 ft. Lime; typical CA kelp diving with some green.
+                  <span className="swatch" style={{ background: "rgb(34,197,94)" }}></span>
+                  <strong>Fair</strong> — 10–20 ft. Green; diveable but washed out.
                 </p>
                 <p className="info-p">
                   <span className="swatch" style={{ background: "rgb(6,182,212)" }}></span>
-                  <strong>Very Good</strong> — 30–50 ft. Cyan; clean blue water.
+                  <strong>Good</strong> — 20–30 ft. Cyan; typical CA kelp diving.
                 </p>
                 <p className="info-p">
                   <span className="swatch" style={{ background: "rgb(3,105,161)" }}></span>
-                  <strong>Excellent</strong> — 50 ft+. Deep blue; tropical / once-a-year clarity.
+                  <strong>Very Good</strong> — 30–50 ft. Blue; clean blue water.
+                </p>
+                <p className="info-p">
+                  <span className="swatch" style={{ background: "rgb(31,77,117)" }}></span>
+                  <strong>Excellent</strong> — 50 ft+. Deep navy; once-a-year clarity.
                 </p>
               </div>
             )}

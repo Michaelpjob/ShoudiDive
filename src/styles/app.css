@@ -562,13 +562,21 @@ body {
     rgb(230,110,60) 85%,
     rgb(170,20,35) 100%);
 }
+/* Stops MUST match CHL_STOPS in src/lib/mapData.js. CSS gradient
+   percentages are positions of the value-anchored stops in log10 mg/m³
+   space, which is the same scale the data is encoded + sampled in:
+     0.10 → 0%
+     0.30 → 28%
+     0.80 → 53%
+     2.00 → 77%
+     5.00 → 100% */
 .legend-bar.chl {
   background: linear-gradient(90deg,
-    rgb(10,50,140) 0%,
-    rgb(30,130,200) 25%,
-    rgb(60,200,180) 50%,
-    rgb(110,210,90) 75%,
-    rgb(50,130,40) 100%);
+    rgb(31,58,85) 0%,
+    rgb(45,84,120) 28%,
+    rgb(91,141,181) 53%,
+    rgb(127,160,90) 77%,
+    rgb(122,90,60) 100%);
 }
 
 .legend-bar.wind {
@@ -1007,7 +1015,9 @@ body {
   background: linear-gradient(90deg, rgb(12,38,130) 0%, rgb(40,130,210) 25%, rgb(120,220,220) 50%, rgb(240,220,110) 70%, rgb(230,110,60) 85%, rgb(170,20,35) 100%);
 }
 .m-legend-bar.chl {
-  background: linear-gradient(90deg, rgb(10,50,140) 0%, rgb(30,130,200) 25%, rgb(60,200,180) 50%, rgb(110,210,90) 75%, rgb(50,130,40) 100%);
+  /* Mirror of .legend-bar.chl — see comment there for the log10
+     gradient-stop math. */
+  background: linear-gradient(90deg, rgb(31,58,85) 0%, rgb(45,84,120) 28%, rgb(91,141,181) 53%, rgb(127,160,90) 77%, rgb(122,90,60) 100%);
 }
 .m-legend-ticks {
   display: flex; justify-content: space-between;

@@ -448,20 +448,20 @@ function Info({ layer }) {
       {layer === "chl" && (
         <>
           <p className="info-p">
-            <span className="swatch" style={{ background: "rgb(10,50,140)" }}></span>
-            <strong>Deep blue</strong> = gin-clear, low-productivity water.
+            <span className="swatch" style={{ background: "rgb(31,58,85)" }}></span>
+            <strong>Deep navy</strong> = gin-clear, low-productivity water.
           </p>
           <p className="info-p">
-            <span className="swatch" style={{ background: "rgb(60,200,180)" }}></span>
-            <strong>Teal</strong> = moderate. Normal coastal viz.
+            <span className="swatch" style={{ background: "rgb(91,141,181)" }}></span>
+            <strong>Mid blue</strong> = typical clear nearshore viz.
           </p>
           <p className="info-p">
-            <span className="swatch" style={{ background: "rgb(110,210,90)" }}></span>
-            <strong>Green</strong> = productive. Fish food, low viz.
+            <span className="swatch" style={{ background: "rgb(127,160,90)" }}></span>
+            <strong>Olive green</strong> = upwelling. Fish food, low viz.
           </p>
           <p className="info-p">
-            <span className="swatch" style={{ background: "rgb(50,130,40)" }}></span>
-            <strong>Dense green</strong> = bloom / red tide.
+            <span className="swatch" style={{ background: "rgb(122,90,60)" }}></span>
+            <strong>Warm brown</strong> = peak upwelling or mild bloom.
           </p>
         </>
       )}
@@ -529,19 +529,19 @@ function Info({ layer }) {
             <strong>Poor</strong> 0–10 ft · silty / blown out.
           </p>
           <p className="info-p">
-            <span className="swatch" style={{ background: "rgb(234,179,8)" }}></span>
-            <strong>Fair</strong> 10–20 ft · washed out.
-          </p>
-          <p className="info-p">
-            <span className="swatch" style={{ background: "rgb(132,204,22)" }}></span>
-            <strong>Good</strong> 20–30 ft · typical kelp diving.
+            <span className="swatch" style={{ background: "rgb(34,197,94)" }}></span>
+            <strong>Fair</strong> 10–20 ft · diveable but washed out.
           </p>
           <p className="info-p">
             <span className="swatch" style={{ background: "rgb(6,182,212)" }}></span>
-            <strong>Very Good</strong> 30–50 ft · clean blue.
+            <strong>Good</strong> 20–30 ft · typical kelp diving.
           </p>
           <p className="info-p">
             <span className="swatch" style={{ background: "rgb(3,105,161)" }}></span>
+            <strong>Very Good</strong> 30–50 ft · clean blue.
+          </p>
+          <p className="info-p">
+            <span className="swatch" style={{ background: "rgb(31,77,117)" }}></span>
             <strong>Excellent</strong> 50+ ft · once-a-year clarity.
           </p>
           <p className="info-p" style={{ fontSize: 10.5, color: "var(--ink-3)" }}>
