@@ -66,7 +66,14 @@ body {
   font-size: 14px;
   line-height: 1.4;
   overflow: hidden;
+  /* 100dvh (dynamic viewport height) so iOS Safari's collapsing
+     bottom toolbar doesn't eat the bottom of the page. With plain
+     100vh, the layer chip strip at the bottom of the peek bar lands
+     BEHIND Safari's chrome and is unreachable. dvh is supported in
+     Safari 15.4+, Chrome 108+, FF 101+ — universal at this point;
+     keep 100vh as a fallback for the truly ancient. */
   height: 100vh;
+  height: 100dvh;
 }
 
 .mono { font-family: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, Consolas, monospace; font-feature-settings: "tnum"; }
@@ -77,6 +84,7 @@ body {
   position: relative;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   background: var(--sea);
 }
