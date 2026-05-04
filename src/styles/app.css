@@ -1312,14 +1312,16 @@ body {
  * with time controls, spots, legend, and info — no tabs, single
  * scrollable column.
  *
- * Heights:
- *   ms-status  ~28 px
- *   ms-handle  ~14 px (12 px bar + click padding)
+ * Heights (after the 2026-05-04 tap-target fix):
+ *   ms-status  ~48 px (padding 10+content+10)
+ *   ms-handle  ~44 px (4px bar + 20px padding each side, HIG min)
  *   ms-chips   ~52 px
- *   total peek ~94 px + safe-area-inset-bottom
+ *   total peek ~144 px + safe-area-inset-bottom
  *
  * Anything that floats above the strip (zoom-ctl, mpa-banner, the
- * wind/swell timeline) needs a `bottom` offset of ~108 px on phones.
+ * wind/swell timeline) needs a `bottom` offset of ~156 px on phones.
+ * Update `.map-stage`'s bottom calc below + the .zoom-ctl override
+ * if you nudge any of the heights above.
  */
 
 .mobile-shell {
@@ -1704,9 +1706,15 @@ body {
      SVG bbox (and its pillarboxing) gets recomputed for the actually-
      visible vertical space. Without this the map renders thinking it
      has the full viewport height, shoves all the pillarbox to the
-     top, and ends up hiding Catalina/SD/Coronados behind the strip. */
+     top, and ends up hiding Catalina/SD/Coronados behind the strip.
+
+     Bumped from 94 -> 144 after the tap-target fix grew the peek
+     strip (ms-status padding 6->10, ms-handle 14->44 hit area).
+     Without this bump the wind/swell timeline at bottom:8 was
+     getting buried behind the now-taller strip — see user report
+     2026-05-04 "slider is blocked". */
   .map-stage {
-    bottom: calc(94px + env(safe-area-inset-bottom));
+    bottom: calc(144px + env(safe-area-inset-bottom));
   }
 
   /* MPA Coronados disclaimer — float just above the peek strip.
