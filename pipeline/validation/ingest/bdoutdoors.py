@@ -42,7 +42,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 
-from . import _llm_extract
+from . import _llm_cache, _llm_extract
 from ._base import BaseScraper
 
 
@@ -69,8 +69,10 @@ FEEDS = [
     },
 ]
 
-MAX_AGE_HOURS = 72        # only LLM-process posts < 72h old
-MAX_ITEMS_PER_FEED = 6    # cap LLM cost per run
+MAX_AGE_HOURS = 72         # only LLM-process posts < 72h old
+MAX_ITEMS_PER_FEED = 10    # cap LLM cost per run (cache dedup keeps repeat
+                           # cost ~zero, so this can be wider than the
+                           # original 6 without blowing the budget)
 
 # RSS namespace used by XenForo for <content:encoded>
 _NS = {
@@ -80,10 +82,14 @@ _NS = {
 
 # Cheap pre-filter: if the body mentions any of these keywords we're
 # fairly sure it's worth the LLM call. Otherwise it's likely off-topic
-# (gear-found, gun ID, etc).
+# (gear-found, gun ID, etc). Widened 2026-05-04 to catch diving slang
+# the original regex missed ("blown out", "epic", "crystal", etc.).
 _VIZ_KEYWORDS = re.compile(
-    r"\b(?:vis(?:ibility)?|viz|water clarity|gin clear|murk|dirty water|clean water|"
-    r"warm water|cold water|temp(?:erature)? was|sst|°|[0-9]{1,3}\s*(?:ft|feet|degrees))\b",
+    r"\b(?:vis(?:ibility)?|viz|water clarity|gin[\s-]?clear|murk|murky|"
+    r"dirty water|clean water|warm water|cold water|temp(?:erature)?|sst|°|"
+    r"blown[\s-]?out|crystal|epic|stoked|gnar|nuked|"
+    r"green water|brown water|chocolate|chunky|"
+    r"[0-9]{1,3}\s*(?:ft|feet|degrees|°[FC]?))\b",
     re.IGNORECASE,
 )
 
@@ -118,7 +124,11 @@ class BdOutdoorsScraper(BaseScraper):
             return []
 
         cutoff = datetime.now(timezone.utc) - timedelta(hours=MAX_AGE_HOURS)
+        # Per-post LLM-call dedup. The hourly cron sees the same posts
+        # for ~3-4 days; without this we'd LLM each one ~24-96 times.
+        cache = _llm_cache.load()
         out: list[dict] = []
+        cache_skips = 0
         for feed in FEEDS:
             try:
                 items = self._fetch_feed(feed["url"], cutoff)
@@ -129,12 +139,23 @@ class BdOutdoorsScraper(BaseScraper):
 
             kept = 0
             for item in items[:MAX_ITEMS_PER_FEED]:
+                cache_key = f"bdoutdoors:{item.get('guid') or item['link']}"
+                if _llm_cache.seen(cache, cache_key):
+                    cache_skips += 1
+                    continue
                 obs = self._parse_item(item, feed=feed)
+                # Mark as LLM'd whether or not we got obs back — the
+                # purpose is to skip re-LLM, not to force a re-try on
+                # zero-obs (a no-quantitative-data post stays no-data).
+                _llm_cache.mark(cache, cache_key)
                 out.extend(obs)
                 if obs:
                     kept += 1
             print(f"  {self.source_id}: {feed['id']} → "
                   f"{len(items)} fresh items, {kept} produced obs")
+        if cache_skips:
+            print(f"  {self.source_id}: cache-skipped {cache_skips} posts (already LLM'd)")
+        _llm_cache.save(_llm_cache.prune(cache))
         return out
 
     # ---- RSS fetch + parse ---------------------------------------------

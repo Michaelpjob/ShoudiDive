@@ -38,7 +38,7 @@ import re
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 
-from . import _llm_extract
+from . import _llm_cache, _llm_extract
 from ._base import BaseScraper
 
 
@@ -61,9 +61,15 @@ _SELFTEXT_RE = re.compile(r"<!--\s*SC_OFF\s*-->(.*?)<!--\s*SC_ON\s*-->", re.DOTA
 _TAG_RE = re.compile(r"<[^>]+>")
 
 # Cheap pre-filter: skip posts that don't even mention a viz/temp keyword.
+# Widened 2026-05-04 to catch diving slang (matches bdoutdoors.py exactly —
+# kept duplicated for now; if a third scraper reaches for these we'll
+# extract to _filters.py).
 _VIZ_KEYWORDS = re.compile(
-    r"\b(?:vis(?:ibility)?|viz|water clarity|gin clear|murk|dirty water|clean water|"
-    r"warm water|cold water|temp(?:erature)?|sst|°|[0-9]{1,3}\s*(?:ft|feet|degrees))\b",
+    r"\b(?:vis(?:ibility)?|viz|water clarity|gin[\s-]?clear|murk|murky|"
+    r"dirty water|clean water|warm water|cold water|temp(?:erature)?|sst|°|"
+    r"blown[\s-]?out|crystal|epic|stoked|gnar|nuked|"
+    r"green water|brown water|chocolate|chunky|"
+    r"[0-9]{1,3}\s*(?:ft|feet|degrees|°[FC]?))\b",
     re.IGNORECASE,
 )
 
@@ -92,7 +98,12 @@ class RedditCAScraper(BaseScraper):
             return []
 
         cutoff = datetime.now(timezone.utc) - timedelta(hours=MAX_AGE_HOURS)
+        # Per-post LLM-call dedup. Reddit threads sit in newest-25 for
+        # ~2 days; without this we'd re-LLM each one ~48 times before
+        # cycling out.
+        cache = _llm_cache.load()
         out: list[dict] = []
+        cache_skips = 0
         for sr in SUBREDDITS:
             try:
                 items = self._fetch_subreddit(sr["sub"], cutoff)
@@ -109,13 +120,21 @@ class RedditCAScraper(BaseScraper):
                 if not self._ca_relevant(item["body"]):
                     continue
                 ca_relevant += 1
+                cache_key = f"reddit:{item.get('permalink_id') or item['url']}"
+                if _llm_cache.seen(cache, cache_key):
+                    cache_skips += 1
+                    continue
                 obs = self._parse_item(item, source_tag=sr["tag"])
+                _llm_cache.mark(cache, cache_key)
                 out.extend(obs)
                 if obs:
                     kept += 1
             print(f"  {self.source_id}: r/{sr['sub']} → "
                   f"{len(items)} fresh posts, {ca_relevant} CA-relevant, "
                   f"{kept} produced obs")
+        if cache_skips:
+            print(f"  {self.source_id}: cache-skipped {cache_skips} posts (already LLM'd)")
+        _llm_cache.save(_llm_cache.prune(cache))
         return out
 
     # ---- Reddit Atom fetch + parse ------------------------------------
@@ -165,11 +184,17 @@ class RedditCAScraper(BaseScraper):
     def _ca_relevant(self, body: str) -> bool:
         spot_hit = bool(self._spot_re and self._spot_re.search(body))
         kw_hit = bool(_VIZ_KEYWORDS.search(body))
-        # Want BOTH a CA spot AND a viz/temp keyword. Spear/scuba
-        # subs are global so a viz number alone is usually a non-CA
-        # trip report, and a spot mention alone (e.g. "I'm thinking
-        # of diving Catalina next month") has no quantitative signal.
-        return spot_hit and kw_hit
+        # Loosened 2026-05-04: spot OR keyword (was AND). The strict
+        # AND filter rejected ~zero scoreable posts in the first
+        # ~24 hours of running. Trade-off: more LLM calls on borderline
+        # posts, but the new _llm_cache module prevents the same post
+        # from being re-LLM'd on subsequent cron ticks (the dominant
+        # cost driver). Posts that pass the loose filter but produce
+        # no quantitative obs still cost ~$0.001 each — bounded by
+        # MAX_ITEMS_PER_SUB. r/scuba + r/spearfishing newest-25 with
+        # CA terms picks up enough trip reports to make the broader
+        # net worth the cost.
+        return spot_hit or kw_hit
 
     # ---- Per-item parsing ---------------------------------------------
 
