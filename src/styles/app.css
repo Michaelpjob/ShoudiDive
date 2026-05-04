@@ -1728,9 +1728,12 @@ body {
      i.e. just above the peek strip. */
   .zoom-ctl {
     right: 8px;
-    bottom: 8px;
+    /* Lift the column above the peek strip. The strip is ~144 px tall
+       on mobile (status row + handle + chip row), and we need a small
+       gap. Without this, the bottom button (recenter) is fully buried. */
+    bottom: 156px;
   }
-  .zoom-ctl button { width: 40px; height: 40px; }
+  .zoom-ctl button { width: 44px; height: 44px; }
   .attribution { display: none; }
   .tooltip { font-size: 11px; }
 
