@@ -14,6 +14,26 @@ export const GEO_ASPECT =
   ((BBOX.lngMax - BBOX.lngMin) * _COS_MID_LAT) /
   (BBOX.latMax - BBOX.latMin);
 
+// "Fill" mode for getFitted — when true, the bbox is stretched to fill
+// the entire container instead of pillar/letterboxing to preserve the
+// geographic aspect ratio. Set by App.jsx via setFillMode whenever
+// useIsMobile() is true.
+//
+// Why mobile gets fill: on a portrait phone the CA bbox aspect (~1.24
+// W:H) inside a phone container (~0.52 W:H) leaves huge top/bottom
+// letterbox margins — about half the screen is empty cream/sky-blue.
+// On desktop the side panels (Layer / Saved Spots / How to Read /
+// Legend) fill the pillarbox margins, so contain mode looks fine.
+//
+// Trade-off: a slight vertical stretch (~2.4× on iPhone portrait)
+// makes the coastline look "tall". Pin positions, MPAs, and the
+// data overlay all stretch the same way (everything routes through
+// getFitted), so they stay anchored to coastline features. For an
+// at-a-glance ocean conditions viewer this is the right call.
+let _fillMode = false;
+export function setFillMode(fill) { _fillMode = !!fill; }
+export function getFillMode() { return _fillMode; }
+
 // Pillarbox / letterbox the bbox inside an arbitrary container so x and y
 // pixels both represent the same on-the-ground distance regardless of the
 // container's aspect ratio. Returns the rectangle inside (0..w, 0..h) that
@@ -21,6 +41,11 @@ export const GEO_ASPECT =
 export function getFitted(w, h) {
   if (!(w > 0) || !(h > 0)) {
     return { marginX: 0, marginY: 0, innerW: w || 0, innerH: h || 0 };
+  }
+  // Mobile fill mode: skip the aspect-preserving margin and use the
+  // entire container. See _fillMode comment above for rationale.
+  if (_fillMode) {
+    return { marginX: 0, marginY: 0, innerW: w, innerH: h };
   }
   const containerAspect = w / h;
   let innerW;

@@ -37,10 +37,14 @@ jobs:
           node-version: "20"
           cache: npm
 
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
+      # Flutter SDK setup retired 2026-05-04 — see commit message.
+      # Flutter web build was producing a 7 MB bundle at /app/ that
+      # had structural mobile rendering issues (foreignObject viewBox
+      # bug, slow CanvasKit boot). The React site at / now does the
+      # mobile job, so /app/ is no longer worth building. Keeping
+      # flutter_app/ in the repo for an eventual native Android
+      # build (`flutter build apk` → Play Store) — that path still
+      # works, it just doesn't run in CI on every deploy.
 
       - name: Install pipeline dependencies
         run: pip install -r pipeline/requirements.txt
@@ -194,20 +198,13 @@ jobs:
       - name: Install JS dependencies
         run: npm ci
 
-      - name: Build Flutter app (served at /app/)
-        # Compiles flutter_app/ → flutter_app/build/web/, then drops the
-        # bundle into public/app/ so Vite copies it through to dist/app/
-        # in the next step. public/app/ is gitignored — the deploy is
-        # the only place these artifacts exist outside this CI runner.
-        working-directory: flutter_app
-        run: |
-          flutter --version
-          flutter pub get
-          flutter test
-          flutter build web --release --base-href /app/
-          rm -rf ../public/app
-          mkdir -p ../public/app
-          cp -r build/web/. ../public/app/
+      # The "Build Flutter app (served at /app/)" step that used to live
+      # here was retired 2026-05-04. Flutter web at /app/ had structural
+      # mobile issues (foreignObject viewBox bug, slow CanvasKit boot,
+      # ~7 MB bundle). The React site at / handles mobile via MobileSheet
+      # + media-query layout and works fast on phones. Keeping flutter_app/
+      # in the repo so we can still ship a native Android build via
+      # `flutter build apk` when ready; just not on every deploy.
 
       - name: Build
         run: npm run build

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { setFillMode } from "./lib/mapData.js";
 import { SeaBasemap, LandBasemap, PLACE_LABELS } from "./components/Basemap.jsx";
 import DataOverlay from "./components/DataOverlay.jsx";
 import WindParticles from "./components/WindParticles.jsx";
@@ -474,6 +475,19 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
     : layer === "swell" ? selToSlotKey(swellSel, getSwell5dSummary())
     : composite;
   const isMobile = useIsMobile();
+
+  // Mirror mobile detection into mapData's getFitted module flag so
+  // every project()/unproject()/data-overlay/wind-particles render
+  // consistently fills the screen instead of leaving huge cream +
+  // sky-blue letterbox margins above/below the data on a portrait
+  // phone. Desktop keeps the aspect-preserving margins because the
+  // side panels (Layer / Saved Spots / How to Read) cover them.
+  //
+  // Set during render (not useEffect) so child components see the
+  // correct fill mode on the SAME render — useEffect would lag by
+  // one paint and cause a flicker.
+  setFillMode(isMobile);
+
   const stageRef = useRef(null);
   const [size, setSize] = useState({ w: 1200, h: 700 });
   const [hover, setHover] = useState(null);
