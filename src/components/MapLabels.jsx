@@ -50,9 +50,34 @@ export default function MapLabels({ labels, vb, size }) {
       const charPx = fontSize * 0.55;
       const w = lab.text.length * charPx + 6;
       const h = fontSize + 6;
-      const anchor = lab.anchor || "center";
-      const offX = lab.offsetX || 0;
+
+      // Auto-flip the anchor near screen edges so a label that would
+      // otherwise clip flips to the other side of its pin. Fixes the
+      // "60 Mile Co", "Cor", etc. labels getting truncated against the
+      // right edge of the map on a portrait phone — saved spots
+      // hardcode anchor:'left' but for spots near the east extent
+      // (Cortes, Tanner, 60 Mile, Coronados) the text runs off-screen.
+      let anchor = lab.anchor || "center";
+      let offX = lab.offsetX || 0;
       const offY = lab.offsetY != null ? lab.offsetY : -fontSize / 2 - 1;
+      const edgePad = 4;
+      if (anchor === "left" && sx + offX + w > size.w - edgePad) {
+        anchor = "right";
+        offX = -offX;
+      } else if (anchor === "right" && sx + offX - w < edgePad) {
+        anchor = "left";
+        offX = -offX;
+      } else if (anchor === "center") {
+        // Center labels: nudge horizontally if they'd clip either edge.
+        if (sx - w / 2 < edgePad) {
+          anchor = "left";
+          offX = edgePad - sx;
+        } else if (sx + w / 2 > size.w - edgePad) {
+          anchor = "right";
+          offX = (size.w - edgePad) - sx;
+        }
+      }
+
       let left, top;
       if (anchor === "left") {
         left = sx + offX;
