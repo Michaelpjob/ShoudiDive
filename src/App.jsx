@@ -991,8 +991,13 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
 
       {/* Moon-phase legend — anchored top-right of the map. On wind/swell
           layers it tracks the time slider (the parent passes the active
-          slot's anchor as viewingDate); other layers show "now". */}
-      <MoonWidget date={viewingDate} />
+          slot's anchor as viewingDate); other layers show "now".
+          On mobile, wind/swell also have a top-center timeline; the
+          .below-timeline class shifts the moon down to clear it. */}
+      <MoonWidget
+        date={viewingDate}
+        className={(layer === "wind" || layer === "swell") ? "below-timeline" : ""}
+      />
 
       {/* Wind scrubber — sticky bottom bar, scrolls through 7 days × 24
           hours (HRRR f00–f48 + GFS f49–f168; days 5–6 are GFS 3-hour).

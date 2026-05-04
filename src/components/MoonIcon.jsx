@@ -136,7 +136,7 @@ export default function MoonIcon({ date = null, size = 22 }) {
  * milestone (new or full, whichever's closer). When `date` is a
  * scrubbed forecast time, also shows the date being displayed.
  */
-export function MoonWidget({ date = null }) {
+export function MoonWidget({ date = null, className = "" }) {
   const isScrubbed = date instanceof Date;
   const t = date || new Date();
   const phase = useMemo(() => moonPhase(t), [t]);
@@ -158,7 +158,11 @@ export function MoonWidget({ date = null }) {
     : null;
 
   return (
-    <div className="moon-widget" role="figure" aria-label={`Moon phase: ${phaseName}, ${illum}% illuminated`}>
+    <div
+      className={"moon-widget" + (className ? " " + className : "")}
+      role="figure"
+      aria-label={`Moon phase: ${phaseName}, ${illum}% illuminated`}
+    >
       <div className="moon-widget-header">MOON</div>
       <div className="moon-widget-body">
         <MoonIcon date={t} size={36} />

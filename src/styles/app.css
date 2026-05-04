@@ -2211,14 +2211,28 @@ body {
 
 @media (max-width: 760px) {
   .wind-timeline {
-    /* Map-stage now ends above the peek strip on mobile, so the
-       timeline at bottom: 8 sits just above the chip row with a few
-       px of breathing room. */
-    bottom: 8px;
+    /* User asked 2026-05-04: move slider to top middle, smaller
+       footprint. Also fixes a rendering bug — the desktop rule sets
+       transform: translateX(-50%) which the previous mobile override
+       didn't reset, so combined with left: 6 the timeline got
+       translated ~200 px off the left edge of the screen ("left side
+       cut off"). Anchored top-center now, narrower width, transform
+       reused for centering. */
+    top: 12px;
+    bottom: auto;
     height: 56px;
-    width: calc(100% - 12px);
-    left: 6px;
-    right: 6px;
+    width: min(360px, calc(100% - 24px));
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+  }
+  /* When the slider is at the top, push the moon widget below it so
+     they stack instead of fighting for the same upper-right corner.
+     This class is added by App.jsx on wind/swell layers; on
+     temp/chl/viz layers (no timeline) the moon stays at the default
+     top: 8 from the base .moon-widget mobile rule. */
+  .moon-widget.below-timeline {
+    top: 80px;
   }
   .tl-day-label {
     font-size: 10px;
