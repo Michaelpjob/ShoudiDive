@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { sstColor, chlColor, getFitted } from "../lib/mapData.js";
 import { getLayerGrid } from "../lib/dataSource.js";
 
@@ -100,13 +100,26 @@ function rgbStrToArr(rgb) {
 }
 
 export default function DataOverlay({ width, height, layer, composite, opacity, dataReady }) {
+  // Why an offscreen canvas piped to an SVG <image> instead of a
+  // <foreignObject><canvas/></foreignObject>:
+  //
+  // iOS Safari has a long-standing bug where foreignObject contents
+  // are not transformed by the parent SVG's viewBox during pan/pinch.
+  // The map base + pin labels zoom correctly because they're real
+  // SVG geometry; the canvas inside foreignObject stayed pinned to
+  // screen-pixel coordinates, which is exactly the "overlay doesn't
+  // scale with the map" symptom users see on phones.
+  //
+  // SVG <image> honors viewBox transforms on every browser. We render
+  // the grid into an offscreen canvas, encode it to a PNG data URL,
+  // and feed that to <image> with preserveAspectRatio="none" so the
+  // 1-cell-per-pixel raster stretches exactly to the fitted rectangle.
   const canvasRef = useRef(null);
+  if (!canvasRef.current && typeof document !== "undefined") {
+    canvasRef.current = document.createElement("canvas");
+  }
+  const [imgHref, setImgHref] = useState(null);
 
-  // Render the canvas at the source grid's NATIVE resolution — one canvas
-  // pixel per source cell. Cells where the satellite didn't capture data
-  // (NaN) stay transparent; the no-data hatch below the overlay shows
-  // through, so the user sees clearly where coverage is missing rather
-  // than fake-smooth synthetic colors.
   useEffect(() => {
     const cv = canvasRef.current;
     if (!cv) return;
@@ -114,11 +127,9 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
 
     const grid = getLayerGrid(layer, composite);
     if (!grid) {
-      // No real data loaded for this (layer, window) yet: clear the canvas.
-      // The basemap + no-data hatch will be all that's visible.
-      cv.width = 1;
-      cv.height = 1;
-      ctx.clearRect(0, 0, 1, 1);
+      // No real data loaded for this (layer, window) yet — drop the
+      // overlay image so the basemap + no-data hatch are all that show.
+      setImgHref(null);
       return;
     }
 
@@ -144,7 +155,18 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
       img.data[i * 4 + 3] = 255;
     }
     ctx.putImageData(img, 0, 0);
-  }, [width, height, layer, composite, dataReady]);
+
+    // toDataURL is synchronous; encoding ~200x200 native cells is
+    // sub-50ms on phones, well within the existing per-layer-change
+    // budget that already runs the for-loop above.
+    try {
+      setImgHref(cv.toDataURL("image/png"));
+    } catch {
+      // Tainted-canvas guard (shouldn't trigger here — we never draw
+      // cross-origin imagery — but harden anyway).
+      setImgHref(null);
+    }
+  }, [layer, composite, dataReady]);
 
   // The overlay's pixel grid is a linear lng/lat raster across the bbox, so
   // it has to live inside the same fitted rectangle that project() uses.
@@ -152,18 +174,22 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
   // stays correctly proportioned and they visibly drift apart.
   const { marginX, marginY, innerW, innerH } = getFitted(width, height);
 
+  if (!imgHref) return null;
+
   return (
     <g className="data-overlay" opacity={opacity}>
-      <foreignObject x={marginX} y={marginY} width={innerW} height={innerH}>
-        <canvas
-          ref={canvasRef}
-          style={{
-            width: "100%",
-            height: "100%",
-            imageRendering: "auto",
-          }}
-        />
-      </foreignObject>
+      <image
+        x={marginX}
+        y={marginY}
+        width={innerW}
+        height={innerH}
+        href={imgHref}
+        preserveAspectRatio="none"
+        // Pixel-art rendering preserves the source-cell grid look at
+        // any zoom level, matching the previous canvas behavior. Set
+        // to "auto" / "smooth" if a softer interpolation is preferred.
+        style={{ imageRendering: "auto" }}
+      />
     </g>
   );
 }
