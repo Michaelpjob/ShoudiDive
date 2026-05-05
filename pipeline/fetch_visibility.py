@@ -72,13 +72,34 @@ def _km_to(lat_a, lng_a, lat_b, lng_b):
     return np.sqrt(dx * dx + dy * dy)
 
 
-def shelf_depth_from_dist(dist_to_shore_km):
-    """Crude CA-shelf bathymetry: 0–5 km nearshore ramp to 200 m, then
-    5–15 km steep slope to ~1500 m, then deep abyss. Replaces the constant
-    200 m field we used before. Order-of-magnitude correct for the model's
-    bottom_stir / tide depth-attenuation terms.
+def shelf_depth_from_dist(dist_to_shore_km, dist_to_island_km=None):
+    """Crude shelf bathymetry: 0–5 km from-shore ramp to 200 m, 5–15 km
+    steep slope to ~1500 m, then deep abyss to 4000 m.
+
+    `dist_to_island_km` (optional, set after the 2026-05-05 island-shelf
+    fix): each Channel/Coastal Island has its OWN shelf, dropping to
+    abyssal depth in 5–15 km offshore (much like the mainland). Without
+    accounting for this, San Clemente Island at 75 km from the
+    mainland was being treated as 4000 m water — wrong by 3 orders of
+    magnitude vs the real 5–50 m on its shelf. Two downstream effects
+    were being silently zeroed for SCI / Catalina / SBI / SNI:
+      * bottom_stir clipped to ~0 (no swell turbidity penalty)
+      * tide_index clipped to 0 (no tide stirring)
+    Both of those terms matter on island shelves and show up in shore-
+    dive observations, so passing the island distance and using
+    min(mainland, island) as the effective shoreline distance is the
+    right call. For points truly out in the bight basin (>15 km from
+    everything) the math is unchanged.
     """
-    d = np.asarray(dist_to_shore_km, dtype=np.float32)
+    d_main = np.asarray(dist_to_shore_km, dtype=np.float32)
+    if dist_to_island_km is not None:
+        d_isl = np.asarray(dist_to_island_km, dtype=np.float32)
+        # Whichever shoreline (mainland or named island) is closer drives
+        # the shelf depth. Bay islets etc. are already filtered out of
+        # dti via static_fields, so this can't be polluted by tiny features.
+        d = np.minimum(d_main, d_isl)
+    else:
+        d = d_main
     out = np.empty_like(d)
     near = d < 5.0
     mid  = (d >= 5.0) & (d < 15.0)
@@ -550,7 +571,38 @@ def main():
     u_5d = np.stack(u_stack, axis=-1)  # (n, 5)
     v_5d = np.stack(v_stack, axis=-1)
     print(f"  wind 5-day stack: {history_used}/5 real days, rest tile from today")
-    along_climo_5d = np.zeros(n, dtype=float)  # we don't have a wind climo yet
+
+    # CA-coast monthly alongshore-wind climatology (m/s, positive =
+    # upwelling-favorable, NW→SE component along a coast normal of 295°).
+    # Sourced from NDBC buoy long-term means, latitude-averaged across
+    # 32–37°N. Replaces the previous along_climo_5d=0 hardcode which
+    # made every normal upwelling-season day register as +5–7 m/s
+    # "anomalous" — that drove the upwell coefficient to over-predict
+    # chl all summer. A proper per-pixel ERA5 climatology is the next
+    # step; this gets the seasonal bias right within ~1 m/s.
+    #
+    # Indexed by month (Jan=index 0). Peak upwelling May–Jul, relaxed
+    # Oct–Feb. The number is the alongshore COMPONENT, not wind speed
+    # — so 6 m/s alongshore in June is consistent with a typical
+    # 8 m/s NW wind (sin/cos projection through the coast normal).
+    ALONG_CLIMO_BY_MONTH = np.array([
+        1.0,  # Jan
+        1.5,  # Feb
+        3.5,  # Mar
+        4.5,  # Apr
+        5.5,  # May
+        6.5,  # Jun
+        5.5,  # Jul
+        4.5,  # Aug
+        3.5,  # Sep
+        2.0,  # Oct
+        1.0,  # Nov
+        0.5,  # Dec
+    ], dtype=np.float64)
+    _today_month = datetime.now(timezone.utc).month
+    _along_climo_value = float(ALONG_CLIMO_BY_MONTH[_today_month - 1])
+    along_climo_5d = np.full(n, _along_climo_value, dtype=np.float64)
+    print(f"  alongshore-wind climo: {_along_climo_value:.1f} m/s (month {_today_month})")
 
     # ---- Waves: today (now) + 3-day max envelope -----------------------
     wave_path = OUT_DIR / "wave_now.png"
@@ -714,7 +766,9 @@ def main():
         kd490_age_days = None
 
     print("Running viz_predict over the grid (n=%d)..." % n)
-    depth_m = flat(shelf_depth_from_dist(dts_km))
+    # Pass dti_km so the island shelves are recognized — see
+    # shelf_depth_from_dist's docstring for why.
+    depth_m = flat(shelf_depth_from_dist(dts_km, dti_km))
     result = viz_predict.predict_all(
         lat=flat(lat_grid), lng=flat(lng_grid),
         depth_m=depth_m,
