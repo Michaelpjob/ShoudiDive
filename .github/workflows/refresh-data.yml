@@ -100,6 +100,18 @@ jobs:
         continue-on-error: true
         run: python pipeline/fetch_bathy.py
 
+      - name: Probe all external feeds
+        # Reachability + sanity check on every external HTTP source
+        # (NASA OB.DAAC, NOAA NOMADS, ERDDAP mirrors, USGS NWIS, NOAA
+        # CO-OPS, GMRT, validation-ingest scrapers). Writes
+        # pipeline/validation/data/feed_health.json which the watchdog
+        # reads. Soft-fail so a single broken feed doesn't block the
+        # deploy — fetch scripts have their own retries and fallbacks.
+        continue-on-error: true
+        env:
+          EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
+        run: python pipeline/check_feeds.py
+
       - name: Run visibility prediction
         # Runs after the satellite/wave/river/tide/climo fetches so the
         # prediction sees the freshest inputs. Wind PNGs are committed in
