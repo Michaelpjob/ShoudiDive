@@ -91,15 +91,52 @@ def parse_netcdf_to_depth(nc_bytes):
         except OSError:
             pass
 
-    # GMRT names: 'z' for elevation (+up), 'lon'/'lat' or 'x'/'y' for coords.
-    # Be defensive about both.
-    z = ds["z"] if "z" in ds.variables else ds["altitude"]
-    if "lon" in ds.coords:
-        lons = ds["lon"].values
-        lats = ds["lat"].values
-    else:
-        lons = ds["x"].values
-        lats = ds["y"].values
+    # GMRT NetCDF schema is loosely CF — names vary across resolutions
+    # and over time. Pick whichever is present out of the common
+    # candidates rather than hard-coding one name.
+    print(f"  NetCDF variables: {list(ds.variables.keys())}")
+    print(f"  NetCDF coords:    {list(ds.coords.keys())}")
+    print(f"  NetCDF dims:      {list(ds.dims.keys()) if hasattr(ds, 'dims') else dict(ds.sizes)}")
+
+    Z_CANDIDATES   = ("z", "altitude", "elevation", "depth", "Band1")
+    LON_CANDIDATES = ("lon", "longitude", "x")
+    LAT_CANDIDATES = ("lat", "latitude", "y")
+
+    def _pick(names, *, where):
+        for n in names:
+            if n in where:
+                return n
+        return None
+
+    z_name = _pick(Z_CANDIDATES, where=ds.variables)
+    lon_name = _pick(LON_CANDIDATES, where=ds.coords) or _pick(LON_CANDIDATES, where=ds.variables)
+    lat_name = _pick(LAT_CANDIDATES, where=ds.coords) or _pick(LAT_CANDIDATES, where=ds.variables)
+
+    if z_name is None or lon_name is None or lat_name is None:
+        # As a last resort, infer from the first 2D variable's coordinate
+        # names (GMRT sometimes only lists the elevation array).
+        for name, var in ds.variables.items():
+            if var.ndim == 2:
+                z_name = z_name or name
+                # GMRT has been known to name dims "lon"/"lat" without
+                # explicitly listing them as coords. Pull dim names.
+                dim0, dim1 = var.dims
+                lat_name = lat_name or dim0
+                lon_name = lon_name or dim1
+                print(f"  fell back to 2D var {name} with dims ({dim0}, {dim1})")
+                break
+
+    if z_name is None or lon_name is None or lat_name is None:
+        raise KeyError(
+            f"GMRT NetCDF missing expected vars/coords. "
+            f"Available variables: {list(ds.variables.keys())} "
+            f"coords: {list(ds.coords.keys())}"
+        )
+
+    print(f"  using elevation='{z_name}', lon='{lon_name}', lat='{lat_name}'")
+    z = ds[z_name]
+    lons = np.asarray(ds[lon_name].values)
+    lats = np.asarray(ds[lat_name].values)
 
     z = np.asarray(z.values, dtype=np.float32)
     # Some grids come N→S, normalize so lats[0] is the southmost row.
