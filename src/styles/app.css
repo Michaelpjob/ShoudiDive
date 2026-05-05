@@ -1230,6 +1230,40 @@ body {
   box-shadow: var(--shadow-2);
   padding: 10px 12px 12px;
 }
+.sp-close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  /* 40px is fine on desktop; mobile rule below bumps to 44 for HIG. */
+  width: 40px;
+  height: 40px;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  font-size: 24px;
+  line-height: 1;
+  color: var(--ink-3);
+  cursor: pointer;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+.sp-close:hover { color: var(--ink); background: var(--bg-sunken); }
+@media (max-width: 760px) {
+  .sp-close { width: 44px; height: 44px; top: 6px; right: 6px; }
+  /* Make the popover comfortable to use one-handed on a phone:
+     wider, anchored just below the topbar with a margin so the close
+     button isn't crammed against the cog. */
+  .settings-pop {
+    top: calc(50px + env(safe-area-inset-top));
+    right: 8px;
+    left: 8px;
+    width: auto;
+    padding: 12px 14px 14px;
+  }
+}
 .settings-pop .sp-section { padding-top: 8px; }
 .settings-pop .sp-section:first-child { padding-top: 0; }
 .settings-pop .sp-h {
@@ -1645,12 +1679,17 @@ body {
 
 .ms-overlay-row {
   display: flex;
-  gap: 8px;
+  gap: 10px;
 }
 .ms-overlay-row .mpa-pill {
   flex: 1;
-  padding: 9px 8px;
-  font-size: 11px;
+  /* Bumped from padding: 9px 8px (~29px tall) to a 44px tappable
+     button. User report 2026-05-04: "the turning on and off of
+     the mpa + bottom layer is difficult". */
+  padding: 14px 10px;
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  min-height: 44px;
 }
 
 .ms-spots {

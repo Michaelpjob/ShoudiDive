@@ -404,9 +404,23 @@ function TopBar({ onSettings, settingsOpen, dataState }) {
   );
 }
 
-function SettingsPopover({ prefs, setPref }) {
+function SettingsPopover({ prefs, setPref, onClose }) {
   return (
     <div className="settings-pop" role="dialog" aria-label="Settings">
+      {/* Close button — was missing entirely; on mobile the popover
+          covers most of the screen and there was no way to dismiss
+          short of tapping the gear again, which most users wouldn't
+          discover. */}
+      {onClose && (
+        <button
+          type="button"
+          className="sp-close"
+          aria-label="Close settings"
+          onClick={onClose}
+        >
+          ×
+        </button>
+      )}
       <div className="sp-section">
         <div className="sp-h">Theme</div>
         <div className="sp-row">
