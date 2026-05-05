@@ -174,8 +174,13 @@ def resample_to_grid(depth, src_lats, src_lons, out_w, out_h, bbox):
     fx = (out_lng - src_lons[0]) / (src_lons[-1] - src_lons[0]) * (src_w - 1)
     fy = (out_lat - src_lats[0]) / (src_lats[-1] - src_lats[0]) * (src_h - 1)
 
-    fx2 = fx[None, :]
-    fy2 = fy[:, None]
+    # Broadcast fx/fy into full (out_h, out_w) so boolean masks align.
+    # Earlier version kept them as (1, out_w) and (out_h, 1), which
+    # made wx[valid] / wy[valid] crash when valid was the full (out_h,
+    # out_w) shape — fancy indexing with depth[y0, x0] broadcasts
+    # naturally but boolean masks don't.
+    fx2 = np.broadcast_to(fx[None, :], (out_h, out_w))
+    fy2 = np.broadcast_to(fy[:, None], (out_h, out_w))
 
     x0 = np.clip(np.floor(fx2).astype(int), 0, src_w - 1)
     x1 = np.clip(x0 + 1, 0, src_w - 1)
