@@ -253,14 +253,15 @@ FEEDS: list[FeedSpec] = [
         feed_id="gmrt_bathy",
         category="static",
         consumer="fetch_bathy.py → bathy.png (one-shot, idempotent)",
-        # Point at the GridServer health URL with a tiny bbox
-        probe_url=(
-            "https://www.gmrt.org/services/GridServer"
-            "?north=33&south=32&west=-118&east=-117&format=netcdf&resolution=low"
-        ),
+        # Reachability check via homepage instead of GridServer — actual
+        # grid requests trigger server-side build that can take 20-60s+,
+        # which makes the probe pointlessly red. Hitting the static
+        # homepage tells us the host is up; fetch_bathy itself uses a
+        # 180s timeout for the real grid request when needed.
+        probe_url="https://www.gmrt.org/",
         method="HEAD",
         critical=False,
-        notes="GMRT GridServer (Lamont-Doherty). Used once; rarely refetched.",
+        notes="GMRT (Lamont-Doherty). Probe via homepage; GridServer probe was triggering slow server-side build.",
     ),
     FeedSpec(
         feed_id="osm_overpass_main",
