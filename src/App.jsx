@@ -577,6 +577,16 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
   }
 
   function onMouseDown(e) {
+    // Same bail as the touch handlers — desktop click-drag inside a
+    // child that owns its own gesture shouldn't ALSO start a map pan.
+    // (Less critical than touch since mouse drag-on-slider already
+    // works, but it eliminates the "pan starts then aborts" flicker
+    // when the user clicks the timeline track on a touchpad laptop.)
+    const t = e.target;
+    if (t && typeof t.closest === "function" &&
+        t.closest(".wind-timeline, .swell-timeline, .mobile-shell, .panel, .moon-widget, .zoom-ctl")) {
+      return;
+    }
     const r = stageRef.current.getBoundingClientRect();
     panStateRef.current = {
       startScreenX: e.clientX - r.left,
@@ -642,7 +652,24 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
   const touchStateRef = useRef(null);
   const touchTapRef = useRef(null);
 
+  // Bail out of the map's pan/zoom touch handlers when the finger is
+  // on a child that owns its own gesture (the wind/swell timeline,
+  // the mobile-shell, panels). Without this, iOS fires BOTH Pointer
+  // events (which the timeline uses for scrubbing) AND Touch events
+  // (which the map listens to) for the same drag — so dragging the
+  // slider also pans the map underneath. The closest-match selector
+  // covers every direct-gesture child in one place.
+  function isOnGestureChild(e) {
+    const t = e.target;
+    return !!(
+      t &&
+      typeof t.closest === "function" &&
+      t.closest(".wind-timeline, .swell-timeline, .mobile-shell, .panel, .moon-widget, .zoom-ctl")
+    );
+  }
+
   function onTouchStart(e) {
+    if (isOnGestureChild(e)) return;
     const r = stageRef.current.getBoundingClientRect();
     if (e.touches.length === 1) {
       const t = e.touches[0];
@@ -681,6 +708,9 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
   }
 
   function onTouchMove(e) {
+    // Same gesture-child bail as onTouchStart so a continuing drag
+    // that crosses out of the timeline can't suddenly start panning.
+    if (isOnGestureChild(e)) return;
     const ts = touchStateRef.current;
     if (!ts) return;
     // touch-action: none on .map-stage already prevents the default page
