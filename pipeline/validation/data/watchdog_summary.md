@@ -1,4 +1,4 @@
-# Validation watchdog — 2026-05-05T19:48Z
+# Validation watchdog — 2026-05-05T20:08Z
 
 **1 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
@@ -12,11 +12,16 @@ Multiple scrapers may be silently broken.
 
 ## Per-zone metrics
 
-_(no zones with observations yet — first signals expected within the first week of ingest)_
+| Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
+|---|---|---|---|---|---|
+| `bight_nearshore` | 4 | 9.13 | -0.51 | 100% | -0.99 |
 
 ## Per-source bias (informational)
 
-_(no scored residuals yet — needs at least one source with `observed_secchi_ft` populated)_
+| Source | n | Mean residual (predicted − observed) |
+|---|---|---|
+| `dive-shop-diveviz` | 1 | -16.19 ft |
+| `dive-shop-justgetwet` | 3 | +4.72 ft |
 
 ## How to act on this issue
 
