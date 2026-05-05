@@ -234,7 +234,11 @@ def static_fields(grid_lat, grid_lng):
     # which now under-predict viz vs reality.
     #
     # See pipeline/viz_predict/zones.py for the named centroid list.
-    from pipeline.viz_predict.config import CHANNEL_ISLAND_CENTROIDS
+    # NOTE on import path: this script is run as `python pipeline/fetch_visibility.py`
+    # which puts `pipeline/` on sys.path, so the module lives at
+    # `viz_predict.config` (not `pipeline.viz_predict.config`).
+    # Other imports in this file follow the same convention.
+    from viz_predict.config import CHANNEL_ISLAND_CENTROIDS
     NAMED_ISLAND_DISTANCE_KM = 25.0  # generous so any point of e.g. Santa Cruz I.
                                      # (long island, ~30 km tip-to-tip) is covered
     centroid_pts = np.array([(c[1], c[0]) for c in CHANNEL_ISLAND_CENTROIDS.values()])
