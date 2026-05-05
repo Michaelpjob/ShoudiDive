@@ -1,4 +1,4 @@
-# Validation watchdog — 2026-05-05T21:12Z
+# Validation watchdog — 2026-05-05T21:22Z
 
 **1 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
@@ -14,7 +14,7 @@ Multiple scrapers may be silently broken.
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_nearshore` | 4 | 9.13 | -0.83 | 100% | -0.99 |
+| `bight_nearshore` | 4 | 9.13 | -0.84 | 100% | -0.99 |
 
 ## Per-source bias (informational)
 
