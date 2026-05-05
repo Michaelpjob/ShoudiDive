@@ -771,12 +771,25 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
     }
   }
 
+  // Vertical "guard band" at the top of the map where tap-to-pin is
+  // suppressed on wind/swell layers. The slider sits at top: 12 with
+  // ~56px height (mobile) plus a generous buffer for the moon widget
+  // beneath and any near-misses — extending to ~140px feels generous
+  // without eating into the actual chart area where users tap.
+  // User report 2026-05-04: "the taps around that wind icon wind
+  // slider, or swell slider, shouldn't go through". Most useful taps
+  // are toward the center of the map, not in the upper strip.
+  const SLIDER_GUARD_PX = 140;
+
   function onTouchEnd(e) {
     if (e.touches.length === 0) {
       // All fingers up. If the gesture was actually a tap, drop a pin so
       // the value is readable on phones (which have no hover state).
       const tap = touchTapRef.current;
-      if (tap && !tap.moved && Date.now() - tap.startTime < 350) {
+      const inSliderGuard =
+        (layer === "wind" || layer === "swell") &&
+        tap && tap.startY < SLIDER_GUARD_PX;
+      if (tap && !tap.moved && Date.now() - tap.startTime < 350 && !inSliderGuard) {
         const r = stageRef.current.getBoundingClientRect();
         const vbX = vb.x + (tap.startX / r.width) * vb.w;
         const vbY = vb.y + (tap.startY / r.height) * vb.h;
