@@ -55,7 +55,10 @@ class FeedSpec:
     consumer: str          # human-readable, "fetch_visibility.py uses sst_1d.png"
     probe_url: str
     method: str = "HEAD"   # "HEAD" or "GET"
-    expect_status: tuple = (200,)
+    # 200 = full success; 206 = Partial Content (server honored our
+    # Range header — we send one to keep probes cheap on big endpoints
+    # like NOMADS directories). Both are healthy responses.
+    expect_status: tuple = (200, 206)
     range_bytes: int = 4096   # only used if method=="GET"
     critical: bool = False    # if all critical feeds fail, exit non-zero
     skip_if_env_unset: Optional[str] = None  # e.g. "EARTHDATA_TOKEN"
@@ -129,7 +132,7 @@ FEEDS: list[FeedSpec] = [
         consumer="fetch.py blender sources #1-3 (AQUA/SNPP/S3A_OLCI)",
         probe_url="https://oceandata.sci.gsfc.nasa.gov/api/file_search?subType=1&search=AQUA_MODIS*L3m*CHL*chlor_a*4km*NRT*&sdate=2026-04-30&edate=2026-04-30&results_as_file=1",
         method="HEAD",
-        expect_status=(200, 401, 403),  # auth-gated; 403 means up but unauthorized
+        expect_status=(200, 206, 401, 403),  # auth-gated; 401/403 = up but unauthorized
         critical=False,
         skip_if_env_unset="EARTHDATA_TOKEN",
         notes="NASA OB.DAAC. Bearer token required for actual download; we just check reachability.",
