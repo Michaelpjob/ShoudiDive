@@ -770,9 +770,31 @@ def main():
         kd490_age_days = None
 
     print("Running viz_predict over the grid (n=%d)..." % n)
-    # Pass dti_km so the island shelves are recognized — see
-    # shelf_depth_from_dist's docstring for why.
-    depth_m = flat(shelf_depth_from_dist(dts_km, dti_km))
+    # Real bathymetry from GMRT (fetched once by pipeline/fetch_bathy.py).
+    # Falls back to the crude shelf approximation if the static asset is
+    # missing — the approximation now also takes dist_to_island into
+    # account so it's order-of-magnitude correct for islands too, but
+    # GMRT's real shelf shape is materially better at island edges.
+    bathy_path = OUT_DIR / "bathy.png"
+    if bathy_path.exists():
+        bathy_src = decode_linear_png(bathy_path, 0.0, 6000.0)
+        bathy_grid = bilinear_sample(
+            bathy_src, bathy_src.shape[1], bathy_src.shape[0],
+            lng_grid, lat_grid,
+        )
+        # NaN over land — give the model something finite (1 m) since
+        # the model's depth-driven terms (bottom_stir, tide_index) get
+        # multiplied by other gates (is_kelp, dist_to_shore) that are
+        # zero on land anyway.
+        bathy_grid_filled = np.where(np.isfinite(bathy_grid), bathy_grid, 1.0)
+        depth_m = flat(bathy_grid_filled)
+        nan_pct = np.isnan(bathy_grid).mean() * 100
+        print(f"  using GMRT bathymetry: depth range "
+              f"{np.nanmin(bathy_grid):.0f}–{np.nanmax(bathy_grid):.0f} m, "
+              f"land cells {nan_pct:.0f}%")
+    else:
+        depth_m = flat(shelf_depth_from_dist(dts_km, dti_km))
+        print(f"  bathy.png missing — falling back to shelf approximation")
     result = viz_predict.predict_all(
         lat=flat(lat_grid), lng=flat(lng_grid),
         depth_m=depth_m,

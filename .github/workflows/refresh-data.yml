@@ -90,6 +90,16 @@ jobs:
         continue-on-error: true
         run: python -m pipeline.tests.assert_outputs fetch_chl
 
+      - name: Fetch bathymetry (one-shot)
+        # Idempotent — fetches GMRT bathy.png the first time CI runs on
+        # a clean checkout, then no-ops on every subsequent run because
+        # bathy.png will be committed to the repo. Soft-fail so a GMRT
+        # outage doesn't block the daily refresh; fetch_visibility falls
+        # back to the shelf-from-distance approximation when bathy.png
+        # is missing.
+        continue-on-error: true
+        run: python pipeline/fetch_bathy.py
+
       - name: Run visibility prediction
         # Runs after the satellite/wave/river/tide/climo fetches so the
         # prediction sees the freshest inputs. Wind PNGs are committed in
