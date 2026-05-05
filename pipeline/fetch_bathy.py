@@ -91,54 +91,61 @@ def parse_netcdf_to_depth(nc_bytes):
         except OSError:
             pass
 
-    # GMRT NetCDF schema is loosely CF — names vary across resolutions
-    # and over time. Pick whichever is present out of the common
-    # candidates rather than hard-coding one name.
+    # GMRT serves the legacy GMT-style grid file format inside its
+    # NetCDF wrapper, not a CF-compliant per-coordinate layout. The
+    # actual fields are:
+    #   x_range  — [min_lon, max_lon]
+    #   y_range  — [min_lat, max_lat]
+    #   z_range  — [min_z, max_z]   (informational)
+    #   spacing  — [dx, dy]         (degrees)
+    #   dimension — [nx, ny]        (int)
+    #   z        — flat (nx * ny,) array, row-major, NORTH→SOUTH scan
     print(f"  NetCDF variables: {list(ds.variables.keys())}")
-    print(f"  NetCDF coords:    {list(ds.coords.keys())}")
-    print(f"  NetCDF dims:      {list(ds.dims.keys()) if hasattr(ds, 'dims') else dict(ds.sizes)}")
 
-    Z_CANDIDATES   = ("z", "altitude", "elevation", "depth", "Band1")
-    LON_CANDIDATES = ("lon", "longitude", "x")
-    LAT_CANDIDATES = ("lat", "latitude", "y")
+    if "x_range" in ds.variables and "dimension" in ds.variables:
+        # GMT-style grid format
+        x_range = np.asarray(ds["x_range"].values).flatten()
+        y_range = np.asarray(ds["y_range"].values).flatten()
+        dim     = np.asarray(ds["dimension"].values).flatten()
+        nx, ny  = int(dim[0]), int(dim[1])
+        z_flat  = np.asarray(ds["z"].values).flatten().astype(np.float32)
+        if z_flat.size != nx * ny:
+            raise ValueError(
+                f"GMT grid: z size {z_flat.size} != nx*ny {nx * ny}"
+            )
+        # GMT grids are row-major, top-left origin (north-most row first).
+        z = z_flat.reshape(ny, nx)
+        # Build the explicit lon/lat coordinate vectors.
+        lons = np.linspace(x_range[0], x_range[1], nx)
+        lats = np.linspace(y_range[1], y_range[0], ny)  # north→south
+        print(f"  GMT-grid: {nx}×{ny}, "
+              f"lon {x_range[0]:.2f}..{x_range[1]:.2f}, "
+              f"lat {y_range[0]:.2f}..{y_range[1]:.2f}")
+    else:
+        # CF-compliant schema (in case GMRT changes serving format)
+        Z_CANDIDATES   = ("z", "altitude", "elevation", "depth", "Band1")
+        LON_CANDIDATES = ("lon", "longitude", "x")
+        LAT_CANDIDATES = ("lat", "latitude", "y")
 
-    def _pick(names, *, where):
-        for n in names:
-            if n in where:
-                return n
-        return None
+        def _pick(names, *, where):
+            for n in names:
+                if n in where:
+                    return n
+            return None
 
-    z_name = _pick(Z_CANDIDATES, where=ds.variables)
-    lon_name = _pick(LON_CANDIDATES, where=ds.coords) or _pick(LON_CANDIDATES, where=ds.variables)
-    lat_name = _pick(LAT_CANDIDATES, where=ds.coords) or _pick(LAT_CANDIDATES, where=ds.variables)
-
-    if z_name is None or lon_name is None or lat_name is None:
-        # As a last resort, infer from the first 2D variable's coordinate
-        # names (GMRT sometimes only lists the elevation array).
-        for name, var in ds.variables.items():
-            if var.ndim == 2:
-                z_name = z_name or name
-                # GMRT has been known to name dims "lon"/"lat" without
-                # explicitly listing them as coords. Pull dim names.
-                dim0, dim1 = var.dims
-                lat_name = lat_name or dim0
-                lon_name = lon_name or dim1
-                print(f"  fell back to 2D var {name} with dims ({dim0}, {dim1})")
-                break
-
-    if z_name is None or lon_name is None or lat_name is None:
-        raise KeyError(
-            f"GMRT NetCDF missing expected vars/coords. "
-            f"Available variables: {list(ds.variables.keys())} "
-            f"coords: {list(ds.coords.keys())}"
-        )
-
-    print(f"  using elevation='{z_name}', lon='{lon_name}', lat='{lat_name}'")
-    z = ds[z_name]
-    lons = np.asarray(ds[lon_name].values)
-    lats = np.asarray(ds[lat_name].values)
-
-    z = np.asarray(z.values, dtype=np.float32)
+        z_name = _pick(Z_CANDIDATES, where=ds.variables)
+        lon_name = _pick(LON_CANDIDATES, where=ds.coords) or _pick(LON_CANDIDATES, where=ds.variables)
+        lat_name = _pick(LAT_CANDIDATES, where=ds.coords) or _pick(LAT_CANDIDATES, where=ds.variables)
+        if z_name is None or lon_name is None or lat_name is None:
+            raise KeyError(
+                f"GMRT NetCDF: unrecognized schema. "
+                f"Variables: {list(ds.variables.keys())} "
+                f"Coords: {list(ds.coords.keys())}"
+            )
+        z = np.asarray(ds[z_name].values, dtype=np.float32)
+        lons = np.asarray(ds[lon_name].values)
+        lats = np.asarray(ds[lat_name].values)
+        print(f"  CF-style: elevation='{z_name}', lon='{lon_name}', lat='{lat_name}'")
     # Some grids come N→S, normalize so lats[0] is the southmost row.
     if lats[0] > lats[-1]:
         lats = lats[::-1]
