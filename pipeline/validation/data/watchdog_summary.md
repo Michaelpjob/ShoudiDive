@@ -1,10 +1,10 @@
-# Validation watchdog — 2026-05-05T08:08Z
+# Validation watchdog — 2026-05-05T19:34Z
 
 **1 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
-### 🔴 1. Only 15 observations in the last 24h (floor: 50)
+### 🔴 1. Only 16 observations in the last 24h (floor: 50)
 
 Multiple scrapers may be silently broken.
 
@@ -12,16 +12,11 @@ Multiple scrapers may be silently broken.
 
 ## Per-zone metrics
 
-| Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
-|---|---|---|---|---|---|
-| `bight_islands` | 4 | 10.81 | +4.18 | 100% | -0.99 |
+_(no zones with observations yet — first signals expected within the first week of ingest)_
 
 ## Per-source bias (informational)
 
-| Source | n | Mean residual (predicted − observed) |
-|---|---|---|
-| `dive-shop-diveviz` | 1 | -13.00 ft |
-| `dive-shop-justgetwet` | 3 | +9.90 ft |
+_(no scored residuals yet — needs at least one source with `observed_secchi_ft` populated)_
 
 ## How to act on this issue
 
