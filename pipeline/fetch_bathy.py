@@ -73,9 +73,23 @@ def parse_netcdf_to_depth(nc_bytes):
     treat land as 0 or skip.
     """
     # Lazy imports — netCDF4 + xarray are heavy to load
+    import os
+    import tempfile
     import xarray as xr
 
-    ds = xr.open_dataset(io.BytesIO(nc_bytes), engine="netcdf4")
+    # The netCDF4 backend (HDF5-backed) requires a real file path; it
+    # can't read from BytesIO. Write to a temp file, parse, then unlink.
+    with tempfile.NamedTemporaryFile(suffix=".nc", delete=False) as tf:
+        tf.write(nc_bytes)
+        tmp_path = tf.name
+    try:
+        ds = xr.open_dataset(tmp_path, engine="netcdf4")
+        ds.load()  # pull data into memory before we delete the file
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
 
     # GMRT names: 'z' for elevation (+up), 'lon'/'lat' or 'x'/'y' for coords.
     # Be defensive about both.
