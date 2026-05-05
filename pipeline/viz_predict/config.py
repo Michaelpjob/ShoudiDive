@@ -129,19 +129,24 @@ SECCHI_COEFFS: Dict[str, SecchiCoefficients] = {
     "transition_islands":   SecchiCoefficients(a=7.5, b=0.30),
     "transition_offshore":  SecchiCoefficients(a=9.0, b=0.32),
     "bight_nearshore":      SecchiCoefficients(a=6.5, b=0.28),
-    # v3.3 (2026-05-04): a=8.0 → 6.5. The 4 JustGetWet observations from
-    # the SD bay area (La Jolla / La Jolla Shores / San Diego / Pt Loma)
-    # all classify as `bight_islands` per zones.py — they're > 2.5 km
-    # from the OPEN coast even though they're shore dives. With a=8.0,
-    # all four predicted ~25 ft Secchi while observed ranges 5-12.5 ft
-    # (over-prediction +13–16 ft each, see residuals 2026-05-04). Lower
-    # `a` by 19% to drag those predictions down ~5 ft. The single Wreck
-    # Alley observation (under-predict by 10 ft) loses ~3 ft of accuracy
-    # — but 4 over-predictions vs 1 under-prediction is a net MAE win.
-    # Proper fix is widening NEARSHORE_DIST_KM in zones.py so SD bay
-    # spots correctly classify as bight_nearshore (where penalties are
-    # higher), but that's a structural change — this nudge first.
-    "bight_islands":        SecchiCoefficients(a=6.5, b=0.30),
+    # v3.4 (2026-05-05): a=6.5 → 8.5. v3.3 dropped a from 8.0 to 6.5 to
+    # fit 4 JustGetWet shore-dive observations (La Jolla / Pt Loma area)
+    # that were classifying as bight_islands due to a separate bug in
+    # fetch_visibility.static_fields — every non-mainland polygon in
+    # land.geojson (including SD bay islets) counted as an "island" for
+    # dist_to_island_km. That mis-classification dragged this calibration
+    # down to fit shore observations, which then made GENUINE bight_islands
+    # locations like San Clemente, Catalina, San Nicolas under-predict
+    # significantly (Pearson r = -0.986 on bight_islands as of 2026-05-05).
+    #
+    # Now that fetch_visibility filters islands_all to only the named
+    # CHANNEL_ISLAND_CENTROIDS, SD shore correctly classifies as
+    # bight_nearshore, and bight_islands gets only real Channel-Island
+    # data. Bumped `a` slightly past v3.2's 8.0 toward v3.1's 9.0 to
+    # match the observed gin-clear days at SCI/Catalina backsides
+    # (50+ ft on calm low-chl days). Re-evaluate once the residuals
+    # accumulate at the proper zone.
+    "bight_islands":        SecchiCoefficients(a=8.5, b=0.30),
     "bight_offshore":       SecchiCoefficients(a=9.0, b=0.32),
 }
 

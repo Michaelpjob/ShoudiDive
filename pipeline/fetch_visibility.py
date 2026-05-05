@@ -199,7 +199,51 @@ def static_fields(grid_lat, grid_lng):
     # Mainland is feature[0] (the largest by point count).
     feats = sorted(land["features"], key=lambda f: -_geom_point_count(f["geometry"]))
     mainland = feats[0]
-    islands = feats[1:]
+    islands_all = feats[1:]
+
+    # Filter "islands" down to the named Channel/Coastal islands that
+    # CHANNEL_ISLAND_CENTROIDS recognizes. The previous behaviour treated
+    # every non-mainland polygon (Coronado bay islets, harbor breakwaters,
+    # Mission Bay islands, kelp islets) as a real "island", which made
+    # San Diego shore points fall within 10 km of "an island" and
+    # classify as `bight_islands`. That mis-classification dragged the
+    # bight_islands secchi calibration DOWN to fit shore-dive observations
+    # (a=8.0 → 6.5 in v3.3) — and that drag also affected the GENUINE
+    # bight_islands locations like San Clemente, Catalina, San Nicolas
+    # which now under-predict viz vs reality.
+    #
+    # See pipeline/viz_predict/zones.py for the named centroid list.
+    from pipeline.viz_predict.config import CHANNEL_ISLAND_CENTROIDS
+    NAMED_ISLAND_DISTANCE_KM = 25.0  # generous so any point of e.g. Santa Cruz I.
+                                     # (long island, ~30 km tip-to-tip) is covered
+    centroid_pts = np.array([(c[1], c[0]) for c in CHANNEL_ISLAND_CENTROIDS.values()])
+    centroid_km_for_filter = (centroid_pts - np.array(
+        [BBOX["lng_min"], BBOX["lat_min"]]
+    )) * np.array([
+        111.0 * np.cos(np.deg2rad((BBOX["lat_min"] + BBOX["lat_max"]) * 0.5)),
+        111.0,
+    ])
+
+    def _polygon_belongs_to_named_island(feat):
+        pts = _all_points(feat["geometry"])
+        if pts.size == 0:
+            return False
+        # Project this polygon's points to km then to the centroid frame.
+        x = (pts[..., 0] - BBOX["lng_min"]) * 111.0 * np.cos(np.deg2rad(
+            (BBOX["lat_min"] + BBOX["lat_max"]) * 0.5
+        ))
+        y = (pts[..., 1] - BBOX["lat_min"]) * 111.0
+        feat_km = np.stack([x, y], axis=-1)
+        # If ANY centroid is within NAMED_ISLAND_DISTANCE_KM of ANY point of
+        # this polygon, treat it as a real island. Long islands (Santa Cruz,
+        # Catalina) extend well beyond their centroid; the per-point check
+        # avoids wrongly excluding their tips.
+        from scipy.spatial import cKDTree as _Tree
+        tree = _Tree(feat_km)
+        d, _ = tree.query(centroid_km_for_filter, k=1)
+        return bool(np.any(d < NAMED_ISLAND_DISTANCE_KM))
+
+    islands = [f for f in islands_all if _polygon_belongs_to_named_island(f)]
 
     mainland_pts = _all_points(mainland["geometry"])  # (N, 2) lng/lat
     island_pts = np.concatenate([_all_points(f["geometry"]) for f in islands], axis=0) \
