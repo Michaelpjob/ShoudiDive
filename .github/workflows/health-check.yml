@@ -1,0 +1,273 @@
+name: Live data health check
+
+# Probes the published deploy at shouldidive.com to catch silent CI
+# failures: refresh-data ran but didn't actually update the manifest,
+# a chl PNG is HTTP 200 but blank, the deploy step crashed, etc.
+#
+# This is intentionally separate from refresh-data.yml so a problem
+# WITH the daily refresh shows up here as a finding even when that
+# workflow itself is broken. It's also separate from validation/
+# watchdog (which scores prediction accuracy vs ground-truth) — this
+# workflow only cares whether the data shipped at all.
+#
+# Findings → rolling GitHub Issue tagged `data-health`.
+# Critical findings (manifest unreachable, generated_at >36h stale)
+# additionally trigger refresh-data.yml as an auto-retry, capped at
+# one retry per 12h to prevent loops on a real upstream outage.
+
+on:
+  schedule:
+    # Every 4 hours. Daily refresh runs at 06:00 UTC; the first health
+    # check after that lands at 08:00 UTC, giving a 2h buffer for the
+    # Cloudflare deploy to propagate.
+    - cron: "0 */4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  actions: write   # needed for `gh workflow run` auto-retry
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+
+      - name: Install pipeline dependencies
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Probe published manifest + layer PNGs
+        # Exit-code policy:
+        #   0 — healthy
+        #   1 — non-critical findings (high/medium)
+        #   2 — at least one critical finding (auto-retry trigger)
+        # We capture the exit code instead of letting it fail the step
+        # so the issue-sync + auto-retry steps below can still run.
+        id: published
+        continue-on-error: true
+        run: |
+          set +e
+          python pipeline/check_published.py
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Probe external feeds (lightweight)
+        # Same script the daily refresh uses. Health-check workflow
+        # piggy-backs on it so feed regressions get surfaced 6× per
+        # day instead of once. Soft-fail: a broken feed shows up in
+        # the issue as a section but doesn't fail the workflow.
+        id: feeds
+        continue-on-error: true
+        env:
+          EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
+        run: python pipeline/check_feeds.py
+
+      - name: Build issue body from JSON reports
+        # Compose a markdown summary the issue-sync step will use for
+        # the issue body. Done in jq + bash rather than a Python helper
+        # to keep the dependency surface tiny — this is a CI-only thing,
+        # not a library piece.
+        id: build_body
+        run: |
+          set -e
+          published=pipeline/validation/data/published_health.json
+          feeds=pipeline/validation/data/feed_health.json
+          out=pipeline/validation/data/health_summary.md
+
+          {
+            echo "# Live data health check"
+            echo
+            echo "_Computed $(date -u '+%Y-%m-%d %H:%MZ') by [\`health-check.yml\`](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})_"
+            echo
+
+            if [ -f "$published" ]; then
+              echo "## Published deploy (\`shouldidive.com/data/manifest.json\`)"
+              echo
+              jq -r '
+                "- generated_at: " + (.manifest_generated_at // "missing") + "\n" +
+                "- findings: " + (.summary.total_findings|tostring) +
+                " (critical=" + (.summary.critical|tostring) +
+                ", high=" + (.summary.high|tostring) +
+                ", medium=" + (.summary.medium|tostring) + ")"
+              ' "$published"
+              echo
+
+              # Per-finding section, grouped by severity.
+              for sev in critical high medium; do
+                count=$(jq --arg s "$sev" '[.findings[] | select(.severity==$s)] | length' "$published")
+                if [ "$count" != "0" ]; then
+                  echo "### ${sev^} ($count)"
+                  echo
+                  jq -r --arg s "$sev" '
+                    .findings[] | select(.severity==$s) |
+                    "- **" + .code + "** — " + .title +
+                    (if .layer then " _(layer: `" + .layer + "`)_" else "" end) +
+                    (if .detail and .detail != "" then "\n  " + (.detail | gsub("\n"; "\n  ")) else "" end)
+                  ' "$published"
+                  echo
+                fi
+              done
+            else
+              echo "## Published deploy"
+              echo
+              echo "_published_health.json not produced — check_published.py crashed._"
+              echo
+            fi
+
+            if [ -f "$feeds" ]; then
+              echo "## External feeds (\`check_feeds.py\`)"
+              echo
+              jq -r '
+                "- " + (.green|tostring) + " green / " +
+                (.yellow|tostring) + " yellow / " +
+                (.red|tostring) + " red / " +
+                (.skipped|tostring) + " skipped"
+              ' "$feeds"
+              red_count=$(jq '.red' "$feeds")
+              if [ "$red_count" != "0" ]; then
+                echo
+                echo "Red feeds:"
+                echo
+                jq -r '.results[] | select(.status=="red") |
+                  "- **" + .feed_id + "** (" + .category + ") — " +
+                  ((.error // "") + " " + (.notes // ""))
+                ' "$feeds"
+              fi
+              echo
+            fi
+
+            echo "---"
+            echo
+            echo "_This issue is auto-managed by \`.github/workflows/health-check.yml\`. "
+            echo "It will close itself when the next health-check passes. To force a refresh, "
+            echo "run [refresh-data.yml](https://github.com/${{ github.repository }}/actions/workflows/refresh-data.yml) manually._"
+          } > "$out"
+
+          echo "summary_path=$out" >> "$GITHUB_OUTPUT"
+          # Title summarises the worst finding for at-a-glance triage.
+          if [ -f "$published" ]; then
+            crit=$(jq '.summary.critical' "$published")
+            high=$(jq '.summary.high' "$published")
+            med=$(jq '.summary.medium' "$published")
+            if [ "$crit" != "0" ]; then
+              echo "title=Live data health: $crit critical, $high high, $med medium" >> "$GITHUB_OUTPUT"
+            elif [ "$high" != "0" ] || [ "$med" != "0" ]; then
+              echo "title=Live data health: $high high, $med medium" >> "$GITHUB_OUTPUT"
+            else
+              echo "title=Live data health: clean" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "title=Live data health: probe crashed" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Sync GitHub Issue (data-health)
+        # Mirrors the validation-watchdog issue-sync block in
+        # refresh-data.yml. One rolling issue, opened on findings,
+        # closed on a clean run.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLISHED_EXIT: ${{ steps.published.outputs.exit_code }}
+          BODY_FILE: ${{ steps.build_body.outputs.summary_path }}
+          BODY_TITLE: ${{ steps.build_body.outputs.title }}
+        run: |
+          set -e
+          gh label create data-health \
+            --color B91C1C \
+            --description "Auto-managed by .github/workflows/health-check.yml" \
+            2>/dev/null || true
+
+          existing=$(gh issue list \
+            --label data-health \
+            --state open \
+            --json number \
+            --jq '.[0].number')
+
+          if [ "$PUBLISHED_EXIT" != "0" ]; then
+            if [ -n "$existing" ]; then
+              gh issue edit "$existing" \
+                --title "$BODY_TITLE" \
+                --body-file "$BODY_FILE"
+              echo "Updated data-health issue #$existing"
+            else
+              gh issue create \
+                --label data-health \
+                --title "$BODY_TITLE" \
+                --body-file "$BODY_FILE"
+              echo "Opened new data-health issue"
+            fi
+          else
+            if [ -n "$existing" ]; then
+              gh issue close "$existing" \
+                --comment "All checks pass as of $(date -u '+%Y-%m-%dT%H:%MZ')."
+              echo "Closed data-health issue #$existing"
+            else
+              echo "All checks pass; no open data-health issue."
+            fi
+          fi
+
+      - name: Auto-retry refresh-data on critical findings
+        # Critical = manifest unreachable / >36h stale / no layers /
+        # invalid JSON. In every case the daily 06:00 UTC refresh either
+        # didn't run or didn't deploy, so kicking it manually is the
+        # right fix.
+        #
+        # Cooldown is stateless — instead of carrying state across
+        # workflow runs (which requires either commits-back or
+        # actions/cache@v4 round-trips), we ask the GH API: when did
+        # refresh-data.yml last START? If <12h ago we skip, regardless
+        # of outcome. That covers both "we already retried" and
+        # "the daily cron just ran" — both mean another retry now would
+        # be redundant.
+        if: steps.published.outputs.exit_code == '2'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          # gh returns ISO-8601 with Z. Pull the most recent run start
+          # time across all event types (schedule, push, workflow_dispatch).
+          last_started=$(gh run list \
+            --workflow=refresh-data.yml \
+            --limit=1 \
+            --json startedAt \
+            --jq '.[0].startedAt // empty')
+
+          now_epoch=$(date -u +%s)
+          cooldown_seconds=$((12 * 3600))
+
+          if [ -n "$last_started" ]; then
+            last_epoch=$(date -u -d "$last_started" +%s)
+            elapsed=$((now_epoch - last_epoch))
+            if [ "$elapsed" -lt "$cooldown_seconds" ]; then
+              hours_ago=$(( elapsed / 3600 ))
+              hours_left=$(( (cooldown_seconds - elapsed) / 3600 ))
+              echo "refresh-data last started ${hours_ago}h ago "
+              echo "(${last_started}); cooldown ${hours_left}h remaining. Skipping retry."
+              exit 0
+            fi
+            echo "refresh-data last started $last_started — past cooldown, retrying."
+          else
+            echo "No prior refresh-data run found; retrying."
+          fi
+
+          echo "Dispatching refresh-data.yml as auto-retry."
+          gh workflow run refresh-data.yml --ref main
+
+      - name: Upload health JSON as artifact
+        # Lets you click into a specific run and grab the raw JSON for
+        # debugging, even after the rolling issue has been updated past
+        # the state at the time of that run.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: health-reports
+          path: |
+            pipeline/validation/data/published_health.json
+            pipeline/validation/data/feed_health.json
+            pipeline/validation/data/health_summary.md
+          retention-days: 14
