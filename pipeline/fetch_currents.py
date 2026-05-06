@@ -206,7 +206,10 @@ def fetch_hfr_latest() -> dict | None:
 def encode_uv_png(u: np.ndarray, v: np.ndarray, out: Path) -> None:
     lo, hi = UV_RANGE
     span = hi - lo
-    u, v = apply_land_mask(u, v)
+    # Do not use PNG alpha as the visual land clip: the browser stretches and
+    # interpolates this grid, so transparent land cells become visible moats
+    # around islands and near shore. The frontend clips the raster with the
+    # vector coastline mask instead, while stats still apply apply_land_mask().
     valid = np.isfinite(u) & np.isfinite(v)
     img = np.zeros((u.shape[0], u.shape[1], 4), dtype=np.uint8)
     img[..., 0][valid] = np.clip(np.round(((u[valid] - lo) / span) * 255), 0, 255).astype(np.uint8)
@@ -302,6 +305,7 @@ def circular_dir_to(u: np.ndarray, v: np.ndarray) -> float | None:
 
 
 def stats_for_grid(u: np.ndarray, v: np.ndarray, valid_at: datetime, source: str, hfr_weight: float) -> dict:
+    u, v = apply_land_mask(u, v)
     speed_kt = np.sqrt(u * u + v * v) * 1.94384
     valid = np.isfinite(speed_kt)
     if not valid.any():
@@ -349,8 +353,7 @@ def build_slot(valid_at: datetime, day: int, bucket: str, hfr: dict | None, tide
 
     lead_h = max(0.0, (valid_at - now).total_seconds() / 3600.0)
     if hfr is None:
-        u, v = apply_land_mask(inferred_u, inferred_v)
-        return u, v, "inferred_tide_wind", 0.0
+        return inferred_u, inferred_v, "inferred_tide_wind", 0.0
 
     hfr_weight = math.exp(-lead_h / 8.0)
     hfr_weight = max(0.0, min(0.9, hfr_weight))
@@ -360,7 +363,6 @@ def build_slot(valid_at: datetime, day: int, bucket: str, hfr: dict | None, tide
     out_u[hmask] = hfr_weight * hfr["u"][hmask] + (1.0 - hfr_weight) * inferred_u[hmask]
     out_v[hmask] = hfr_weight * hfr["v"][hmask] + (1.0 - hfr_weight) * inferred_v[hmask]
     source = "hfr_observed" if lead_h <= 1.5 else "hfr_persistence_tide_wind"
-    out_u, out_v = apply_land_mask(out_u, out_v)
     return out_u, out_v, source, hfr_weight
 
 
