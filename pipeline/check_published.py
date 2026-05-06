@@ -73,27 +73,38 @@ GENERATED_AT_CRITICAL_HOURS = 36
 
 # Per-layer date freshness (when the manifest reports a layer's most-
 # recent satellite/model day in `windows.<key>.dates`). chl + kd490
-# share the ~4-day NASA OB.DAAC publication lag floor.
+# share the ~4-day NASA OB.DAAC publication lag floor; sst's MUR L4
+# typically has a 2d lag but can stretch to 4 during gap-fill rebuilds.
 LAYER_DATE_MAX_DAYS = {
-    "sst":    3,
+    "sst":    4,
     "chl":    7,
-    "kd490":  7,
+    "kd490":  10,   # NASA's kd490 product is more lag-prone than chl
     "viz":    2,
     "wind":   2,    # HRRR is sub-daily; 2d window covers a missed cron
     "wave":   2,    # gfswave is sub-daily, same logic as wind
-    "precip": 2,    # CPC unified daily — 1d publication lag is normal
+    "precip": 3,    # CPC unified daily can have a 1-2d publication lag
     # wind5d / swell5d covered separately via summary_url branch
 }
 
 # PNG content heuristics. Pipeline writes mode='L' grayscale where R=0
-# means no-data; a healthy PNG has ≥5% non-zero coverage AND ≥8 distinct
-# non-zero values (catches "stuck on a single fill value" bugs).
+# means no-data; a healthy "dense" layer has ≥5% non-zero coverage
+# AND ≥8 distinct non-zero values (catches "stuck on a single fill"
+# bugs). Layers like precip can legitimately have ~all-zero output
+# during a dry stretch — keyed exemptions below.
 MIN_NONZERO_PIXEL_FRACTION    = 0.05
 MIN_DISTINCT_NONZERO_VALUES   = 8
 
-# Minimum body size for a "real" PNG. A 1×1 transparent placeholder is
-# ~70 bytes. Real bbox PNGs are tens of KB.
-MIN_PNG_BYTES = 1000
+# Layers whose content checks should be relaxed because zero is a
+# valid signal (no rain this week, no kelp blooms in this aoi, etc).
+# When listed here, both nonzero-fraction and distinct-values checks
+# are skipped; we only verify the PNG decodes cleanly at expected dims.
+CONTENT_CHECK_EXEMPT = {"precip"}
+
+# Minimum body size for a "real" PNG. Calibrated against the actual
+# precip_7d.png on a dry week (~620 bytes for 71×87 with very few
+# non-zero pixels). 200 bytes still rules out 1×1 transparent
+# placeholders (~70 bytes) without false-positiving compressible layers.
+MIN_PNG_BYTES = 200
 
 
 # ---- Findings --------------------------------------------------------
@@ -246,8 +257,15 @@ def _resolve_url(path_or_url: str) -> str:
     return f"{REMOTE_BASE}{path_or_url}"
 
 
-def _probe_png(url: str) -> tuple[bool, Optional[str], dict]:
-    """Returns (ok, error, stats). stats has bytes/dims/nonzero_frac/distinct."""
+def _probe_png(url: str, layer_id: Optional[str] = None) -> tuple[bool, Optional[str], dict]:
+    """Returns (ok, error, stats). stats has bytes/dims/nonzero_frac/distinct.
+
+    `layer_id` is used to look up content-check exemptions
+    (CONTENT_CHECK_EXEMPT) — layers like precip legitimately publish
+    near-all-zero PNGs during dry weeks, and the variability checks
+    would false-positive on those. Passing None applies the strict
+    defaults (used for one-off probes and the wave_url path).
+    """
     stats: dict = {}
     try:
         r = _http_get(url)
@@ -289,6 +307,12 @@ def _probe_png(url: str) -> tuple[bool, Optional[str], dict]:
     distinct_nonzero = len({v for v in px if v > 0})
     stats["nonzero_fraction"] = round(nonzero_frac, 4)
     stats["distinct_nonzero_values"] = distinct_nonzero
+
+    if layer_id in CONTENT_CHECK_EXEMPT:
+        # PNG decoded cleanly at expected dims — for exempt layers
+        # that's all the integrity we can confirm without overfitting.
+        stats["content_check"] = "exempt"
+        return True, None, stats
 
     if nonzero_frac < MIN_NONZERO_PIXEL_FRACTION:
         return False, (f"{nonzero_frac*100:.1f}% non-zero coverage "
@@ -349,35 +373,42 @@ def check_layers(manifest: dict) -> tuple[list[Finding], list[dict]]:
             ))
             continue
         win = windows[primary_key]
-        url_path = win.get("url")
-        if not url_path:
+        # Some layers package vector data across multiple PNGs in one
+        # window — wind has `speed_url` + `uv_url`, wave has `wave_url`
+        # (RGBA Hs/Tp/Dp). Probe every PNG-URL field present.
+        url_fields = [k for k in (
+            "url", "speed_url", "uv_url", "wave_url",
+        ) if isinstance(win.get(k), str)]
+        if not url_fields:
             findings.append(Finding(
                 severity="high",
                 code="layer_window_no_url",
-                title=f"Layer `{layer_id}` window `{primary_key}` has no url",
-                detail=f"Window entry: {json.dumps(win, default=str)[:200]}",
+                title=f"Layer `{layer_id}` window `{primary_key}` has no PNG url",
+                detail=f"Window entry keys: {sorted(win.keys())}",
                 layer=layer_id,
             ))
             continue
-        url = _resolve_url(url_path)
-        ok, err, stats = _probe_png(url)
-        layer_stats.append({
-            "layer": layer_id,
-            "window": primary_key,
-            "url": url,
-            "ok": ok,
-            "error": err,
-            **stats,
-        })
-        if not ok:
-            findings.append(Finding(
-                severity="high",
-                code="layer_png_unhealthy",
-                title=f"Layer `{layer_id}` ({primary_key}) PNG is unhealthy",
-                detail=f"GET {url}\n  → {err}",
-                layer=layer_id,
-                url=url,
-            ))
+        for url_field in url_fields:
+            url = _resolve_url(win[url_field])
+            ok, err, stats = _probe_png(url, layer_id=layer_id)
+            layer_stats.append({
+                "layer":  layer_id,
+                "window": primary_key,
+                "field":  url_field,
+                "url":    url,
+                "ok":     ok,
+                "error":  err,
+                **stats,
+            })
+            if not ok:
+                findings.append(Finding(
+                    severity="high",
+                    code="layer_png_unhealthy",
+                    title=f"Layer `{layer_id}` ({primary_key}/{url_field}) PNG is unhealthy",
+                    detail=f"GET {url}\n  → {err}",
+                    layer=layer_id,
+                    url=url,
+                ))
 
         # Date freshness — if the window includes a `dates` array (most
         # recent observation date last), check it against the per-layer
