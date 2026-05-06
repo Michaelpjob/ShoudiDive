@@ -94,6 +94,76 @@ describe("loadManifest", () => {
       expect(ds.getManifest()).toBeNull();
     });
   });
+
+  it("records the error message when fetch fails", async () => {
+    mockFetchFailure();
+    await withFreshModule(async (ds) => {
+      await ds.loadManifest();
+      expect(ds.getError()).toBe("network down");
+    });
+  });
+
+  it("records an HTTP error when the server returns a non-OK status", async () => {
+    global.fetch = jest.fn(() =>
+      Promise.resolve({ ok: false, status: 503, statusText: "Service Unavailable" })
+    );
+    await withFreshModule(async (ds) => {
+      await ds.loadManifest();
+      expect(ds.getError()).toMatch(/HTTP 503/);
+      expect(ds.getManifest()).toBeNull();
+    });
+  });
+
+  it("force=true retries after a previous failure", async () => {
+    await withFreshModule(async (ds) => {
+      // First call: network down.
+      global.fetch = jest.fn(() => Promise.reject(new Error("offline")));
+      await ds.loadManifest();
+      expect(ds.getError()).toBe("offline");
+      expect(ds.getManifest()).toBeNull();
+
+      // Second call with force=true: server back, manifest lands.
+      global.fetch = jest.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve(SAMPLE_MANIFEST) })
+      );
+      const m = await ds.loadManifest({ force: true });
+      expect(m).toEqual(SAMPLE_MANIFEST);
+      expect(ds.getError()).toBeNull();
+      expect(ds.getManifest()).toEqual(SAMPLE_MANIFEST);
+    });
+  });
+
+  it("force=true on a cached-good manifest re-fetches", async () => {
+    await withFreshModule(async (ds) => {
+      // Initial load.
+      mockFetchOnce(SAMPLE_MANIFEST);
+      await ds.loadManifest();
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+
+      // Force retry — should hit the network again.
+      global.fetch = jest.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve(SAMPLE_MANIFEST) })
+      );
+      await ds.loadManifest({ force: true });
+      expect(global.fetch).toHaveBeenCalledTimes(1); // a fresh mock, called once
+    });
+  });
+
+  it("preserves stale manifest if a forced retry fails", async () => {
+    await withFreshModule(async (ds) => {
+      // Successful initial load.
+      mockFetchOnce(SAMPLE_MANIFEST);
+      await ds.loadManifest();
+      expect(ds.getManifest()).toEqual(SAMPLE_MANIFEST);
+
+      // Forced retry fails — keep the stale manifest, but record the error.
+      global.fetch = jest.fn(() => Promise.reject(new Error("retry failed")));
+      const result = await ds.loadManifest({ force: true });
+      expect(result).toEqual(SAMPLE_MANIFEST); // last-good
+      expect(ds.getManifest()).toEqual(SAMPLE_MANIFEST);
+      expect(ds.getError()).toBe("retry failed");
+    });
+  });
 });
 
 

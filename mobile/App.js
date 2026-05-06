@@ -1,8 +1,16 @@
 // Day-1 entry. Just renders the map screen full-bleed; navigation +
 // secondary screens (saved spots list, info pane) come once the
 // primary surface feels right.
+//
+// SafeAreaProvider wraps the whole tree so descendants can call
+// useSafeAreaInsets() to read the notch / Dynamic Island / gesture-bar
+// inset for the current device. Android with edge-to-edge enabled
+// returns non-zero top + bottom insets too — without this provider the
+// status pill and chip strip would land under system UI on every
+// modern phone.
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 // No extension on the import path so Metro can resolve to
 // MapScreen.web.jsx on web and MapScreen.jsx on iOS / Android. With
@@ -13,8 +21,10 @@ import MapScreen from "./src/components/MapScreen";
 export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <MapScreen />
-      <StatusBar style="auto" />
+      <SafeAreaProvider>
+        <MapScreen />
+        <StatusBar style="auto" />
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }

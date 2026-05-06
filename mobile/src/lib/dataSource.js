@@ -22,6 +22,14 @@ const MANIFEST_URL = `${REMOTE_BASE}/data/manifest.json`;
 let manifest = null;
 let inflight = null;
 let ready = false;
+// Last fetch error if loadManifest didn't return a real manifest. The
+// previous behaviour collapsed every failure (HTTP error, JSON parse,
+// network down, captive portal HTML) into manifest=null + ready=true,
+// so MapScreen rendered the generic "no PNG" empty state with no
+// indication that the failure was a network problem and no retry path.
+// Tracking the error explicitly lets the UI distinguish "data hasn't
+// loaded yet" from "data failed to load and you can retry".
+let lastError = null;
 const listeners = new Set();
 
 
@@ -39,19 +47,42 @@ function notify() {
 
 
 /** Fetch + cache the manifest. Calls beyond the first are no-ops
- * unless the cached fetch failed. */
-export async function loadManifest() {
-  if (manifest) return manifest;
+ * unless the cached fetch failed. Pass force=true to retry after a
+ * previous failure (e.g. user tapped a retry button). */
+export async function loadManifest({ force = false } = {}) {
+  if (manifest && !force) return manifest;
   if (inflight) return inflight;
+  // Reset error state on retry so the UI can clear its banner.
+  if (force) lastError = null;
   inflight = fetch(MANIFEST_URL)
-    .then((r) => (r.ok ? r.json() : null))
-    .catch(() => null)
+    .then(async (r) => {
+      if (!r.ok) {
+        throw new Error(`HTTP ${r.status} ${r.statusText}`);
+      }
+      const json = await r.json();
+      if (!json || typeof json !== "object" || !json.layers) {
+        throw new Error("manifest payload missing 'layers'");
+      }
+      return json;
+    })
     .then((m) => {
       manifest = m;
+      lastError = null;
       ready = true;
       inflight = null;
       notify();
       return m;
+    })
+    .catch((err) => {
+      // Don't clobber a previously-loaded manifest if a retry fails —
+      // user keeps seeing stale data, just with a banner saying refresh
+      // didn't work. (This matches the desktop behaviour.)
+      const errMsg = err?.message || String(err);
+      lastError = errMsg;
+      ready = true;
+      inflight = null;
+      notify();
+      return manifest; // null on first-time failure, last-good on retry-fail
     });
   return inflight;
 }
@@ -64,6 +95,12 @@ export function getManifest() {
 
 export function isReady() {
   return ready;
+}
+
+
+/** Return the last fetch error message (or null if the manifest is fine). */
+export function getError() {
+  return lastError;
 }
 
 

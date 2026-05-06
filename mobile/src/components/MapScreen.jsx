@@ -19,6 +19,7 @@ import {
 } from "react-native";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import { Canvas, Image as SkiaImage, useImage } from "@shopify/react-native-skia";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BBOX, BBOX_REGION, SAVED_SPOTS } from "../lib/mapData.js";
 import { colorizeImage } from "../lib/colors.js";
@@ -26,6 +27,7 @@ import {
   loadManifest,
   subscribe,
   isReady,
+  getError,
   getLayerPngUrl,
 } from "../lib/dataSource.js";
 
@@ -53,6 +55,11 @@ export default function MapScreen() {
   // overlay tracks smoothly.
   const [region, setRegion] = useState(BBOX_REGION);
   const [mapSize, setMapSize] = useState({ w: 0, h: 0 });
+  // Safe-area insets — non-zero on notched iPhones and Android devices
+  // running edge-to-edge. We add these to the hardcoded offsets below
+  // so absolute-positioned controls (status pill, chip strip, composite
+  // picker) clear the system UI on every device.
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     loadManifest();
@@ -60,6 +67,7 @@ export default function MapScreen() {
   }, []);
 
   const ready = isReady();
+  const error = getError();
   const pngUrl = getLayerPngUrl(layer, composite);
   const compositeButtonsActive = layer === "sst" || layer === "chl";
 
@@ -148,8 +156,12 @@ export default function MapScreen() {
       )}
 
       {/* Status pill — minimal v1: layer label, window, overlay
-          load state. */}
-      <View style={styles.statusPill} pointerEvents="none">
+          load state. Top offset adds insets.top so the pill clears
+          the notch / status bar on every device. */}
+      <View
+        style={[styles.statusPill, { top: 12 + insets.top }]}
+        pointerEvents="none"
+      >
         <View
           style={[
             styles.dot,
@@ -164,8 +176,10 @@ export default function MapScreen() {
         </Text>
       </View>
 
-      {/* Layer chip strip — Pressable so taps fire on native. */}
-      <View style={styles.chipStrip}>
+      {/* Layer chip strip — Pressable so taps fire on native. Bottom
+          offset adds insets.bottom so it clears the home indicator /
+          gesture-nav bar. */}
+      <View style={[styles.chipStrip, { bottom: 12 + insets.bottom }]}>
         {LAYERS.map((L) => {
           const active = layer === L.id;
           return (
@@ -191,9 +205,10 @@ export default function MapScreen() {
         })}
       </View>
 
-      {/* Composite buttons (only for sst/chl). */}
+      {/* Composite buttons (only for sst/chl). Top offset matches the
+          status pill so they sit on the same row beneath the notch. */}
       {compositeButtonsActive && (
-        <View style={styles.compositeStrip}>
+        <View style={[styles.compositeStrip, { top: 12 + insets.top }]}>
           {[1, 2, 3].map((d) => (
             <Pressable
               key={d}
@@ -219,13 +234,35 @@ export default function MapScreen() {
 
       {/* Loading indicator when the manifest is in flight. */}
       {!ready && (
-        <View style={styles.loadingOverlay}>
+        <View style={[styles.loadingOverlay, { top: 62 + insets.top }]}>
           <ActivityIndicator size="small" />
           <Text style={styles.loadingText}>Loading conditions…</Text>
         </View>
       )}
-      {ready && !pngUrl && (
-        <View style={styles.loadingOverlay}>
+      {/* Network / fetch failure — distinct from the "no PNG" empty
+          state. Shows the underlying error and a Retry button that
+          re-runs loadManifest with force=true. We render this in
+          preference to the no-PNG message so a captive portal or
+          offline state doesn't masquerade as a missing layer. */}
+      {ready && error && !pngUrl && (
+        <View style={[styles.errorOverlay, { top: 62 + insets.top }]}>
+          <Text style={styles.errorTitle}>Couldn’t load conditions</Text>
+          <Text style={styles.errorBody} numberOfLines={2}>
+            {error}
+          </Text>
+          <Pressable
+            onPress={() => loadManifest({ force: true })}
+            style={({ pressed }) => [
+              styles.retryBtn,
+              pressed && styles.retryBtnPressed,
+            ]}
+          >
+            <Text style={styles.retryLabel}>Retry</Text>
+          </Pressable>
+        </View>
+      )}
+      {ready && !error && !pngUrl && (
+        <View style={[styles.loadingOverlay, { top: 62 + insets.top }]}>
           <Text style={styles.loadingText}>
             No PNG for {layerLabel(layer)}
             {compositeButtonsActive ? ` ${composite}-day` : ""}
@@ -256,7 +293,7 @@ const styles = StyleSheet.create({
 
   statusPill: {
     position: "absolute",
-    top: 60,
+    // top is set inline (12 + insets.top) so the pill clears the notch.
     left: 12,
     flexDirection: "row",
     alignItems: "center",
@@ -283,7 +320,7 @@ const styles = StyleSheet.create({
 
   chipStrip: {
     position: "absolute",
-    bottom: 28,
+    // bottom is set inline (12 + insets.bottom) to clear the home bar.
     left: 8,
     right: 8,
     flexDirection: "row",
@@ -315,7 +352,7 @@ const styles = StyleSheet.create({
 
   compositeStrip: {
     position: "absolute",
-    top: 60,
+    // top is set inline (12 + insets.top) to match the status pill.
     right: 12,
     flexDirection: "row",
     gap: 4,
@@ -340,7 +377,7 @@ const styles = StyleSheet.create({
 
   loadingOverlay: {
     position: "absolute",
-    top: 110,
+    // top is set inline (62 + insets.top) so it sits below the status pill.
     alignSelf: "center",
     flexDirection: "row",
     alignItems: "center",
@@ -351,4 +388,45 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.95)",
   },
   loadingText: { fontSize: 12, color: "#0f172a" },
+
+  // Error banner — same screen position as loadingOverlay but stacked
+  // vertically and wider, with a Retry button. Shows when the manifest
+  // fetch failed (network down, captive portal, server 5xx) so the
+  // user can distinguish "still loading" from "broken" and recover
+  // without restarting the app.
+  errorOverlay: {
+    position: "absolute",
+    // top is set inline (62 + insets.top).
+    left: 24,
+    right: 24,
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.97)",
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  errorTitle: { fontSize: 13, fontWeight: "700", color: "#0f172a" },
+  errorBody: {
+    fontSize: 11,
+    color: "#475569",
+    textAlign: "center",
+    marginBottom: 4,
+  },
+  retryBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: "#0f172a",
+    minHeight: 36,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  retryBtnPressed: { backgroundColor: "#1e293b" },
+  retryLabel: { fontSize: 12, fontWeight: "600", color: "#ffffff" },
 });
