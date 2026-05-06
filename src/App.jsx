@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { setFillMode } from "./lib/mapData.js";
 import { SeaBasemap, LandBasemap, PLACE_LABELS } from "./components/Basemap.jsx";
 import DataOverlay from "./components/DataOverlay.jsx";
 import WindParticles from "./components/WindParticles.jsx";
@@ -67,26 +66,13 @@ import {
   getSwell5dStats,
 } from "./lib/dataSource.js";
 
-// Reactive viewport-width hook. Returns true at <760 px so we can branch the
-// layout between the floating-panel desktop UI and a bottom-sheet mobile UI.
-// Why this query rather than just (max-width: 760px):
+// Reactive viewport hook for the bottom-sheet mobile UI.
 //
-//   * iPhone Pro Max in landscape is 932px wide — the old 760px
-//     ceiling wrongly served those users the desktop layout, where
-//     panels stretch into a horizontal sprawl and the layer chip row
-//     is buried inside the collapsed Layer panel (no obvious way to
-//     switch layers — exactly the bug the user reported).
-//   * iPad portrait starts at 744px (mini) but goes up to 1024px
-//     (12.9"). All sizes are touch-primary phones-grade UX, not
-//     desktop-with-mouse UX. Same fix applies.
-//
-// The (hover: none) and (pointer: coarse) pair is the modern feature-
-// detection idiom for "primary input is a finger, not a mouse" — true
-// for every iOS/Android device, false for every regular laptop, even
-// touchscreen laptops where a mouse is the primary input. Width
-// 1024px catches the same devices via a different axis so older
-// browsers without media-feature support still get sensible behaviour.
-const MOBILE_QUERY = "(max-width: 1024px), (hover: none) and (pointer: coarse)";
+// Treat touch/coarse-pointer devices as mobile at any width, which catches
+// large phones and tablets in landscape. For fine-pointer desktop browsers,
+// only the truly narrow layout switches to mobile; a windowed laptop browser
+// keeps the desktop panels and the original map framing.
+const MOBILE_QUERY = "(max-width: 760px), (hover: none) and (pointer: coarse)";
 function subscribeMatchMedia(cb) {
   const mql = window.matchMedia(MOBILE_QUERY);
   mql.addEventListener("change", cb);
@@ -541,18 +527,6 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
     : layer === "current" ? currentSelToSlotKey(currentSel, getCurrent5dSummary())
     : composite;
   const isMobile = useIsMobile();
-
-  // Mirror mobile detection into mapData's getFitted module flag so
-  // every project()/unproject()/data-overlay/wind-particles render
-  // consistently fills the screen instead of leaving huge cream +
-  // sky-blue letterbox margins above/below the data on a portrait
-  // phone. Desktop keeps the aspect-preserving margins because the
-  // side panels (Layer / Saved Spots / How to Read) cover them.
-  //
-  // Set during render (not useEffect) so child components see the
-  // correct fill mode on the SAME render — useEffect would lag by
-  // one paint and cause a flicker.
-  setFillMode(isMobile);
 
   const stageRef = useRef(null);
   const [size, setSize] = useState({ w: 1200, h: 700 });
