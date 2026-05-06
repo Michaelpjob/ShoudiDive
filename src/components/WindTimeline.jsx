@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import {
   getWind5dSummary,
   getWind5dHourlyStats,
   loadWind5dHourly,
   windCardinal,
 } from "../lib/dataSource.js";
+import { useTimelineDrag } from "./useTimelineDrag.js";
 
 // Bucket → first hour of that bucket (for selections that came from a card click).
 const BUCKET_FIRST_HOUR = {
@@ -65,7 +66,6 @@ function ktColor(kt) {
 export default function WindTimeline({ sel, setSel }) {
   const summary = getWind5dSummary();
   const ref = useRef(null);
-  const [dragging, setDragging] = useState(false);
 
   // Background-load every day's hourly grids so scrubbing across the
   // timeline doesn't reveal placeholder cells. Idempotent + dedupes.
@@ -76,9 +76,11 @@ export default function WindTimeline({ sel, setSel }) {
     }
   }, [summary]);
 
-  if (!summary || !summary.days?.length) return null;
-
-  const numDays = summary.days.length;
+  // Compute slider math BEFORE any conditional return so React's hook
+  // order stays stable across renders (the useTimelineDrag hook below
+  // would otherwise see different call counts on first render vs after
+  // the summary lands).
+  const numDays = summary?.days?.length || 0;
   const totalHours = numDays * 24;
 
   // Convert sel → global hour offset (0..120). Bucket-only selections snap
@@ -89,35 +91,32 @@ export default function WindTimeline({ sel, setSel }) {
       ? sel.hour
       : BUCKET_FIRST_HOUR[sel?.bucket] ?? 12;
   const currentHour = selDay * 24 + selHour;
-  const playheadFrac = totalHours > 1 ? currentHour / (totalHours - 1) : 0;
 
-  function xToHour(clientX) {
-    const r = ref.current.getBoundingClientRect();
-    const t = (clientX - r.left) / r.width;
-    return Math.max(0, Math.min(totalHours - 1, Math.round(t * (totalHours - 1))));
-  }
-  function setHour(globalHour) {
-    const day = Math.floor(globalHour / 24);
-    const hour = globalHour % 24;
-    setSel({ day, bucket: hourToBucket(hour), hour });
-  }
+  const drag = useTimelineDrag({
+    ref,
+    currentTarget: currentHour,
+    xToTarget: (clientX) => {
+      const r = ref.current?.getBoundingClientRect();
+      if (!r || totalHours <= 1) return 0;
+      const t = (clientX - r.left) / r.width;
+      return Math.max(0, Math.min(totalHours - 1, Math.round(t * (totalHours - 1))));
+    },
+    targetToFrac: (h) => (totalHours > 1 ? h / (totalHours - 1) : 0),
+    onCommit: (globalHour) => {
+      const day = Math.floor(globalHour / 24);
+      const hour = globalHour % 24;
+      setSel({ day, bucket: hourToBucket(hour), hour });
+    },
+    // Keyboard: ←/→ steps one hour, PageUp/PageDown jumps a full day,
+    // Home/End jumps to the first/last hour.
+    step: (cur, delta) =>
+      Math.max(0, Math.min(totalHours - 1, cur + delta)),
+    totalSteps: Math.max(0, totalHours - 1),
+  });
 
-  function onPointerDown(e) {
-    // touch-action: none on .wind-timeline already prevents the default
-    // page scroll on touch devices; calling preventDefault() here only
-    // tripped the "passive listener" warning on iOS Safari.
-    setDragging(true);
-    setHour(xToHour(e.clientX));
-    e.currentTarget.setPointerCapture?.(e.pointerId);
-  }
-  function onPointerMove(e) {
-    if (!dragging) return;
-    setHour(xToHour(e.clientX));
-  }
-  function onPointerUp(e) {
-    setDragging(false);
-    e.currentTarget.releasePointerCapture?.(e.pointerId);
-  }
+  if (!summary || !summary.days?.length) return null;
+
+  const playheadFrac = drag.playheadFrac;
 
   // Stats for the playhead badge — real per-hour if loaded, otherwise the
   // bucket's mean.
@@ -180,12 +179,9 @@ export default function WindTimeline({ sel, setSel }) {
 
   return (
     <div
-      className={`wind-timeline ${dragging ? "dragging" : ""}`}
+      className={`wind-timeline ${drag.dragging ? "dragging" : ""}`}
       ref={ref}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
+      {...drag.handlers}
       role="slider"
       aria-label="Wind forecast time scrubber"
       aria-valuemin={0}

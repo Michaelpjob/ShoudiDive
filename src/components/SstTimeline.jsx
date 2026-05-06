@@ -1,9 +1,10 @@
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { sstColor } from "../lib/mapData.js";
 import {
   getSstHistoryStats,
   getSstHistorySummary,
 } from "../lib/dataSource.js";
+import { useTimelineDrag } from "./useTimelineDrag.js";
 
 function fmtDay(iso) {
   const d = new Date(`${iso}T12:00:00Z`);
@@ -92,15 +93,37 @@ export function SstCurrentCard({ sel, units }) {
 export default function SstTimeline({ sel, setSel, units }) {
   const summary = getSstHistorySummary();
   const ref = useRef(null);
-  const [dragging, setDragging] = useState(false);
 
-  if (!summary?.days?.length) return null;
-
-  const days = summary.days;
+  // Hook lookup BEFORE the early return so React's hook order stays
+  // stable across renders. We pass conservative defaults that the hook
+  // tolerates when summary isn't ready yet.
+  const days = summary?.days || [];
   const numDays = days.length;
   const slot = sstSelToSlotKey(sel, summary);
   const idx = Math.max(0, days.findIndex((d) => d.slot === slot));
-  const playheadFrac = numDays > 1 ? idx / (numDays - 1) : 0;
+
+  const drag = useTimelineDrag({
+    ref,
+    currentTarget: idx,
+    xToTarget: (clientX) => {
+      const r = ref.current?.getBoundingClientRect();
+      if (!r || numDays <= 1) return 0;
+      const t = (clientX - r.left) / r.width;
+      return Math.max(0, Math.min(numDays - 1, Math.round(t * (numDays - 1))));
+    },
+    targetToFrac: (i) => (numDays > 1 ? i / (numDays - 1) : 0),
+    onCommit: (nextIdx) => {
+      const next = days[nextIdx];
+      if (next) setSel({ slot: next.slot });
+    },
+    step: (cur, delta) =>
+      Math.max(0, Math.min(numDays - 1, cur + delta)),
+    totalSteps: Math.max(0, numDays - 1),
+  });
+
+  if (!summary?.days?.length) return null;
+
+  const playheadFrac = drag.playheadFrac;
   const day = days[idx];
   const prev = idx > 0 ? days[idx - 1] : null;
   const mean = cToDisplay(day?.mean, units);
@@ -108,33 +131,6 @@ export default function SstTimeline({ sel, setSel, units }) {
     day && prev && Number.isFinite(day.mean) && Number.isFinite(prev.mean)
       ? day.mean - prev.mean
       : null;
-
-  function xToIndex(clientX) {
-    const r = ref.current.getBoundingClientRect();
-    const t = (clientX - r.left) / r.width;
-    return Math.max(0, Math.min(numDays - 1, Math.round(t * (numDays - 1))));
-  }
-
-  function setIndex(nextIdx) {
-    const next = days[nextIdx];
-    if (next) setSel({ slot: next.slot });
-  }
-
-  function onPointerDown(e) {
-    setDragging(true);
-    setIndex(xToIndex(e.clientX));
-    e.currentTarget.setPointerCapture?.(e.pointerId);
-  }
-
-  function onPointerMove(e) {
-    if (!dragging) return;
-    setIndex(xToIndex(e.clientX));
-  }
-
-  function onPointerUp(e) {
-    setDragging(false);
-    e.currentTarget.releasePointerCapture?.(e.pointerId);
-  }
 
   const dayCells = days.map((d, i) => {
     const left = (i / numDays) * 100;
@@ -168,12 +164,9 @@ export default function SstTimeline({ sel, setSel, units }) {
 
   return (
     <div
-      className={`wind-timeline sst-timeline ${dragging ? "dragging" : ""}`}
+      className={`wind-timeline sst-timeline ${drag.dragging ? "dragging" : ""}`}
       ref={ref}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
+      {...drag.handlers}
       role="slider"
       aria-label="Sea temperature history scrubber"
       aria-valuemin={0}

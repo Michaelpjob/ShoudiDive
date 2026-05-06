@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import {
   getSwell5dSummary,
   getSwell5dHourlyStats,
   loadSwell5dHourly,
   windCardinal,
 } from "../lib/dataSource.js";
+import { useTimelineDrag } from "./useTimelineDrag.js";
 
 // Bucket → first hour (mirrors the wind timeline so a bucket-only
 // selection has somewhere to plant the playhead).
@@ -135,7 +136,6 @@ export function SwellCurrentCard({ sel }) {
 export default function SwellTimeline({ sel, setSel }) {
   const summary = getSwell5dSummary();
   const ref = useRef(null);
-  const [dragging, setDragging] = useState(false);
 
   useEffect(() => {
     if (!summary) return;
@@ -144,9 +144,9 @@ export default function SwellTimeline({ sel, setSel }) {
     }
   }, [summary]);
 
-  if (!summary || !summary.days?.length) return null;
-
-  const numDays = summary.days.length;
+  // Compute slider math BEFORE the early return so React's hook order
+  // stays stable across renders (see SstTimeline for the same dance).
+  const numDays = summary?.days?.length || 0;
   const totalHours = numDays * 24;
 
   const selDay = Math.max(0, Math.min(numDays - 1, sel?.day ?? 0));
@@ -155,35 +155,30 @@ export default function SwellTimeline({ sel, setSel }) {
       ? sel.hour
       : BUCKET_FIRST_HOUR[sel?.bucket] ?? 12;
   const currentHour = selDay * 24 + selHour;
-  const playheadFrac = totalHours > 1 ? currentHour / (totalHours - 1) : 0;
 
-  function xToHour(clientX) {
-    const r = ref.current.getBoundingClientRect();
-    const t = (clientX - r.left) / r.width;
-    return Math.max(0, Math.min(totalHours - 1, Math.round(t * (totalHours - 1))));
-  }
-  function setHour(globalHour) {
-    const day = Math.floor(globalHour / 24);
-    const hour = globalHour % 24;
-    setSel({ day, bucket: hourToBucket(hour), hour });
-  }
+  const drag = useTimelineDrag({
+    ref,
+    currentTarget: currentHour,
+    xToTarget: (clientX) => {
+      const r = ref.current?.getBoundingClientRect();
+      if (!r || totalHours <= 1) return 0;
+      const t = (clientX - r.left) / r.width;
+      return Math.max(0, Math.min(totalHours - 1, Math.round(t * (totalHours - 1))));
+    },
+    targetToFrac: (h) => (totalHours > 1 ? h / (totalHours - 1) : 0),
+    onCommit: (globalHour) => {
+      const day = Math.floor(globalHour / 24);
+      const hour = globalHour % 24;
+      setSel({ day, bucket: hourToBucket(hour), hour });
+    },
+    step: (cur, delta) =>
+      Math.max(0, Math.min(totalHours - 1, cur + delta)),
+    totalSteps: Math.max(0, totalHours - 1),
+  });
 
-  function onPointerDown(e) {
-    // touch-action: none on .wind-timeline already prevents page scroll;
-    // calling preventDefault() here tripped the iOS Safari passive-listener
-    // warning without doing any extra work.
-    setDragging(true);
-    setHour(xToHour(e.clientX));
-    e.currentTarget.setPointerCapture?.(e.pointerId);
-  }
-  function onPointerMove(e) {
-    if (!dragging) return;
-    setHour(xToHour(e.clientX));
-  }
-  function onPointerUp(e) {
-    setDragging(false);
-    e.currentTarget.releasePointerCapture?.(e.pointerId);
-  }
+  if (!summary || !summary.days?.length) return null;
+
+  const playheadFrac = drag.playheadFrac;
 
   // Real per-hour stats once the grid is loaded; bucket fallback while it
   // streams. Stats are in metric units (Hs m, Tp s, Dp deg from). We
@@ -250,12 +245,9 @@ export default function SwellTimeline({ sel, setSel }) {
 
   return (
     <div
-      className={`wind-timeline ${dragging ? "dragging" : ""}`}
+      className={`wind-timeline ${drag.dragging ? "dragging" : ""}`}
       ref={ref}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
+      {...drag.handlers}
       role="slider"
       aria-label="Swell forecast time scrubber"
       aria-valuemin={0}
