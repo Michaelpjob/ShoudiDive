@@ -86,6 +86,11 @@ LAYER_DATE_MAX_DAYS = {
     # wind5d / swell5d covered separately via summary_url branch
 }
 
+REQUIRED_LAYERS = {
+    "sst", "sst7d", "chl", "kd490", "wind", "wind5d", "swell5d",
+    "current5d", "viz", "wave", "precip",
+}
+
 # PNG content heuristics. Pipeline writes mode='L' grayscale where R=0
 # means no-data; a healthy "dense" layer has ≥5% non-zero coverage
 # AND ≥8 distinct non-zero values (catches "stuck on a single fill"
@@ -339,6 +344,15 @@ def check_layers(manifest: dict) -> tuple[list[Finding], list[dict]]:
             detail="`layers` key present but empty — pipeline produced nothing.",
         ))
         return findings, layer_stats
+
+    missing_layers = sorted(REQUIRED_LAYERS - set(layers.keys()))
+    if missing_layers:
+        findings.append(Finding(
+            severity="high",
+            code="required_layers_missing",
+            title=f"Live manifest is missing required layer(s): {', '.join(missing_layers)}",
+            detail="The deployed app may render an empty selector or stale fallback for these data products.",
+        ))
 
     for layer_id, info in sorted(layers.items()):
         if not isinstance(info, dict):

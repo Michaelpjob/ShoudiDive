@@ -181,6 +181,16 @@ FEEDS: list[FeedSpec] = [
         notes="WaveWatch III packaged in GFS. wcoast 0.16° subdomain.",
     ),
 
+    FeedSpec(
+        feed_id="hfr_uswc_6km",
+        category="model",
+        consumer="fetch_currents.py -> currents/summary.json",
+        probe_url="https://dods.ndbc.noaa.gov/thredds/dodsC/hfradar_uswc_6km.html",
+        method="GET",
+        critical=True,
+        notes="IOOS/NDBC HFRNet U.S. West Coast 6 km near-real-time surface currents.",
+    ),
+
     # --------- Point obs --------------------------------------------------
     FeedSpec(
         feed_id="cdip",

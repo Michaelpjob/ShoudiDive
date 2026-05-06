@@ -27,14 +27,18 @@ import {
   getChl,
   getWindSpeed,
   getWindUV,
+  getCurrentSpeed,
+  getCurrentUV,
   getVizFt,
   windCompass,
   windCardinal,
   windSource,
+  currentSource,
   dataDates,
   isReal,
   getDataState,
   getWind5dSummary,
+  getCurrent5dSummary,
   getSstHistorySummary,
 } from "./lib/dataSource.js";
 import WindDayGrid, {
@@ -45,6 +49,12 @@ import WindDayGrid, {
 } from "./components/WindDayGrid.jsx";
 import WindTimeline from "./components/WindTimeline.jsx";
 import SwellTimeline, { SwellCurrentCard } from "./components/SwellTimeline.jsx";
+import CurrentTimeline, {
+  CurrentCurrentCard,
+  currentSelToSlotKey,
+  currentSelectionHasData,
+  defaultCurrentSelection,
+} from "./components/CurrentTimeline.jsx";
 import SstTimeline, {
   SstCurrentCard,
   defaultSstSelection,
@@ -140,6 +150,7 @@ const TIME_OPTIONS = {
   chl:   { label: "Composite",      helper: "rolling window",      buttons: ["1 Day", "2 Day", "3 Day"],         tags: ["freshest", "balanced", "best cover"] },
   wind:  { label: "Forecast Step",  helper: "HRRR + GFS",          buttons: ["Now",   "+6h",   "+24h", "+72h"],  tags: ["analysis", "afternoon", "tomorrow", "3-day"] },
   swell: { label: "Swell forecast", helper: "WaveWatch III · 5d",  buttons: ["Now"],                              tags: ["timeline below"] },
+  current: { label: "Surface current", helper: "HFR + tide/wind", buttons: ["Now"], tags: ["timeline below"] },
   viz:   { label: "Visibility forecast", helper: "model output · feet", buttons: ["Now"],                          tags: ["best estimate"] },
 };
 
@@ -178,6 +189,16 @@ function hoverReadout(layer, hover, activeComposite, units) {
     const dirStr =
       Number.isFinite(u) && Number.isFinite(v)
         ? ` ${windCardinal(windCompass(u, v))}`
+        : "";
+    return `${kt.toFixed(1)} kt${dirStr} at cursor`;
+  }
+  if (layer === "current") {
+    const kt = getCurrentSpeed(lng, lat, activeComposite);
+    if (!Number.isFinite(kt)) return null;
+    const { u, v } = getCurrentUV(lng, lat, activeComposite);
+    const dirStr =
+      Number.isFinite(u) && Number.isFinite(v)
+        ? ` to ${windCardinal((Math.atan2(u, v) * 180 / Math.PI + 360) % 360)}`
         : "";
     return `${kt.toFixed(1)} kt${dirStr} at cursor`;
   }
@@ -254,6 +275,7 @@ export default function App() {
   const [sstSel, setSstSel] = useState({ slot: "d0" });
   const [windSel, setWindSel] = useState({ day: 0, bucket: "morning", hour: null });
   const [swellSel, setSwellSel] = useState({ day: 0, bucket: "morning", hour: null });
+  const [currentSel, setCurrentSel] = useState({ day: 0, bucket: "midday" });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const dataState = useDataVersion();
 
@@ -275,6 +297,10 @@ export default function App() {
     if (sSummary && !selectionHasData(sSummary, swellSel)) {
       setSwellSel(defaultWindSelection(sSummary));
     }
+    const cSummary = getCurrent5dSummary();
+    if (cSummary && !currentSelectionHasData(cSummary, currentSel)) {
+      setCurrentSel(defaultCurrentSelection(cSummary));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataState?.ready, dataState?.manifest?.generated_at]);
 
@@ -293,7 +319,7 @@ export default function App() {
   // Moon-phase icon should track the active time slider when those
   // layers are active, otherwise show "now". Computed at render time
   // so it updates whenever the selected time/layer changes.
-  const viewingDate = selToDate(layer, sstSel, windSel, swellSel);
+  const viewingDate = selToDate(layer, sstSel, windSel, swellSel, currentSel);
 
   return (
     <div className="app">
@@ -316,6 +342,8 @@ export default function App() {
         setWindSel={setWindSel}
         swellSel={swellSel}
         setSwellSel={setSwellSel}
+        currentSel={currentSel}
+        setCurrentSel={setCurrentSel}
         opacity={prefs.opacity}
         units={prefs.units}
         dataState={dataState}
@@ -332,7 +360,7 @@ export default function App() {
 // Map a timeline selection to a real Date so the moon icon can update
 // with the selected time. Returns null when the active layer has no
 // timeline (chl/viz), so the widget falls back to "now".
-function selToDate(layer, sstSel, windSel, swellSel) {
+function selToDate(layer, sstSel, windSel, swellSel, currentSel) {
   if (layer === "sst") {
     const summary = getSstHistorySummary();
     const slot = sstSelToSlotKey(sstSel, summary);
@@ -347,16 +375,15 @@ function selToDate(layer, sstSel, windSel, swellSel) {
   } else if (layer === "swell") {
     sel = swellSel;
     summary = getSwell5dSummary();
+  } else if (layer === "current") {
+    sel = currentSel;
+    summary = getCurrent5dSummary();
   }
   if (!sel || !summary) return null;
   const dayInfo = summary.days?.find((d) => d.day === sel.day);
   if (!dayInfo?.date) return null;
   const [y, m, d] = dayInfo.date.split("-").map(Number);
   if (!y || !m || !d) return null;
-  // Use the selected hour, or the bucket's mid-hour. Phase computation
-  // is precise to ~1 part in 30 per hour so the exact hour barely
-  // matters for icon display, but staying honest about the choice
-  // keeps debug logging sane.
   const hour =
     sel.hour != null
       ? sel.hour
@@ -392,7 +419,7 @@ function TopBar({ onSettings, settingsOpen, dataState }) {
           <div className="brand-name">ShouldIDive</div>
         </div>
         <span className="brand-tag">
-          Sea Temp · Water Clarity · Wind · CA Coast 31.8°–37.6°N
+          Sea Temp · Water Clarity · Wind · Current · CA Coast 31.8°–37.6°N
         </span>
       </div>
       <div className="topbar-meta">
@@ -402,7 +429,7 @@ function TopBar({ onSettings, settingsOpen, dataState }) {
           <span className="mono">{lastUpdate}</span>
         </span>
         <span>
-          Sources: <strong>NOAA · NASA OB.DAAC · Copernicus</strong>
+          Sources: <strong>NOAA · IOOS · NASA OB.DAAC · Copernicus</strong>
         </span>
         {/* The MobileShell peek strip carries layer/value/time info on
             phones — the topbar just keeps the brand mark + settings cog
@@ -502,7 +529,7 @@ function SettingsPopover({ prefs, setPref, onClose }) {
   );
 }
 
-function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstSel, windSel, setWindSel, swellSel, setSwellSel, opacity, units, dataState, mpaOn, setMpaOn, bathyOn, setBathyOn, viewingDate }) {
+function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstSel, windSel, setWindSel, swellSel, setSwellSel, currentSel, setCurrentSel, opacity, units, dataState, mpaOn, setMpaOn, bathyOn, setBathyOn, viewingDate }) {
   // Timeline layers use a slot-key string derived from their selection
   // state; helpers fall back to a valid slot if the requested one has no
   // data. Chl/viz keep the legacy integer composite.
@@ -511,6 +538,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
     layer === "sst"   ? (sstHistorySummary ? sstSelToSlotKey(sstSel, sstHistorySummary) : composite)
     : layer === "wind"  ? selToSlotKey(windSel,  getWind5dSummary())
     : layer === "swell" ? selToSlotKey(swellSel, getSwell5dSummary())
+    : layer === "current" ? currentSelToSlotKey(currentSel, getCurrent5dSummary())
     : composite;
   const isMobile = useIsMobile();
 
@@ -811,7 +839,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
       // the value is readable on phones (which have no hover state).
       const tap = touchTapRef.current;
       const inSliderGuard =
-        ((layer === "sst" && sstHistorySummary) || layer === "wind" || layer === "swell") &&
+        ((layer === "sst" && sstHistorySummary) || layer === "wind" || layer === "swell" || layer === "current") &&
         tap && tap.startY < SLIDER_GUARD_PX;
       if (tap && !tap.moved && Date.now() - tap.startTime < 350 && !inSliderGuard) {
         const r = stageRef.current.getBoundingClientRect();
@@ -841,6 +869,8 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
       ? "latest SST"
       : layer === "wind"
       ? "now"
+      : layer === "current"
+      ? "surface current"
       : layer === "viz"
       ? "now"
       : composite === 1
@@ -1036,7 +1066,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
           respawn check inside WindParticles (already there) keeps
           streamlines from visibly crossing land now that the SVG land
           basemap no longer naturally occludes them. */}
-      {layer === "wind" && (() => {
+      {(layer === "wind" || layer === "current") && (() => {
         const f = getFitted(size.w, size.h);
         const cssLeft = ((f.marginX - vb.x) / vb.w) * size.w;
         const cssTop  = ((f.marginY - vb.y) / vb.h) * size.h;
@@ -1064,6 +1094,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
               height={f.innerH}
               composite={activeComposite}
               dataReady={dataState?.ready}
+              vectorLayer={layer === "current" ? "current" : "wind"}
               active
             />
           </div>
@@ -1079,7 +1110,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
           .below-timeline class shifts the moon down to clear it. */}
       <MoonWidget
         date={viewingDate}
-        className={((layer === "sst" && sstHistorySummary) || layer === "wind" || layer === "swell") ? "below-timeline" : ""}
+        className={((layer === "sst" && sstHistorySummary) || layer === "wind" || layer === "swell" || layer === "current") ? "below-timeline" : ""}
       />
 
       {/* Timeline scrubbers. Wind/swell are forecasts; SST is historical
@@ -1092,6 +1123,9 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
       )}
       {layer === "swell" && (
         <SwellTimeline sel={swellSel} setSel={setSwellSel} />
+      )}
+      {layer === "current" && (
+        <CurrentTimeline sel={currentSel} setSel={setCurrentSel} />
       )}
 
       {hover && (
@@ -1136,7 +1170,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
           </span>
         </div>
         {controlsOpen && <div className="panel-body">
-          <div className="layer-toggle layer-toggle-5" role="tablist">
+          <div className="layer-toggle layer-toggle-6" role="tablist">
             <button
               className={layer === "sst" ? "active" : ""}
               onClick={() => setLayer("sst")}
@@ -1168,6 +1202,14 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
             >
               <span className="lt-label">Swell</span>
               <span className="lt-sub">ft Hs</span>
+            </button>
+            <button
+              className={layer === "current" ? "active" : ""}
+              onClick={() => setLayer("current")}
+              title="Surface current speed and direction from HFR observations plus tide/wind inference"
+            >
+              <span className="lt-label">Current</span>
+              <span className="lt-sub">kt</span>
             </button>
             <button
               className={layer === "viz" ? "active" : ""}
@@ -1208,6 +1250,14 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
                 <span className="hint">drag the timeline below</span>
               </div>
               <SwellCurrentCard sel={swellSel} />
+            </div>
+          ) : layer === "current" ? (
+            <div className="composite wind-grid-host">
+              <div className="composite-label">
+                <span>Surface current</span>
+                <span className="hint">drag the timeline below</span>
+              </div>
+              <CurrentCurrentCard sel={currentSel} />
             </div>
           ) : (
             <div className="composite">
@@ -1325,6 +1375,36 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
                   for the exact knots and compass bearing.
                 </p>
               </div>
+            ) : layer === "current" ? (
+              <div className="info-section">
+                <h4 className="info-h">Surface Current</h4>
+                <p className="info-p">
+                  Color shows estimated surface-current speed in knots. Particle trails show
+                  where the water is setting, which matters for drift, anchoring, and how stable
+                  a kelp-bed dive window will feel.
+                </p>
+                <p className="info-p">
+                  <span className="swatch" style={{ background: "rgb(125,211,252)" }}></span>
+                  <strong>Blue</strong> is weak current, generally easier diving.
+                </p>
+                <p className="info-p">
+                  <span className="swatch" style={{ background: "rgb(94,234,212)" }}></span>
+                  <strong>Teal</strong> is noticeable set. Watch the boat, floatline, and exit.
+                </p>
+                <p className="info-p">
+                  <span className="swatch" style={{ background: "rgb(250,204,21)" }}></span>
+                  <strong>Yellow</strong> is strong enough to matter for most freedivers.
+                </p>
+                <p className="info-p">
+                  <span className="swatch" style={{ background: "rgb(220,38,38)" }}></span>
+                  <strong>Red/purple</strong> is high-risk surface set. Treat as a no-go unless
+                  you have strong local confirmation.
+                </p>
+                <p className="info-p" style={{ fontSize: 11, color: "var(--ink-3)" }}>
+                  This is a surface-current product. Reef-depth current can differ near points,
+                  kelp, shelves, and island structure.
+                </p>
+              </div>
             ) : layer === "swell" ? (
               <div className="info-section">
                 <h4 className="info-h">Swell · Hs / Tp / Dp</h4>
@@ -1401,6 +1481,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
               <h4 className="info-h">{
                 layer === "sst"    ? "Historical trend"
                 : layer === "wind" ? "Forecast slots"
+                : layer === "current" ? "Consistency and reversals"
                 : layer === "viz"  ? "How the model works"
                 : layer === "swell"? "Period vs height"
                 : "Why composite windows?"
@@ -1410,6 +1491,8 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
                   ? "Sea-surface temperature is not forecast here. The timeline shows the most recent daily MUR satellite analyses so you can see whether a zone is warming, cooling, or holding steady before a dive window."
                   : layer === "wind"
                   ? "HRRR is NOAA's hourly 3-km weather model for the first 48 h, then GFS (25 km) extends out to 7 days. Drag the timeline to scrub through any hour — every cell on the heatmap reflects the wind speed at that exact hour. Days 5–6 are tagged 'low' confidence (trend, not gospel)."
+                  : layer === "current"
+                  ? "The current layer carries speed, set direction, consistency, and reversal risk by dive-window bucket. HFR observations anchor the near-term surface field where available; later windows decay into an explicitly labeled tide/wind inference."
                   : layer === "viz"
                   ? "A zone-aware stack (3 latitude × 3 distance-from-shore) translates today's chl-a into a Secchi depth, then nudges it for storm-driven bottom stir, river/precip runoff, tidal mixing, kelp shading, and substrate. The 'best estimate' is the median; hover any cell to see the value."
                   : layer === "swell"
@@ -1427,6 +1510,8 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
                   ? "NOAA MUR L4 SST. Daily gap-filled satellite analysis, loaded as a 7-day historical trend plus the legacy 1/2/3-day composites."
                   : layer === "wind"
                   ? "NOAA HRRR (3-km, hourly). 10-m UGRD/VGRD via NOMADS byte-range fetch. Regridded to ~5 km."
+                  : layer === "current"
+                  ? "IOOS/NDBC HFRNet US West Coast 6-km surface currents where available, blended with NOAA CO-OPS tide range, lunar spring/neap phase, and wind drift. Refreshed with the wind/swell cycle."
                   : layer === "viz"
                   ? "MUR SST · VIIRS chl-a · HRRR + GFS wind (7d) · WaveWatch III (3d max) · CPC precip · USGS river discharge · NOAA CO-OPS tides · MODIS-Aqua climatology. Recomputed daily."
                   : layer === "swell"
@@ -1473,6 +1558,11 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
                 unit = "mg/m³";
               } else if (layer === "wind") {
                 v = getWindSpeed(s.lng, s.lat, activeComposite);
+                valTxt = Number.isFinite(v) ? `${v.toFixed(1)}` : "—";
+                unit = "kt";
+                col = "var(--ink-2)";
+              } else if (layer === "current") {
+                v = getCurrentSpeed(s.lng, s.lat, activeComposite);
                 valTxt = Number.isFinite(v) ? `${v.toFixed(1)}` : "—";
                 unit = "kt";
                 col = "var(--ink-2)";
@@ -1525,6 +1615,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
               : layer === "chl" ? "Water Clarity (Chlorophyll-a)"
               : layer === "wind" ? "Wind Speed (10 m)"
               : layer === "swell" ? "Swell · Hs / Tp / Dp"
+              : layer === "current" ? "Surface Current"
               : "Predicted Visibility"}
             {layer === "viz" && <span className="predicted-badge">PREDICTED</span>}
           </span>
@@ -1534,6 +1625,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
                 : layer === "chl" ? "mg/m³"
                 : layer === "wind" ? "kt"
                 : layer === "swell" ? "ft Hs"
+                : layer === "current" ? "kt"
                 : "ft"}
             </span>
             <Chevron open={legendOpen} />
@@ -1564,6 +1656,10 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
               <>
                 <span>0</span><span>1</span><span>3</span><span>5</span><span>8</span><span>12</span><span>20+</span>
               </>
+            ) : layer === "current" ? (
+              <>
+                <span>0</span><span>0.4</span><span>0.8</span><span>1.2</span><span>1.8</span><span>2.5</span><span>3+</span>
+              </>
             ) : (
               <>
                 <span>0</span><span>10</span><span>20</span><span>30</span><span>50+</span>
@@ -1576,6 +1672,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
                 : layer === "chl" ? "Gin-clear → Bloom"
                 : layer === "wind" ? "Calm → Gale"
                 : layer === "swell" ? "Glassy → Storm seas"
+                : layer === "current" ? "Weak → ripping"
                 : "Poor → Excellent"}
             </span>
             <span>
@@ -1589,6 +1686,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
                 const suffix =
                   layer === "sst"   ? ` · MUR trend`
                   : layer === "wind"  ? ` · ${windSource(activeComposite) || "HRRR"}`
+                  : layer === "current" ? ` · ${currentSource(activeComposite) || "surface estimate"}`
                   : layer === "viz" ? ` · model output`
                   : layer === "swell" ? ` · WaveWatch III`
                   : ` · ${composite}-day composite`;
@@ -1641,6 +1739,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
         sstSel={sstSel} setSstSel={setSstSel}
         windSel={windSel} setWindSel={setWindSel}
         swellSel={swellSel} setSwellSel={setSwellSel}
+        currentSel={currentSel} setCurrentSel={setCurrentSel}
         activeComposite={activeComposite}
         units={units}
         dataState={dataState}
@@ -1872,6 +1971,18 @@ function Tooltip({ x, y, layer, composite, lng, lat, units }) {
     } else {
       big = "—";
       sub = "no data";
+    }
+  } else if (layer === "current") {
+    title = "Surface Current";
+    const { u, v } = getCurrentUV(lng, lat, composite);
+    const kt = getCurrentSpeed(lng, lat, composite);
+    if (Number.isFinite(kt) && Number.isFinite(u) && Number.isFinite(v)) {
+      const deg = (Math.atan2(u, v) * 180 / Math.PI + 360) % 360;
+      big = `${kt.toFixed(1)} kt`;
+      sub = `setting to ${windCardinal(deg)} (${Math.round(deg)} deg)`;
+    } else {
+      big = "—";
+      sub = "no current estimate";
     }
   } else if (layer === "swell") {
     title = "Swell · WaveWatch III";

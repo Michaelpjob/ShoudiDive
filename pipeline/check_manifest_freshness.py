@@ -44,17 +44,20 @@ SUMMARY_MAX_HOURS = {
     "sst7d": 96,
     "wind5d": 8,
     "swell5d": 8,
+    "current5d": 8,
 }
 
 SUMMARY_MIN_DAYS = {
     "sst7d": 3,
     "wind5d": 5,
     "swell5d": 5,
+    "current5d": 5,
 }
 
 SUMMARY_MIN_BUCKETS_PER_DAY = {
     "wind5d": 3,
     "swell5d": 3,
+    "current5d": 3,
 }
 
 SST_SOURCE_LAG_MAX_DAYS = 1.25
@@ -265,6 +268,7 @@ def check_summary_layer(layer_id: str, info: dict, now: datetime) -> list[Findin
     bucket_url_fields = {
         "wind5d": ("uv_url",),
         "swell5d": ("wave_url",),
+        "current5d": ("uv_url",),
     }.get(layer_id, ())
     if bucket_url_fields:
         missing = []

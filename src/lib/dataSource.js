@@ -279,6 +279,48 @@ export async function loadManifest() {
           // Don't null out — leave whatever summary did parse so the UI
           // can show the day labels even if the heatmap is missing.
         }
+      } else if (layer === "current5d") {
+        try {
+          const sres = await fetch(info.summary_url, { cache: "no-cache" });
+          if (!sres.ok) throw new Error(`currents summary ${info.summary_url} ${sres.status}`);
+          const summary = await sres.json();
+          state.layers.current5d = {
+            summary,
+            uvRange: info.uv_range,
+            speedRange: info.speed_range,
+            buckets: {},
+          };
+          const tasks = [];
+          let failed = 0;
+          let loaded = 0;
+          for (const day of summary.days || []) {
+            for (const b of day.buckets || []) {
+              const key = bucketKey(day.day, b.bucket);
+              tasks.push(
+                decodeUVPng(b.uv_url, info.uv_range)
+                  .then((uv) => {
+                    const speed = computeSpeedKt(uv);
+                    state.layers.current5d.buckets[key] = {
+                      uvU: uv.u, uvV: uv.v,
+                      width: uv.width, height: uv.height,
+                      data: speed, speedKt: speed,
+                    };
+                    loaded++;
+                  })
+                  .catch((e) => {
+                    failed++;
+                    console.warn(`current5d bucket ${key} failed`, e);
+                  })
+              );
+            }
+          }
+          await Promise.all(tasks);
+          if (failed) {
+            console.warn(`current5d: ${loaded} buckets loaded, ${failed} failed`);
+          }
+        } catch (e) {
+          console.warn("dataSource: current5d summary load failed", e);
+        }
       } else if (layer === "wind") {
         const speedRange = info.speed_range;
         const uvRange = info.uv_range;
@@ -495,6 +537,10 @@ export function getLayerGrid(layer, composite) {
     // .data is Hs in metres — DataOverlay's swell ramp expects m.
     return w ? { data: w.data, width: w.width, height: w.height } : null;
   }
+  if (layer === "current" || layer === "current5d") {
+    const w = current5dEntry(typeof composite === "string" ? composite : "d0_midday");
+    return w ? { data: w.data, width: w.width, height: w.height } : null;
+  }
   const w = state.layers[layer]?.[slotKey(layer, composite)];
   if (!w) return null;
   return { data: w.data, width: w.width, height: w.height };
@@ -520,6 +566,51 @@ export function getWind5dSpeed(lng, lat, slotKeyStr) {
 
 export function getWind5dUV(lng, lat, slotKeyStr) {
   const w = wind5dEntry(slotKeyStr);
+  if (!w) return { u: NaN, v: NaN };
+  const fx = ((lng - BBOX.lngMin) / (BBOX.lngMax - BBOX.lngMin)) * (w.width - 1);
+  const fy = ((BBOX.latMax - lat) / (BBOX.latMax - BBOX.latMin)) * (w.height - 1);
+  if (fx < 0 || fx > w.width - 1 || fy < 0 || fy > w.height - 1) {
+    return { u: NaN, v: NaN };
+  }
+  const x0 = Math.floor(fx), x1 = Math.min(x0 + 1, w.width - 1);
+  const y0 = Math.floor(fy), y1 = Math.min(y0 + 1, w.height - 1);
+  const tx = fx - x0, ty = fy - y0;
+  const lookup = (arr) => {
+    const v00 = arr[y0 * w.width + x0];
+    const v10 = arr[y0 * w.width + x1];
+    const v01 = arr[y1 * w.width + x0];
+    const v11 = arr[y1 * w.width + x1];
+    let sum = 0, n = 0;
+    if (Number.isFinite(v00)) { sum += v00; n++; }
+    if (Number.isFinite(v10)) { sum += v10; n++; }
+    if (Number.isFinite(v01)) { sum += v01; n++; }
+    if (Number.isFinite(v11)) { sum += v11; n++; }
+    if (n === 0) return NaN;
+    if (n < 4) return sum / n;
+    return v00 * (1 - tx) * (1 - ty) + v10 * tx * (1 - ty)
+         + v01 * (1 - tx) * ty       + v11 * tx * ty;
+  };
+  return { u: lookup(w.uvU), v: lookup(w.uvV) };
+}
+
+// ---- current5d accessors ----------------------------------------------------
+
+function current5dEntry(slotKeyStr) {
+  const c5 = state.layers.current5d;
+  if (!c5) return null;
+  return c5.buckets[slotKeyStr] || null;
+}
+
+export function getCurrent5dSummary() {
+  return state.layers.current5d?.summary || null;
+}
+
+export function getCurrentSpeed(lng, lat, slotKeyStr) {
+  return bilinear(current5dEntry(slotKeyStr), lng, lat);
+}
+
+export function getCurrentUV(lng, lat, slotKeyStr) {
+  const w = current5dEntry(slotKeyStr);
   if (!w) return { u: NaN, v: NaN };
   const fx = ((lng - BBOX.lngMin) / (BBOX.lngMax - BBOX.lngMin)) * (w.width - 1);
   const fy = ((BBOX.latMax - lat) / (BBOX.latMax - BBOX.latMin)) * (w.height - 1);
@@ -798,6 +889,22 @@ export function windSource(composite) {
   return state.layers.wind?.[slotKey("wind", composite)]?.source ?? null;
 }
 
+export function currentSource(composite) {
+  const summary = state.layers.current5d?.summary;
+  if (!summary || typeof composite !== "string") return null;
+  const m = composite.match(/^d(\d+)_(?!h\d)([a-z]+)$/);
+  if (!m) return null;
+  const day = +m[1];
+  const bucket = m[2];
+  const dayInfo = summary.days?.find((d) => d.day === day);
+  const bk = dayInfo?.buckets?.find((b) => b.bucket === bucket);
+  if (!bk?.source) return null;
+  if (bk.source === "hfr_observed") return "HFR observed";
+  if (bk.source === "hfr_persistence_tide_wind") return "HFR + tide/wind";
+  if (bk.source === "inferred_tide_wind") return "tide/wind inferred";
+  return bk.source;
+}
+
 // Bilinear lookup against U or V grid (NaN-safe).
 function bilinearComponent(grid, lng, lat) {
   if (!grid) return NaN;
@@ -859,6 +966,14 @@ export function dataDates(layer, composite) {
   if (layer === "swell" && typeof composite === "string") {
     return dataDatesForSwell(composite);
   }
+  if (layer === "current" && typeof composite === "string") {
+    const summary = state.layers.current5d?.summary;
+    if (!summary) return null;
+    const dm = composite.match(/^d(\d+)_/);
+    const day = dm ? +dm[1] : 0;
+    const dayInfo = summary.days?.find((d) => d.day === day);
+    return dayInfo ? [dayInfo.date] : null;
+  }
   const key = slotKey(layer, composite);
   const w = state.layers[layer]?.[key];
   if (!w) return null;
@@ -872,6 +987,9 @@ export function isReal(layer, composite) {
   }
   if (layer === "swell" && typeof composite === "string") {
     return Boolean(swell5dEntry(composite));
+  }
+  if (layer === "current" && typeof composite === "string") {
+    return Boolean(current5dEntry(composite));
   }
   return Boolean(state.layers[layer]?.[slotKey(layer, composite)]);
 }

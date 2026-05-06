@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { getWindUV } from "../lib/dataSource.js";
+import { getCurrentUV, getWindUV } from "../lib/dataSource.js";
 import { project, unproject, BBOX } from "../lib/mapData.js";
 
 
@@ -105,6 +105,16 @@ const WIND_STOPS = [
   { t: 35, kt: 35, c: [140, 30, 90]   },
 ];
 
+const CURRENT_STOPS = [
+  { kt: 0.0, c: [232, 246, 255] },
+  { kt: 0.4, c: [125, 211, 252] },
+  { kt: 0.8, c: [94, 234, 212]  },
+  { kt: 1.2, c: [250, 204, 21]  },
+  { kt: 1.8, c: [249, 115, 22]  },
+  { kt: 2.5, c: [220, 38, 38]   },
+  { kt: 3.5, c: [126, 34, 206]  },
+];
+
 function windColor(kt) {
   for (let i = 0; i < WIND_STOPS.length - 1; i++) {
     const a = WIND_STOPS[i], b = WIND_STOPS[i + 1];
@@ -120,7 +130,23 @@ function windColor(kt) {
   return WIND_STOPS[WIND_STOPS.length - 1].c;
 }
 
-export default function WindParticles({ width, height, composite, dataReady, active }) {
+function currentColor(kt) {
+  if (!Number.isFinite(kt)) return [220, 220, 220];
+  for (let i = 0; i < CURRENT_STOPS.length - 1; i++) {
+    const a = CURRENT_STOPS[i], b = CURRENT_STOPS[i + 1];
+    if (kt >= a.kt && kt <= b.kt) {
+      const k = (kt - a.kt) / (b.kt - a.kt);
+      return [
+        Math.round(a.c[0] + (b.c[0] - a.c[0]) * k),
+        Math.round(a.c[1] + (b.c[1] - a.c[1]) * k),
+        Math.round(a.c[2] + (b.c[2] - a.c[2]) * k),
+      ];
+    }
+  }
+  return CURRENT_STOPS[CURRENT_STOPS.length - 1].c;
+}
+
+export default function WindParticles({ width, height, composite, dataReady, active, vectorLayer = "wind" }) {
   const canvasRef = useRef(null);
   const rafRef = useRef(0);
   const particlesRef = useRef([]);
@@ -212,7 +238,10 @@ export default function WindParticles({ width, height, composite, dataReady, act
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
         const [lng, lat] = unproject(p.x, p.y, width, height);
-        const { u, v } = getWindUV(lng, lat, composite);
+        const { u, v } =
+          vectorLayer === "current"
+            ? getCurrentUV(lng, lat, composite)
+            : getWindUV(lng, lat, composite);
         // Respawn if: out of life, no UV (open ocean grid edge), or
         // the particle wandered onto land. The land check defeats the
         // bilinear-smear that otherwise pulls finite UV from ocean
@@ -233,7 +262,7 @@ export default function WindParticles({ width, height, composite, dataReady, act
           continue;
         }
         const kt = Math.sqrt(u * u + v * v) * 1.94384;
-        const [r, g, b] = windColor(kt);
+        const [r, g, b] = vectorLayer === "current" ? currentColor(kt) : windColor(kt);
         ctx.strokeStyle = `rgba(${r},${g},${b},0.85)`;
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
@@ -247,7 +276,7 @@ export default function WindParticles({ width, height, composite, dataReady, act
     }
     rafRef.current = requestAnimationFrame(step);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [width, height, composite, dataReady, active, landFeatures]);
+  }, [width, height, composite, dataReady, active, landFeatures, vectorLayer]);
 
   return (
     <canvas

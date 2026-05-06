@@ -13,6 +13,16 @@ const WIND_RAMP = [
   { kt: 35, c: [140, 30, 90]   },
 ];
 
+const CURRENT_RAMP = [
+  { kt: 0.0, c: [232, 246, 255] },
+  { kt: 0.4, c: [125, 211, 252] },
+  { kt: 0.8, c: [94, 234, 212]  },
+  { kt: 1.2, c: [250, 204, 21]  },
+  { kt: 1.8, c: [249, 115, 22]  },
+  { kt: 2.5, c: [220, 38, 38]   },
+  { kt: 3.5, c: [126, 34, 206]  },
+];
+
 // Predicted-visibility ramp (Secchi feet → [r,g,b]). Stops at the lower
 // edge of each category bin (Poor 0–10, Fair 10–20, Good 20–30,
 // Very Good 30–50, Excellent 50+) so cells between bins interpolate smoothly.
@@ -55,6 +65,23 @@ function windColorRGBArr(kt) {
     }
   }
   return WIND_RAMP[WIND_RAMP.length - 1].c;
+}
+
+function currentColorRGBArr(kt) {
+  if (!Number.isFinite(kt)) return [220, 220, 220];
+  if (kt <= CURRENT_RAMP[0].kt) return CURRENT_RAMP[0].c;
+  for (let i = 0; i < CURRENT_RAMP.length - 1; i++) {
+    const a = CURRENT_RAMP[i], b = CURRENT_RAMP[i + 1];
+    if (kt >= a.kt && kt <= b.kt) {
+      const k = (kt - a.kt) / (b.kt - a.kt);
+      return [
+        Math.round(a.c[0] + (b.c[0] - a.c[0]) * k),
+        Math.round(a.c[1] + (b.c[1] - a.c[1]) * k),
+        Math.round(a.c[2] + (b.c[2] - a.c[2]) * k),
+      ];
+    }
+  }
+  return CURRENT_RAMP[CURRENT_RAMP.length - 1].c;
 }
 
 function vizColorRGBArr(ft) {
@@ -145,6 +172,7 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
       if (layer === "sst") rgb = rgbStrToArr(sstColor(v));
       else if (layer === "chl") rgb = rgbStrToArr(chlColor(v));
       else if (layer === "wind") rgb = windColorRGBArr(v);
+      else if (layer === "current") rgb = currentColorRGBArr(v);
       else if (layer === "swell") rgb = swellColorRGBArr(v);  // Hs in m
       else rgb = vizColorRGBArr(v);  // viz layer (predicted Secchi feet)
       img.data[i * 4]     = rgb[0];

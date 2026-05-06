@@ -72,7 +72,7 @@ EXPECTED_DAILY_OBS_FLOOR = 50
 # upstream broke.
 REQUIRED_SOURCES = ["cdip-buoy", "ndbc-buoy"]
 REQUIRED_SOURCE_MAX_AGE_HOURS = 24
-CRITICAL_FEEDS = {"sst_mur_l4_pfeg", "nomads_hrrr", "nomads_gfswave_wcoast"}
+CRITICAL_FEEDS = {"sst_mur_l4_pfeg", "nomads_hrrr", "nomads_gfswave_wcoast", "hfr_uswc_6km"}
 
 
 # ---- Loading ---------------------------------------------------------

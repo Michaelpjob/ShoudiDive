@@ -610,6 +610,17 @@ body {
     rgb(140,30,90) 100%);
 }
 
+.legend-bar.current {
+  background: linear-gradient(90deg,
+    rgb(232,246,255) 0%,
+    rgb(125,211,252) 12%,
+    rgb(94,234,212) 26%,
+    rgb(250,204,21) 40%,
+    rgb(249,115,22) 58%,
+    rgb(220,38,38) 78%,
+    rgb(126,34,206) 100%);
+}
+
 /* Predicted-visibility ramp: Poor → Fair → Good → Very Good → Excellent.
    Warm "danger" floor (burnt-orange Poor) → green Fair → cool blue ramp
    deepening through cyan/blue/navy. Keeps the traffic-light reading.
@@ -640,6 +651,11 @@ body {
 }
 .layer-toggle.layer-toggle-5 .lt-label { font-size: 10.5px; }
 .layer-toggle.layer-toggle-5 .lt-sub   { font-size: 8.5px; }
+.layer-toggle.layer-toggle-6 {
+  grid-template-columns: repeat(6, 1fr);
+}
+.layer-toggle.layer-toggle-6 .lt-label { font-size: 9.5px; }
+.layer-toggle.layer-toggle-6 .lt-sub   { font-size: 8px; }
 
 /* "PREDICTED" badge for the viz layer — never let it look like a measurement. */
 .predicted-badge {
@@ -1469,7 +1485,7 @@ body {
 
 .ms-chips {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 4px;
   padding: 4px 8px 8px;
 }
@@ -1495,12 +1511,12 @@ body {
   border-color: var(--ink);
 }
 .ms-chip-label {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.01em;
 }
 .ms-chip-sub {
-  font-size: 10px;
+  font-size: 9px;
   opacity: 0.75;
   white-space: nowrap;
   overflow: hidden;

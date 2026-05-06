@@ -23,22 +23,28 @@ import {
   getChl,
   getWindSpeed,
   getWindUV,
+  getCurrentSpeed,
+  getCurrentUV,
   getVizFt,
   getSwell5dStats,
   getSstHistorySummary,
+  getCurrent5dSummary,
   windSource,
+  currentSource,
   windCompass,
   windCardinal,
 } from "../lib/dataSource.js";
 import WindDayGrid from "./WindDayGrid.jsx";
 import { SwellCurrentCard } from "./SwellTimeline.jsx";
 import { SstCurrentCard } from "./SstTimeline.jsx";
+import { CurrentCurrentCard } from "./CurrentTimeline.jsx";
 
 const LAYERS = [
   { id: "sst",   label: "Temp",  unit: "°{U}" },
   { id: "chl",   label: "Chl",   unit: "mg/m³" },
   { id: "wind",  label: "Wind",  unit: "kt" },
   { id: "swell", label: "Swell", unit: "ft" },
+  { id: "current", label: "Current", unit: "kt" },
   { id: "viz",   label: "Vis",   unit: "ft" },
 ];
 
@@ -66,6 +72,16 @@ function valueAt(layer, lng, lat, composite, units) {
         : "";
     return `${kt.toFixed(0)} kt${dir}`;
   }
+  if (layer === "current") {
+    const kt = getCurrentSpeed(lng, lat, composite);
+    if (!Number.isFinite(kt)) return "—";
+    const { u, v } = getCurrentUV(lng, lat, composite);
+    const dir =
+      Number.isFinite(u) && Number.isFinite(v)
+        ? ` to ${windCardinal((Math.atan2(u, v) * 180 / Math.PI + 360) % 360)}`
+        : "";
+    return `${kt.toFixed(1)} kt${dir}`;
+  }
   if (layer === "swell") {
     const w = getSwell5dStats(lng, lat, composite);
     if (!Number.isFinite(w.hs)) return "—";
@@ -92,6 +108,7 @@ export default function MobileShell({
   sstSel, setSstSel,
   windSel, setWindSel,
   swellSel, setSwellSel,
+  currentSel, setCurrentSel,
   activeComposite,
   units, dataState,
   mpaOn, setMpaOn,
@@ -104,15 +121,16 @@ export default function MobileShell({
   setHover,
 }) {
   const [open, setOpen] = useState(false);
-  // wind + swell use the slot-key string; sst/chl/viz use integer composite.
+  // wind + swell + current use slot keys; sst/chl/viz use integer composite.
   const hasSstHistory = Boolean(getSstHistorySummary());
+  const hasCurrentSummary = Boolean(getCurrent5dSummary());
   const lookupKey = activeComposite ?? composite;
   const focal = focalPoint(hover, activeSpot);
   const focalValue = valueAt(layer, focal.lng, focal.lat, lookupKey, units);
 
   // Time slice label — short version for the status row.
   const timeLabel =
-    (layer === "sst" && hasSstHistory) || layer === "wind" || layer === "swell"
+    (layer === "sst" && hasSstHistory) || layer === "wind" || layer === "swell" || layer === "current"
       ? compositeText
       : `${composite}-day · ${compositeText}`;
 
@@ -136,6 +154,7 @@ export default function MobileShell({
               {layer === "wind" ? "Wind · 5-day forecast"
                 : layer === "sst" && hasSstHistory ? "Sea temp · historical trend"
                 : layer === "swell" ? "Swell · 5-day forecast"
+                : layer === "current" ? "Surface current · 5-day"
                 : timeOpts.label}
               <span className="ms-section-sub">
                 {layer === "sst" && hasSstHistory ? "recent MUR days" : timeOpts.helper}
@@ -147,6 +166,8 @@ export default function MobileShell({
               <WindDayGrid sel={windSel} setSel={setWindSel} layout="stack" />
             ) : layer === "swell" ? (
               <SwellCurrentCard sel={swellSel} />
+            ) : layer === "current" && hasCurrentSummary ? (
+              <CurrentCurrentCard sel={currentSel} />
             ) : (
               <>
                 <div
@@ -314,6 +335,7 @@ function layerNameFor(layer) {
     : layer === "chl" ? "Chlorophyll"
     : layer === "wind" ? "Wind"
     : layer === "swell" ? "Swell"
+    : layer === "current" ? "Current"
     : "Visibility";
 }
 
@@ -346,6 +368,11 @@ function SpotsList({ layer, composite, units, activeSpot, setActiveSpot }) {
           unit = "mg/m³";
         } else if (layer === "wind") {
           const v = getWindSpeed(s.lng, s.lat, composite);
+          valTxt = Number.isFinite(v) ? v.toFixed(1) : "—";
+          unit = "kt";
+          col = "var(--ink-2)";
+        } else if (layer === "current") {
+          const v = getCurrentSpeed(s.lng, s.lat, composite);
           valTxt = Number.isFinite(v) ? v.toFixed(1) : "—";
           unit = "kt";
           col = "var(--ink-2)";
@@ -387,12 +414,14 @@ function Legend({ layer, units, composite, compositeText, layerIsReal, dataReady
     : layer === "chl" ? "Water Clarity (Chlorophyll-a)"
     : layer === "wind" ? "Wind Speed (10 m)"
     : layer === "swell" ? "Swell · Hs"
+    : layer === "current" ? "Surface Current"
     : "Predicted Visibility";
   const unitLabel =
     layer === "sst" ? `°${units}`
     : layer === "chl" ? "mg/m³"
     : layer === "wind" ? "kt"
     : layer === "swell" ? "ft Hs"
+    : layer === "current" ? "kt"
     : "ft";
   return (
     <div className="ms-legend">
@@ -417,6 +446,8 @@ function Legend({ layer, units, composite, compositeText, layerIsReal, dataReady
           <><span>0</span><span>5</span><span>10</span><span>15</span><span>20</span><span>25</span><span>35+</span></>
         ) : layer === "swell" ? (
           <><span>0</span><span>1</span><span>3</span><span>5</span><span>8</span><span>12</span><span>20+</span></>
+        ) : layer === "current" ? (
+          <><span>0</span><span>0.4</span><span>0.8</span><span>1.2</span><span>1.8</span><span>2.5</span><span>3+</span></>
         ) : (
           <><span>0</span><span>10</span><span>20</span><span>30</span><span>50+</span></>
         )}
@@ -427,12 +458,15 @@ function Legend({ layer, units, composite, compositeText, layerIsReal, dataReady
             : layer === "chl" ? "Gin-clear → Bloom"
             : layer === "wind" ? "Calm → Gale"
             : layer === "swell" ? "Glassy → Storm seas"
+            : layer === "current" ? "Weak → ripping"
             : "Poor → Excellent"}
         </span>
         <span>
           <strong>{compositeText}</strong>
           {layer === "wind"
             ? ` · ${windSource(composite) || "HRRR"}`
+            : layer === "current"
+            ? ` · ${currentSource(composite) || "surface estimate"}`
             : layer === "viz"
             ? ` · model output`
             : layer === "swell"
@@ -540,6 +574,33 @@ function Info({ layer }) {
           </p>
           <p className="info-p" style={{ fontSize: 11, color: "var(--ink-3)" }}>
             Tp ≥ 12 s = clean groundswell · Tp &lt; 8 s = windswell.
+          </p>
+        </>
+      )}
+      {layer === "current" && (
+        <>
+          <p className="info-p">
+            Surface-current speed and set direction. The near-term field uses
+            HFR observations where available, then decays into tide/wind inference.
+          </p>
+          <p className="info-p">
+            <span className="swatch" style={{ background: "rgb(125,211,252)" }}></span>
+            <strong>Blue</strong> = weak current.
+          </p>
+          <p className="info-p">
+            <span className="swatch" style={{ background: "rgb(94,234,212)" }}></span>
+            <strong>Teal</strong> = noticeable set.
+          </p>
+          <p className="info-p">
+            <span className="swatch" style={{ background: "rgb(250,204,21)" }}></span>
+            <strong>Yellow</strong> = strong enough to shape the dive plan.
+          </p>
+          <p className="info-p">
+            <span className="swatch" style={{ background: "rgb(220,38,38)" }}></span>
+            <strong>Red/purple</strong> = high-risk surface set.
+          </p>
+          <p className="info-p" style={{ fontSize: 10.5, color: "var(--ink-3)" }}>
+            Surface current only; reef-depth current can differ around structure and kelp.
           </p>
         </>
       )}

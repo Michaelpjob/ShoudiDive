@@ -77,6 +77,13 @@ jobs:
         continue-on-error: true
         run: python pipeline/fetch_tides.py
 
+      - name: Fetch surface currents
+        # Uses HFR observations where available, then blends tide range,
+        # lunar phase, and the committed wind forecast buckets into an
+        # explicitly labeled short-horizon surface-current estimate.
+        continue-on-error: true
+        run: python pipeline/fetch_currents.py
+
       - name: Refresh climatology if needed
         # Idempotent: only refetches when the calendar month rolls over.
         continue-on-error: true
@@ -133,7 +140,7 @@ jobs:
         # to publish. Soft-fail here so the watchdog issue sync below can
         # publish the exact finding instead of losing it with the runner.
         continue-on-error: true
-        run: python pipeline/check_manifest_freshness.py --layers sst,sst7d,chl,kd490,wind,wind5d,swell5d,viz,wave,precip --check-sst-source
+        run: python pipeline/check_manifest_freshness.py --layers sst,sst7d,chl,kd490,wind,wind5d,swell5d,current5d,viz,wave,precip --check-sst-source
 
       - name: Score visibility predictions against ground-truth
         # Joins observations.jsonl (collected by ingest-ground-truth.yml)

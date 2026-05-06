@@ -56,11 +56,17 @@ jobs:
         continue-on-error: true
         run: python pipeline/fetch_swell_5day.py
 
+      - name: Fetch surface currents
+        # HFR observed surface currents where available, blended into a
+        # short-horizon tide/wind inferred layer with explicit confidence.
+        continue-on-error: true
+        run: python pipeline/fetch_currents.py
+
       - name: Assert wind + swell freshness budgets
         # Fetch steps are soft-failed to tolerate transient NOMADS issues;
         # this is the hard signal that prevents a green deploy when the
         # committed forecast summaries have aged out or lost required days.
-        run: python pipeline/check_manifest_freshness.py --layers wind,wind5d,swell5d --skip-top-level
+        run: python pipeline/check_manifest_freshness.py --layers wind,wind5d,swell5d,current5d --skip-top-level
 
       - name: Install JS dependencies
         run: npm ci
