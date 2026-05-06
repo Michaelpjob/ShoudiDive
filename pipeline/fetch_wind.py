@@ -404,7 +404,7 @@ def main() -> None:
             "bbox": [BBOX["lng_min"], BBOX["lat_min"], BBOX["lng_max"], BBOX["lat_max"]],
             "layers": {},
         }
-    manifest["generated_at"] = (
+    wind_layer["generated_at"] = (
         datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
     )
     manifest.setdefault("layers", {})["wind"] = wind_layer

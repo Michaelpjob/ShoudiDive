@@ -164,8 +164,38 @@ export async function loadManifest() {
     const manifest = await res.json();
     state.manifest = manifest;
     for (const [layer, info] of Object.entries(manifest.layers || {})) {
-      state.layers[layer] = {};
-      if (layer === "swell5d") {
+      state.layers[layer] = layer === "sst" ? (state.layers.sst || {}) : {};
+      if (layer === "sst7d") {
+        try {
+          const sres = await fetch(info.summary_url, { cache: "no-cache" });
+          if (!sres.ok) throw new Error(`sst summary ${info.summary_url} ${sres.status}`);
+          const summary = await sres.json();
+          state.layers.sst7d = { summary };
+          state.layers.sst = state.layers.sst || {};
+          const scale = info.scale || summary.scale || "linear";
+          const range = info.range || summary.range;
+          if (!range) throw new Error("sst7d has no range");
+          const tasks = [];
+          for (const d of summary.days || []) {
+            if (!d?.slot || !d?.url) continue;
+            tasks.push(
+              decodePng(d.url, scale, range)
+                .then((decoded) => {
+                  state.layers.sst[d.slot] = {
+                    ...decoded,
+                    dates: d.date ? [d.date] : [],
+                    history: true,
+                    stats: d,
+                  };
+                })
+                .catch((e) => console.warn(`sst7d ${d.slot} failed`, e))
+            );
+          }
+          await Promise.all(tasks);
+        } catch (e) {
+          console.warn("dataSource: sst7d summary load failed", e);
+        }
+      } else if (layer === "swell5d") {
         // 5-day × 5-bucket swell forecast (gfswave). Load summary.json
         // first; bucket + hourly wave PNGs (RGBA Hs/Tp/Dp) load in
         // parallel with per-task error-tolerance.
@@ -418,6 +448,16 @@ function computeSpeedKt({ u, v, width, height }) {
 export function getSST(lng, lat, composite = 1) {
   // Returns °C, or NaN if the satellite didn't capture this cell.
   return bilinear(state.layers.sst?.[slotKey("sst", composite)], lng, lat);
+}
+
+export function getSstHistorySummary() {
+  return state.layers.sst7d?.summary || null;
+}
+
+export function getSstHistoryStats(slotKeyStr) {
+  const summary = getSstHistorySummary();
+  if (!summary) return null;
+  return summary.days?.find((d) => d.slot === slotKeyStr) || null;
 }
 
 export function getChl(lng, lat, composite = 1) {

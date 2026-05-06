@@ -2257,6 +2257,9 @@ body {
 }
 .tl-pb-dir { font-size: 10.5px; color: var(--ink-2); }
 .tl-pb-est { color: var(--ink-3); font-style: italic; margin-left: 2px; }
+.sst-timeline .tl-day-label {
+  font-size: 10px;
+}
 
 @media (max-width: 1024px), (hover: none) and (pointer: coarse) {
   .wind-timeline {
@@ -2285,6 +2288,17 @@ body {
   }
   .tl-day-label {
     font-size: 10px;
+  }
+  .sst-timeline .tl-day-cell {
+    padding: 5px 3px;
+  }
+  .sst-timeline .tl-day-label {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: clip;
+    white-space: nowrap;
+    font-size: 8px;
   }
   .tl-hour-label {
     font-size: 8px;

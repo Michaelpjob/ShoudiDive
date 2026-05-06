@@ -498,13 +498,13 @@ def main() -> None:
             "bbox": [BBOX["lng_min"], BBOX["lat_min"], BBOX["lng_max"], BBOX["lat_max"]],
             "layers": {},
         }
-    manifest["generated_at"] = summary["generated_at"]
     manifest.setdefault("layers", {})["wind5d"] = {
         "summary_url": "/data/wind/summary.json",
         "grid":        {"width": GRID_W, "height": GRID_H},
         "speed_range": [0.0, 50.0],
         "uv_range":    list(UV_RANGE),
         "tz":          "America/Los_Angeles",
+        "generated_at": summary["generated_at"],
         "best_window": best_window,
     }
     manifest_path.write_text(json.dumps(manifest, indent=2))

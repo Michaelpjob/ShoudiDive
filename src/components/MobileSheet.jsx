@@ -25,12 +25,14 @@ import {
   getWindUV,
   getVizFt,
   getSwell5dStats,
+  getSstHistorySummary,
   windSource,
   windCompass,
   windCardinal,
 } from "../lib/dataSource.js";
 import WindDayGrid from "./WindDayGrid.jsx";
 import { SwellCurrentCard } from "./SwellTimeline.jsx";
+import { SstCurrentCard } from "./SstTimeline.jsx";
 
 const LAYERS = [
   { id: "sst",   label: "Temp",  unit: "°{U}" },
@@ -87,6 +89,7 @@ function focalPoint(hover, activeSpot) {
 export default function MobileShell({
   layer, setLayer,
   composite, setComposite,
+  sstSel, setSstSel,
   windSel, setWindSel,
   swellSel, setSwellSel,
   activeComposite,
@@ -102,13 +105,14 @@ export default function MobileShell({
 }) {
   const [open, setOpen] = useState(false);
   // wind + swell use the slot-key string; sst/chl/viz use integer composite.
+  const hasSstHistory = Boolean(getSstHistorySummary());
   const lookupKey = activeComposite ?? composite;
   const focal = focalPoint(hover, activeSpot);
   const focalValue = valueAt(layer, focal.lng, focal.lat, lookupKey, units);
 
   // Time slice label — short version for the status row.
   const timeLabel =
-    layer === "wind" || layer === "swell"
+    (layer === "sst" && hasSstHistory) || layer === "wind" || layer === "swell"
       ? compositeText
       : `${composite}-day · ${compositeText}`;
 
@@ -130,11 +134,16 @@ export default function MobileShell({
           <section className="ms-section">
             <div className="ms-section-h">
               {layer === "wind" ? "Wind · 5-day forecast"
+                : layer === "sst" && hasSstHistory ? "Sea temp · historical trend"
                 : layer === "swell" ? "Swell · 5-day forecast"
                 : timeOpts.label}
-              <span className="ms-section-sub">{timeOpts.helper}</span>
+              <span className="ms-section-sub">
+                {layer === "sst" && hasSstHistory ? "recent MUR days" : timeOpts.helper}
+              </span>
             </div>
-            {layer === "wind" ? (
+            {layer === "sst" && hasSstHistory ? (
+              <SstCurrentCard sel={sstSel} setSel={setSstSel} units={units} />
+            ) : layer === "wind" ? (
               <WindDayGrid sel={windSel} setSel={setWindSel} layout="stack" />
             ) : layer === "swell" ? (
               <SwellCurrentCard sel={swellSel} />
@@ -428,6 +437,8 @@ function Legend({ layer, units, composite, compositeText, layerIsReal, dataReady
             ? ` · model output`
             : layer === "swell"
             ? ` · WaveWatch III`
+            : layer === "sst"
+            ? ` · MUR trend`
             : ` · composite`}
           {!layerIsReal && dataReady && " · no data"}
         </span>

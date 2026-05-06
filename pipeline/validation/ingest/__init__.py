@@ -76,6 +76,7 @@ SCRAPERS = [
 # Where the normalized observation table lives. Versioned in git.
 DATA_DIR = pathlib.Path(__file__).resolve().parent.parent / "data"
 OBS_PATH = DATA_DIR / "observations.jsonl"
+HEALTH_PATH = DATA_DIR / "ingest_health.json"
 
 
 def run_all() -> list[dict]:
@@ -92,13 +93,26 @@ def run_all() -> list[dict]:
     print(f"  out: {OBS_PATH}")
 
     new_obs: list[dict] = []
+    source_status: list[dict] = []
     for scraper in SCRAPERS:
         sid = getattr(scraper, "source_id", scraper.__class__.__name__)
         try:
             obs = scraper.fetch()
             print(f"  {sid}: {len(obs)} observations")
             new_obs.extend(obs)
+            source_status.append({
+                "source_id": sid,
+                "status": "ok",
+                "observation_count": len(obs),
+                "error": None,
+            })
         except Exception as exc:  # noqa: BLE001
+            source_status.append({
+                "source_id": sid,
+                "status": "failed",
+                "observation_count": 0,
+                "error": f"{exc.__class__.__name__}: {exc}",
+            })
             print(f"  {sid}: FAILED — {exc.__class__.__name__}: {exc}")
 
     # Dedup: load existing obs_ids, drop any duplicates from this run.
@@ -109,6 +123,18 @@ def run_all() -> list[dict]:
     with OBS_PATH.open("a", encoding="utf-8") as f:
         for o in fresh:
             f.write(json.dumps(o) + "\n")
+
+    health = {
+        "computed_at": started.isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "total_sources": len(source_status),
+        "ok": sum(1 for s in source_status if s["status"] == "ok"),
+        "failed": sum(1 for s in source_status if s["status"] == "failed"),
+        "observations_fetched": len(new_obs),
+        "observations_added": len(fresh),
+        "sources": source_status,
+    }
+    HEALTH_PATH.write_text(json.dumps(health, indent=2) + "\n", encoding="utf-8")
+    print(f"wrote {HEALTH_PATH}")
 
     print(f"ingest run done: {len(fresh)} new (of {len(new_obs)} fetched)")
     return fresh

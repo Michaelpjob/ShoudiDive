@@ -468,13 +468,13 @@ def main() -> None:
             "bbox": [BBOX["lng_min"], BBOX["lat_min"], BBOX["lng_max"], BBOX["lat_max"]],
             "layers": {},
         }
-    manifest["generated_at"] = summary["generated_at"]
     manifest.setdefault("layers", {})["swell5d"] = {
         "summary_url":    "/data/swell/summary.json",
         "grid":           {"width": GRID_W, "height": GRID_H},
         "height_range_m": list(HEIGHT_RANGE_M),
         "period_range_s": list(PERIOD_RANGE_S),
         "tz":             "America/Los_Angeles",
+        "generated_at":   summary["generated_at"],
     }
     manifest_path.write_text(json.dumps(manifest, indent=2))
     print(f"patched {manifest_path}")

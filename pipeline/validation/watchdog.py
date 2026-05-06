@@ -45,6 +45,9 @@ DATA_DIR = HERE / "data"
 METRICS_PATH      = DATA_DIR / "per_zone_metrics.json"
 RESIDUALS_PATH    = DATA_DIR / "residuals.jsonl"
 OBSERVATIONS_PATH = DATA_DIR / "observations.jsonl"
+FEED_HEALTH_PATH  = DATA_DIR / "feed_health.json"
+FRESHNESS_PATH    = DATA_DIR / "freshness_health.json"
+INGEST_HEALTH_PATH = DATA_DIR / "ingest_health.json"
 SUMMARY_PATH      = DATA_DIR / "watchdog_summary.md"
 
 
@@ -69,6 +72,7 @@ EXPECTED_DAILY_OBS_FLOOR = 50
 # upstream broke.
 REQUIRED_SOURCES = ["cdip-buoy", "ndbc-buoy"]
 REQUIRED_SOURCE_MAX_AGE_HOURS = 24
+CRITICAL_FEEDS = {"sst_mur_l4_pfeg", "nomads_hrrr", "nomads_gfswave_wcoast"}
 
 
 # ---- Loading ---------------------------------------------------------
@@ -96,6 +100,15 @@ def load_jsonl(path: pathlib.Path) -> list[dict]:
             except json.JSONDecodeError:
                 continue
     return rows
+
+
+def load_json(path: pathlib.Path) -> dict | None:
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
 
 
 # ---- Rules -----------------------------------------------------------
@@ -271,6 +284,76 @@ def rule_data_flow(observations: list[dict]) -> list[dict]:
     return out
 
 
+def rule_feed_health(feed_health: dict | None) -> list[dict]:
+    """R5: feed probe output has red feeds."""
+    if not feed_health:
+        return []
+    red = [r for r in feed_health.get("results", []) if r.get("status") == "red"]
+    if not red:
+        return []
+
+    out = []
+    critical = [r for r in red if r.get("feed_id") in CRITICAL_FEEDS]
+    if critical:
+        out.append({
+            "rule": "R5",
+            "severity": "high",
+            "title": f"{len(critical)} critical external feed(s) are red",
+            "what": "A required upstream data source failed the latest feed-health probe.",
+            "action": "Inspect `pipeline/validation/data/feed_health.json`, then retry the affected fetch workflow after confirming the upstream feed recovered.",
+        })
+
+    noncritical = [r for r in red if r.get("feed_id") not in CRITICAL_FEEDS]
+    if noncritical:
+        names = ", ".join(r.get("feed_id", "unknown") for r in noncritical[:8])
+        out.append({
+            "rule": "R5",
+            "severity": "medium",
+            "title": f"{len(noncritical)} non-critical external feed(s) are red",
+            "what": f"Red feeds: {names}. Fallbacks may keep the model running, but redundancy is degraded.",
+            "action": "Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.",
+        })
+    return out
+
+
+def rule_freshness_health(freshness: dict | None) -> list[dict]:
+    """R6: local manifest freshness gate found stale or missing outputs."""
+    if not freshness:
+        return []
+    issues = freshness.get("findings") or []
+    if not issues:
+        return []
+    sample = ", ".join(
+        f"{f.get('layer') or 'manifest'}:{f.get('code')}"
+        for f in issues[:8]
+    )
+    return [{
+        "rule": "R6",
+        "severity": "high",
+        "title": f"Published-data freshness gate found {len(issues)} issue(s)",
+        "what": f"Freshness/completeness failures: {sample}.",
+        "action": "Open `pipeline/validation/data/freshness_health.json`; fix the failing fetcher or rerun the matching workflow before trusting the deploy.",
+    }]
+
+
+def rule_ingest_health(ingest_health: dict | None) -> list[dict]:
+    """R7: hourly scraper status artifact has failed sources."""
+    if not ingest_health:
+        return []
+    results = ingest_health.get("sources") or []
+    failed = [r for r in results if r.get("status") == "failed"]
+    if not failed:
+        return []
+    names = ", ".join(r.get("source_id", "unknown") for r in failed[:8])
+    return [{
+        "rule": "R7",
+        "severity": "high",
+        "title": f"{len(failed)} ingest scraper(s) failed in the latest run",
+        "what": f"Failed scrapers: {names}. Silent scraper failures can starve validation before the daily volume floor catches up.",
+        "action": "Open `pipeline/validation/data/ingest_health.json`, inspect the scraper error, then run `ingest-ground-truth.yml` manually after the fix.",
+    }]
+
+
 # ---- Per-source bias (informational, computed from residuals) -------
 
 def per_source_summary(residuals: list[dict]) -> list[dict]:
@@ -360,13 +443,14 @@ def render(findings: list[dict], zones: dict, source_summary: list[dict]) -> str
     lines.append("## How to act on this issue")
     lines.append("")
     lines.append(
-        "1. Review each finding's suggested action. Edits go in "
-        "`pipeline/viz_predict/config.py`."
+        "1. Review each finding's suggested action. It points to the "
+        "specific fetcher, probe, ingest scraper, or visibility-model "
+        "config that needs attention."
     )
     lines.append(
-        "2. After making a coefficient change, the next refresh-data "
-        "run will rebuild `per_zone_metrics.json` and the watchdog "
-        "re-runs. If the finding clears, this issue auto-closes."
+        "2. After fixing the source problem, rerun the matching workflow "
+        "or wait for its next scheduled run. The watchdog re-runs after "
+        "new health artifacts are published."
     )
     lines.append(
         "3. To dismiss a specific finding intentionally (you've decided "
@@ -388,28 +472,21 @@ def render(findings: list[dict], zones: dict, source_summary: list[dict]) -> str
 
 def main() -> int:
     metrics = load_metrics()
-    if metrics is None:
-        # No metrics yet — score.py hasn't run or wrote nothing. Don't
-        # emit a finding; this is normal during the first day.
-        SUMMARY_PATH.parent.mkdir(parents=True, exist_ok=True)
-        SUMMARY_PATH.write_text(
-            "# Validation watchdog\n\n"
-            "_(per_zone_metrics.json missing — score.py hasn't produced output yet. "
-            "No findings to report.)_\n",
-            encoding="utf-8",
-        )
-        print("watchdog: no metrics file; nothing to report")
-        return 0
-
     zones = (metrics or {}).get("zones", {}) or {}
     residuals = load_jsonl(RESIDUALS_PATH)
     observations = load_jsonl(OBSERVATIONS_PATH)
+    feed_health = load_json(FEED_HEALTH_PATH)
+    freshness_health = load_json(FRESHNESS_PATH)
+    ingest_health = load_json(INGEST_HEALTH_PATH)
 
     findings: list[dict] = []
     findings.extend(rule_zone_bias(zones))
     findings.extend(rule_zone_calibration(zones))
     findings.extend(rule_zone_correlation(zones))
     findings.extend(rule_data_flow(observations))
+    findings.extend(rule_feed_health(feed_health))
+    findings.extend(rule_freshness_health(freshness_health))
+    findings.extend(rule_ingest_health(ingest_health))
 
     source_summary = per_source_summary(residuals)
 

@@ -44,6 +44,8 @@ LAYERS: dict[str, dict] = {
         "scale": "linear",
         "unit": "degC",
         "stride": 2,
+        "history_days": 7,
+        "max_back": 10,
         # dims after time and before (lat, lng); for MUR there are none
         "pre_xy_dims": "",
     },
@@ -214,13 +216,33 @@ def encode_png(arr: np.ndarray, cfg: dict, out: Path) -> None:
     Image.fromarray(px, mode="L").save(out, optimize=True)
 
 
+def _layer_stats(arr: np.ndarray) -> dict:
+    valid = np.isfinite(arr)
+    if not valid.any():
+        return {
+            "mean": None,
+            "min": None,
+            "max": None,
+            "coverage_frac": 0.0,
+        }
+    vals = arr[valid]
+    return {
+        "mean": round(float(np.nanmean(vals)), 2),
+        "min": round(float(np.nanmin(vals)), 2),
+        "max": round(float(np.nanmax(vals)), 2),
+        "coverage_frac": round(float(valid.sum() / valid.size), 3),
+    }
+
+
 def build_layer(layer: str, cfg: dict, end: date, want: int = 3, max_back: int = 7) -> dict | None:
     """Fetch up to `want` valid days walking back from `end`. Different layers
     publish on different lags, so each layer finds its own latest 3.
     Per-layer override via cfg["max_back"] for products with longer NRT lag
     (Kd_490 commonly publishes 5-7 days behind today)."""
     max_back = int(cfg.get("max_back", max_back))
-    print(f"[{layer}] looking for {want} day(s) ending {end} (stride={cfg['stride']}, max_back={max_back})")
+    history_days = int(cfg.get("history_days", 0) or 0)
+    want_fetch = max(want, history_days)
+    print(f"[{layer}] looking for {want_fetch} day(s) ending {end} (stride={cfg['stride']}, max_back={max_back})")
     stack_rev: list[np.ndarray] = []
     actual_rev: list[date] = []
     for i in range(max_back):
@@ -229,7 +251,7 @@ def build_layer(layer: str, cfg: dict, end: date, want: int = 3, max_back: int =
         if a is not None:
             stack_rev.append(a)
             actual_rev.append(d)
-            if len(stack_rev) >= want:
+            if len(stack_rev) >= want_fetch:
                 break
 
     if not stack_rev:
@@ -240,12 +262,17 @@ def build_layer(layer: str, cfg: dict, end: date, want: int = 3, max_back: int =
     actual = list(reversed(actual_rev))
 
     h, w = stack[-1].shape
-    composites = {"1d": stack[-1:], "2d": stack[-2:], "3d": stack}
+    composites = {
+        "1d": stack[-1:],
+        "2d": stack[-min(2, len(stack)):],
+        "3d": stack[-min(3, len(stack)):],
+    }
     manifest_layer = {
         "range": list(cfg["range"]),
         "scale": cfg["scale"],
         "unit": cfg["unit"],
         "grid": {"width": w, "height": h},
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
         "windows": {},
     }
     for win, st in composites.items():
@@ -259,6 +286,53 @@ def build_layer(layer: str, cfg: dict, end: date, want: int = 3, max_back: int =
             "dates": [d.isoformat() for d in actual[-len(st):]],
         }
         print(f"  wrote {out.name}  ({h}x{w})")
+
+    if history_days:
+        history_dir = OUT_DIR / layer / "history"
+        history_dir.mkdir(parents=True, exist_ok=True)
+        hist_stack = stack[-history_days:]
+        hist_dates = actual[-history_days:]
+        hist_days = []
+        for idx, (arr, d) in enumerate(zip(hist_stack, hist_dates)):
+            offset = idx - (len(hist_stack) - 1)
+            slot = "d0" if offset == 0 else f"d{offset}"
+            out = history_dir / f"{slot}.png"
+            encode_png(arr, cfg, out)
+            stats = _layer_stats(arr)
+            hist_days.append({
+                "slot": slot,
+                "offset": offset,
+                "date": d.isoformat(),
+                "url": f"/data/{layer}/history/{slot}.png",
+                "mean": stats["mean"],
+                "min": stats["min"],
+                "max": stats["max"],
+                "coverage_frac": stats["coverage_frac"],
+            })
+            print(f"  wrote {layer}/history/{slot}.png  ({h}x{w})")
+        manifest_layer["history_summary_url"] = f"/data/{layer}/summary.json"
+
+        latest = hist_days[-1] if hist_days else None
+        prev = hist_days[-2] if len(hist_days) >= 2 else None
+        trend = None
+        if latest and prev and latest["mean"] is not None and prev["mean"] is not None:
+            trend = {
+                "delta_c": round(latest["mean"] - prev["mean"], 2),
+                "period": "1d",
+            }
+        summary = {
+            "generated_at": manifest_layer["generated_at"],
+            "tz": "UTC",
+            "range": list(cfg["range"]),
+            "scale": cfg["scale"],
+            "unit": cfg["unit"],
+            "grid": {"width": w, "height": h},
+            "days": hist_days,
+            "latest_slot": latest["slot"] if latest else None,
+            "trend": trend,
+        }
+        (OUT_DIR / layer / "summary.json").write_text(json.dumps(summary, indent=2))
+        print(f"  wrote {layer}/summary.json")
 
     # Per-cell freshness sidecar.
     #
@@ -342,10 +416,23 @@ def main() -> None:
             "bbox": [BBOX["lng_min"], BBOX["lat_min"], BBOX["lng_max"], BBOX["lat_max"]],
             "layers": {},
         }
-    manifest["generated_at"] = (
-        datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
-    )
+    generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    if args.layer == "all":
+        manifest["generated_at"] = generated_at
+    else:
+        manifest.setdefault("partial_generated_at", {})[args.layer] = generated_at
     manifest.setdefault("layers", {}).update(manifest_layers)
+    if "sst" in manifest_layers:
+        sst = manifest_layers["sst"]
+        manifest["layers"]["sst7d"] = {
+            "summary_url": sst.get("history_summary_url", "/data/sst/summary.json"),
+            "grid": sst.get("grid"),
+            "range": sst.get("range"),
+            "scale": sst.get("scale"),
+            "unit": sst.get("unit"),
+            "generated_at": sst.get("generated_at"),
+            "tz": "UTC",
+        }
     manifest_path.write_text(json.dumps(manifest, indent=2))
     print("wrote manifest.json")
 

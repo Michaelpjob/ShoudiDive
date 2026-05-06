@@ -848,22 +848,21 @@ def main():
             "bbox": [BBOX["lng_min"], BBOX["lat_min"], BBOX["lng_max"], BBOX["lat_max"]],
             "layers": {},
         }
-    manifest["generated_at"] = (
-        datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
-    )
+    generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
     manifest.setdefault("layers", {})["viz"] = {
         "range_ft": list(VIZ_RANGE_FT),
         "scale": "linear",
         "unit": "ft",
         "grid": {"width": GRID_W, "height": GRID_H},
         "source": "viz_predict (PREDICTED)",
+        "generated_at": generated_at,
         "windows": {
             "now": {
                 "url":      "/data/viz_p50_ft.png",
                 "p10_url":  "/data/viz_p10_ft.png",
                 "p90_url":  "/data/viz_p90_ft.png",
                 "quality_url": "/data/viz_quality.png",
-                "valid_at": manifest["generated_at"],
+                "valid_at": generated_at,
             },
         },
     }

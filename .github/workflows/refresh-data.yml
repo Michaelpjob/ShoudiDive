@@ -128,6 +128,13 @@ jobs:
         continue-on-error: true
         run: python -m pipeline.tests.assert_outputs visibility
 
+      - name: Assert local manifest freshness budgets
+        # Final end-to-end gate over the data artifacts this run is about
+        # to publish. Soft-fail here so the watchdog issue sync below can
+        # publish the exact finding instead of losing it with the runner.
+        continue-on-error: true
+        run: python pipeline/check_manifest_freshness.py --layers sst,sst7d,chl,kd490,wind,wind5d,swell5d,viz,wave,precip --check-sst-source
+
       - name: Score visibility predictions against ground-truth
         # Joins observations.jsonl (collected by ingest-ground-truth.yml)
         # against today's archive snapshot, dumps per-zone metrics. Runs
@@ -147,9 +154,10 @@ jobs:
         run: python -m pipeline.validation.check_regression
 
       - name: Watchdog — analyse metrics, flag anomalies
-        # Reads per_zone_metrics.json + residuals.jsonl + observations.jsonl,
-        # runs four anomaly rules, writes pipeline/validation/data/
-        # watchdog_summary.md. Exits 1 when any rule fires (which the
+        # Reads per_zone_metrics.json, residuals.jsonl, observations.jsonl,
+        # and the feed/freshness/ingest health artifacts, then writes
+        # pipeline/validation/data/watchdog_summary.md. Exits 1 when any
+        # rule fires (which the
         # next step uses to open/update a rolling GitHub Issue), exits
         # 0 otherwise. continue-on-error: the watchdog firing is
         # informational, not a deploy blocker.
@@ -252,7 +260,10 @@ jobs:
           git add public/data/
           git add pipeline/validation/data/per_zone_metrics.json \
                   pipeline/validation/data/residuals.jsonl \
-                  pipeline/validation/data/watchdog_summary.md 2>/dev/null || true
+                  pipeline/validation/data/watchdog_summary.md \
+                  pipeline/validation/data/feed_health.json \
+                  pipeline/validation/data/freshness_health.json \
+                  pipeline/validation/data/ingest_health.json 2>/dev/null || true
           if git diff --staged --quiet; then
             echo "No data changes to commit."
           else

@@ -302,9 +302,7 @@ def main() -> None:
             "bbox": [BBOX["lng_min"], BBOX["lat_min"], BBOX["lng_max"], BBOX["lat_max"]],
             "layers": {},
         }
-    manifest["generated_at"] = (
-        datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
-    )
+    generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
     valid_at = (
         datetime(run_date.year, run_date.month, run_date.day, run_hour, tzinfo=timezone.utc)
     ).isoformat().replace("+00:00", "Z")
@@ -313,6 +311,7 @@ def main() -> None:
         "period_range_s": list(PERIOD_RANGE_S),
         "grid": {"width": GRID_W, "height": GRID_H},
         "source": "NOAA gfswave (WaveWatch III)",
+        "generated_at": generated_at,
         "windows": {
             "now":    {"url": "/data/wave_now.png",    "valid_at": valid_at},
             "max_3d": {"url": "/data/wave_max_3d.png", "valid_at": valid_at},

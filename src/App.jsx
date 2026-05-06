@@ -35,6 +35,7 @@ import {
   isReal,
   getDataState,
   getWind5dSummary,
+  getSstHistorySummary,
 } from "./lib/dataSource.js";
 import WindDayGrid, {
   WindCurrentSelectionCard,
@@ -44,6 +45,12 @@ import WindDayGrid, {
 } from "./components/WindDayGrid.jsx";
 import WindTimeline from "./components/WindTimeline.jsx";
 import SwellTimeline, { SwellCurrentCard } from "./components/SwellTimeline.jsx";
+import SstTimeline, {
+  SstCurrentCard,
+  defaultSstSelection,
+  sstSelectionHasData,
+  sstSelToSlotKey,
+} from "./components/SstTimeline.jsx";
 import { MoonWidget } from "./components/MoonIcon.jsx";
 import {
   getSwell5dSummary,
@@ -126,8 +133,8 @@ function Chevron({ open }) {
   );
 }
 
-// Time filter is layer-aware: SST/chl use composite windows, wind/swell
-// use the 5-day timeline scrubber, viz (predicted) is a single 'now' slot.
+// Time filter is layer-aware: SST/wind/swell use timeline scrubbers, chl
+// keeps rolling satellite composites, and viz (predicted) is a single slot.
 const TIME_OPTIONS = {
   sst:   { label: "Composite",      helper: "rolling window",      buttons: ["1 Day", "2 Day", "3 Day"],         tags: ["freshest", "balanced", "best cover"] },
   chl:   { label: "Composite",      helper: "rolling window",      buttons: ["1 Day", "2 Day", "3 Day"],         tags: ["freshest", "balanced", "best cover"] },
@@ -241,19 +248,25 @@ export default function App() {
   const [prefs, setPrefs] = useState(loadPrefs);
   const [layer, setLayer] = useState("sst");
   const [composite, setComposite] = useState(2);
-  // 5-day forecast layers (wind + swell) each maintain their own
-  // {day, bucket, hour} selection. selToSlotKey turns either one into a
-  // composite string slot key the data layer understands.
+  // Timeline layers each maintain their own selection. SST is historical
+  // daily data; wind + swell are forecasts. The helper for each layer turns
+  // its selection into the slot key the data layer understands.
+  const [sstSel, setSstSel] = useState({ slot: "d0" });
   const [windSel, setWindSel] = useState({ day: 0, bucket: "morning", hour: null });
   const [swellSel, setSwellSel] = useState({ day: 0, bucket: "morning", hour: null });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const dataState = useDataVersion();
 
-  // Reconcile windSel + swellSel against their loaded forecasts. Today's
+  // Reconcile timeline selections against their loaded summaries. Today's
   // morning + pre-dawn buckets get dropped from summary.json once they're
   // past, so a hardcoded initial selection often points at a non-existent
-  // slot. We re-validate whenever the data state changes.
+  // slot. SST history can also be shorter than seven days during upstream
+  // gaps, so it gets the same data-driven check.
   useEffect(() => {
+    const tSummary = getSstHistorySummary();
+    if (tSummary && !sstSelectionHasData(tSummary, sstSel)) {
+      setSstSel(defaultSstSelection(tSummary));
+    }
     const wSummary = getWind5dSummary();
     if (wSummary && !selectionHasData(wSummary, windSel)) {
       setWindSel(defaultWindSelection(wSummary));
@@ -277,10 +290,10 @@ export default function App() {
     setPrefs((p) => ({ ...p, [key]: val }));
   }
 
-  // Moon-phase icon should track the wind/swell time slider when those
+  // Moon-phase icon should track the active time slider when those
   // layers are active, otherwise show "now". Computed at render time
-  // so it updates whenever windSel/swellSel/layer changes.
-  const viewingDate = selToDate(layer, windSel, swellSel);
+  // so it updates whenever the selected time/layer changes.
+  const viewingDate = selToDate(layer, sstSel, windSel, swellSel);
 
   return (
     <div className="app">
@@ -297,6 +310,8 @@ export default function App() {
         setLayer={setLayer}
         composite={composite}
         setComposite={setComposite}
+        sstSel={sstSel}
+        setSstSel={setSstSel}
         windSel={windSel}
         setWindSel={setWindSel}
         swellSel={swellSel}
@@ -314,11 +329,16 @@ export default function App() {
   );
 }
 
-// Map a wind/swell {day, bucket, hour} selection to a real Date so the
-// moon icon can update with the time slider. Returns null when the
-// active layer isn't a 5-day forecast layer (sst/chl/viz) — caller
-// then falls back to "now".
-function selToDate(layer, windSel, swellSel) {
+// Map a timeline selection to a real Date so the moon icon can update
+// with the selected time. Returns null when the active layer has no
+// timeline (chl/viz), so the widget falls back to "now".
+function selToDate(layer, sstSel, windSel, swellSel) {
+  if (layer === "sst") {
+    const summary = getSstHistorySummary();
+    const slot = sstSelToSlotKey(sstSel, summary);
+    const dayInfo = summary?.days?.find((d) => d.slot === slot);
+    return dayInfo?.date ? new Date(`${dayInfo.date}T12:00:00Z`) : null;
+  }
   let sel = null;
   let summary = null;
   if (layer === "wind") {
@@ -482,12 +502,14 @@ function SettingsPopover({ prefs, setPref, onClose }) {
   );
 }
 
-function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWindSel, swellSel, setSwellSel, opacity, units, dataState, mpaOn, setMpaOn, bathyOn, setBathyOn, viewingDate }) {
-  // Wind + swell layers use a slot-key string derived from their respective
-  // 5-day selection state; selToSlotKey falls back to a valid slot if the
-  // requested one has no data. SST/chl/viz keep the legacy integer composite.
+function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstSel, windSel, setWindSel, swellSel, setSwellSel, opacity, units, dataState, mpaOn, setMpaOn, bathyOn, setBathyOn, viewingDate }) {
+  // Timeline layers use a slot-key string derived from their selection
+  // state; helpers fall back to a valid slot if the requested one has no
+  // data. Chl/viz keep the legacy integer composite.
+  const sstHistorySummary = getSstHistorySummary();
   const activeComposite =
-    layer === "wind"  ? selToSlotKey(windSel,  getWind5dSummary())
+    layer === "sst"   ? (sstHistorySummary ? sstSelToSlotKey(sstSel, sstHistorySummary) : composite)
+    : layer === "wind"  ? selToSlotKey(windSel,  getWind5dSummary())
     : layer === "swell" ? selToSlotKey(swellSel, getSwell5dSummary())
     : composite;
   const isMobile = useIsMobile();
@@ -789,7 +811,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
       // the value is readable on phones (which have no hover state).
       const tap = touchTapRef.current;
       const inSliderGuard =
-        (layer === "wind" || layer === "swell") &&
+        ((layer === "sst" && sstHistorySummary) || layer === "wind" || layer === "swell") &&
         tap && tap.startY < SLIDER_GUARD_PX;
       if (tap && !tap.moved && Date.now() - tap.startTime < 350 && !inSliderGuard) {
         const r = stageRef.current.getBoundingClientRect();
@@ -815,7 +837,9 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
   }
 
   const fallbackText =
-    layer === "wind"
+    layer === "sst"
+      ? "latest SST"
+      : layer === "wind"
       ? "now"
       : layer === "viz"
       ? "now"
@@ -1055,12 +1079,14 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
           .below-timeline class shifts the moon down to clear it. */}
       <MoonWidget
         date={viewingDate}
-        className={(layer === "wind" || layer === "swell") ? "below-timeline" : ""}
+        className={((layer === "sst" && sstHistorySummary) || layer === "wind" || layer === "swell") ? "below-timeline" : ""}
       />
 
-      {/* Wind scrubber — sticky bottom bar, scrolls through 7 days × 24
-          hours (HRRR f00–f48 + GFS f49–f168; days 5–6 are GFS 3-hour).
-          The map heatmap + particles update on every drag tick. */}
+      {/* Timeline scrubbers. Wind/swell are forecasts; SST is historical
+          daily satellite data. The map heatmap updates on every drag tick. */}
+      {layer === "sst" && sstHistorySummary && (
+        <SstTimeline sel={sstSel} setSel={setSstSel} units={units} />
+      )}
       {layer === "wind" && (
         <WindTimeline sel={windSel} setSel={setWindSel} />
       )}
@@ -1152,7 +1178,19 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
               <span className="lt-sub">ft</span>
             </button>
           </div>
-          {layer === "wind" ? (
+          {layer === "sst" && sstHistorySummary ? (
+            <div className="composite wind-grid-host">
+              <div className="composite-label">
+                <span>Sea temp trend</span>
+                <span className="hint">drag the timeline below</span>
+              </div>
+              <SstCurrentCard sel={sstSel} units={units} />
+              <div className="composite-window">
+                <span>Day</span>
+                <span className="mono">{compositeText}</span>
+              </div>
+            </div>
+          ) : layer === "wind" ? (
             <div className="composite wind-grid-host">
               <div className="composite-label">
                 <span>7-day forecast</span>
@@ -1361,13 +1399,16 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
             )}
             <div className="info-section">
               <h4 className="info-h">{
-                layer === "wind"   ? "Forecast slots"
+                layer === "sst"    ? "Historical trend"
+                : layer === "wind" ? "Forecast slots"
                 : layer === "viz"  ? "How the model works"
                 : layer === "swell"? "Period vs height"
                 : "Why composite windows?"
               }</h4>
               <p className="info-p">
-                {layer === "wind"
+                {layer === "sst"
+                  ? "Sea-surface temperature is not forecast here. The timeline shows the most recent daily MUR satellite analyses so you can see whether a zone is warming, cooling, or holding steady before a dive window."
+                  : layer === "wind"
                   ? "HRRR is NOAA's hourly 3-km weather model for the first 48 h, then GFS (25 km) extends out to 7 days. Drag the timeline to scrub through any hour — every cell on the heatmap reflects the wind speed at that exact hour. Days 5–6 are tagged 'low' confidence (trend, not gospel)."
                   : layer === "viz"
                   ? "A zone-aware stack (3 latitude × 3 distance-from-shore) translates today's chl-a into a Secchi depth, then nudges it for storm-driven bottom stir, river/precip runoff, tidal mixing, kelp shading, and substrate. The 'best estimate' is the median; hover any cell to see the value."
@@ -1382,7 +1423,9 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
                 className="info-p"
                 style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 10.5 }}
               >
-                {layer === "wind"
+                {layer === "sst"
+                  ? "NOAA MUR L4 SST. Daily gap-filled satellite analysis, loaded as a 7-day historical trend plus the legacy 1/2/3-day composites."
+                  : layer === "wind"
                   ? "NOAA HRRR (3-km, hourly). 10-m UGRD/VGRD via NOMADS byte-range fetch. Regridded to ~5 km."
                   : layer === "viz"
                   ? "MUR SST · VIIRS chl-a · HRRR + GFS wind (7d) · WaveWatch III (3d max) · CPC precip · USGS river discharge · NOAA CO-OPS tides · MODIS-Aqua climatology. Recomputed daily."
@@ -1544,7 +1587,8 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
                 const hv = hover ? hoverReadout(layer, hover, activeComposite, units) : null;
                 if (hv) return <strong>{hv}</strong>;
                 const suffix =
-                  layer === "wind"  ? ` · ${windSource(activeComposite) || "HRRR"}`
+                  layer === "sst"   ? ` · MUR trend`
+                  : layer === "wind"  ? ` · ${windSource(activeComposite) || "HRRR"}`
                   : layer === "viz" ? ` · model output`
                   : layer === "swell" ? ` · WaveWatch III`
                   : ` · ${composite}-day composite`;
@@ -1594,6 +1638,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, windSel, setWin
       <MobileSheet
         layer={layer} setLayer={setLayer}
         composite={composite} setComposite={setComposite}
+        sstSel={sstSel} setSstSel={setSstSel}
         windSel={windSel} setWindSel={setWindSel}
         swellSel={swellSel} setSwellSel={setSwellSel}
         activeComposite={activeComposite}

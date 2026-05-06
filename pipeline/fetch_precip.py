@@ -136,13 +136,12 @@ def main() -> None:
             "bbox": [BBOX["lng_min"], BBOX["lat_min"], BBOX["lng_max"], BBOX["lat_max"]],
             "layers": {},
         }
-    manifest["generated_at"] = (
-        datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
-    )
+    generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
     manifest.setdefault("layers", {})["precip"] = {
         "range_mm": list(PRECIP_RANGE_MM),
         "grid": {"width": GRID_W, "height": GRID_H},
         "source": "NOAA CPC US Unified Daily Precip (7-day cumulative)",
+        "generated_at": generated_at,
         "windows": {
             "now": {
                 "url": "/data/precip_7d.png",
