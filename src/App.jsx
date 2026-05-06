@@ -559,14 +559,35 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
   const MAX_ZOOM = 8;
 
   useEffect(() => {
+    let raf = 0;
     function measure() {
-      if (!stageRef.current) return;
-      const r = stageRef.current.getBoundingClientRect();
-      setSize({ w: r.width, h: r.height });
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        if (!stageRef.current) return;
+        const r = stageRef.current.getBoundingClientRect();
+        setSize((prev) =>
+          Math.abs(prev.w - r.width) < 0.5 && Math.abs(prev.h - r.height) < 0.5
+            ? prev
+            : { w: r.width, h: r.height }
+        );
+      });
     }
     measure();
+    const ro =
+      typeof ResizeObserver !== "undefined" && stageRef.current
+        ? new ResizeObserver(measure)
+        : null;
+    if (ro && stageRef.current) ro.observe(stageRef.current);
     window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
+    window.addEventListener("orientationchange", measure);
+    window.visualViewport?.addEventListener("resize", measure);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro?.disconnect();
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("orientationchange", measure);
+      window.visualViewport?.removeEventListener("resize", measure);
+    };
   }, []);
 
   // Reset / clamp the viewBox whenever the stage size changes.
@@ -856,8 +877,20 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
   const layerIsReal = isReal(layer, activeComposite);
   const timeOpts = TIME_OPTIONS[layer];
 
+  // Render with a size-matched viewBox immediately after orientation changes.
+  // The state reset above catches up on the next commit, but iOS Safari can
+  // visibly stretch a stale portrait-ratio viewBox across landscape for a frame.
+  const renderVb = useMemo(() => {
+    if (!(size.w > 0) || !(size.h > 0)) return vb;
+    const ratio = size.w / size.h;
+    if (vb.w <= 1 || vb.h <= 1 || Math.abs(vb.w / vb.h - ratio) > 0.001) {
+      return { x: 0, y: 0, w: size.w, h: size.h };
+    }
+    return vb;
+  }, [vb, size.w, size.h]);
+
   // Current zoom factor: ratio of full-extent width to visible viewBox width.
-  const zoomLevel = size.w > 0 && vb.w > 0 ? size.w / vb.w : 1;
+  const zoomLevel = size.w > 0 && renderVb.w > 0 ? size.w / renderVb.w : 1;
 
   // Assemble all labels for the screen-space overlay (constant size + collision).
   const allLabels = useMemo(() => {
@@ -913,7 +946,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
     >
       <svg
         className="map-svg"
-        viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
+        viewBox={`${renderVb.x} ${renderVb.y} ${renderVb.w} ${renderVb.h}`}
         preserveAspectRatio="none"
       >
         <defs>
@@ -1043,10 +1076,10 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
           basemap no longer naturally occludes them. */}
       {(layer === "wind" || layer === "current") && (() => {
         const f = getFitted(size.w, size.h);
-        const cssLeft = ((f.marginX - vb.x) / vb.w) * size.w;
-        const cssTop  = ((f.marginY - vb.y) / vb.h) * size.h;
-        const scaleX = size.w / vb.w;
-        const scaleY = size.h / vb.h;
+        const cssLeft = ((f.marginX - renderVb.x) / renderVb.w) * size.w;
+        const cssTop  = ((f.marginY - renderVb.y) / renderVb.h) * size.h;
+        const scaleX = size.w / renderVb.w;
+        const scaleY = size.h / renderVb.h;
         return (
           <div
             className="wind-particles-host"
@@ -1076,7 +1109,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
         );
       })()}
 
-      <MapLabels labels={allLabels} vb={vb} size={size} />
+      <MapLabels labels={allLabels} vb={renderVb} size={size} />
 
       {/* Moon-phase legend — anchored top-right of the map. On wind/swell
           layers it tracks the time slider (the parent passes the active
@@ -1699,7 +1732,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
         zoom 7 · 34.6°N −120.3°W · CA Coast bbox 31.8°→37.6°N · −124.0°→−116.8°W
       </div>
 
-      {mpaOn && <CoronadosBanner vb={vb} size={size} />}
+      {mpaOn && <CoronadosBanner vb={renderVb} size={size} />}
 
       {selectedMpa && (
         <MpaPopup mpa={selectedMpa} onClose={() => setSelectedMpa(null)} />

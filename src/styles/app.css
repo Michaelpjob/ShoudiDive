@@ -1905,6 +1905,82 @@ body {
   }
 }
 
+/* Phone landscape has too little vertical room to reserve the full peek
+   strip below the map. Let the map keep its natural stage height and float a
+   compact control strip over it; otherwise the geographic fit is calculated
+   against a squat viewport and the coast reads stretched/squeezed. */
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+  .map-stage {
+    bottom: 0;
+  }
+
+  .mobile-shell {
+    left: calc(8px + env(safe-area-inset-left));
+    right: calc(8px + env(safe-area-inset-right));
+    bottom: calc(8px + env(safe-area-inset-bottom));
+  }
+
+  .ms-peek {
+    display: grid;
+    grid-template-columns: minmax(130px, 0.9fr) minmax(0, 1.6fr);
+    align-items: stretch;
+    padding-bottom: 0;
+    border: 1px solid var(--line);
+    border-radius: var(--r-2);
+    overflow: hidden;
+    box-shadow: var(--shadow-2);
+  }
+
+  .ms-status {
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 7px 10px;
+    border-bottom: 0;
+    border-right: 1px solid var(--line-2);
+    min-height: 44px;
+  }
+
+  .ms-status-val {
+    text-align: right;
+  }
+
+  .ms-status-where,
+  .ms-status-time,
+  .ms-handle {
+    display: none;
+  }
+
+  .ms-chips {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    padding: 4px;
+  }
+
+  .ms-chip {
+    min-height: 44px;
+    padding: 5px 4px;
+    border-radius: 5px;
+  }
+
+  .ms-chip-label {
+    font-size: 10.5px;
+  }
+
+  .ms-chip-sub {
+    display: none;
+  }
+
+  .ms-sheet {
+    margin-bottom: 6px;
+    max-height: calc(100dvh - 92px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    border: 1px solid var(--line);
+    border-radius: var(--r-2);
+    box-shadow: var(--shadow-2);
+  }
+
+  .zoom-ctl {
+    bottom: 12px;
+  }
+}
+
 /* ---------- Wind 5-day grid (replaces the legacy 4-pill control) -------- */
 
 .wind-day-grid {
