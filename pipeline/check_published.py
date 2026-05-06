@@ -177,13 +177,23 @@ def fetch_manifest() -> tuple[Optional[dict], Optional[Finding]]:
 # ---- Freshness --------------------------------------------------------
 
 def _parse_iso(s: str) -> Optional[datetime]:
+    """Parse an ISO-8601 timestamp OR a plain YYYY-MM-DD date.
+
+    Always returns a tz-aware datetime in UTC — manifest layer dates
+    are date-only strings ("2026-05-03"), and Python parses those as
+    NAIVE datetimes, which then can't be arithmetic'd against
+    datetime.now(timezone.utc). Normalising here closes that gap.
+    """
     if not s:
         return None
     # tolerate trailing Z (Python's fromisoformat supports it from 3.11+)
     try:
-        return datetime.fromisoformat(s.replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
     except ValueError:
         return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
 
 
 def check_generated_at(manifest: dict) -> list[Finding]:
@@ -269,11 +279,14 @@ def _probe_png(url: str) -> tuple[bool, Optional[str], dict]:
     else:
         gray = img.convert("L")
 
-    px = list(gray.getdata())
+    # `tobytes()` returns one byte per pixel for mode 'L' — same data
+    # as getdata() but stable across Pillow versions (getdata is deprecated
+    # for removal in Pillow 14).
+    px = gray.tobytes()
     total = len(px)
-    nonzero = [v for v in px if v > 0]
-    nonzero_frac = (len(nonzero) / total) if total else 0.0
-    distinct_nonzero = len(set(nonzero))
+    nonzero_count = sum(1 for v in px if v > 0)
+    nonzero_frac = (nonzero_count / total) if total else 0.0
+    distinct_nonzero = len({v for v in px if v > 0})
     stats["nonzero_fraction"] = round(nonzero_frac, 4)
     stats["distinct_nonzero_values"] = distinct_nonzero
 
@@ -408,19 +421,15 @@ def _check_layer_date_freshness(layer_id: str, window_key: str, win: dict) -> Op
         return None
     # Last entry is the most recent satellite/model date for the window.
     latest_str = dates[-1]
-    latest = _parse_iso(latest_str)
+    latest = _parse_iso(str(latest_str))
     if latest is None:
-        # tolerate plain "YYYY-MM-DD"
-        try:
-            latest = datetime.fromisoformat(str(latest_str)).replace(tzinfo=timezone.utc)
-        except ValueError:
-            return Finding(
-                severity="medium",
-                code="layer_date_unparseable",
-                title=f"Layer `{layer_id}` ({window_key}) date is unparseable",
-                detail=f"Raw value: {latest_str!r}",
-                layer=layer_id,
-            )
+        return Finding(
+            severity="medium",
+            code="layer_date_unparseable",
+            title=f"Layer `{layer_id}` ({window_key}) date is unparseable",
+            detail=f"Raw value: {latest_str!r}",
+            layer=layer_id,
+        )
     age_days = (datetime.now(timezone.utc) - latest).total_seconds() / 86400
     if age_days > max_days:
         return Finding(
