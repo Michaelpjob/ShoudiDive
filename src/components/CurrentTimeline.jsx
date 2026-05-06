@@ -90,8 +90,11 @@ export function CurrentCurrentCard({ sel }) {
   return (
     <div className="wind-current-card">
       <div className="wind-current-stats">
-        <div className="wcs-time">
-          {dayInfo?.weekday ?? "Current"} {bucketLabel(bucket?.bucket)}
+        <div className="wcs-headline">
+          <div className="wcs-time">
+            {dayInfo?.weekday ?? "Current"} {bucketLabel(bucket?.bucket)}
+          </div>
+          <span className="beta-badge">BETA</span>
         </div>
         <div className="wcs-kt-row">
           <span className="wcs-kt">
@@ -110,6 +113,9 @@ export function CurrentCurrentCard({ sel }) {
         <div className="wcs-confidence">
           {sourceLabel(bucket?.source)}
           {summary.surface_note ? ` · ${summary.surface_note}` : ""}
+        </div>
+        <div className="wcs-confidence current-beta-note">
+          Beta estimate: verify local conditions before relying on it.
         </div>
       </div>
     </div>

@@ -1379,6 +1379,11 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
               <div className="info-section">
                 <h4 className="info-h">Surface Current</h4>
                 <p className="info-p">
+                  <strong>Beta estimate.</strong> Use this as planning context only, and
+                  verify with local observations, boat drift, and in-water feel before
+                  committing to a dive.
+                </p>
+                <p className="info-p">
                   Color shows estimated surface-current speed in knots. Particle trails show
                   where the water is setting, which matters for drift, anchoring, and how stable
                   a kelp-bed dive window will feel.
@@ -1618,6 +1623,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
               : layer === "current" ? "Surface Current"
               : "Predicted Visibility"}
             {layer === "viz" && <span className="predicted-badge">PREDICTED</span>}
+            {layer === "current" && <span className="beta-badge">BETA</span>}
           </span>
           <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span className="panel-title mono" style={{ color: "var(--ink-3)" }}>

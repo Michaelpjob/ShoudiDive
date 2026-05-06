@@ -673,6 +673,21 @@ body {
   color: oklch(0.85 0.14 30);
 }
 
+.beta-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  background: oklch(0.62 0.16 80 / 0.18);
+  color: oklch(0.46 0.14 80);
+  border-radius: 3px;
+}
+[data-theme="dark"] .beta-badge {
+  background: oklch(0.62 0.16 80 / 0.26);
+  color: oklch(0.88 0.14 80);
+}
+
 /* Mobile sheet layer toggle — 4 buttons */
 .ms-layer-toggle.ms-layer-toggle-4 {
   grid-template-columns: 1fr 1fr 1fr 1fr;
@@ -2100,6 +2115,12 @@ body {
   border-radius: var(--r-2);
   background: var(--bg-panel-solid);
 }
+.wcs-headline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
 .wcs-time {
   font-size: 11px;
   color: var(--ink-3);
@@ -2132,6 +2153,12 @@ body {
   font-size: 10.5px;
   color: var(--warn);
   font-style: italic;
+}
+.current-beta-note {
+  color: oklch(0.48 0.13 80);
+}
+[data-theme="dark"] .current-beta-note {
+  color: oklch(0.86 0.12 80);
 }
 
 /* ---------- Wind timeline (Windy-style scrubber, sticky bottom of map) ---- */

@@ -428,6 +428,7 @@ function Legend({ layer, units, composite, compositeText, layerIsReal, dataReady
       <div className="ms-legend-head">
         <strong>{title}</strong>
         {layer === "viz" && <span className="predicted-badge">PREDICTED</span>}
+        {layer === "current" && <span className="beta-badge">BETA</span>}
         <span className="mono" style={{ color: "var(--ink-3)", marginLeft: "auto" }}>
           {unitLabel}
         </span>
@@ -579,6 +580,10 @@ function Info({ layer }) {
       )}
       {layer === "current" && (
         <>
+          <p className="info-p">
+            <strong>Beta estimate.</strong> Use as planning context only, and verify with
+            local conditions before committing to a dive.
+          </p>
           <p className="info-p">
             Surface-current speed and set direction. The near-term field uses
             HFR observations where available, then decays into tide/wind inference.
