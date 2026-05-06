@@ -28,7 +28,7 @@ from scipy.spatial import cKDTree
 
 
 BBOX = dict(lat_min=31.8, lat_max=37.6, lng_min=-124.0, lng_max=-116.8)
-GRID_W, GRID_H = 140, 110
+GRID_W, GRID_H = 280, 220
 UV_RANGE = (-1.5, 1.5)  # m/s, roughly 0..3 kt in either component.
 HORIZON_DAYS = 5
 PT = ZoneInfo("America/Los_Angeles")
@@ -65,15 +65,6 @@ def _coord_to_grid_xy(coord: list[float]) -> tuple[float, float]:
     return x, y
 
 
-def _dilate_bool(mask: np.ndarray) -> np.ndarray:
-    p = np.pad(mask, 1, mode="constant", constant_values=False)
-    out = np.zeros_like(mask, dtype=bool)
-    for dy in range(3):
-        for dx in range(3):
-            out |= p[dy:dy + mask.shape[0], dx:dx + mask.shape[1]]
-    return out
-
-
 def land_mask() -> np.ndarray:
     global _LAND_MASK
     if _LAND_MASK is not None:
@@ -104,8 +95,9 @@ def land_mask() -> np.ndarray:
                 if pts:
                     draw.polygon(pts, fill=0)
 
-    # One-cell padding prevents coarse-grid shoreline bleed from painting land.
-    _LAND_MASK = _dilate_bool(np.asarray(img, dtype=np.uint8) > 0)
+    # Keep this exact. Visual land clipping happens in SVG map space; padding
+    # this coarse grid creates visible no-data moats around islands and shore.
+    _LAND_MASK = np.asarray(img, dtype=np.uint8) > 0
     return _LAND_MASK
 
 

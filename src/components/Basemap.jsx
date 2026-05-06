@@ -198,7 +198,7 @@ export function OceanMaskDefs({ width, height }) {
   }, [features, width, height]);
 
   return (
-    <mask id="ocean-mask" maskUnits="userSpaceOnUse">
+    <mask id="ocean-mask" x={0} y={0} width={width} height={height} maskUnits="userSpaceOnUse">
       {/* White over the entire stage = visible by default. */}
       <rect x={0} y={0} width={width} height={height} fill="white" />
       {/* Land polygons in black = hidden inside the masked group. */}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { SeaBasemap, LandBasemap, PLACE_LABELS } from "./components/Basemap.jsx";
+import { SeaBasemap, LandBasemap, OceanMaskDefs, PLACE_LABELS } from "./components/Basemap.jsx";
 import DataOverlay from "./components/DataOverlay.jsx";
 import WindParticles from "./components/WindParticles.jsx";
 import MpaLayer, { styleForType } from "./components/MpaLayer.jsx";
@@ -937,6 +937,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
               strokeOpacity="0.32"
             />
           </pattern>
+          <OceanMaskDefs width={size.w} height={size.h} />
         </defs>
 
         {/* Sea + graticule under everything (full-bleed: open ocean fills
@@ -951,7 +952,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
           // come from project() which already uses it.
           const f = getFitted(size.w, size.h);
           return (
-            <>
+            <g mask="url(#ocean-mask)">
               {/* No-data hatch — only inside the bbox area; outside is just sea. */}
               <rect
                 x={f.marginX}
@@ -978,7 +979,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
                   viewBox transform to foreignObject contents, which made
                   the streamlines stay locked to screen pixels while the
                   rest of the map zoomed. */}
-            </>
+            </g>
           );
         })()}
 
