@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { sstColor, chlColor, getFitted } from "../lib/mapData.js";
 import { getLayerGrid } from "../lib/dataSource.js";
+import { buildLandMask, loadLandGeoJSON } from "../lib/landMask.js";
 
 // Beaufort-aligned wind ramp (knots → [r,g,b]); same stops as the legend.
 const WIND_RAMP = [
@@ -144,6 +145,18 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
     canvasRef.current = document.createElement("canvas");
   }
   const [imgHref, setImgHref] = useState(null);
+  const [landFeatures, setLandFeatures] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadLandGeoJSON().then((fc) => {
+      if (cancelled || !fc) return;
+      setLandFeatures(fc.features);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const cv = canvasRef.current;
@@ -158,12 +171,18 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
       return;
     }
 
+    if (layer === "current" && !landFeatures) {
+      setImgHref(null);
+      return;
+    }
+
     cv.width = grid.width;
     cv.height = grid.height;
+    const landMask = buildLandMask(landFeatures, grid.width, grid.height);
     const img = ctx.createImageData(grid.width, grid.height);
     for (let i = 0; i < grid.data.length; i++) {
       const v = grid.data[i];
-      if (!Number.isFinite(v)) {
+      if (!Number.isFinite(v) || landMask?.[i] === 1) {
         // No data at this cell — leave transparent.
         img.data[i * 4 + 3] = 0;
         continue;
@@ -192,7 +211,7 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
       // cross-origin imagery — but harden anyway).
       setImgHref(null);
     }
-  }, [layer, composite, dataReady]);
+  }, [layer, composite, dataReady, landFeatures]);
 
   // The overlay's pixel grid is a linear lng/lat raster across the bbox, so
   // it has to live inside the same fitted rectangle that project() uses.

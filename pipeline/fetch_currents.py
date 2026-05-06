@@ -23,7 +23,7 @@ from zoneinfo import ZoneInfo
 
 import numpy as np
 import xarray as xr
-from PIL import Image
+from PIL import Image, ImageDraw
 from scipy.spatial import cKDTree
 
 
@@ -39,6 +39,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "public" / "data"
 OUT_DIR = DATA_DIR / "currents"
 BUCKETS_DIR = OUT_DIR / "buckets"
+LAND_PATH = DATA_DIR / "land.geojson"
 
 BUCKETS: list[tuple[str, int, int]] = [
     ("predawn", 4, 6),
@@ -48,12 +49,73 @@ BUCKETS: list[tuple[str, int, int]] = [
     ("evening", 19, 21),
 ]
 DAY_LABELS = ["Today", "+1", "+2", "+3", "+4"]
+_LAND_MASK: np.ndarray | None = None
 
 
 def target_grid() -> tuple[np.ndarray, np.ndarray]:
     lats = np.linspace(BBOX["lat_max"], BBOX["lat_min"], GRID_H, dtype=np.float32)
     lngs = np.linspace(BBOX["lng_min"], BBOX["lng_max"], GRID_W, dtype=np.float32)
     return np.meshgrid(lngs, lats)
+
+
+def _coord_to_grid_xy(coord: list[float]) -> tuple[float, float]:
+    lng, lat = coord[:2]
+    x = ((lng - BBOX["lng_min"]) / (BBOX["lng_max"] - BBOX["lng_min"])) * (GRID_W - 1)
+    y = ((BBOX["lat_max"] - lat) / (BBOX["lat_max"] - BBOX["lat_min"])) * (GRID_H - 1)
+    return x, y
+
+
+def _dilate_bool(mask: np.ndarray) -> np.ndarray:
+    p = np.pad(mask, 1, mode="constant", constant_values=False)
+    out = np.zeros_like(mask, dtype=bool)
+    for dy in range(3):
+        for dx in range(3):
+            out |= p[dy:dy + mask.shape[0], dx:dx + mask.shape[1]]
+    return out
+
+
+def land_mask() -> np.ndarray:
+    global _LAND_MASK
+    if _LAND_MASK is not None:
+        return _LAND_MASK
+    if not LAND_PATH.exists():
+        _LAND_MASK = np.zeros((GRID_H, GRID_W), dtype=bool)
+        return _LAND_MASK
+
+    fc = json.loads(LAND_PATH.read_text(encoding="utf-8"))
+    img = Image.new("L", (GRID_W, GRID_H), 0)
+    draw = ImageDraw.Draw(img)
+    for feature in fc.get("features", []):
+        geom = feature.get("geometry") or {}
+        if geom.get("type") == "Polygon":
+            polys = [geom.get("coordinates") or []]
+        elif geom.get("type") == "MultiPolygon":
+            polys = geom.get("coordinates") or []
+        else:
+            continue
+        for poly in polys:
+            if not poly:
+                continue
+            exterior = [_coord_to_grid_xy(pt) for pt in poly[0]]
+            if exterior:
+                draw.polygon(exterior, fill=1)
+            for hole in poly[1:]:
+                pts = [_coord_to_grid_xy(pt) for pt in hole]
+                if pts:
+                    draw.polygon(pts, fill=0)
+
+    # One-cell padding prevents coarse-grid shoreline bleed from painting land.
+    _LAND_MASK = _dilate_bool(np.asarray(img, dtype=np.uint8) > 0)
+    return _LAND_MASK
+
+
+def apply_land_mask(u: np.ndarray, v: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    mask = land_mask()
+    u = u.copy()
+    v = v.copy()
+    u[mask] = np.nan
+    v[mask] = np.nan
+    return u, v
 
 
 def km_coords(lng: np.ndarray, lat: np.ndarray) -> np.ndarray:
@@ -93,7 +155,7 @@ def regrid_to_bbox(lat: np.ndarray, lng: np.ndarray, u: np.ndarray, v: np.ndarra
     flat_v = out_v.ravel()
     flat_u[good] = src_u[idx[good]]
     flat_v[good] = src_v[idx[good]]
-    return out_u, out_v
+    return apply_land_mask(out_u, out_v)
 
 
 def iso_from_time_value(value) -> str:
@@ -152,6 +214,7 @@ def fetch_hfr_latest() -> dict | None:
 def encode_uv_png(u: np.ndarray, v: np.ndarray, out: Path) -> None:
     lo, hi = UV_RANGE
     span = hi - lo
+    u, v = apply_land_mask(u, v)
     valid = np.isfinite(u) & np.isfinite(v)
     img = np.zeros((u.shape[0], u.shape[1], 4), dtype=np.uint8)
     img[..., 0][valid] = np.clip(np.round(((u[valid] - lo) / span) * 255), 0, 255).astype(np.uint8)
@@ -294,7 +357,8 @@ def build_slot(valid_at: datetime, day: int, bucket: str, hfr: dict | None, tide
 
     lead_h = max(0.0, (valid_at - now).total_seconds() / 3600.0)
     if hfr is None:
-        return inferred_u, inferred_v, "inferred_tide_wind", 0.0
+        u, v = apply_land_mask(inferred_u, inferred_v)
+        return u, v, "inferred_tide_wind", 0.0
 
     hfr_weight = math.exp(-lead_h / 8.0)
     hfr_weight = max(0.0, min(0.9, hfr_weight))
@@ -304,6 +368,7 @@ def build_slot(valid_at: datetime, day: int, bucket: str, hfr: dict | None, tide
     out_u[hmask] = hfr_weight * hfr["u"][hmask] + (1.0 - hfr_weight) * inferred_u[hmask]
     out_v[hmask] = hfr_weight * hfr["v"][hmask] + (1.0 - hfr_weight) * inferred_v[hmask]
     source = "hfr_observed" if lead_h <= 1.5 else "hfr_persistence_tide_wind"
+    out_u, out_v = apply_land_mask(out_u, out_v)
     return out_u, out_v, source, hfr_weight
 
 
