@@ -952,7 +952,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
           // come from project() which already uses it.
           const f = getFitted(size.w, size.h);
           return (
-            <g mask="url(#ocean-mask)">
+            <g clipPath="url(#ocean-clip)" mask="url(#ocean-mask)">
               {/* No-data hatch — only inside the bbox area; outside is just sea. */}
               <rect
                 x={f.marginX}

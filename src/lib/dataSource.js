@@ -4,6 +4,7 @@
 // intentionally do NOT synthesize fake data; correctness over completeness.
 
 import { BBOX } from "./mapData.js";
+import { buildLandMask, loadLandGeoJSON } from "./landMask.js";
 
 const state = {
   ready: false,
@@ -12,6 +13,7 @@ const state = {
 };
 
 const subscribers = new Set();
+const currentSampleMasks = new Map();
 
 export function subscribe(cb) {
   subscribers.add(cb);
@@ -150,6 +152,28 @@ async function decodeUVPng(url, uvRange) {
     }
   }
   return { u, v, width: c.width, height: c.height };
+}
+
+async function currentSampleMask(width, height) {
+  const key = `${width}x${height}`;
+  if (currentSampleMasks.has(key)) return currentSampleMasks.get(key);
+  const maskPromise = loadLandGeoJSON().then((fc) => buildLandMask(fc?.features, width, height));
+  currentSampleMasks.set(key, maskPromise);
+  return maskPromise;
+}
+
+function landMaskedCurrentSample(uv, mask) {
+  const u = new Float32Array(uv.u);
+  const v = new Float32Array(uv.v);
+  if (mask) {
+    for (let i = 0; i < mask.length; i++) {
+      if (mask[i] === 1) {
+        u[i] = NaN;
+        v[i] = NaN;
+      }
+    }
+  }
+  return { u, v, width: uv.width, height: uv.height };
 }
 
 export async function loadManifest() {
@@ -299,11 +323,19 @@ export async function loadManifest() {
               tasks.push(
                 decodeUVPng(b.uv_url, info.uv_range)
                   .then((uv) => {
+                    const maskPromise = currentSampleMask(uv.width, uv.height);
+                    return maskPromise.then((landMask) => ({ uv, landMask }));
+                  })
+                  .then(({ uv, landMask }) => {
                     const speed = computeSpeedKt(uv);
+                    const sample = landMaskedCurrentSample(uv, landMask);
+                    const sampleSpeed = computeSpeedKt(sample);
                     state.layers.current5d.buckets[key] = {
-                      uvU: uv.u, uvV: uv.v,
+                      uvU: sample.u, uvV: sample.v,
+                      visualUvU: uv.u, visualUvV: uv.v,
                       width: uv.width, height: uv.height,
                       data: speed, speedKt: speed,
+                      sampleData: sampleSpeed, sampleSpeedKt: sampleSpeed,
                     };
                     loaded++;
                   })
@@ -606,7 +638,17 @@ export function getCurrent5dSummary() {
 }
 
 export function getCurrentSpeed(lng, lat, slotKeyStr) {
-  return bilinear(current5dEntry(slotKeyStr), lng, lat);
+  const entry = current5dEntry(slotKeyStr);
+  if (!entry) return NaN;
+  return bilinear(
+    {
+      data: entry.sampleData || entry.data,
+      width: entry.width,
+      height: entry.height,
+    },
+    lng,
+    lat
+  );
 }
 
 export function getCurrentUV(lng, lat, slotKeyStr) {

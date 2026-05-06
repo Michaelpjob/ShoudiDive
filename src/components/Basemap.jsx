@@ -196,16 +196,33 @@ export function OceanMaskDefs({ width, height }) {
       d: geomToPath(f.geometry, width, height),
     }));
   }, [features, width, height]);
+  const oceanClipPath = useMemo(() => {
+    const outer = `M0 0H${width}V${height}H0Z`;
+    return `${outer} ${paths.map((p) => p.d).join(" ")}`;
+  }, [paths, width, height]);
 
   return (
-    <mask id="ocean-mask" x={0} y={0} width={width} height={height} maskUnits="userSpaceOnUse">
-      {/* White over the entire stage = visible by default. */}
-      <rect x={0} y={0} width={width} height={height} fill="white" />
-      {/* Land polygons in black = hidden inside the masked group. */}
-      {paths.map((p) => (
-        <path key={p.id} d={p.d} fill="black" />
-      ))}
-    </mask>
+    <>
+      <clipPath id="ocean-clip" clipPathUnits="userSpaceOnUse">
+        <path d={oceanClipPath} clipRule="evenodd" />
+      </clipPath>
+      <mask
+        id="ocean-mask"
+        x={0}
+        y={0}
+        width={width}
+        height={height}
+        maskUnits="userSpaceOnUse"
+        maskContentUnits="userSpaceOnUse"
+      >
+        {/* White over the entire stage = visible by default. */}
+        <rect x={0} y={0} width={width} height={height} fill="white" />
+        {/* Land polygons in black = hidden inside the masked group. */}
+        {paths.map((p) => (
+          <path key={p.id} d={p.d} fill="black" />
+        ))}
+      </mask>
+    </>
   );
 }
 

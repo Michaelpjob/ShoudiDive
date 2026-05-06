@@ -84,30 +84,32 @@ export default function WindParticles({ width, height, composite, dataReady, act
     }
     const c = canvasRef.current;
     if (!c || width <= 0 || height <= 0) return;
-    c.width = width;
-    c.height = height;
+    const pixelWidth = Math.max(1, Math.round(width));
+    const pixelHeight = Math.max(1, Math.round(height));
+    c.width = pixelWidth;
+    c.height = pixelHeight;
     const ctx = c.getContext("2d");
 
     if (!landFeatures) {
-      ctx.clearRect(0, 0, width, height);
+      ctx.clearRect(0, 0, pixelWidth, pixelHeight);
       return;
     }
 
-    const landMask = buildLandMask(landFeatures, width, height);
+    const landMask = buildLandMask(landFeatures, pixelWidth, pixelHeight);
     if (!landMask) {
-      ctx.clearRect(0, 0, width, height);
+      ctx.clearRect(0, 0, pixelWidth, pixelHeight);
       return;
     }
 
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    const nParticles = reduce ? 0 : (width < 600 ? 1200 : 3000);
+    const nParticles = reduce ? 0 : (pixelWidth < 600 ? 1200 : 3000);
     const maxAge = 90;
 
     const isLand = (x, y) => {
       const ix = x | 0;
       const iy = y | 0;
-      if (ix < 0 || ix >= width || iy < 0 || iy >= height) return false;
-      return landMask[iy * width + ix] === 1;
+      if (ix < 0 || ix >= pixelWidth || iy < 0 || iy >= pixelHeight) return false;
+      return landMask[iy * pixelWidth + ix] === 1;
     };
 
     // Initialize particle pool. Skip-land at spawn so we never start
@@ -115,8 +117,8 @@ export default function WindParticles({ width, height, composite, dataReady, act
     const spawn = (p) => {
       let tries = 0;
       do {
-        p.x = Math.random() * width;
-        p.y = Math.random() * height;
+        p.x = Math.random() * pixelWidth;
+        p.y = Math.random() * pixelHeight;
         tries++;
       } while (isLand(p.x, p.y) && tries < 8);
       p.age = 0;
@@ -135,7 +137,7 @@ export default function WindParticles({ width, height, composite, dataReady, act
       // Trail fade — translucent black wash to fade prior frames.
       ctx.globalCompositeOperation = "destination-in";
       ctx.fillStyle = "rgba(0,0,0,0.94)";
-      ctx.fillRect(0, 0, width, height);
+      ctx.fillRect(0, 0, pixelWidth, pixelHeight);
       ctx.globalCompositeOperation = "source-over";
 
       ctx.lineCap = "round";
@@ -145,7 +147,7 @@ export default function WindParticles({ width, height, composite, dataReady, act
       const speedScale = 0.6; // px per m/s per frame; keeps motion readable
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
-        const [lng, lat] = unproject(p.x, p.y, width, height);
+        const [lng, lat] = unproject(p.x, p.y, pixelWidth, pixelHeight);
         const { u, v } =
           vectorLayer === "current"
             ? getCurrentUV(lng, lat, composite)
@@ -165,7 +167,7 @@ export default function WindParticles({ width, height, composite, dataReady, act
         const nx = p.x + u * speedScale;
         // Screen y grows downward; v is positive northward = on-screen upward.
         const ny = p.y - v * speedScale;
-        if (nx < 0 || nx >= width || ny < 0 || ny >= height || isLand(nx, ny)) {
+        if (nx < 0 || nx >= pixelWidth || ny < 0 || ny >= pixelHeight || isLand(nx, ny)) {
           spawn(p);
           continue;
         }
