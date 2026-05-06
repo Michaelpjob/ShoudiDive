@@ -22,7 +22,7 @@ Per-cell algorithm (in build_blended_chl):
     tie-break by source priority (lower priority wins ties).
 
 Output files (same names + dims as the legacy single-source pipeline,
-backward-compatible with all React + Flutter + viz_predict consumers):
+backward-compatible with all React + RN + viz_predict consumers):
   public/data/chl_1d.png             — blended freshest single value
   public/data/chl_2d.png             — 2-frame nanmean smoothing per source, then blend
   public/data/chl_3d.png             — 3-frame nanmean smoothing per source, then blend
@@ -55,7 +55,7 @@ from PIL import Image
 BBOX = dict(lat_min=31.8, lat_max=37.6, lng_min=-124.0, lng_max=-116.8)
 
 # Output grid — kept at the legacy ERDDAP stride-1 dims for backward compat
-# with manifest.json consumers (React MapCanvas, Flutter map_view, viz_predict).
+# with manifest.json consumers (React MapCanvas, RN MapScreen, viz_predict).
 # Higher-res grid is a separate v2 task that requires updating those readers.
 OUT_W, OUT_H = 71, 87
 

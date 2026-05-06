@@ -187,11 +187,11 @@ export const SST_STOPS = [
 ];
 export const SST_RANGE = [9, 25]; // °C
 
-// Value-anchored chl stops (matches Flutter SidPalettes.chl + v2 prototype).
-// Anchored at the diving-relevant 0.1–5 mg/m³ range so the coastal upwelling
-// band (~0.5–3 mg/m³) gets the full color spectrum instead of being squashed
-// into the bottom 30% of a 0.05–20 log10 scale (which made every upwelling
-// state look "navy" — see the 2026-05-03 user report).
+// Value-anchored chl stops (the v2 prototype). Anchored at the diving-
+// relevant 0.1–5 mg/m³ range so the coastal upwelling band (~0.5–3 mg/m³)
+// gets the full color spectrum instead of being squashed into the bottom
+// 30% of a 0.05–20 log10 scale (which made every upwelling state look
+// "navy" — see the 2026-05-03 user report).
 //
 // Stops are in mg/m³, lerped in log10 space (matches the underlying PNG
 // encoding which is also log10):

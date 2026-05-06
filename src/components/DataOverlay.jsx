@@ -20,9 +20,7 @@ const WIND_RAMP = [
 // Hybrid semantics — warm "danger" floor for unsafe-to-dive viz, then a
 // cool blue ramp climbing from green ("ok, go") through deepening blues
 // to deep navy at Excellent. Keeps the at-a-glance traffic-light reading
-// (orange = avoid, green = go) that pure mono-blue lost. Excellent
-// matches Flutter SidPalettes.vis' deep navy for cross-app visual
-// continuity at the high end.
+// (orange = avoid, green = go) that pure mono-blue lost.
 const VIZ_RAMP = [
   { ft: 0,  c: [194,  65,  12] },  // Poor       — burnt orange #C2410C
   { ft: 10, c: [34,  197,  94] },  // Fair       — green        #22C55E

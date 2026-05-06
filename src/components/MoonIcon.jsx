@@ -18,7 +18,8 @@ const MOON_DARK = "#0F172A";    // night side
 const MOON_LIT  = "#F5EDD8";    // warm cream
 const MOON_RING = "rgba(245, 237, 216, 0.55)"; // cream @ ~55% — keeps silhouette visible at new moon
 
-/** Mirrors lib/moon_phase.dart in the Flutter app — keep in sync. */
+/** Returns the moon phase as a 0..1 fraction of the synodic month
+ *  (0 = new, 0.5 = full). */
 export function moonPhase(when) {
   const t = when instanceof Date ? when : new Date();
   const deltaDays = (t.getTime() - REF_NEW_MOON_MS) / 86400000;
