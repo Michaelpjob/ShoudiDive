@@ -387,7 +387,9 @@ function TopBar({ onSettings, settingsOpen, dataState }) {
         {/* The MobileShell peek strip carries layer/value/time info on
             phones — the topbar just keeps the brand mark + settings cog
             on small screens (timestamp + sources are hidden via the
-            @media (max-width: 760px) block in app.css). */}
+            mobile-shell @media block in app.css; that media query
+            mirrors MOBILE_QUERY above so JS and CSS agree on what
+            counts as "mobile"). */}
         <button
           className="icon-btn"
           aria-label="Settings"

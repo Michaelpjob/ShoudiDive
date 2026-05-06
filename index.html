@@ -2,9 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <!-- user-scalable=no removed 2026-05-05: it disabled browser pinch-zoom
+         across the entire PWA, hurting low-vision users. The map's pinch
+         zoom is implemented separately and scoped to .map-stage via
+         touch-action: none — that gives the map its own gesture without
+         locking out the rest of the page from accessibility zoom. -->
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <meta name="theme-color" content="#0369a1" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)" />
