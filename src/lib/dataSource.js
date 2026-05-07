@@ -200,14 +200,12 @@ export async function loadManifest() {
           const summary = await sres.json();
           state.layers.sst5d = { summary };
           const scale = info.scale || summary.scale || "linear";
-          const range = info.range_c || summary.range_c;
+          const range = info.range || info.range_c || summary.range || summary.range_c;
           if (!range) throw new Error("sst5d has no range");
           const tasks = [];
           for (const d of summary.days || []) {
             if (!d?.url) continue;
-            const slot = `f${d.offset ?? 0}`;     // forecast slot, namespaced
-                                                  // away from the sst7d "d-N"
-                                                  // keys to avoid collisions.
+            const slot = d.slot || `f${d.day ?? d.offset ?? 0}`;
             tasks.push(
               decodePng(d.url, scale, range)
                 .then((decoded) => {
@@ -254,36 +252,6 @@ export async function loadManifest() {
           await Promise.all(tasks);
         } catch (e) {
           console.warn("dataSource: sst7d summary load failed", e);
-        }
-      } else if (layer === "sst5d") {
-        try {
-          const sres = await fetch(info.summary_url, { cache: "no-cache" });
-          if (!sres.ok) throw new Error(`sst forecast summary ${info.summary_url} ${sres.status}`);
-          const summary = await sres.json();
-          state.layers.sst5d = { summary };
-          state.layers.sst = state.layers.sst || {};
-          const scale = info.scale || summary.scale || "linear";
-          const range = info.range || summary.range;
-          if (!range) throw new Error("sst5d has no range");
-          const tasks = [];
-          for (const d of summary.days || []) {
-            if (!d?.slot || !d?.url) continue;
-            tasks.push(
-              decodePng(d.url, scale, range)
-                .then((decoded) => {
-                  state.layers.sst[d.slot] = {
-                    ...decoded,
-                    dates: d.date ? [d.date] : [],
-                    forecast: true,
-                    stats: d,
-                  };
-                })
-                .catch((e) => console.warn(`sst5d ${d.slot} failed`, e))
-            );
-          }
-          await Promise.all(tasks);
-        } catch (e) {
-          console.warn("dataSource: sst5d summary load failed", e);
         }
       } else if (layer === "swell5d") {
         // 5-day × 5-bucket swell forecast (gfswave). Load summary.json
@@ -694,7 +662,7 @@ export function getSstForecastSparkline(lng, lat) {
   const summary = getSstForecastSummary();
   if (!summary?.days?.length) return null;
   return summary.days.map((d) =>
-    bilinear(state.layers.sst5d?.[`f${d.offset ?? 0}`], lng, lat)
+    bilinear(state.layers.sst5d?.[d.slot || `f${d.day ?? d.offset ?? 0}`], lng, lat)
   );
 }
 

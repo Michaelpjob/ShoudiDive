@@ -8,6 +8,8 @@
     "build": "vite build",
     "test": "node --test tests/*.test.js",
     "test:data-contracts": "node tests/dataFeatureContracts.mjs",
+    "smoke:site": "node tests/siteSmoke.mjs --root dist",
+    "smoke:prod": "node tests/siteSmoke.mjs --url https://shouldidive.com --retries 5 --retry-delay-ms 10000",
     "preview": "vite preview"
   },
   "dependencies": {

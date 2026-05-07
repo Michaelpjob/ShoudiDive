@@ -282,12 +282,18 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Smoke built site
+        run: npm run smoke:site
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy dist --project-name=shouldidive --branch=main --commit-dirty=true
+
+      - name: Smoke production site
+        run: npm run smoke:prod
 
       - name: Commit refreshed data
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

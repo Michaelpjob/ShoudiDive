@@ -26,7 +26,8 @@ test("Temp keeps historical and beta forecast SST timelines instead of reverting
   assert.match(mobileSheet, /layer === "sst" && hasSstTimeline \? `Sea temp/);
   assert.match(mobileSheet, /layer === "sst" && hasSstTimeline \?\s*\(\s*<>[\s\S]*<SstModeToggle[\s\S]*<SstCurrentCard sel=\{activeSstSel\} units=\{units\} mode=\{activeSstMode\} \/>/);
   assert.match(dataSource, /if \(layer === "sst7d"\)/);
-  assert.match(dataSource, /else if \(layer === "sst5d"\)/);
+  assert.equal((dataSource.match(/layer === "sst5d"/g) || []).length, 2);
+  assert.match(dataSource, /info\.range \|\| info\.range_c \|\| summary\.range \|\| summary\.range_c/);
   assert.match(dataSource, /state\.layers\.sst7d = \{ summary \}/);
   assert.match(dataSource, /state\.layers\.sst5d = \{ summary \}/);
 });
@@ -55,6 +56,7 @@ test("CI runs frontend and data feature contracts before publishing", () => {
 
   assert.equal(pkg.scripts.test, "node --test tests/*.test.js");
   assert.equal(pkg.scripts["test:data-contracts"], "node tests/dataFeatureContracts.mjs");
-  assert.match(frontendWorkflow, /Run frontend regression tests[\s\S]*npm test[\s\S]*Build[\s\S]*npm run build/);
-  assert.match(deployWorkflow, /Run frontend regression tests[\s\S]*npm test[\s\S]*Run data feature contracts[\s\S]*npm run test:data-contracts[\s\S]*Build[\s\S]*npm run build/);
+  assert.equal(pkg.scripts["smoke:site"], "node tests/siteSmoke.mjs --root dist");
+  assert.match(frontendWorkflow, /Run frontend regression tests[\s\S]*npm test[\s\S]*Build[\s\S]*npm run build[\s\S]*Run site smoke test[\s\S]*npm run smoke:site/);
+  assert.match(deployWorkflow, /Run frontend regression tests[\s\S]*npm test[\s\S]*Run data feature contracts[\s\S]*npm run test:data-contracts[\s\S]*Build[\s\S]*npm run build[\s\S]*Smoke built site[\s\S]*npm run smoke:site[\s\S]*Deploy to Cloudflare Pages[\s\S]*Smoke production site[\s\S]*npm run smoke:prod/);
 });

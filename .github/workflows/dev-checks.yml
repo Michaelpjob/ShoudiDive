@@ -73,6 +73,8 @@ jobs:
         run: npm ci
       - name: Build
         run: npm run build
+      - name: Smoke built site
+        run: npm run smoke:site
       - name: Upload bundle as artifact
         # Lets a reviewer download the dev build to spot-check size /
         # contents without having to clone + build locally.

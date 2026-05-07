@@ -54,12 +54,15 @@ const sstForecastPath = localDataPath(sst5d.summary_url);
 assert.equal(existsSync(sstForecastPath), true, `sst5d summary missing: ${sst5d.summary_url}`);
 const sstForecast = readJson(sstForecastPath);
 assert.equal(sstForecast.beta, true, "sst5d summary must be explicitly marked beta");
+assert.deepEqual(sstForecast.range, layers.sst.range, "sst5d summary range must match sst");
+assert.deepEqual(sstForecast.grid, layers.sst.grid, "sst5d summary grid must match sst");
 assert.equal(Array.isArray(sstForecast.days), true, "sst5d summary must have days[]");
 assert.ok(sstForecast.days.length >= 5, `sst5d must retain at least 5 days, got ${sstForecast.days.length}`);
 assert.equal(sstForecast.default_slot, "f0", "sst5d must default to the freshest forecast anchor");
 
 for (const day of sstForecast.days) {
   assert.match(day.slot, /^f\d+$/, "sst5d day must use forecast slot keys");
+  assert.equal(typeof day.day, "number", `sst5d ${day.slot} must include numeric day`);
   assert.equal(typeof day.date, "string", `sst5d ${day.slot} must include date`);
   assert.equal(typeof day.url, "string", `sst5d ${day.slot} must include url`);
   assert.equal(existsSync(localDataPath(day.url)), true, `sst5d PNG missing: ${day.url}`);

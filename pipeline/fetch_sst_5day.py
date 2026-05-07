@@ -257,12 +257,15 @@ def main() -> int:
         horizon_days=HORIZON_DAYS,
     )
 
-    # Write per-day PNGs + a summary.json mirroring fetch_wind_5day.
+    # Write per-day PNGs + a summary.json using the same schema that
+    # fetch.py writes. The daily workflow runs both scripts, so keeping
+    # this writer schema-identical prevents one step from breaking the
+    # deploy contract emitted by the other.
     SST5D_DIR.mkdir(parents=True, exist_ok=True)
     today = datetime.now(timezone.utc).date()
     days = []
     for d in range(HORIZON_DAYS):
-        dpath = SST5D_DIR / f"d{d}.png"
+        dpath = SST5D_DIR / f"f{d}_sst.png"
         _encode_celsius_to_png(forecast[d], dpath)
         st = _stats_for_grid(forecast[d])
         anom = forecast[d] - sst_climo
@@ -271,16 +274,18 @@ def main() -> int:
             if np.any(np.isfinite(anom)) else None
         )
         days.append({
-            "day":         DAY_LABELS_REL[d],
-            "offset":      d,
+            "slot":        f"f{d}",
+            "day":         d,
             "date":        (today + timedelta(days=d)).isoformat(),
-            "url":         f"/data/sst5d/d{d}.png",
+            "url":         f"/data/sst5d/f{d}_sst.png",
             "confidence":  CONFIDENCE_BY_DAY[d],
-            "mean_c":      st["mean"],
+            "mean":        st["mean"],
             "anom_c":      anom_mean,
-            "min_c":       st["min"],
-            "max_c":       st["max"],
+            "min":         st["min"],
+            "max":         st["max"],
             "coverage_frac": st["coverage_frac"],
+            "forecast":    d > 0,
+            "observed_anchor": d == 0,
         })
         print(f"  d{d} ({DAY_LABELS_REL[d]:>5}): mean={st['mean']}°C "
               f"anom={anom_mean}°C conf={CONFIDENCE_BY_DAY[d]}")
@@ -288,13 +293,17 @@ def main() -> int:
     summary = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")
                                 .replace("+00:00", "Z"),
+        "valid_at":     today.isoformat(),
         "horizon_days": HORIZON_DAYS,
         "method":       "persistence_decay",
         "tz":           "UTC",
-        "range_c":      list(SST_RANGE_C),
+        "range":        list(SST_RANGE_C),
         "scale":        SST_SCALE,
         "unit":         SST_UNIT_C,
         "grid":         {"width": W, "height": H},
+        "beta":         True,
+        "default_slot": "f0",
+        "latest_slot":  "f0",
         "days":         days,
     }
     (SST5D_DIR / "summary.json").write_text(json.dumps(summary, indent=2))
@@ -313,9 +322,13 @@ def main() -> int:
     manifest["layers"]["sst5d"] = {
         "summary_url":  "/data/sst5d/summary.json",
         "horizon_days": HORIZON_DAYS,
-        "range_c":      list(SST_RANGE_C),
+        "range":        list(SST_RANGE_C),
+        "scale":        SST_SCALE,
         "unit":         SST_UNIT_C,
         "grid":         {"width": W, "height": H},
+        "generated_at": summary["generated_at"],
+        "tz":           "UTC",
+        "beta":         True,
         "method":       "persistence_decay",
     }
     MANIFEST_PATH.write_text(json.dumps(manifest, indent=2))
