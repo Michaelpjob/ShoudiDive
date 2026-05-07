@@ -42,7 +42,17 @@
 //        previous index.html from cache, referencing the previous JS
 //        bundle, with no land mask. Bumping forces controllerchange +
 //        auto-reload onto the fixed bundle on next launch.
-const CACHE_VERSION = "v6";
+//   v7 — fix the underlying class of bug that v6 was a band-aid for:
+//        switch HTML/SW/manifest from cache-first to network-first.
+//        Cache-first meant returning users always saw yesterday's
+//        shell on every visit until they reloaded TWICE. Now the
+//        browser hits the network for HTML on every visit (with the
+//        cache as a fallback), and gets the freshest asset hash
+//        immediately. Hashed /assets/* files stay cache-first since
+//        Vite's content-hash filename is the cache key — they're
+//        safe to keep forever. Pairs with the new public/_headers
+//        which sets matching CDN-edge Cache-Control directives.
+const CACHE_VERSION = "v7";
 const SHELL_CACHE = `shouldidive-shell-${CACHE_VERSION}`;
 const DATA_CACHE  = `shouldidive-data-${CACHE_VERSION}`;
 
@@ -80,11 +90,32 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-function isShellRequest(url) {
+// Shell resources split by HOW they should cache:
+//
+//   - HTML / SW / manifest: identifying the latest deploy depends
+//     on these being fresh. Cache-first means returning users see
+//     yesterday's shell on every visit until they reload twice.
+//     Network-first.
+//
+//   - /assets/* (Vite output) and icons/fonts: content-hashed by
+//     filename. The URL itself is a cache key — once cached, never
+//     stale. Cache-first.
+function isHtmlShellRequest(url) {
   if (url.origin !== self.location.origin) return false;
   if (url.pathname === "/" || url.pathname === "/index.html") return true;
+  if (url.pathname === "/sw.js") return true;
+  if (url.pathname === "/manifest.webmanifest") return true;
+  return false;
+}
+
+function isHashedAssetRequest(url) {
+  if (url.origin !== self.location.origin) return false;
+  // Vite's hashed bundles (/assets/index-abc123.js etc).
   if (url.pathname.startsWith("/assets/")) return true;
-  if (/\.(svg|png|ico|webmanifest)$/.test(url.pathname)) return true;
+  // Static icons + small images that don't churn often. The CDN
+  // _headers file gives them a 24h TTL; the SW cache is a longer
+  // backstop for offline launches.
+  if (/\.(svg|png|ico)$/.test(url.pathname)) return true;
   return false;
 }
 
@@ -121,13 +152,42 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (isShellRequest(url)) {
-    // Cache-first for the app shell, with network upgrade in the background.
+  if (isHtmlShellRequest(url)) {
+    // NETWORK-FIRST for HTML / SW / manifest. The whole point is to
+    // get the freshest reference to the latest /assets/index-<hash>.js
+    // — cache-first put returning users one cycle behind on every
+    // deploy, which is the bug class this rewrite fixes.
+    //
+    // Fallback to the cached HTML when offline so a returning user
+    // still sees SOMETHING. The cached HTML may reference an asset
+    // hash that's no longer on the server, but Vite's content-hashed
+    // /assets/* tree means we keep older files around for at least a
+    // few deploys, so the offline launch usually still mounts.
+    event.respondWith(
+      caches.open(SHELL_CACHE).then(async (cache) => {
+        try {
+          const res = await fetch(req);
+          if (res && res.ok) cache.put(req, res.clone());
+          return res;
+        } catch {
+          const cached = await cache.match(req);
+          if (cached) return cached;
+          throw new Error("offline and no cache for " + req.url);
+        }
+      }),
+    );
+    return;
+  }
+
+  if (isHashedAssetRequest(url)) {
+    // CACHE-FIRST for hashed Vite bundles + static icons. Vite's
+    // content-hash filename means a new build produces a NEW URL,
+    // so the cache key naturally invalidates without a SW bump.
+    // Background-refresh keeps the cache warm.
     event.respondWith(
       caches.open(SHELL_CACHE).then(async (cache) => {
         const cached = await cache.match(req);
         if (cached) {
-          // Refresh in background so the next visit gets the latest shell.
           fetch(req).then((res) => {
             if (res && res.ok) cache.put(req, res.clone());
           }).catch(() => {});

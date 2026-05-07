@@ -1,0 +1,95 @@
+# Cloudflare Pages — per-pattern Cache-Control headers.
+#
+# THE problem this file fixes:
+#   "I have to open the site in private mode to get the latest update."
+#
+# Without explicit Cache-Control, Cloudflare's edge caches HTML for
+# its default 4-hour TTL AND the user's browser caches it indefinitely.
+# Returning users see the old HTML, which references the OLD asset
+# hash, until their browser TTL expires (sometimes weeks). Combined
+# with our service worker's previous cache-first shell strategy, that
+# gave returning users last-week's app for one full visit cycle on
+# every deploy.
+#
+# Layered cache strategy:
+#   - HTML / SW / manifest:    no-cache  (always re-validate, content
+#                                          is small + identifying)
+#   - Hashed JS/CSS bundles:   immutable + 1-year max-age
+#                              (Vite includes a content hash in the
+#                              filename — when the content changes,
+#                              the URL changes; safe to cache forever)
+#   - /data/manifest.json:     short max-age + must-revalidate
+#                              (changes every cron cycle)
+#   - /data/*.png and similar: 5-minute max-age
+#                              (changes daily; 5 min is the longest
+#                              window where stale data matters less
+#                              than the per-fetch cost)
+#
+# The /* match-all at the bottom is a safety net; explicit patterns
+# above it take precedence (Cloudflare _headers uses first-match).
+
+# ---- HTML + service worker + PWA manifest ---------------------------
+/
+  Cache-Control: public, max-age=0, must-revalidate
+  X-Content-Type-Options: nosniff
+
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate
+  X-Content-Type-Options: nosniff
+
+# Service worker MUST always be re-fetched — that's how the SW
+# update cycle works (new SW installs in background → activates →
+# triggers controllerchange → main.jsx reloads the tab).
+/sw.js
+  Cache-Control: public, max-age=0, must-revalidate
+  Service-Worker-Allowed: /
+
+/manifest.webmanifest
+  Cache-Control: public, max-age=300, must-revalidate
+
+# ---- Hashed Vite assets (immutable by content hash) ----------------
+# Vite outputs files as `/assets/index-<hash>.js`. The hash is a
+# content fingerprint; any change → new filename. Caching for a year
+# is safe and dramatically reduces TTFB for returning users.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# ---- Static icons + fonts (rarely change; long cache) --------------
+/icon.svg
+  Cache-Control: public, max-age=86400
+/icon-*.png
+  Cache-Control: public, max-age=86400
+/apple-touch-icon.png
+  Cache-Control: public, max-age=86400
+/favicon-32.png
+  Cache-Control: public, max-age=86400
+
+# ---- Live data plane -----------------------------------------------
+# manifest.json gates everything else — the React + RN clients fetch
+# it on every load. Cache for 1 minute at the edge with revalidation;
+# the client's `cache: "no-cache"` flag will still re-validate.
+/data/manifest.json
+  Cache-Control: public, max-age=60, must-revalidate
+
+# Daily-refresh artifacts. 5 minutes is long enough to hit the cache
+# on a quick reload + short enough that a within-day re-deploy
+# propagates within ~5 min instead of 4 hours.
+/data/*.png
+  Cache-Control: public, max-age=300, must-revalidate
+
+/data/*.json
+  Cache-Control: public, max-age=300, must-revalidate
+
+# Per-layer subdirectories (sst5d/, sst7d/, wind/, etc) match too
+/data/*/*.png
+  Cache-Control: public, max-age=300, must-revalidate
+
+/data/*/*.json
+  Cache-Control: public, max-age=300, must-revalidate
+
+# ---- Default for anything not matched above ------------------------
+# Conservative: tells the browser "you can cache, but check with us
+# first." Avoids the 4-hour CF default + the indefinite browser
+# default for unknown content.
+/*
+  Cache-Control: public, max-age=0, must-revalidate
