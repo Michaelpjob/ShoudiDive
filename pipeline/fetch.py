@@ -287,6 +287,84 @@ def _layer_stats(arr: np.ndarray) -> dict:
     }
 
 
+def build_sst_forecast(
+    cfg: dict,
+    hist_stack: list[np.ndarray],
+    hist_dates: list[date],
+    generated_at: str,
+    horizon_days: int = 7,
+) -> dict | None:
+    """Write a beta SST forecast using observed trend persistence.
+
+    This is intentionally conservative: day 0 is the latest observed SST,
+    later days carry only a capped recent-trend anomaly that decays toward
+    persistence. It restores the forward-looking temperature UI without
+    claiming full ocean-model skill.
+    """
+    if not hist_stack or not hist_dates:
+        return None
+
+    latest = hist_stack[-1]
+    latest_date = hist_dates[-1]
+    if len(hist_stack) >= 2:
+        prev = hist_stack[-2]
+        date_delta = max(1, (hist_dates[-1] - hist_dates[-2]).days)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            trend = (latest - prev) / date_delta
+        trend = np.where(np.isfinite(trend), trend, 0.0)
+    else:
+        trend = np.zeros_like(latest)
+
+    # Coastal SST day-to-day skill drops fast. Cap extreme gradients so a
+    # single bad satellite edge does not turn into a runaway forecast.
+    trend = np.clip(trend, -0.35, 0.35)
+
+    out_dir = OUT_DIR / "sst5d"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    days = []
+    for lead in range(horizon_days):
+        decay = float(np.exp(-lead / 3.0))
+        arr = latest + trend * lead * decay
+        arr = np.where(np.isfinite(latest), arr, np.nan)
+        out = out_dir / f"f{lead}_sst.png"
+        encode_png(arr, cfg, out)
+        stats = _layer_stats(arr)
+        confidence = "high" if lead <= 1 else "medium" if lead <= 3 else "low"
+        days.append({
+            "slot": f"f{lead}",
+            "day": lead,
+            "date": (latest_date + timedelta(days=lead)).isoformat(),
+            "url": f"/data/sst5d/f{lead}_sst.png",
+            "mean": stats["mean"],
+            "min": stats["min"],
+            "max": stats["max"],
+            "coverage_frac": stats["coverage_frac"],
+            "confidence": confidence,
+            "forecast": lead > 0,
+            "observed_anchor": lead == 0,
+        })
+        print(f"  wrote sst5d/f{lead}_sst.png  ({latest.shape[0]}x{latest.shape[1]})")
+
+    summary = {
+        "generated_at": generated_at,
+        "valid_at": latest_date.isoformat(),
+        "tz": "UTC",
+        "range": list(cfg["range"]),
+        "scale": cfg["scale"],
+        "unit": cfg["unit"],
+        "grid": {"width": latest.shape[1], "height": latest.shape[0]},
+        "horizon_days": horizon_days,
+        "beta": True,
+        "method": "observed-trend persistence with 3-day decay",
+        "default_slot": "f0",
+        "latest_slot": "f0",
+        "days": days,
+    }
+    (OUT_DIR / "sst5d" / "summary.json").write_text(json.dumps(summary, indent=2))
+    print("  wrote sst5d/summary.json")
+    return summary
+
+
 def build_layer(layer: str, cfg: dict, end: date, want: int = 3, max_back: int = 7) -> dict | None:
     """Fetch up to `want` valid days walking back from `end`. Different layers
     publish on different lags, so each layer finds its own latest 3.
@@ -390,6 +468,15 @@ def build_layer(layer: str, cfg: dict, end: date, want: int = 3, max_back: int =
         }
         (OUT_DIR / layer / "summary.json").write_text(json.dumps(summary, indent=2))
         print(f"  wrote {layer}/summary.json")
+        if layer == "sst":
+            forecast_summary = build_sst_forecast(
+                cfg,
+                hist_stack,
+                hist_dates,
+                manifest_layer["generated_at"],
+            )
+            if forecast_summary:
+                manifest_layer["forecast_summary_url"] = "/data/sst5d/summary.json"
 
     # Per-cell freshness sidecar.
     #
@@ -490,6 +577,18 @@ def main() -> None:
             "generated_at": sst.get("generated_at"),
             "tz": "UTC",
         }
+        if sst.get("forecast_summary_url"):
+            manifest["layers"]["sst5d"] = {
+                "summary_url": sst.get("forecast_summary_url"),
+                "grid": sst.get("grid"),
+                "range": sst.get("range"),
+                "scale": sst.get("scale"),
+                "unit": sst.get("unit"),
+                "generated_at": sst.get("generated_at"),
+                "tz": "UTC",
+                "beta": True,
+                "method": "observed-trend persistence",
+            }
     manifest_path.write_text(json.dumps(manifest, indent=2))
     print("wrote manifest.json")
 

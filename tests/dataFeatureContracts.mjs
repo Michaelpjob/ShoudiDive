@@ -21,7 +21,7 @@ assert.equal(existsSync(manifestPath), true, "public/data/manifest.json must exi
 const manifest = readJson(manifestPath);
 const layers = manifest.layers || {};
 
-for (const layer of ["sst", "sst7d", "wind5d", "swell5d", "current5d", "viz"]) {
+for (const layer of ["sst", "sst7d", "sst5d", "wind5d", "swell5d", "current5d", "viz"]) {
   assert.ok(layers[layer], `manifest must include ${layer}`);
 }
 
@@ -42,6 +42,28 @@ for (const day of sstSummary.days) {
   assert.equal(typeof day.date, "string", `sst7d ${day.slot} must include date`);
   assert.equal(typeof day.url, "string", `sst7d ${day.slot} must include url`);
   assert.equal(existsSync(localDataPath(day.url)), true, `sst7d PNG missing: ${day.url}`);
+}
+
+const sst5d = layers.sst5d;
+assert.equal(typeof sst5d.summary_url, "string", "sst5d must expose summary_url");
+assert.deepEqual(sst5d.range, layers.sst.range, "sst5d range must match sst");
+assert.deepEqual(sst5d.grid, layers.sst.grid, "sst5d grid must match sst");
+assert.equal(sst5d.beta, true, "sst5d must be explicitly marked beta");
+
+const sstForecastPath = localDataPath(sst5d.summary_url);
+assert.equal(existsSync(sstForecastPath), true, `sst5d summary missing: ${sst5d.summary_url}`);
+const sstForecast = readJson(sstForecastPath);
+assert.equal(sstForecast.beta, true, "sst5d summary must be explicitly marked beta");
+assert.equal(Array.isArray(sstForecast.days), true, "sst5d summary must have days[]");
+assert.ok(sstForecast.days.length >= 5, `sst5d must retain at least 5 days, got ${sstForecast.days.length}`);
+assert.equal(sstForecast.default_slot, "f0", "sst5d must default to the freshest forecast anchor");
+
+for (const day of sstForecast.days) {
+  assert.match(day.slot, /^f\d+$/, "sst5d day must use forecast slot keys");
+  assert.equal(typeof day.date, "string", `sst5d ${day.slot} must include date`);
+  assert.equal(typeof day.url, "string", `sst5d ${day.slot} must include url`);
+  assert.equal(existsSync(localDataPath(day.url)), true, `sst5d PNG missing: ${day.url}`);
+  assert.ok(["high", "medium", "low"].includes(day.confidence), `sst5d ${day.slot} must include confidence`);
 }
 
 for (const layer of ["wind5d", "swell5d", "current5d"]) {

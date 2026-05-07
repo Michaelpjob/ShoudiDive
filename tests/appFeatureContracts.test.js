@@ -10,19 +10,25 @@ function read(rel) {
   return readFileSync(resolve(repoRoot, rel), "utf8");
 }
 
-test("Temp stays on the historical SST timeline instead of the legacy composite UI", () => {
+test("Temp keeps historical and beta forecast SST timelines instead of reverting to legacy composites", () => {
   const app = read("src/App.jsx");
   const mobileSheet = read("src/components/MobileSheet.jsx");
   const dataSource = read("src/lib/dataSource.js");
 
   assert.match(app, /import SstTimeline,\s*\{[\s\S]*SstCurrentCard[\s\S]*sstSelToSlotKey/);
-  assert.match(app, /layer === "sst"\s*\?\s*\(sstHistorySummary \? sstSelToSlotKey\(sstSel, sstHistorySummary\) : composite\)/);
-  assert.match(app, /\{layer === "sst" && sstHistorySummary && \(\s*<SstTimeline sel=\{sstSel\} setSel=\{setSstSel\} units=\{units\} \/>/);
-  assert.match(app, /layer === "sst" && sstHistorySummary \?\s*\(\s*<div className="composite wind-grid-host">[\s\S]*Sea temp trend[\s\S]*<SstCurrentCard sel=\{sstSel\} units=\{units\} \/>/);
-  assert.match(mobileSheet, /layer === "sst" && hasSstHistory \? "Sea temp/);
-  assert.match(mobileSheet, /layer === "sst" && hasSstHistory \?\s*\(\s*<SstCurrentCard sel=\{sstSel\} setSel=\{setSstSel\} units=\{units\} \/>/);
+  assert.match(app, /SstModeToggle/);
+  assert.match(app, /getSstForecastSummary/);
+  assert.match(app, /const \[sstMode, setSstMode\] = useState\("history"\)/);
+  assert.match(app, /const \[sstForecastSel, setSstForecastSel\] = useState\(\{ slot: "f0" \}\)/);
+  assert.match(app, /layer === "sst"\s*\?\s*\(sstTimelineSummary \? sstSelToSlotKey\(sstActiveSel, sstTimelineSummary\) : composite\)/);
+  assert.match(app, /\{layer === "sst" && hasSstTimeline && \(\s*<SstTimeline sel=\{sstActiveSel\} setSel=\{setSstActiveSel\} units=\{units\} mode=\{activeSstMode\} \/>/);
+  assert.match(app, /layer === "sst" && hasSstTimeline \?\s*\(\s*<div className="composite wind-grid-host">[\s\S]*Sea temp forecast[\s\S]*<SstModeToggle[\s\S]*<SstCurrentCard sel=\{sstActiveSel\} units=\{units\} mode=\{activeSstMode\} \/>/);
+  assert.match(mobileSheet, /layer === "sst" && hasSstTimeline \? `Sea temp/);
+  assert.match(mobileSheet, /layer === "sst" && hasSstTimeline \?\s*\(\s*<>[\s\S]*<SstModeToggle[\s\S]*<SstCurrentCard sel=\{activeSstSel\} units=\{units\} mode=\{activeSstMode\} \/>/);
   assert.match(dataSource, /if \(layer === "sst7d"\)/);
+  assert.match(dataSource, /else if \(layer === "sst5d"\)/);
   assert.match(dataSource, /state\.layers\.sst7d = \{ summary \}/);
+  assert.match(dataSource, /state\.layers\.sst5d = \{ summary \}/);
 });
 
 test("Current, swell, wind, and mobile overlay features remain wired", () => {

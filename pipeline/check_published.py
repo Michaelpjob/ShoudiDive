@@ -83,11 +83,11 @@ LAYER_DATE_MAX_DAYS = {
     "wind":   2,    # HRRR is sub-daily; 2d window covers a missed cron
     "wave":   2,    # gfswave is sub-daily, same logic as wind
     "precip": 3,    # CPC unified daily can have a 1-2d publication lag
-    # wind5d / swell5d covered separately via summary_url branch
+    # sst5d / wind5d / swell5d covered separately via summary_url branch
 }
 
 REQUIRED_LAYERS = {
-    "sst", "sst7d", "chl", "kd490", "wind", "wind5d", "swell5d",
+    "sst", "sst7d", "sst5d", "chl", "kd490", "wind", "wind5d", "swell5d",
     "current5d", "viz", "wave", "precip",
 }
 
@@ -490,7 +490,7 @@ def _check_layer_date_freshness(layer_id: str, window_key: str, win: dict) -> Op
 
 
 def _probe_5d_summary(layer_id: str, info: dict, layer_stats: list[dict]) -> list[Finding]:
-    """Lightweight check for wind5d / swell5d: fetch the summary JSON and
+    """Lightweight check for sst5d / wind5d / swell5d: fetch the summary JSON and
     confirm it has the expected `days` array. Probing every per-bucket
     PNG would be expensive (~60+ files); the summary is the integrity
     gate."""

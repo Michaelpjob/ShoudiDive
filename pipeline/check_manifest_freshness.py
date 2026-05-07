@@ -45,6 +45,7 @@ LAYER_DATE_MAX_DAYS = {
 
 SUMMARY_MAX_HOURS = {
     "sst7d": 96,
+    "sst5d": 96,
     "wind5d": 8,
     "swell5d": 8,
     "current5d": 8,
@@ -52,6 +53,7 @@ SUMMARY_MAX_HOURS = {
 
 SUMMARY_MIN_DAYS = {
     "sst7d": 3,
+    "sst5d": 5,
     "wind5d": 5,
     "swell5d": 5,
     "current5d": 5,
@@ -290,7 +292,7 @@ def check_summary_layer(layer_id: str, info: dict, now: datetime) -> list[Findin
                 detail=", ".join(missing[:8]),
             ))
 
-    if layer_id == "sst7d":
+    if layer_id in ("sst7d", "sst5d"):
         missing = []
         for d in days:
             p = resolve_data_path(d.get("url"))
@@ -299,8 +301,8 @@ def check_summary_layer(layer_id: str, info: dict, now: datetime) -> list[Findin
         if missing:
             findings.append(Finding(
                 "high",
-                "sst_history_png_missing",
-                "SST history references missing PNGs",
+                "sst_timeline_png_missing",
+                "SST timeline references missing PNGs",
                 layer=layer_id,
                 detail=", ".join(missing[:5]),
             ))

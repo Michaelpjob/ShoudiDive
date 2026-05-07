@@ -1,6 +1,8 @@
 import { useRef } from "react";
 import { sstColor } from "../lib/mapData.js";
 import {
+  getSstForecastStats,
+  getSstForecastSummary,
   getSstHistoryStats,
   getSstHistorySummary,
 } from "../lib/dataSource.js";
@@ -43,18 +45,50 @@ function tempPillColor(c) {
   return Number.isFinite(c) ? sstColor(c) : "var(--ink-3)";
 }
 
-export function SstCurrentCard({ sel, units }) {
-  const summary = getSstHistorySummary();
+function summaryForMode(mode) {
+  return mode === "forecast" ? getSstForecastSummary() : getSstHistorySummary();
+}
+
+function statsForMode(mode, slot) {
+  return mode === "forecast" ? getSstForecastStats(slot) : getSstHistoryStats(slot);
+}
+
+export function SstModeToggle({ mode, setMode, hasHistory = true, hasForecast = false }) {
+  return (
+    <div className="sst-mode-toggle" role="tablist" aria-label="Temperature time mode">
+      <button
+        type="button"
+        className={mode !== "forecast" ? "active" : ""}
+        onClick={() => setMode("history")}
+        disabled={!hasHistory}
+      >
+        History
+      </button>
+      <button
+        type="button"
+        className={mode === "forecast" ? "active" : ""}
+        onClick={() => setMode("forecast")}
+        disabled={!hasForecast}
+      >
+        Forecast
+        <span>Beta</span>
+      </button>
+    </div>
+  );
+}
+
+export function SstCurrentCard({ sel, units, mode = "history" }) {
+  const summary = summaryForMode(mode);
   if (!summary?.days?.length) {
     return (
       <div className="wind-day-grid empty">
-        <p>Sea temperature history not loaded yet.</p>
+        <p>Sea temperature {mode === "forecast" ? "forecast" : "history"} not loaded yet.</p>
       </div>
     );
   }
 
   const slot = sstSelToSlotKey(sel, summary);
-  const day = getSstHistoryStats(slot);
+  const day = statsForMode(mode, slot);
   const idx = summary.days.findIndex((d) => d.slot === slot);
   const prev = idx > 0 ? summary.days[idx - 1] : null;
   const mean = cToDisplay(day?.mean, units);
@@ -69,7 +103,8 @@ export function SstCurrentCard({ sel, units }) {
     <div className="wind-current-card">
       <div className="wind-current-stats">
         <div className="wcs-time">
-          {day?.date ? `${fmtWeekday(day.date)} ${fmtDay(day.date)}` : "Recent SST"}
+          {day?.date ? `${fmtWeekday(day.date)} ${fmtDay(day.date)}` : "SST"}
+          {mode === "forecast" && <span className="sst-beta-pill">Beta</span>}
         </div>
         <div className="wcs-kt-row">
           <span className="wcs-kt">
@@ -83,15 +118,17 @@ export function SstCurrentCard({ sel, units }) {
           </span>
         </div>
         <div className="wcs-confidence" style={{ color: "var(--ink-3)", fontStyle: "normal" }}>
-          {deltaLabel(deltaC, units)}
+          {mode === "forecast"
+            ? `${day?.confidence || "low"} confidence trend model`
+            : deltaLabel(deltaC, units)}
         </div>
       </div>
     </div>
   );
 }
 
-export default function SstTimeline({ sel, setSel, units }) {
-  const summary = getSstHistorySummary();
+export default function SstTimeline({ sel, setSel, units, mode = "history" }) {
+  const summary = summaryForMode(mode);
   const ref = useRef(null);
 
   // Hook lookup BEFORE the early return so React's hook order stays
@@ -138,7 +175,7 @@ export default function SstTimeline({ sel, setSel, units }) {
     return (
       <div
         key={d.slot}
-        className={`tl-day-cell ${i % 2 === 0 ? "even" : "odd"} conf-high`}
+        className={`tl-day-cell ${i % 2 === 0 ? "even" : "odd"} conf-${d.confidence || "high"}`}
         style={{ left: `${left}%`, width: `${width}%` }}
       >
         <span className="tl-day-label">
@@ -168,7 +205,7 @@ export default function SstTimeline({ sel, setSel, units }) {
       ref={ref}
       {...drag.handlers}
       role="slider"
-      aria-label="Sea temperature history scrubber"
+      aria-label={`Sea temperature ${mode === "forecast" ? "forecast" : "history"} scrubber`}
       aria-valuemin={0}
       aria-valuemax={numDays - 1}
       aria-valuenow={idx}
@@ -184,6 +221,7 @@ export default function SstTimeline({ sel, setSel, units }) {
           <span className="tl-pb-time">
             {day?.date ? fmtDay(day.date) : "SST"}
           </span>
+          {mode === "forecast" && <span className="sst-beta-pill">Beta</span>}
           {Number.isFinite(mean) && (
             <span
               className="tl-pb-kt"
@@ -192,7 +230,9 @@ export default function SstTimeline({ sel, setSel, units }) {
               {mean.toFixed(1)} deg {unitLabel(units)}
             </span>
           )}
-          <span className="tl-pb-dir">{deltaLabel(deltaC, units)}</span>
+          <span className="tl-pb-dir">
+            {mode === "forecast" ? `${day?.confidence || "low"} confidence` : deltaLabel(deltaC, units)}
+          </span>
         </div>
       </div>
     </div>
@@ -200,7 +240,7 @@ export default function SstTimeline({ sel, setSel, units }) {
 }
 
 export function defaultSstSelection(summary) {
-  const slot = summary?.latest_slot || summary?.days?.[summary.days.length - 1]?.slot;
+  const slot = summary?.default_slot || summary?.latest_slot || summary?.days?.[summary.days.length - 1]?.slot;
   return { slot: slot || "d0" };
 }
 

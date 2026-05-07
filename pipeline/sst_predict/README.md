@@ -1,9 +1,11 @@
 # sst_predict — multi-source ensemble SST nowcast + 7-day forecast
 
-**Status: framework only.** Files in this directory are scaffolds with
-docstrings and clear `# TODO:` markers. Nothing in here is wired to
-`refresh-data.yml` yet, and `fetch.py` still ships today's MUR L4 PNGs
-unchanged. The implementation lands in phases (see "Rollout" below).
+**Status: full ensemble framework only.** The deployed app now has a
+beta `sst5d` forecast generated in `pipeline/fetch.py` from the freshest
+observed SST field plus recent trend persistence. Files in this
+directory are still the scaffolds for the later multi-source ensemble
+version with ocean-model advection, heat-flux correction, and scoring.
+The implementation lands in phases (see "Rollout" below).
 
 ## Why this exists
 

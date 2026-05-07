@@ -27,6 +27,7 @@ import {
   getCurrentUV,
   getVizFt,
   getSwell5dStats,
+  getSstForecastSummary,
   getSstHistorySummary,
   getCurrent5dSummary,
   windSource,
@@ -36,7 +37,7 @@ import {
 } from "../lib/dataSource.js";
 import WindDayGrid from "./WindDayGrid.jsx";
 import { SwellCurrentCard } from "./SwellTimeline.jsx";
-import { SstCurrentCard } from "./SstTimeline.jsx";
+import { SstCurrentCard, SstModeToggle } from "./SstTimeline.jsx";
 import { CurrentCurrentCard } from "./CurrentTimeline.jsx";
 
 const LAYERS = [
@@ -105,7 +106,9 @@ function focalPoint(hover, activeSpot) {
 export default function MobileShell({
   layer, setLayer,
   composite, setComposite,
+  sstMode, setSstMode,
   sstSel, setSstSel,
+  sstForecastSel, setSstForecastSel,
   windSel, setWindSel,
   swellSel, setSwellSel,
   currentSel, setCurrentSel,
@@ -121,8 +124,20 @@ export default function MobileShell({
   setHover,
 }) {
   const [open, setOpen] = useState(false);
-  // wind + swell + current use slot keys; sst/chl/viz use integer composite.
+  // wind + swell + current use slot keys; sst uses history/forecast slots
+  // when loaded; chl/viz use integer composites.
   const hasSstHistory = Boolean(getSstHistorySummary());
+  const hasSstForecast = Boolean(getSstForecastSummary());
+  const activeSstMode =
+    sstMode === "forecast" && hasSstForecast
+      ? "forecast"
+      : hasSstHistory
+      ? "history"
+      : hasSstForecast
+      ? "forecast"
+      : "history";
+  const hasSstTimeline = hasSstHistory || hasSstForecast;
+  const activeSstSel = activeSstMode === "forecast" ? sstForecastSel : sstSel;
   const hasCurrentSummary = Boolean(getCurrent5dSummary());
   const lookupKey = activeComposite ?? composite;
   const focal = focalPoint(hover, activeSpot);
@@ -130,7 +145,7 @@ export default function MobileShell({
 
   // Time slice label — short version for the status row.
   const timeLabel =
-    (layer === "sst" && hasSstHistory) || layer === "wind" || layer === "swell" || layer === "current"
+    (layer === "sst" && hasSstTimeline) || layer === "wind" || layer === "swell" || layer === "current"
       ? compositeText
       : `${composite}-day · ${compositeText}`;
 
@@ -152,16 +167,26 @@ export default function MobileShell({
           <section className="ms-section">
             <div className="ms-section-h">
               {layer === "wind" ? "Wind · 5-day forecast"
-                : layer === "sst" && hasSstHistory ? "Sea temp · historical trend"
+                : layer === "sst" && hasSstTimeline ? `Sea temp · ${activeSstMode === "forecast" ? "beta forecast" : "historical trend"}`
                 : layer === "swell" ? "Swell · 5-day forecast"
                 : layer === "current" ? "Surface current · 5-day"
                 : timeOpts.label}
               <span className="ms-section-sub">
-                {layer === "sst" && hasSstHistory ? "recent MUR days" : timeOpts.helper}
+                {layer === "sst" && hasSstTimeline
+                  ? activeSstMode === "forecast" ? "trend persistence" : "recent MUR days"
+                  : timeOpts.helper}
               </span>
             </div>
-            {layer === "sst" && hasSstHistory ? (
-              <SstCurrentCard sel={sstSel} setSel={setSstSel} units={units} />
+            {layer === "sst" && hasSstTimeline ? (
+              <>
+                <SstModeToggle
+                  mode={activeSstMode}
+                  setMode={setSstMode}
+                  hasHistory={hasSstHistory}
+                  hasForecast={hasSstForecast}
+                />
+                <SstCurrentCard sel={activeSstSel} units={units} mode={activeSstMode} />
+              </>
             ) : layer === "wind" ? (
               <WindDayGrid sel={windSel} setSel={setWindSel} layout="stack" />
             ) : layer === "swell" ? (
