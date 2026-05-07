@@ -266,9 +266,24 @@ jobs:
         run: npm ci
 
       - name: Run frontend regression tests
+        # Soft-fail. The dev-checks gate runs the same tests on every
+        # PR before merge — by the time refresh-data fires, this is a
+        # belt-and-suspenders re-run, NOT a deploy gate. Hard-failing
+        # here would block hotfix deploys behind unrelated test breakage,
+        # which is exactly what happened on the 2026-05-07 white-screen
+        # incident: the data-feature-contracts step failed (data mid-
+        # refresh), Build + Deploy got skipped, prod stayed broken for
+        # ~20 min. Catch real test regressions in dev-checks; let the
+        # deploy step always fire.
+        continue-on-error: true
         run: npm test
 
       - name: Run data feature contracts
+        # Same soft-fail rationale as the regression tests above.
+        # Data contracts assert manifest shape — they routinely fail
+        # transiently when this very workflow is mid-refresh and the
+        # PNGs are partially overwritten. Don't gate the deploy on it.
+        continue-on-error: true
         run: npm run test:data-contracts
 
       # The "Build Flutter app (served at /app/)" step that used to live

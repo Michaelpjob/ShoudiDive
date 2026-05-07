@@ -67,14 +67,14 @@ export default [
       "no-undef":                  "error",
 
       // ---- other no-mistake-no-cost rules --------------------------
-      "no-unused-vars":            ["warn", {
-        // Explicitly-prefixed-underscore identifiers are intentional —
-        // common pattern for the throwaway side of a destructure.
-        argsIgnorePattern: "^_",
-        varsIgnorePattern: "^_",
-        // Catch identifiers that are introduced and never read at all.
-        caughtErrors: "none",
-      }],
+      // no-unused-vars is intentionally OFF until eslint-plugin-react
+      // is added — without `react/jsx-uses-vars` it false-positives on
+      // every component imported for JSX (e.g. <MoonWidget/> looks
+      // unused to base ESLint because espree doesn't recognize JSX as
+      // a "use"). TODO: pull in eslint-plugin-react and re-enable as
+      // `warn`. Until then, dead-import noise stays in the source —
+      // an acceptable trade for silencing the white-screen-class fire.
+      "no-unused-vars":            "off",
       "no-unreachable":            "error",
       "no-self-compare":           "error",
       "no-self-assign":            "error",
