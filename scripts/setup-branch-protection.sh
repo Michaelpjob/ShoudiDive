@@ -32,6 +32,10 @@ BRANCH="main"
 REQUIRED_CHECKS=(
   "pipeline-tests"
   "web-build"
+  "web-lint"          # ESLint — catches `no-undef` (would have caught
+                      # the 2026-05-07 white-screen bug)
+  "web-tests"         # node --test contract suites (formerly orphaned)
+  "web-smoke"         # Puppeteer runtime boot — catches mount-time crashes
   "mobile-static"
   "secrets-scan"
   "workflow-lint"

@@ -40,6 +40,8 @@ import {
   getCurrent5dSummary,
   getSstForecastSummary,
   getSstHistorySummary,
+  getSwell5dSummary,
+  getSwell5dStats,
 } from "./lib/dataSource.js";
 import WindDayGrid, {
   WindCurrentSelectionCard,
@@ -64,10 +66,6 @@ import SstTimeline, {
 } from "./components/SstTimeline.jsx";
 import { SstTrendChip, SstSparkline } from "./components/SstTrendBits.jsx";
 import { MoonWidget } from "./components/MoonIcon.jsx";
-import {
-  getSwell5dSummary,
-  getSwell5dStats,
-} from "./lib/dataSource.js";
 import {
   isMapGestureChildTarget,
   shouldPinMapTap,

@@ -189,43 +189,7 @@ export async function loadManifest() {
     state.manifest = manifest;
     for (const [layer, info] of Object.entries(manifest.layers || {})) {
       state.layers[layer] = layer === "sst" ? (state.layers.sst || {}) : {};
-      if (layer === "sst5d") {
-        // Phase E — 7-day SST forecast. Same shape as sst7d (per-day
-        // PNG + summary.json) so the loader is structurally identical;
-        // separate state slot keeps the forecast and the history from
-        // stomping each other when both ship.
-        try {
-          const sres = await fetch(info.summary_url, { cache: "no-cache" });
-          if (!sres.ok) throw new Error(`sst5d summary ${info.summary_url} ${sres.status}`);
-          const summary = await sres.json();
-          state.layers.sst5d = { summary };
-          const scale = info.scale || summary.scale || "linear";
-          const range = info.range_c || summary.range_c;
-          if (!range) throw new Error("sst5d has no range");
-          const tasks = [];
-          for (const d of summary.days || []) {
-            if (!d?.url) continue;
-            const slot = `f${d.offset ?? 0}`;     // forecast slot, namespaced
-                                                  // away from the sst7d "d-N"
-                                                  // keys to avoid collisions.
-            tasks.push(
-              decodePng(d.url, scale, range)
-                .then((decoded) => {
-                  state.layers.sst5d[slot] = {
-                    ...decoded,
-                    dates: d.date ? [d.date] : [],
-                    forecast: true,
-                    stats: d,
-                  };
-                })
-                .catch((e) => console.warn(`sst5d ${slot} failed`, e))
-            );
-          }
-          await Promise.all(tasks);
-        } catch (e) {
-          console.warn("dataSource: sst5d summary load failed", e);
-        }
-      } else if (layer === "sst7d") {
+      if (layer === "sst7d") {
         try {
           const sres = await fetch(info.summary_url, { cache: "no-cache" });
           if (!sres.ok) throw new Error(`sst summary ${info.summary_url} ${sres.status}`);
@@ -682,21 +646,12 @@ export function getSstForecastStats(slotKeyStr) {
   return summary.days?.find((d) => d.slot === slotKeyStr) || null;
 }
 
-/** Forecast SST °C at (lng, lat) for a given lead day (0..6). */
-export function getSstForecast(lng, lat, leadDay = 0) {
-  return bilinear(state.layers.sst5d?.[`f${leadDay}`], lng, lat);
-}
-
-/** Forecast horizon line for a single spot — a 7-day sparkline-like
- *  array, °C per lead day in order [f0, f1, ..., f6]. NaN slots
- *  ride through. */
-export function getSstForecastSparkline(lng, lat) {
-  const summary = getSstForecastSummary();
-  if (!summary?.days?.length) return null;
-  return summary.days.map((d) =>
-    bilinear(state.layers.sst5d?.[`f${d.offset ?? 0}`], lng, lat)
-  );
-}
+// getSstForecast / getSstForecastSparkline removed: they were left
+// over from my Phase E loader (which wrote forecasts into a separate
+// state.layers.sst5d.f{offset} namespace). The shipped loader writes
+// into state.layers.sst[d.slot] alongside history, so any future
+// per-spot forecast accessor should bilinear off there. No callers
+// exist today — saves shipping dead code that returns NaN forever.
 
 export function getChl(lng, lat, composite = 1) {
   // Returns mg/m³, or NaN if the satellite didn't capture this cell.
