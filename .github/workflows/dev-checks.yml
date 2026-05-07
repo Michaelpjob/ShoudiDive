@@ -1,0 +1,184 @@
+name: Dev checks
+
+# Test gate that every change passes before reaching main.
+#
+# Triggers on:
+#   * push to `dev`        — agents (Claude Code, Codex) commit here first
+#   * pull_request → main  — same checks block the merge
+#   * workflow_dispatch    — manual re-run
+#
+# Status checks declared here are wired into main's branch-protection
+# rules so PRs cannot merge red. To add a new gate: add a job here, then
+# add its job-name to the required_status_checks list in
+# scripts/setup-branch-protection.sh and re-run that script.
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Cancel earlier in-flight runs on the same ref when a new commit lands —
+# saves CI minutes when an agent pushes a quick fix on top of a previous
+# push that's still running.
+concurrency:
+  group: dev-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+
+  # ---------------------------------------------------------------------
+  # Pipeline (Python)
+  # Mirrors the existing `Pipeline tests` workflow's --unit layer so the
+  # signal is identical. ~30 s on a clean cache.
+  # ---------------------------------------------------------------------
+  pipeline-tests:
+    name: pipeline-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+      - name: Install
+        run: |
+          pip install -r pipeline/requirements.txt
+          pip install pytest
+      - name: Run unit + static layers
+        run: bash pipeline/scripts/validate.sh --unit
+
+  # ---------------------------------------------------------------------
+  # Web build (Vite production bundle)
+  # Catches: import-typo regressions, syntax errors in any module the
+  # bundler reaches, missing/dropped deps, CSS reference failures.
+  # The deploy step (deploy-dev.yml) runs the same command so a green
+  # check here means the deploy will too.
+  # ---------------------------------------------------------------------
+  web-build:
+    name: web-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Upload bundle as artifact
+        # Lets a reviewer download the dev build to spot-check size /
+        # contents without having to clone + build locally.
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist-${{ github.sha }}
+          path: dist/
+          retention-days: 7
+
+  # ---------------------------------------------------------------------
+  # Mobile (jest unit tests + package alignment)
+  #
+  # We deliberately skip the heavier puppeteer / expo-export layers from
+  # mobile/scripts/validate.sh — those need ~5 min and Chrome which the
+  # ubuntu-latest runner doesn't carry by default. They run on schedule
+  # via a separate workflow (TODO when needed); for the dev gate the
+  # jest signal is sufficient to catch the regressions agents introduce
+  # most often (data layer, colormap, manifest parsing).
+  # ---------------------------------------------------------------------
+  mobile-static:
+    name: mobile-static
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Jest unit tests
+        # mobile/src/lib/__tests__/{colors,dataSource,mapData}.test.js —
+        # the data layer + colormap correctness, no native required.
+        run: npm test -- --colors=false
+
+  # ---------------------------------------------------------------------
+  # Secrets scan
+  # Cheap grep-based defense against accidentally committing API keys
+  # or .env files. Catches the most common patterns; not a substitute
+  # for proper secret-rotation hygiene.
+  # ---------------------------------------------------------------------
+  secrets-scan:
+    name: secrets-scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan for committed secrets
+        run: |
+          set -e
+          fail=0
+
+          # Patterns we DO want to allow (usage in workflow files /
+          # docs is fine; only the actual values matter). The grep
+          # below already excludes .github/workflows/ + the dev-routing
+          # docs, so secrets-scan only fires on real secret values.
+
+          # Common API key patterns (fixed hex/base64 lengths)
+          patterns=(
+            'sk-[a-zA-Z0-9]{32,}'                  # OpenAI / Anthropic
+            'ghp_[a-zA-Z0-9]{36}'                  # GitHub PAT
+            'gho_[a-zA-Z0-9]{36}'                  # GitHub OAuth
+            'AKIA[0-9A-Z]{16}'                     # AWS access key
+            'AIza[0-9A-Za-z_-]{35}'                # Google API key
+            'xox[bps]-[0-9a-zA-Z]{10,}'            # Slack token
+          )
+          for pat in "${patterns[@]}"; do
+            if git grep -InE "$pat" -- ':!*.md' ':!.github/' ':!*.lock' ':!package-lock.json' 2>/dev/null; then
+              echo "::error::potential secret matching pattern: $pat"
+              fail=1
+            fi
+          done
+
+          # .env files should never be committed
+          if git ls-files | grep -E '(^|/)\.env(\.|$)' | grep -v '\.env\.example$'; then
+            echo "::error::committed .env file detected"
+            fail=1
+          fi
+
+          # PEM private keys
+          if git grep -l 'BEGIN RSA PRIVATE KEY\|BEGIN OPENSSH PRIVATE KEY\|BEGIN PRIVATE KEY' 2>/dev/null; then
+            echo "::error::committed private key detected"
+            fail=1
+          fi
+
+          if [ "$fail" -ne 0 ]; then
+            exit 1
+          fi
+          echo "secrets-scan: clean"
+
+  # ---------------------------------------------------------------------
+  # Workflow YAML lint — catches typos in workflow files themselves
+  # before they break a future deploy. Cheap, no extra deps.
+  # ---------------------------------------------------------------------
+  workflow-lint:
+    name: workflow-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install actionlint
+        run: |
+          curl -sL -o actionlint.tar.gz https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz
+          tar xzf actionlint.tar.gz actionlint
+          chmod +x actionlint
+      - name: Lint .github/workflows
+        run: ./actionlint -color
