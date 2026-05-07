@@ -565,14 +565,13 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
     : layer === "swell" ? selToSlotKey(swellSel, getSwell5dSummary())
     : layer === "current" ? currentSelToSlotKey(currentSel, getCurrent5dSummary())
     : composite;
-  // Map-render layer override: keep `layer` state at "sst" everywhere
-  // else so panels / pickers / saved-spots logic is unchanged, but
-  // hand DataOverlay the synthetic "sst-trend" / "sst5d" layer when
-  // those modes are active. Cheap, isolated, easy to revert.
-  const renderLayer =
-    layer === "sst" && sstViewMode === "trend"    ? "sst-trend"
-    : layer === "sst" && sstViewMode === "forecast" ? "sst5d"
-    : layer;
+  // Map-render layer override. The `sst-trend` palette mode was wired
+  // up alongside a Now/Trend/Forecast toggle that got dropped during
+  // conflict resolution with main's existing SstModeToggle (which
+  // handles history vs forecast already). Until the two mode systems
+  // are harmonised, hand DataOverlay the layer state directly. The
+  // trend chip + sparkline in saved-spots (Phase A) still ship.
+  const renderLayer = layer;
   const isMobile = useIsMobile();
 
   const stageRef = useRef(null);
