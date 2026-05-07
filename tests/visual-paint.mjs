@@ -189,15 +189,18 @@ async function run() {
     for (const vp of VIEWPORTS) {
       console.log(`[visual-paint] viewport=${vp.id} (${vp.w}×${vp.h})`);
       const page = await browser.newPage();
-      await page.setViewport({ width: vp.w, height: vp.h, deviceScaleFactor: 1 });
-      // Treat mobile viewport with coarse-pointer media-features so the
-      // mobile UI branch actually fires.
-      if (vp.id === "mobile") {
-        await page.emulateMediaFeatures([
-          { name: "hover",   value: "none" },
-          { name: "pointer", value: "coarse" },
-        ]);
-      }
+      // hasTouch + isMobile flip the matchMedia hover/pointer to coarse
+      // for the mobile viewport — Puppeteer's emulateMediaFeatures()
+      // doesn't accept "hover"/"pointer" (rejects with "Unsupported
+      // media feature"), but emulate() with the device descriptor does
+      // the right thing under the hood.
+      await page.setViewport({
+        width: vp.w,
+        height: vp.h,
+        deviceScaleFactor: 1,
+        isMobile: vp.id === "mobile",
+        hasTouch: vp.id === "mobile",
+      });
 
       try {
         await page.goto(`${ORIGIN}/`, { waitUntil: "domcontentloaded", timeout: 30000 });
