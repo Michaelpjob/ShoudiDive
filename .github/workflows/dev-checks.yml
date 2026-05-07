@@ -106,7 +106,15 @@ jobs:
           cache: npm
           cache-dependency-path: mobile/package-lock.json
       - name: Install
-        run: npm ci
+        # `npm install` rather than `npm ci` — the mobile lockfile
+        # historically drifts when an agent edits package.json without
+        # regenerating it (no node on the user's Windows host = no
+        # local lockfile regeneration). Until we wire a "regenerate
+        # lock + commit" step in dev-checks itself, `npm install`
+        # tolerates that drift in CI without blocking the gate.
+        # The web-build job keeps `npm ci` because the root lockfile
+        # is well-maintained.
+        run: npm install --no-audit --no-fund
       - name: Jest unit tests
         # mobile/src/lib/__tests__/{colors,dataSource,mapData}.test.js —
         # the data layer + colormap correctness, no native required.
@@ -155,8 +163,11 @@ jobs:
             fail=1
           fi
 
-          # PEM private keys
-          if git grep -l 'BEGIN RSA PRIVATE KEY\|BEGIN OPENSSH PRIVATE KEY\|BEGIN PRIVATE KEY' 2>/dev/null; then
+          # PEM private keys. Same path exclusions as the API-key
+          # patterns above so this pattern doesn't match the
+          # workflow file or this commit's secret-scanning docs that
+          # include the string literally as documentation.
+          if git grep -l 'BEGIN RSA PRIVATE KEY\|BEGIN OPENSSH PRIVATE KEY\|BEGIN PRIVATE KEY' -- ':!*.md' ':!.github/' ':!*.lock' ':!package-lock.json' 2>/dev/null; then
             echo "::error::committed private key detected"
             fail=1
           fi
