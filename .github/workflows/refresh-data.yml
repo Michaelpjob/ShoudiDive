@@ -119,6 +119,14 @@ jobs:
           EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
         run: python pipeline/check_feeds.py
 
+      - name: Run 5-day SST forecast (Phase E)
+        # Persistence + climatology decay. Reads sst_1d.png + sst_climo.png
+        # written by fetch.py / fetch_climatology.py above. Outputs to
+        # public/data/sst5d/. Soft-fail: a missing climatology shouldn't
+        # block the rest of the pipeline.
+        continue-on-error: true
+        run: python pipeline/fetch_sst_5day.py
+
       - name: Run visibility prediction
         # Runs after the satellite/wave/river/tide/climo fetches so the
         # prediction sees the freshest inputs. Wind PNGs are committed in
@@ -141,6 +149,28 @@ jobs:
         # publish the exact finding instead of losing it with the runner.
         continue-on-error: true
         run: python pipeline/check_manifest_freshness.py --layers sst,sst7d,sst5d,chl,kd490,wind,wind5d,swell5d,current5d,viz,wave,precip --check-sst-source
+
+      - name: Score SST predictions vs buoy + dive-log obs (Phase C)
+        # Joins observations.jsonl rows with observed_sst_f / observed_sst_c
+        # against today's archive snapshot, writes:
+        #   pipeline/validation/data/sst_residuals.jsonl
+        #   pipeline/validation/data/sst_per_zone_metrics.json
+        #   pipeline/validation/data/sst_per_spot_metrics.json
+        # Soft-fail until the residual archive is large enough to be
+        # meaningful (~30 obs/zone, ~20 obs/spot).
+        continue-on-error: true
+        run: python -m validation.sst_score
+        working-directory: pipeline
+
+      - name: SST watchdog — analyse SST metrics, flag anomalies (Phase C)
+        # Reads sst_per_zone_metrics + sst_per_spot_metrics, runs R1
+        # (zone bias), R3 (correlation), R5 (per-spot bias). Exits 1
+        # if any rule fires. The existing watchdog issue-sync block
+        # below picks up `sst-watchdog` next iteration once we wire it.
+        continue-on-error: true
+        id: sst_watchdog
+        run: python -m validation.sst_watchdog
+        working-directory: pipeline
 
       - name: Score visibility predictions against ground-truth
         # Joins observations.jsonl (collected by ingest-ground-truth.yml)

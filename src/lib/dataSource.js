@@ -189,7 +189,43 @@ export async function loadManifest() {
     state.manifest = manifest;
     for (const [layer, info] of Object.entries(manifest.layers || {})) {
       state.layers[layer] = layer === "sst" ? (state.layers.sst || {}) : {};
-      if (layer === "sst7d") {
+      if (layer === "sst5d") {
+        // Phase E — 7-day SST forecast. Same shape as sst7d (per-day
+        // PNG + summary.json) so the loader is structurally identical;
+        // separate state slot keeps the forecast and the history from
+        // stomping each other when both ship.
+        try {
+          const sres = await fetch(info.summary_url, { cache: "no-cache" });
+          if (!sres.ok) throw new Error(`sst5d summary ${info.summary_url} ${sres.status}`);
+          const summary = await sres.json();
+          state.layers.sst5d = { summary };
+          const scale = info.scale || summary.scale || "linear";
+          const range = info.range_c || summary.range_c;
+          if (!range) throw new Error("sst5d has no range");
+          const tasks = [];
+          for (const d of summary.days || []) {
+            if (!d?.url) continue;
+            const slot = `f${d.offset ?? 0}`;     // forecast slot, namespaced
+                                                  // away from the sst7d "d-N"
+                                                  // keys to avoid collisions.
+            tasks.push(
+              decodePng(d.url, scale, range)
+                .then((decoded) => {
+                  state.layers.sst5d[slot] = {
+                    ...decoded,
+                    dates: d.date ? [d.date] : [],
+                    forecast: true,
+                    stats: d,
+                  };
+                })
+                .catch((e) => console.warn(`sst5d ${slot} failed`, e))
+            );
+          }
+          await Promise.all(tasks);
+        } catch (e) {
+          console.warn("dataSource: sst5d summary load failed", e);
+        }
+      } else if (layer === "sst7d") {
         try {
           const sres = await fetch(info.summary_url, { cache: "no-cache" });
           if (!sres.ok) throw new Error(`sst summary ${info.summary_url} ${sres.status}`);
@@ -564,6 +600,78 @@ export function getSstHistoryStats(slotKeyStr) {
   return summary.days?.find((d) => d.slot === slotKeyStr) || null;
 }
 
+// ---- 3-day trend (Phase A) ---------------------------------------------
+//
+// The 7-day history pipeline writes one PNG per day into
+// state.layers.sst[d-6 .. d0]. These helpers compute trend signals
+// directly off those grids — no new fetches, no pipeline changes.
+
+// Number of days back the "trend" view compares. Picked to match the
+// time-window of physical ocean processes a free diver cares about
+// (a typical upwelling event spins up over 2-3 days). Configurable
+// in case we want a "1-day" sub-mode later.
+export const SST_TREND_DAYS = 3;
+
+/** Per-cell ΔT (today − N days ago) as a derived grid. Cached on first
+ *  call and invalidated whenever a fresh manifest lands (notify()).
+ *  Cells where either day is NaN come out NaN — DataOverlay treats
+ *  those as transparent, which is exactly what we want for stale tiles.
+ */
+let _trendGridCache = null;
+subscribers.add(() => { _trendGridCache = null; });
+
+export function getSstTrendGrid(daysBack = SST_TREND_DAYS) {
+  if (_trendGridCache && _trendGridCache.daysBack === daysBack) {
+    return _trendGridCache.grid;
+  }
+  const today = state.layers.sst?.["d0"];
+  const then  = state.layers.sst?.[`d-${daysBack}`];
+  if (!today || !then) return null;
+  if (today.width !== then.width || today.height !== then.height) return null;
+  const N = today.data.length;
+  const out = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    const a = today.data[i];
+    const b = then.data[i];
+    out[i] = (Number.isFinite(a) && Number.isFinite(b)) ? (a - b) : NaN;
+  }
+  const grid = { data: out, width: today.width, height: today.height };
+  _trendGridCache = { daysBack, grid };
+  return grid;
+}
+
+/** Per-spot trend at (lng, lat). Returns °C numbers (caller converts).
+ *  `now`  = today's value
+ *  `then` = N days ago value
+ *  `deltaC` = now - then
+ *  All three may be NaN when the satellite missed that cell.
+ */
+export function getSstTrend(lng, lat, daysBack = SST_TREND_DAYS) {
+  const now  = bilinear(state.layers.sst?.["d0"],  lng, lat);
+  const then = bilinear(state.layers.sst?.[`d-${daysBack}`], lng, lat);
+  const deltaC = (Number.isFinite(now) && Number.isFinite(then)) ? now - then : NaN;
+  return { now, then, deltaC };
+}
+
+/** Per-spot 7-day sparkline values at (lng, lat). Returns an array of
+ *  °C samples in order [d-6, d-5, ..., d-1, d0]. NaN slots ride along
+ *  for the renderer to skip / dim. */
+export function getSstSparkline(lng, lat) {
+  const summary = getSstHistorySummary();
+  if (!summary?.days?.length) return null;
+  // Use the summary's `days` array order (already chronological) so
+  // we don't re-derive the slot list locally.
+  return summary.days.map((d) => bilinear(state.layers.sst?.[d.slot], lng, lat));
+}
+
+
+// ---- 5-day forecast (Phase E) ------------------------------------------
+//
+// Mirror of the sst7d helpers. Each day's forecast lands in
+// state.layers.sst5d.f{0..6} (slot key namespace distinct from the
+// d-N history keys). Summary stats live in state.layers.sst5d.summary.
+
+/** Live forecast summary or null if not loaded. */
 export function getSstForecastSummary() {
   return state.layers.sst5d?.summary || null;
 }
@@ -572,6 +680,22 @@ export function getSstForecastStats(slotKeyStr) {
   const summary = getSstForecastSummary();
   if (!summary) return null;
   return summary.days?.find((d) => d.slot === slotKeyStr) || null;
+}
+
+/** Forecast SST °C at (lng, lat) for a given lead day (0..6). */
+export function getSstForecast(lng, lat, leadDay = 0) {
+  return bilinear(state.layers.sst5d?.[`f${leadDay}`], lng, lat);
+}
+
+/** Forecast horizon line for a single spot — a 7-day sparkline-like
+ *  array, °C per lead day in order [f0, f1, ..., f6]. NaN slots
+ *  ride through. */
+export function getSstForecastSparkline(lng, lat) {
+  const summary = getSstForecastSummary();
+  if (!summary?.days?.length) return null;
+  return summary.days.map((d) =>
+    bilinear(state.layers.sst5d?.[`f${d.offset ?? 0}`], lng, lat)
+  );
 }
 
 export function getChl(lng, lat, composite = 1) {
@@ -595,6 +719,26 @@ export function getVizFt(lng, lat, composite = 1) {
 // that bilinear() reads from. Lets DataOverlay render at native grid resolution
 // (one canvas pixel per source cell) and let the browser scale up smoothly.
 export function getLayerGrid(layer, composite) {
+  // Synthetic "sst-trend" pseudo-layer: derived from sst d0 vs d-N grids,
+  // rendered with the diverging ΔT colormap. Composite carries the days-back
+  // (integer); falls back to the SST_TREND_DAYS default when it's not numeric.
+  if (layer === "sst-trend") {
+    const days = Number.isInteger(composite) ? composite : SST_TREND_DAYS;
+    return getSstTrendGrid(days);
+  }
+  // 5-day SST forecast layer. composite is the lead-day integer (0..6)
+  // OR a string "f3"-style slot key. Reuses the SST color ramp via
+  // DataOverlay's "sst" branch — so we present the forecast as a
+  // separate `layer="sst5d"` value the panel can switch into without
+  // re-using the sst-trend palette.
+  if (layer === "sst5d") {
+    const slot = typeof composite === "string"
+      ? composite
+      : `f${Number.isInteger(composite) ? composite : 0}`;
+    const w = state.layers.sst5d?.[slot];
+    if (!w) return null;
+    return { data: w.data, width: w.width, height: w.height };
+  }
   // Wind / Swell: a string composite is a 5-day slot key (e.g. "d2_morning").
   if (layer === "wind" && typeof composite === "string") {
     const w = wind5dEntry(composite);

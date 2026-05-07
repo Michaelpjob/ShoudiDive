@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { sstColor, chlColor, getFitted } from "../lib/mapData.js";
+import { sstColor, sstTrendColor, chlColor, getFitted } from "../lib/mapData.js";
 import { getLayerGrid } from "../lib/dataSource.js";
 
 // Beaufort-aligned wind ramp (knots → [r,g,b]); same stops as the legend.
@@ -170,6 +170,8 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
       }
       let rgb;
       if (layer === "sst") rgb = rgbStrToArr(sstColor(v));
+      else if (layer === "sst5d") rgb = rgbStrToArr(sstColor(v));
+      else if (layer === "sst-trend") rgb = rgbStrToArr(sstTrendColor(v));
       else if (layer === "chl") rgb = rgbStrToArr(chlColor(v));
       else if (layer === "wind") rgb = windColorRGBArr(v);
       else if (layer === "current") rgb = currentColorRGBArr(v);
