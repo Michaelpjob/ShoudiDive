@@ -124,6 +124,10 @@ export default function BathyLayer({ width, height, active, zoomLevel, onSelect 
             key={props.id}
             className="bathy-feature"
             style={{ cursor: "pointer", pointerEvents: "all" }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
               onSelect?.(props);

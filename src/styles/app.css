@@ -1202,6 +1202,7 @@ body {
   padding: 20px;
 }
 .mpa-popup {
+  position: relative;
   width: 420px;
   max-width: 100%;
   max-height: 80vh;
@@ -1212,12 +1213,39 @@ body {
   box-shadow: var(--shadow-2);
   padding: 16px 18px 14px;
 }
+.mpa-popup-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 44px;
+  height: 44px;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--ink-3);
+  border-radius: 50%;
+  font: inherit;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+.mpa-popup-close:hover,
+.mpa-popup-close:focus-visible {
+  background: var(--bg-sunken);
+  color: var(--ink);
+  outline: none;
+}
 .mpa-popup-head {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
   margin-bottom: 10px;
+  padding-right: 42px;
 }
 .mpa-popup-name {
   font-size: 16px;
@@ -1265,6 +1293,25 @@ body {
   padding-top: 8px;
   margin: 0;
   font-style: italic;
+}
+.mpa-popup-done {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 12px;
+  appearance: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  background: var(--ink);
+  color: var(--bg-panel-solid);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.mpa-popup-done:hover,
+.mpa-popup-done:focus-visible {
+  filter: brightness(1.05);
+  outline: none;
 }
 
 /* ---------- Settings popover (replaces iframe-protocol Tweaks panel) ---------- */
@@ -1438,6 +1485,34 @@ body {
   /* prevent iOS rubber-band gesture from dragging the shell */
   overscroll-behavior: contain;
   box-shadow: 0 -2px 12px rgb(0 0 0 / 0.06);
+}
+
+.ms-overlay-quick {
+  pointer-events: auto;
+  position: absolute;
+  left: 8px;
+  bottom: calc(100% + 8px);
+  display: flex;
+  gap: 8px;
+  z-index: 2;
+}
+.mobile-shell.open .ms-overlay-quick {
+  display: none;
+}
+.ms-overlay-quick .mpa-pill {
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--bg-panel-solid);
+  box-shadow: var(--shadow-1);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  border-color: var(--line);
+}
+.ms-overlay-quick .mpa-pill.active {
+  background: var(--ink);
+  color: var(--bg-panel-solid);
+  border-color: var(--ink);
 }
 
 .ms-status {
@@ -1929,6 +2004,11 @@ body {
     border-radius: var(--r-2);
     overflow: hidden;
     box-shadow: var(--shadow-2);
+  }
+
+  .ms-overlay-quick {
+    left: 0;
+    bottom: calc(100% + 6px);
   }
 
   .ms-status {

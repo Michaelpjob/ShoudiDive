@@ -95,7 +95,11 @@ export default function MpaLayer({ width, height, active, onSelect }) {
           stroke={p.style.stroke}
           strokeWidth="1.6"
           strokeOpacity="0.85"
-          style={{ cursor: "pointer", pointerEvents: "all" }}
+          style={{ cursor: "pointer", pointerEvents: "visiblePainted" }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
             onSelect?.(p.props);

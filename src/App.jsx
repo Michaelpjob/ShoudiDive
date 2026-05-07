@@ -240,7 +240,7 @@ function formatWindow(dates, fallback, layer) {
 }
 
 const PREF_KEY = "ca-coast-conditions:prefs:v1";
-const DEFAULT_PREFS = { theme: "light", opacity: 0.62, units: "F", mpaOn: true, bathyOn: false };
+const DEFAULT_PREFS = { theme: "light", opacity: 0.62, units: "F", mpaOn: true, bathyOn: true };
 
 function loadPrefs() {
   try {
@@ -539,6 +539,25 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
   const [selectedMpa, setSelectedMpa] = useState(null);
   const [selectedBathy, setSelectedBathy] = useState(null);
   const [bathyFeatures, setBathyFeatures] = useState(null);
+
+  const updateMpaOn = (next) => {
+    const value = typeof next === "function" ? next(mpaOn) : next;
+    if (!value) setSelectedMpa(null);
+    setMpaOn(value);
+  };
+  const updateBathyOn = (next) => {
+    const value = typeof next === "function" ? next(bathyOn) : next;
+    if (!value) setSelectedBathy(null);
+    setBathyOn(value);
+  };
+
+  useEffect(() => {
+    if (!mpaOn) setSelectedMpa(null);
+  }, [mpaOn]);
+
+  useEffect(() => {
+    if (!bathyOn) setSelectedBathy(null);
+  }, [bathyOn]);
 
   // Lazy-load bathy features whenever the layer flips on (used for both the
   // SVG markers and the screen-space labels).
@@ -1159,7 +1178,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
             <button
               type="button"
               className={"mpa-pill" + (mpaOn ? " active" : "")}
-              onClick={(e) => { e.stopPropagation(); setMpaOn(!mpaOn); }}
+              onClick={(e) => { e.stopPropagation(); updateMpaOn(!mpaOn); }}
               title={mpaOn ? "MPAs visible · click to hide" : "MPAs hidden · click to show"}
               aria-pressed={mpaOn}
             >
@@ -1168,7 +1187,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
             <button
               type="button"
               className={"mpa-pill" + (bathyOn ? " active" : "")}
-              onClick={(e) => { e.stopPropagation(); setBathyOn(!bathyOn); }}
+              onClick={(e) => { e.stopPropagation(); updateBathyOn(!bathyOn); }}
               title={bathyOn ? "Bottom detail visible · click to hide" : "Bottom detail hidden · click to show"}
               aria-pressed={bathyOn}
             >
@@ -1757,8 +1776,8 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
         activeComposite={activeComposite}
         units={units}
         dataState={dataState}
-        mpaOn={mpaOn} setMpaOn={setMpaOn}
-        bathyOn={bathyOn} setBathyOn={setBathyOn}
+        mpaOn={mpaOn} setMpaOn={updateMpaOn}
+        bathyOn={bathyOn} setBathyOn={updateBathyOn}
         activeSpot={activeSpot} setActiveSpot={setActiveSpot}
         timeOpts={timeOpts}
         compositeText={compositeText}
@@ -1869,9 +1888,30 @@ function MpaPopup({ mpa, onClose }) {
   const officialUrl =
     "https://wildlife.ca.gov/Conservation/Marine/MPAs/Network";
   const verdict = verdictForType(mpa.type);
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
   return (
-    <div className="mpa-popup-overlay" onClick={onClose}>
-      <div className="mpa-popup" onClick={(e) => e.stopPropagation()}>
+    <div className="mpa-popup-overlay" onClick={onClose} role="presentation">
+      <div
+        className="mpa-popup"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${mpa.name} MPA details`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          className="mpa-popup-close"
+          onClick={onClose}
+          aria-label="Close MPA details"
+        >
+          ×
+        </button>
         <div className="mpa-popup-head">
           <div>
             <div className="mpa-popup-name">{mpa.name}</div>
@@ -1911,6 +1951,13 @@ function MpaPopup({ mpa, onClose }) {
         <p className="mpa-popup-disclaimer">
           Information shown is for planning purposes only. Verify with CDFW before harvesting.
         </p>
+        <button
+          type="button"
+          className="mpa-popup-done"
+          onClick={onClose}
+        >
+          Back to map
+        </button>
       </div>
     </div>
   );

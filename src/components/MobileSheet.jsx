@@ -201,14 +201,24 @@ export default function MobileShell({
             <div className="ms-section-h">Overlays</div>
             <div className="ms-overlay-row">
               <button
+                type="button"
                 className={"mpa-pill" + (mpaOn ? " active" : "")}
-                onClick={() => setMpaOn(!mpaOn)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMpaOn(!mpaOn);
+                }}
+                aria-pressed={mpaOn}
               >
                 MPAs
               </button>
               <button
+                type="button"
                 className={"mpa-pill" + (bathyOn ? " active" : "")}
-                onClick={() => setBathyOn(!bathyOn)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setBathyOn(!bathyOn);
+                }}
+                aria-pressed={bathyOn}
               >
                 Bottom Detail
               </button>
@@ -258,6 +268,31 @@ export default function MobileShell({
           </section>
         </div>
       )}
+
+      <div className="ms-overlay-quick" aria-label="Map overlays">
+        <button
+          type="button"
+          className={"mpa-pill" + (mpaOn ? " active" : "")}
+          onClick={(e) => {
+            e.stopPropagation();
+            setMpaOn(!mpaOn);
+          }}
+          aria-pressed={mpaOn}
+        >
+          MPAs
+        </button>
+        <button
+          type="button"
+          className={"mpa-pill" + (bathyOn ? " active" : "")}
+          onClick={(e) => {
+            e.stopPropagation();
+            setBathyOn(!bathyOn);
+          }}
+          aria-pressed={bathyOn}
+        >
+          Bottom
+        </button>
+      </div>
 
       {/* Always-visible peek strip ------------------------------------- */}
       <div className="ms-peek">
