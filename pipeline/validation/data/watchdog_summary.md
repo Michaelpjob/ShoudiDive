@@ -1,32 +1,44 @@
-# Validation watchdog — 2026-05-06T08:20Z
+# Validation watchdog — 2026-05-07T08:31Z
 
-**1 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
+**3 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
-### 🔴 1. Only 16 observations in the last 24h (floor: 50)
+### 🔴 1. Only 15 observations in the last 24h (floor: 50)
 
 Multiple scrapers may be silently broken.
 
 **Suggested action:** Open the latest hourly ingest workflow run; look for `FAILED` lines per scraper.
 
+### ⚠️ 2. 1 non-critical external feed(s) are red
+
+Red feeds: ingest_eagle4. Fallbacks may keep the model running, but redundancy is degraded.
+
+**Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
+
+### 🔴 3. Published-data freshness gate found 2 issue(s)
+
+Freshness/completeness failures: wind5d:summary_generated_at_stale, swell5d:summary_generated_at_stale.
+
+**Suggested action:** Open `pipeline/validation/data/freshness_health.json`; fix the failing fetcher or rerun the matching workflow before trusting the deploy.
+
 ## Per-zone metrics
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_nearshore` | 4 | 9.40 | -2.17 | 100% | -0.99 |
+| `bight_nearshore` | 4 | 9.66 | -1.64 | 100% | -1.00 |
 
 ## Per-source bias (informational)
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `dive-shop-diveviz` | 1 | -17.90 ft |
-| `dive-shop-justgetwet` | 3 | +3.08 ft |
+| `dive-shop-diveviz` | 1 | -18.13 ft |
+| `dive-shop-justgetwet` | 3 | +3.86 ft |
 
 ## How to act on this issue
 
-1. Review each finding's suggested action. Edits go in `pipeline/viz_predict/config.py`.
-2. After making a coefficient change, the next refresh-data run will rebuild `per_zone_metrics.json` and the watchdog re-runs. If the finding clears, this issue auto-closes.
+1. Review each finding's suggested action. It points to the specific fetcher, probe, ingest scraper, or visibility-model config that needs attention.
+2. After fixing the source problem, rerun the matching workflow or wait for its next scheduled run. The watchdog re-runs after new health artifacts are published.
 3. To dismiss a specific finding intentionally (you've decided the bias is correct behavior), close this issue manually with a comment. It will reopen if the finding persists in the next run.
 
 ---
