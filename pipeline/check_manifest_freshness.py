@@ -23,6 +23,9 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "public" / "data"
 MANIFEST = DATA / "manifest.json"
 OUT_PATH = ROOT / "pipeline" / "validation" / "data" / "freshness_health.json"
+REQUEST_HEADERS = {
+    "User-Agent": "shouldidive-data-pipeline/1.0 (+https://shouldidive.com)",
+}
 MUR_SCI_POINT_URL = (
     "https://coastwatch.pfeg.noaa.gov/erddap/griddap/"
     "jplMURSST41.csv?analysed_sst[(last)][(32.93)][(-118.49)]"
@@ -322,7 +325,7 @@ def check_sst_source_lag(manifest: dict) -> list[Finding]:
         )]
 
     try:
-        r = requests.get(MUR_SCI_POINT_URL, timeout=30)
+        r = requests.get(MUR_SCI_POINT_URL, timeout=30, headers=REQUEST_HEADERS)
         r.raise_for_status()
     except requests.RequestException as exc:
         return [Finding(

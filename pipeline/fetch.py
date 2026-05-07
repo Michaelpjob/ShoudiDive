@@ -31,6 +31,9 @@ from PIL import Image
 
 BBOX = dict(lat_min=31.8, lat_max=37.6, lng_min=-124.0, lng_max=-116.8)
 ERDDAP_BASE = "https://coastwatch.pfeg.noaa.gov/erddap/griddap"
+REQUEST_HEADERS = {
+    "User-Agent": "shouldidive-data-pipeline/1.0 (+https://shouldidive.com)",
+}
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = ROOT / "public" / "data"
@@ -48,6 +51,20 @@ LAYERS: dict[str, dict] = {
         "max_back": 10,
         # dims after time and before (lat, lng); for MUR there are none
         "pre_xy_dims": "",
+        "fallbacks": [
+            {
+                # NOAA's canonical CoastWatch ERDDAP has occasionally 403'd
+                # GitHub Actions egress for jplMURSST41 while still serving
+                # other products. Keep Temp history alive with NOAA's
+                # near-real-time Geo-polar blended GHRSST analysis instead
+                # of silently dropping back to the legacy 1/2/3-day UI.
+                "host": "https://coastwatch.noaa.gov/erddap/griddap",
+                "dataset": "noaacwBLENDEDsstDNDaily",
+                "variable": "analysed_sst",
+                "stride": 1,
+                "source_label": "NOAA Geo-polar blended SST",
+            }
+        ],
     },
     "chl": {
         # Source moved off the deprecating coastwatch.pfeg.noaa.gov mirror:
@@ -126,42 +143,65 @@ def erddap_url(cfg: dict, d: date, stride: int) -> str:
     )
 
 
+def _source_key(cfg: dict) -> str:
+    return str(cfg.get("dataset", "source")).replace("/", "_")
+
+
+def candidate_configs(cfg: dict) -> list[dict]:
+    out = [dict(cfg)]
+    for fallback in cfg.get("fallbacks", []) or []:
+        merged = dict(cfg)
+        merged.update(fallback)
+        merged.pop("fallbacks", None)
+        out.append(merged)
+    return out
+
+
 def fetch_day(layer: str, cfg: dict, d: date, stride: int) -> np.ndarray | None:
     """Return a 2D array in the layer's native units, or None on failure."""
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    nc_path = CACHE_DIR / f"{layer}_{d.isoformat()}_s{stride}.nc"
-    if not nc_path.exists():
-        url = erddap_url(cfg, d, stride)
-        print(f"  GET {layer} {d}", flush=True)
-        r = requests.get(url, timeout=180)
-        if r.status_code != 200:
-            # Cache a marker so we don't keep re-fetching a known-missing day.
-            print(f"  {layer} {d}: HTTP {r.status_code} - skipping", flush=True)
-            return None
-        nc_path.write_bytes(r.content)
+    for i, source_cfg in enumerate(candidate_configs(cfg)):
+        source_stride = int(source_cfg.get("stride", stride))
+        source_key = _source_key(source_cfg)
+        suffix = "" if i == 0 else f" via {source_key}"
+        nc_path = CACHE_DIR / f"{layer}_{source_key}_{d.isoformat()}_s{source_stride}.nc"
+        if not nc_path.exists():
+            url = erddap_url(source_cfg, d, source_stride)
+            print(f"  GET {layer} {d}{suffix}", flush=True)
+            try:
+                r = requests.get(url, timeout=180, headers=REQUEST_HEADERS)
+            except requests.RequestException as exc:
+                print(f"  {layer} {d}{suffix}: {exc.__class__.__name__} - skipping", flush=True)
+                continue
+            if r.status_code != 200:
+                print(f"  {layer} {d}{suffix}: HTTP {r.status_code} - skipping", flush=True)
+                continue
+            nc_path.write_bytes(r.content)
 
-    with xr.open_dataset(nc_path) as ds:
-        var = ds[cfg["variable"]]
-        # Some ERDDAP date-range queries return >1 time slice; just take the
-        # last (most recent) and drop length-1 axes.
-        if "time" in var.dims and var.sizes["time"] > 1:
-            var = var.isel(time=-1)
-        arr = np.asarray(var.values).squeeze()
-        units = (var.attrs.get("units") or "").lower()
+        with xr.open_dataset(nc_path) as ds:
+            var = ds[source_cfg["variable"]]
+            # Some ERDDAP date-range queries return >1 time slice; just take the
+            # last (most recent) and drop length-1 axes.
+            if "time" in var.dims and var.sizes["time"] > 1:
+                var = var.isel(time=-1)
+            arr = np.asarray(var.values).squeeze()
+            units = (var.attrs.get("units") or "").lower()
 
-    if arr.ndim != 2:
-        print(f"  {layer} {d}: unexpected shape {arr.shape}", flush=True)
-        return None
+        if arr.ndim != 2:
+            print(f"  {layer} {d}{suffix}: unexpected shape {arr.shape}", flush=True)
+            continue
 
-    # PNG image rows go top->bottom = lat_max->lat_min; ERDDAP returns lat ascending.
-    arr = np.flipud(arr)
+        # PNG image rows go top->bottom = lat_max->lat_min; ERDDAP returns lat ascending.
+        arr = np.flipud(arr)
 
-    # MUR analysed_sst is documented as Kelvin but this ERDDAP serves degree_C.
-    # Honour the units attribute either way.
-    if layer == "sst" and units in ("k", "kelvin", "degrees_kelvin"):
-        arr = arr - 273.15
+        # MUR analysed_sst is documented as Kelvin but this ERDDAP serves degree_C.
+        # Honour the units attribute either way.
+        if layer == "sst" and units in ("k", "kelvin", "degrees_kelvin"):
+            arr = arr - 273.15
 
-    return arr
+        return arr
+
+    return None
 
 
 def composite(stack: list[np.ndarray]) -> np.ndarray:
@@ -249,6 +289,9 @@ def build_layer(layer: str, cfg: dict, end: date, want: int = 3, max_back: int =
         d = end - timedelta(days=i)
         a = fetch_day(layer, cfg, d, cfg["stride"])
         if a is not None:
+            if stack_rev and a.shape != stack_rev[0].shape:
+                print(f"  {layer} {d}: shape {a.shape} differs from {stack_rev[0].shape} - skipping", flush=True)
+                continue
             stack_rev.append(a)
             actual_rev.append(d)
             if len(stack_rev) >= want_fetch:
