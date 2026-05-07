@@ -608,6 +608,99 @@ body {
 }
 .spot-val .unit { color: var(--ink-3); font-weight: 400; font-size: 10px; margin-left: 1px; }
 
+/* Phase A — SST trend chip + sparkline + mode toggle.
+   The chip uses the same diverging palette as the map; the sparkline
+   re-uses it anchored to each spot's local 7-day mean so the row reads
+   "this place's trend" rather than "global trend at this place". */
+.spot-trend {
+  margin-left: 14px;
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sst-trend-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+.sst-sparkline {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+.sst-mode-toggle {
+  display: inline-flex;
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px;
+  background: var(--bg-sunken);
+}
+.sst-mode-toggle button {
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.sst-mode-toggle button:hover { color: var(--ink); }
+.sst-mode-toggle button.active {
+  background: var(--bg-panel-solid);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.06);
+}
+
+/* Phase E — forecast lead-day picker. Lives directly beneath the
+   mode toggle when "Forecast" is active. Tighter than the mode
+   toggle since 7 days × 8 px font = a row that just barely fits the
+   panel width. */
+.sst-lead-picker {
+  display: flex;
+  margin-top: 6px;
+  gap: 2px;
+}
+.sst-lead-picker button {
+  flex: 1;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 3px 0;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.sst-lead-picker button:hover {
+  border-color: var(--ink-3);
+  color: var(--ink);
+}
+.sst-lead-picker button.active {
+  background: var(--accent);
+  color: rgb(15, 23, 42);
+  border-color: var(--accent);
+}
+
+/* Mobile spot row — inline chip variant. The grid template needs one
+   extra "auto" column to seat the chip without pushing the value off
+   the right edge. */
+.ms-spot { /* defined elsewhere; we just relax the column template here */ }
+.ms-spot .sst-trend-chip {
+  font-size: 9.5px;
+  padding: 2px 5px;
+  margin-left: 6px;
+}
+
 /* Legend — bottom-right */
 .legend-br {
   bottom: 12px;

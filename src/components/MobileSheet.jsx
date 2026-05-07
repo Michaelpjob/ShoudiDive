@@ -18,6 +18,7 @@
 
 import { useState } from "react";
 import { sstColor, chlColor, SAVED_SPOTS } from "../lib/mapData.js";
+import { SstTrendChip } from "./SstTrendBits.jsx";
 import {
   getSST,
   getChl,
@@ -456,6 +457,12 @@ function SpotsList({ layer, composite, units, activeSpot, setActiveSpot }) {
           >
             <span className="ms-spot-pin" style={{ color: col }}></span>
             <span className="ms-spot-name">{s.name}</span>
+            {/* SST mobile rows get the trend chip inline so direction
+                reads at a glance without crowding. Sparkline omitted on
+                mobile — too small to be readable in this row height. */}
+            {layer === "sst" && (
+              <SstTrendChip lng={s.lng} lat={s.lat} units={units} />
+            )}
             <span className="ms-spot-val mono">
               {valTxt}<span className="unit">{unit}</span>
             </span>

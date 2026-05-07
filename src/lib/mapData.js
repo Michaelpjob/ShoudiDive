@@ -162,6 +162,49 @@ export const SST_STOPS = [
 ];
 export const SST_RANGE = [9, 25]; // °C
 
+// ---- ΔT trend ramp (Phase A) -----------------------------------------
+// Diverging palette for the 3-day SST trend view. Centered at 0 °C
+// delta = neutral. Saturates at ±2 °C — a typical upwelling event
+// shifts coastal SST by 1-2 °C within 3 days, so saturation falls just
+// past the meaningful upper end and a "deep red plume / band of cold
+// blue" reads at-a-glance rather than blending.
+//
+// Stops chosen to:
+//   * keep ±0.2 °C visually neutral (under noise floor / averaging error)
+//   * cool side: cyan → blue → deep navy (matches the existing SST cold
+//     end so the visual idiom stays "cold = blue")
+//   * warm side: warm orange → red (matches the SST hot end)
+export const SST_TREND_RANGE_C = [-2.0, 2.0];   // saturation endpoints
+export const SST_TREND_STOPS = [
+  { d: -2.0, c: [12,  38, 130] },  // saturated cooling
+  { d: -1.0, c: [40, 130, 210] },  // strong cooling
+  { d: -0.4, c: [120, 200, 240] }, // mild cooling
+  { d: -0.2, c: [220, 230, 240] }, // near-neutral cool
+  { d:  0.0, c: [240, 240, 240] }, // neutral / under noise floor
+  { d:  0.2, c: [240, 230, 220] }, // near-neutral warm
+  { d:  0.4, c: [240, 200, 140] }, // mild warming
+  { d:  1.0, c: [230, 110,  60] }, // strong warming
+  { d:  2.0, c: [170,  20,  35] }, // saturated warming
+];
+
+export function sstTrendColor(deltaC) {
+  if (!Number.isFinite(deltaC)) return "rgba(0,0,0,0)";
+  // Clamp to the saturated endpoints — anything past ±2 °C ramps no further.
+  const d = Math.max(SST_TREND_RANGE_C[0], Math.min(SST_TREND_RANGE_C[1], deltaC));
+  for (let i = 0; i < SST_TREND_STOPS.length - 1; i++) {
+    const a = SST_TREND_STOPS[i], b = SST_TREND_STOPS[i + 1];
+    if (d >= a.d && d <= b.d) {
+      const span = b.d - a.d;
+      const t = span > 0 ? (d - a.d) / span : 0;
+      const r = Math.round(a.c[0] + t * (b.c[0] - a.c[0]));
+      const g = Math.round(a.c[1] + t * (b.c[1] - a.c[1]));
+      const bl = Math.round(a.c[2] + t * (b.c[2] - a.c[2]));
+      return `rgb(${r},${g},${bl})`;
+    }
+  }
+  return "rgb(120,120,120)";
+}
+
 // Value-anchored chl stops (the v2 prototype). Anchored at the diving-
 // relevant 0.1–5 mg/m³ range so the coastal upwelling band (~0.5–3 mg/m³)
 // gets the full color spectrum instead of being squashed into the bottom

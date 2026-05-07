@@ -51,6 +51,53 @@ ALL_ZONES = [zone_key(la, di) for la in LAT_LABELS for di in DIST_LABELS]
 BIAS_CORRECTION_F: Dict[str, float] = {z: 0.0 for z in ALL_ZONES}
 
 
+# ---- Per-spot corrections (Phase C) ------------------------------------
+#
+# Per-saved-spot residuals against ground truth (dive-log SST + buoy
+# obs within SPOT_MATCH_KM). The watchdog's R5 rule suggests deltas to
+# alpha_f when a spot accumulates ≥20 obs of consistent-direction bias.
+# Humans review + commit; nothing here gets auto-mutated.
+#
+# Schema:
+#   alpha_f      static °F offset added to predicted SST at this spot
+#                (positive = spot reads warmer than the bbox cell)
+#   beta_f       optional seasonal-cycle amplitude — pairs with phi_doy
+#                (kept zero in v1; activated when ≥3 months of obs land)
+#   phi_doy      day-of-year of the seasonal-cycle peak (0..364)
+#
+# spot_id keys MUST match SAVED_SPOTS in src/lib/mapData.js (a unit
+# test in pipeline/tests/test_buoy_correction.py enforces parity).
+
+# Phase D feature flag — "apply" the bathy-coupled nearshore corrections
+# from ``sst_predict.nearshore`` to the published SST grid. Default ON
+# in dev (so we can audit them on the dev preview); flip OFF in
+# production until the residual archive shows they reduce per-zone RMSE
+# vs the buoy-corrected baseline. See pipeline/sst_predict/nearshore.py
+# for the underlying physics + caps.
+APPLY_NEARSHORE_CORRECTIONS = True
+
+
+@dataclass
+class SpotCorrection:
+    alpha_f: float = 0.0    # static offset (°F)
+    beta_f:  float = 0.0    # seasonal amplitude (°F); v2 — leave 0 for now
+    phi_doy: int   = 200    # peak DOY for sin (≈ Jul 19, summer max)
+
+
+SPOT_CORRECTIONS: Dict[str, SpotCorrection] = {
+    "monterey":  SpotCorrection(),
+    "morro":     SpotCorrection(),
+    "pt-concep": SpotCorrection(),
+    "santabarb": SpotCorrection(),
+    "santacruz": SpotCorrection(),
+    "malibu":    SpotCorrection(),
+    "catalina":  SpotCorrection(),
+    "lajolla":   SpotCorrection(),
+    "sandiego":  SpotCorrection(),
+    "coronados": SpotCorrection(),
+}
+
+
 # ---- Forecast persistence timescales -----------------------------------
 #
 # When advancing today's blended field forward in time, the anomaly

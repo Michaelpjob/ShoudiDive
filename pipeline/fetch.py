@@ -365,6 +365,128 @@ def build_sst_forecast(
     return summary
 
 
+# ----- Phase B + D — buoy + nearshore corrections ----------------------
+#
+# These run BEFORE build_sst_forecast above, mutating the stack in
+# place so the forecast (and the rolling 1d/2d/3d composites) inherit
+# the buoy-anchored correction. They're additive: each returns a small
+# manifest block describing what got applied, both null-safe.
+
+def _apply_sst_buoy_correction(*, stack: list, grid_h: int, grid_w: int) -> dict | None:
+    """Compute the buoy-anchored correction surface for today and apply
+    it in-place to every grid in ``stack``.
+
+    Returns the JSON-serializable summary block destined for
+    manifest.json's ``layers.sst.buoy_correction``, or None if the
+    fetch / correction failed for any reason. Failure is silent in the
+    sense that the layer still ships — just without the buoy correction.
+    Log lines are loud enough that the next ``check_published.py``
+    health-check run notices a missing ``buoy_correction`` block.
+    """
+    try:
+        # Local import — keep the rest of fetch.py able to run on hosts
+        # that don't have ``pipeline.sst_buoy_correction`` available
+        # (mostly: editor static-analysis pre-commit, where requests is
+        # already a dep but we don't want to make this module a hard
+        # gate for those flows).
+        from pipeline.sst_buoy_correction import (
+            BUOYS as _BUOYS,
+            fetch_buoy_readings,
+            kriging_correction_surface,
+            correction_summary,
+        )
+    except ImportError as exc:
+        print(f"[sst] buoy correction unavailable: {exc}")
+        return None
+
+    print(f"[sst] fetching buoy readings (last 24h, {len(_BUOYS)} buoys)…")
+    try:
+        readings = fetch_buoy_readings()
+    except Exception as exc:
+        print(f"[sst] buoy fetch failed: {exc}")
+        return None
+    print(f"[sst] {len(readings)} of {len(_BUOYS)} buoys returned valid data")
+
+    # The bbox is sampled top→bot for lats (lat_max → lat_min) and
+    # left→right for lngs (lng_min → lng_max), matching the PNG row
+    # convention build_layer enforces below.
+    lats = np.linspace(BBOX["lat_max"], BBOX["lat_min"], grid_h)
+    lngs = np.linspace(BBOX["lng_min"], BBOX["lng_max"], grid_w)
+
+    correction, anchor_info = kriging_correction_surface(
+        sst_grid_c=stack[-1].astype(np.float32),
+        lats=lats, lngs=lngs,
+        buoys=readings,
+    )
+    n_active = sum(1 for a in anchor_info if a.get("skipped") is None)
+    if n_active == 0:
+        print("[sst] no usable buoy anchors — leaving SST uncorrected")
+        # Still emit a summary block so health-check notices the gap.
+        return correction_summary(anchor_info)
+
+    # Apply the same correction surface to every grid in the stack.
+    # See module docstring for the rationale (quasi-stationary spatial
+    # bias). NaN cells stay NaN — addition with finite is fine.
+    for i, arr in enumerate(stack):
+        # Per-cell add; unaffected by NaNs because the correction is
+        # always finite (zeros where Kriging said it has no idea).
+        stack[i] = arr + correction
+
+    summary = correction_summary(anchor_info)
+    rms = summary.get("rms_residual_c")
+    print(f"[sst] applied buoy correction — {n_active} active anchors, "
+          f"RMS residual = {rms}°C, max |correction| = "
+          f"{float(np.max(np.abs(correction))):.2f}°C")
+    return summary
+
+
+def _apply_sst_nearshore_correction(*, stack: list, grid_h: int, grid_w: int) -> dict | None:
+    """Phase D — apply the bathy-coupled nearshore corrections (upwelling
+    cooling at headlands, with solar/tidal scaffolded). Gated by the
+    APPLY_NEARSHORE_CORRECTIONS flag in ``sst_predict.config``.
+
+    Same fault-tolerance contract as the buoy correction: any failure
+    returns None and leaves ``stack`` untouched. Health-check sees the
+    missing manifest block.
+    """
+    try:
+        # Local imports — same justification as the buoy correction's
+        # local import. Keeps fetch.py runnable on hosts without the
+        # full sst_predict toolchain.
+        from sst_predict import config as sst_config
+        from sst_predict.nearshore import (
+            compute_all_corrections,
+            correction_summary,
+        )
+    except ImportError as exc:
+        print(f"[sst] nearshore correction unavailable: {exc}")
+        return None
+
+    if not getattr(sst_config, "APPLY_NEARSHORE_CORRECTIONS", False):
+        print("[sst] nearshore correction disabled by config flag")
+        return None
+
+    print("[sst] computing nearshore corrections (upwelling + scaffolds)…")
+    try:
+        result = compute_all_corrections(target_h=grid_h, target_w=grid_w)
+    except Exception as exc:
+        print(f"[sst] nearshore correction failed: {exc}")
+        return None
+
+    layers = result.get("layers", [])
+    if not layers:
+        print("[sst] no nearshore terms active (inputs not published yet)")
+        return correction_summary([])
+
+    total = result["total_delta_c"]
+    for i, arr in enumerate(stack):
+        stack[i] = arr + total
+
+    print(f"[sst] applied nearshore correction — {len(layers)} term(s) "
+          f"active, max |delta| = {float(np.max(np.abs(total))):.2f}°C")
+    return correction_summary(layers)
+
+
 def build_layer(layer: str, cfg: dict, end: date, want: int = 3, max_back: int = 7) -> dict | None:
     """Fetch up to `want` valid days walking back from `end`. Different layers
     publish on different lags, so each layer finds its own latest 3.
@@ -397,6 +519,35 @@ def build_layer(layer: str, cfg: dict, end: date, want: int = 3, max_back: int =
     actual = list(reversed(actual_rev))
 
     h, w = stack[-1].shape
+
+    # Phase B — buoy-anchored correction (SST only).
+    #
+    # The full bbox has 6 NDBC water-temp buoys reporting hourly. Their
+    # 24-h mean residual against today's MUR is a direct measurement of
+    # the satellite's local bias. We krieg those anchors into a smooth
+    # correction surface and apply it to every grid in the stack
+    # (today + each historical day). The buoy snapshot is "today's"
+    # correction applied uniformly — accepted approximation since the
+    # spatial bias pattern is quasi-stationary on the day-over-day
+    # scale. See ``pipeline/sst_buoy_correction.py`` for the full
+    # rationale + per-anchor sanity gates.
+    buoy_correction_summary = None
+    nearshore_correction_summary = None
+    if layer == "sst":
+        buoy_correction_summary = _apply_sst_buoy_correction(
+            stack=stack,
+            grid_h=h, grid_w=w,
+        )
+        # Phase D — bathy-coupled nearshore enhancement. Applied AFTER
+        # the buoy correction so that the resulting field is "buoy-
+        # anchored mean + microclimate adjustments". Both corrections
+        # add small (sub-1.5 °C) terms; combined cap is enforced by
+        # each module's own clamp.
+        nearshore_correction_summary = _apply_sst_nearshore_correction(
+            stack=stack,
+            grid_h=h, grid_w=w,
+        )
+
     composites = {
         "1d": stack[-1:],
         "2d": stack[-min(2, len(stack)):],
@@ -410,6 +561,10 @@ def build_layer(layer: str, cfg: dict, end: date, want: int = 3, max_back: int =
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
         "windows": {},
     }
+    if buoy_correction_summary is not None:
+        manifest_layer["buoy_correction"] = buoy_correction_summary
+    if nearshore_correction_summary is not None:
+        manifest_layer["nearshore_correction"] = nearshore_correction_summary
     for win, st in composites.items():
         if not st:
             continue

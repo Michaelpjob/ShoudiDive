@@ -62,6 +62,7 @@ import SstTimeline, {
   sstSelectionHasData,
   sstSelToSlotKey,
 } from "./components/SstTimeline.jsx";
+import { SstTrendChip, SstSparkline } from "./components/SstTrendBits.jsx";
 import { MoonWidget } from "./components/MoonIcon.jsx";
 import {
   getSwell5dSummary,
@@ -564,6 +565,14 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
     : layer === "swell" ? selToSlotKey(swellSel, getSwell5dSummary())
     : layer === "current" ? currentSelToSlotKey(currentSel, getCurrent5dSummary())
     : composite;
+  // Map-render layer override: keep `layer` state at "sst" everywhere
+  // else so panels / pickers / saved-spots logic is unchanged, but
+  // hand DataOverlay the synthetic "sst-trend" / "sst5d" layer when
+  // those modes are active. Cheap, isolated, easy to revert.
+  const renderLayer =
+    layer === "sst" && sstViewMode === "trend"    ? "sst-trend"
+    : layer === "sst" && sstViewMode === "forecast" ? "sst5d"
+    : layer;
   const isMobile = useIsMobile();
 
   const stageRef = useRef(null);
@@ -1047,11 +1056,14 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
                 pointerEvents="none"
               />
 
-              {/* Data overlay (positions itself inside the fitted box). */}
+              {/* Data overlay (positions itself inside the fitted box).
+                  renderLayer is `layer` for normal modes and "sst-trend"
+                  when the trend toggle is on — so the diverging palette
+                  paints without any panel/UI thinking the layer changed. */}
               <DataOverlay
                 width={size.w}
                 height={size.h}
-                layer={layer}
+                layer={renderLayer}
                 composite={activeComposite}
                 opacity={opacity}
                 dataReady={dataState?.ready}
@@ -1667,6 +1679,15 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
                     <div className="spot-meta mono">
                       {s.lat.toFixed(2)}°N {Math.abs(s.lng).toFixed(2)}°W
                     </div>
+                    {/* Trend pill + sparkline only for SST. Both fall
+                        back to null when history isn't loaded yet, so
+                        non-SST layers and first-paint stay clean. */}
+                    {layer === "sst" && (
+                      <div className="spot-trend">
+                        <SstTrendChip lng={s.lng} lat={s.lat} units={units} />
+                        <SstSparkline lng={s.lng} lat={s.lat} units={units} />
+                      </div>
+                    )}
                   </div>
                   <div className="spot-val mono">
                     {valTxt}
