@@ -240,12 +240,18 @@ function formatWindow(dates, fallback, layer) {
 }
 
 const PREF_KEY = "ca-coast-conditions:prefs:v1";
+const OVERLAY_DEFAULTS_MIGRATION_KEY = "ca-coast-conditions:prefs:migrations:overlay-defaults-v1";
 const DEFAULT_PREFS = { theme: "light", opacity: 0.62, units: "F", mpaOn: true, bathyOn: true };
 
 function loadPrefs() {
   try {
     const raw = localStorage.getItem(PREF_KEY);
-    return raw ? { ...DEFAULT_PREFS, ...JSON.parse(raw) } : DEFAULT_PREFS;
+    const prefs = raw ? { ...DEFAULT_PREFS, ...JSON.parse(raw) } : { ...DEFAULT_PREFS };
+    if (!localStorage.getItem(OVERLAY_DEFAULTS_MIGRATION_KEY)) {
+      prefs.bathyOn = true;
+      localStorage.setItem(OVERLAY_DEFAULTS_MIGRATION_KEY, "1");
+    }
+    return prefs;
   } catch {
     return DEFAULT_PREFS;
   }
