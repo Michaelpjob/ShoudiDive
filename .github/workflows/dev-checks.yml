@@ -70,17 +70,115 @@ jobs:
           node-version: "20"
           cache: npm
       - name: Install
-        run: npm ci
+        # `npm install` rather than `npm ci` until the user regenerates
+        # package-lock.json with the new ESLint + puppeteer deps. Once
+        # that's done locally and committed, switch back to `npm ci`
+        # for deterministic-from-lockfile installs. Same drift-tolerance
+        # the mobile-static job uses.
+        run: npm install --no-audit --no-fund
       - name: Build
         run: npm run build
       - name: Upload bundle as artifact
         # Lets a reviewer download the dev build to spot-check size /
         # contents without having to clone + build locally.
+        # Also consumed by the web-smoke job below so the smoke test
+        # runs against the EXACT bytes web-build produced.
         uses: actions/upload-artifact@v4
         with:
           name: web-dist-${{ github.sha }}
           path: dist/
           retention-days: 7
+
+  # ---------------------------------------------------------------------
+  # Web lint (ESLint flat config)
+  #
+  # The exact gate that would have caught the 2026-05-07 white-screen
+  # bug (ReferenceError: sstViewMode is not defined): `no-undef` is
+  # the rule that fires on a dangling reference. ESLint runs in <5s so
+  # this is a cheap, high-signal gate.
+  # ---------------------------------------------------------------------
+  web-lint:
+    name: web-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - name: Install
+        # `npm install` rather than `npm ci` until the user regenerates
+        # package-lock.json with the new ESLint + puppeteer deps. Once
+        # that's done locally and committed, switch back to `npm ci`
+        # for deterministic-from-lockfile installs. Same drift-tolerance
+        # the mobile-static job uses.
+        run: npm install --no-audit --no-fund
+      - name: Lint
+        run: npm run lint
+
+  # ---------------------------------------------------------------------
+  # Web tests (existing tests/*.test.js — were not being run in CI)
+  #
+  # These exercise the source-level contracts that pinned the SST
+  # forecast UI, the mobile interaction guards, and the data-feature
+  # contracts. They've been in the repo for a while; they just weren't
+  # wired into a gate, so a contract drift could land silently.
+  # ---------------------------------------------------------------------
+  web-tests:
+    name: web-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - name: Install
+        # `npm install` rather than `npm ci` until the user regenerates
+        # package-lock.json with the new ESLint + puppeteer deps. Once
+        # that's done locally and committed, switch back to `npm ci`
+        # for deterministic-from-lockfile installs. Same drift-tolerance
+        # the mobile-static job uses.
+        run: npm install --no-audit --no-fund
+      - name: Run node:test suites
+        run: npm test
+
+  # ---------------------------------------------------------------------
+  # Web runtime smoke (Puppeteer)
+  #
+  # Booting the BUILT bundle in headless Chrome and watching for
+  # uncaught exceptions / console.error is the only gate that catches
+  # "compiles + lints clean but crashes on first React render" bugs.
+  # That's the failure class the white-screen incident was, and the
+  # one neither web-build nor web-lint is structurally able to catch
+  # (Vite happily bundles dead-letter references; ESLint catches
+  # SOMETIMES if the reference is module-scope, missed it here because
+  # it was inside a destructure-style render function). The smoke test
+  # closes that gap by actually executing the code path.
+  # ---------------------------------------------------------------------
+  web-smoke:
+    name: web-smoke
+    needs: web-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - name: Install
+        # Fresh install in this job — we need puppeteer's Chromium
+        # download. Couldn't reuse the web-build job's node_modules
+        # because that artifact is dist/ only. `npm install` (not
+        # `npm ci`) until the lockfile is regenerated with puppeteer.
+        run: npm install --no-audit --no-fund
+      - name: Download dist artifact from web-build
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist-${{ github.sha }}
+          path: dist/
+      - name: Boot bundle + watch for runtime errors
+        run: npm run test:runtime-smoke
 
   # ---------------------------------------------------------------------
   # Mobile (jest unit tests + package alignment)

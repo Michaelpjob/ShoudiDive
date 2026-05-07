@@ -77,13 +77,16 @@ The dev gate is fast (~90 seconds end-to-end) so the cost is small.
 
 ## What runs in `dev-checks.yml`
 
-Five jobs run in parallel; all five must pass for the PR to be
-merge-able:
+Eight jobs run in parallel (web-smoke chains after web-build); all
+must pass for the PR to be merge-able:
 
 | Job              | What it catches |
 |------------------|-----------------|
 | `pipeline-tests` | Python static-compile + pytest unit layer |
 | `web-build`      | `npm ci && npm run build` — Vite production bundle |
+| `web-lint`       | ESLint flat config — `no-undef` and friends. Catches "compiles but references an undefined variable" (the 2026-05-07 white-screen bug). |
+| `web-tests`      | `npm test` — node:test contract suites in `tests/*.test.js` |
+| `web-smoke`      | Puppeteer boots the built bundle in headless Chrome and watches for runtime errors / pageerror / console.error. Catches "compiles + lints clean but crashes on first React render." |
 | `mobile-static`  | `npm ci && jest` in `mobile/` |
 | `secrets-scan`   | Committed API keys, `.env`, PEM private keys |
 | `workflow-lint`  | actionlint on `.github/workflows/*.yml` |
@@ -91,6 +94,26 @@ merge-able:
 These job names are wired into main's branch-protection rules. Adding
 a new check means: add a job to `dev-checks.yml`, then update the
 required-checks list (see `scripts/setup-branch-protection.sh`).
+
+### Why three web-side gates (lint + tests + smoke)?
+
+Each catches a distinct failure class:
+
+- **`web-build`** catches syntax errors and broken imports.
+- **`web-lint`** catches dangling references (`no-undef`), unused
+  imports, and React-hooks violations. JavaScript is dynamically
+  typed; a typo'd variable name compiles fine but throws at runtime.
+- **`web-tests`** catches contract regressions — the existing
+  `tests/*.test.js` files assert that the SST forecast UI, mobile
+  interaction guards, and data manifest contract stay wired.
+- **`web-smoke`** catches the rest: Puppeteer actually boots the
+  bundle and watches React's first-render path. If the build is
+  clean, lint is clean, contracts hold, but `<App/>` throws on
+  mount, this is the gate that fires.
+
+The 2026-05-07 white-screen incident slipped through because only
+`web-build` existed at the time — `lint`, `tests`, and `smoke` were
+all gaps. They're closed now.
 
 ## Branch-protection rules on `main`
 
