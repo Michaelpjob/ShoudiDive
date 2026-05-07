@@ -120,6 +120,7 @@ export function useTimelineDrag({
   }, [ref, xToTarget, onCommit, currentTarget]);
 
   const onPointerDown = useCallback((e) => {
+    e.stopPropagation();
     setDragging(true);
     updatePosition(e.clientX);
     e.currentTarget.setPointerCapture?.(e.pointerId);
@@ -127,10 +128,12 @@ export function useTimelineDrag({
 
   const onPointerMove = useCallback((e) => {
     if (!dragging) return;
+    e.stopPropagation();
     updatePosition(e.clientX);
   }, [dragging, updatePosition]);
 
   const onPointerUp = useCallback((e) => {
+    e.stopPropagation();
     setDragging(false);
     // Clear the raw pixel position. The component falls back to the
     // snapped frac via targetToFrac(currentTarget), and the CSS

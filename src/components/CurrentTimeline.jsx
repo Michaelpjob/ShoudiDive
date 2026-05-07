@@ -147,6 +147,7 @@ export default function CurrentTimeline({ sel, setSel }) {
   }
 
   function onPointerDown(e) {
+    e.stopPropagation();
     setDragging(true);
     setIndex(xToIndex(e.clientX));
     e.currentTarget.setPointerCapture?.(e.pointerId);
@@ -154,10 +155,12 @@ export default function CurrentTimeline({ sel, setSel }) {
 
   function onPointerMove(e) {
     if (!dragging) return;
+    e.stopPropagation();
     setIndex(xToIndex(e.clientX));
   }
 
   function onPointerUp(e) {
+    e.stopPropagation();
     setDragging(false);
     e.currentTarget.releasePointerCapture?.(e.pointerId);
   }

@@ -235,6 +235,9 @@ jobs:
       - name: Install JS dependencies
         run: npm ci
 
+      - name: Run frontend regression tests
+        run: npm test
+
       # The "Build Flutter app (served at /app/)" step that used to live
       # here was retired 2026-05-04. Flutter web at /app/ had structural
       # mobile issues (foreignObject viewBox bug, slow CanvasKit boot,

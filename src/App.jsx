@@ -65,6 +65,10 @@ import {
   getSwell5dSummary,
   getSwell5dStats,
 } from "./lib/dataSource.js";
+import {
+  isMapGestureChildTarget,
+  shouldPinMapTap,
+} from "./lib/mapInteractionGuards.js";
 
 // Reactive viewport hook for the bottom-sheet mobile UI.
 //
@@ -668,9 +672,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
     // (Less critical than touch since mouse drag-on-slider already
     // works, but it eliminates the "pan starts then aborts" flicker
     // when the user clicks the timeline track on a touchpad laptop.)
-    const t = e.target;
-    if (t && typeof t.closest === "function" &&
-        t.closest(".wind-timeline, .swell-timeline, .mobile-shell, .panel, .moon-widget, .zoom-ctl")) {
+    if (isMapGestureChildTarget(e.target)) {
       return;
     }
     const r = stageRef.current.getBoundingClientRect();
@@ -689,6 +691,10 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
   }
 
   function onMove(e) {
+    if (isMapGestureChildTarget(e.target)) {
+      setHover(null);
+      return;
+    }
     const r = stageRef.current.getBoundingClientRect();
     const x = e.clientX - r.left;
     const y = e.clientY - r.top;
@@ -714,6 +720,8 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
     // intentionally do NOT cache the value here: if the layer changes while
     // hover is still populated, the cached val shape would mismatch the
     // active layer's tooltip code. Tooltip recomputes from lng/lat instead.
+    if (isMobile) return;
+
     const vbX = vb.x + (x / r.width) * vb.w;
     const vbY = vb.y + (y / r.height) * vb.h;
     const [lng, lat] = unproject(vbX, vbY, size.w, size.h);
@@ -746,12 +754,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
   // slider also pans the map underneath. The closest-match selector
   // covers every direct-gesture child in one place.
   function isOnGestureChild(e) {
-    const t = e.target;
-    return !!(
-      t &&
-      typeof t.closest === "function" &&
-      t.closest(".wind-timeline, .swell-timeline, .mobile-shell, .panel, .moon-widget, .zoom-ctl")
-    );
+    return isMapGestureChildTarget(e.target);
   }
 
   function onTouchStart(e) {
@@ -851,17 +854,12 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
   // User report 2026-05-04: "the taps around that wind icon wind
   // slider, or swell slider, shouldn't go through". Most useful taps
   // are toward the center of the map, not in the upper strip.
-  const SLIDER_GUARD_PX = 140;
-
   function onTouchEnd(e) {
     if (e.touches.length === 0) {
       // All fingers up. If the gesture was actually a tap, drop a pin so
       // the value is readable on phones (which have no hover state).
       const tap = touchTapRef.current;
-      const inSliderGuard =
-        ((layer === "sst" && sstHistorySummary) || layer === "wind" || layer === "swell" || layer === "current") &&
-        tap && tap.startY < SLIDER_GUARD_PX;
-      if (tap && !tap.moved && Date.now() - tap.startTime < 350 && !inSliderGuard) {
+      if (shouldPinMapTap({ tap, layer, hasSstHistory: Boolean(sstHistorySummary), target: e.target })) {
         const r = stageRef.current.getBoundingClientRect();
         const vbX = vb.x + (tap.startX / r.width) * vb.w;
         const vbY = vb.y + (tap.startY / r.height) * vb.h;
@@ -1161,7 +1159,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstSel, setSstS
         <CurrentTimeline sel={currentSel} setSel={setCurrentSel} />
       )}
 
-      {hover && (
+      {!isMobile && hover && (
         <Tooltip
           x={hover.x}
           y={hover.y}
