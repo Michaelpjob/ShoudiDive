@@ -75,25 +75,62 @@ The dev gate is fast (~90 seconds end-to-end) so the cost is small.
 
 6. **Wait for the human to review + merge.** Do not auto-merge.
 
-## What runs in `dev-checks.yml`
+## What runs in `dev-checks.yml` (per-PR gate)
 
-Eight jobs run in parallel (web-smoke chains after web-build); all
-must pass for the PR to be merge-able:
+The full taxonomy lives in [`tests/CHECKPOINTS.md`](tests/CHECKPOINTS.md)
+— including which bug class each checkpoint catches. Quick reference:
 
-| Job              | What it catches |
-|------------------|-----------------|
-| `pipeline-tests` | Python static-compile + pytest unit layer |
-| `web-build`      | `npm ci && npm run build` — Vite production bundle |
-| `web-lint`       | ESLint flat config — `no-undef` and friends. Catches "compiles but references an undefined variable" (the 2026-05-07 white-screen bug). |
-| `web-tests`      | `npm test` — node:test contract suites in `tests/*.test.js` |
-| `web-smoke`      | Puppeteer boots the built bundle in headless Chrome and watches for runtime errors / pageerror / console.error. Catches "compiles + lints clean but crashes on first React render." |
-| `mobile-static`  | `npm ci && jest` in `mobile/` |
-| `secrets-scan`   | Committed API keys, `.env`, PEM private keys |
-| `workflow-lint`  | actionlint on `.github/workflows/*.yml` |
+| Job                | Stage  | Catches |
+|--------------------|--------|---------|
+| `pipeline-tests`   | dev    | Python static-compile + pytest unit layer |
+| `web-build`        | dev    | Vite production bundle compiles |
+| `web-lint`         | dev    | ESLint `no-undef`, dupe imports, dupe `else if`, hooks rules |
+| `web-tests`        | dev    | All `tests/*.test.js` + `tests/checkpoints/*.test.js` (data-shape, rendering-math, sst-trend, mobile-adaptive) |
+| `web-smoke`        | dev    | Puppeteer boots the built bundle, watches for `pageerror`/console errors |
+| `cp-visual-paint`  | dev    | 3 viewports × 5 layers paint check (non-required, advisory) |
+| `mobile-static`    | dev    | RN data-layer + colormap jest tests |
+| `secrets-scan`     | dev    | Committed API keys, `.env`, PEM private keys |
+| `workflow-lint`    | dev    | actionlint on `.github/workflows/*.yml` |
 
-These job names are wired into main's branch-protection rules. Adding
-a new check means: add a job to `dev-checks.yml`, then update the
-required-checks list (see `scripts/setup-branch-protection.sh`).
+Required-status-checks list lives in
+`scripts/setup-branch-protection.sh`. Adding a new GATING check =
+add a job + add it to `REQUIRED_CHECKS` + re-run that script.
+
+## What runs in `deploy-verify.yml` (post-deploy gate)
+
+After every successful refresh-data / refresh-wind deploy AND every
+4 h via cron, the live-side checkpoints fire against shouldidive.com:
+
+| Job                  | Catches |
+|----------------------|---------|
+| `live-cp-manifest`   | Live `manifest.json` reachable, `generated_at` fresh, all required layers present, every primary PNG returns 200 + decodes |
+| `live-cp-render`     | Headless Chrome boots shouldidive.com, asserts shell mounted + DataOverlay painted + saved-spots populated |
+| `sync-issue`         | On red: opens / updates rolling Issue tagged `live-deploy-broken`. On green-after-red: auto-closes it. |
+
+The 2026-05-07 white-screen incident shipped to prod for ~25 min.
+With `live-cp-render` running, the same bug would surface as an
+opened Issue within ~3 min of the bad deploy.
+
+### Why three layers of gates (lint + tests + smoke + visual + live)
+
+Each catches a distinct failure class:
+
+- **`web-build`**: syntax errors, broken imports.
+- **`web-lint`**: dangling references, dupe imports, hook violations.
+  Pure JavaScript is dynamically typed; a typo'd variable name
+  compiles fine but throws at runtime. (Caught the 2026-05-07
+  duplicate import + the duplicate `else if (layer === "sst5d")`.)
+- **`web-tests`**: contract regressions — components/exports/keys
+  that the source has agreed to publish stay published.
+- **`web-smoke`**: actually boots the bundle in headless Chrome and
+  watches React's first-render path. If build/lint/tests pass but
+  `<App/>` throws on mount, this is the gate that fires.
+- **`cp-visual-paint`**: extends the smoke to 3 viewports × every
+  layer chip. Catches "layer renders blank at mobile width."
+- **`live-cp-*`**: same headless-Chrome smoke + a manifest+PNG HTTP
+  probe, run AGAINST PRODUCTION after the deploy lands. Catches
+  CDN-cache staleness, broken upstream feeds, and "deploy succeeded
+  but the published bundle has no working data."
 
 ### Why three web-side gates (lint + tests + smoke)?
 

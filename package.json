@@ -6,9 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "node --test tests/*.test.js",
+    "test": "node --test tests/*.test.js tests/checkpoints/*.test.js",
     "test:data-contracts": "node tests/dataFeatureContracts.mjs",
     "test:runtime-smoke": "node tests/runtime-smoke.mjs",
+    "test:visual-paint": "node tests/visual-paint.mjs",
+    "test:live-runtime": "node tests/live-checkpoints/live-runtime.mjs",
+    "test:live-manifest": "node tests/live-checkpoints/live-manifest.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },
