@@ -157,7 +157,13 @@ def candidate_configs(cfg: dict) -> list[dict]:
     return out
 
 
-def fetch_day(layer: str, cfg: dict, d: date, stride: int) -> np.ndarray | None:
+def fetch_day(
+    layer: str,
+    cfg: dict,
+    d: date,
+    stride: int,
+    expected_shape: tuple[int, int] | None = None,
+) -> np.ndarray | None:
     """Return a 2D array in the layer's native units, or None on failure."""
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     for i, source_cfg in enumerate(candidate_configs(cfg)):
@@ -198,6 +204,13 @@ def fetch_day(layer: str, cfg: dict, d: date, stride: int) -> np.ndarray | None:
         # Honour the units attribute either way.
         if layer == "sst" and units in ("k", "kelvin", "degrees_kelvin"):
             arr = arr - 273.15
+
+        if expected_shape is not None and arr.shape != expected_shape:
+            print(
+                f"  {layer} {d}{suffix}: shape {arr.shape} differs from {expected_shape} - trying next source",
+                flush=True,
+            )
+            continue
 
         return arr
 
@@ -287,7 +300,8 @@ def build_layer(layer: str, cfg: dict, end: date, want: int = 3, max_back: int =
     actual_rev: list[date] = []
     for i in range(max_back):
         d = end - timedelta(days=i)
-        a = fetch_day(layer, cfg, d, cfg["stride"])
+        expected_shape = stack_rev[0].shape if stack_rev else None
+        a = fetch_day(layer, cfg, d, cfg["stride"], expected_shape=expected_shape)
         if a is not None:
             if stack_rev and a.shape != stack_rev[0].shape:
                 print(f"  {layer} {d}: shape {a.shape} differs from {stack_rev[0].shape} - skipping", flush=True)
