@@ -1,0 +1,77 @@
+name: Deploy dev preview
+
+# Builds and deploys the React PWA to the dev preview URL on every push
+# to dev — but only AFTER dev-checks.yml passes. Cloudflare Pages
+# automatically serves non-production-branch deploys at
+# `<branch>.shouldidive.pages.dev`, so this lands at
+# https://dev.shouldidive.pages.dev for visual verification.
+#
+# Distinct from refresh-data.yml in three ways:
+#   * No data refresh — uses the PNGs already committed in public/data/
+#     (production data on the previous main deploy), so a code-only dev
+#     change can be reviewed without re-pulling NOAA / NASA feeds.
+#   * No commits back — the workflow runs read-only on contents.
+#   * --branch=dev means CF Pages routes this to the preview URL, NOT
+#     production at shouldidive.com.
+
+on:
+  workflow_run:
+    # Only deploy after dev-checks completes successfully.
+    workflows: ["Dev checks"]
+    types: [completed]
+    branches: [dev]
+  workflow_dispatch:
+
+# Don't pile up deploys on rapid-fire dev pushes.
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    # Only run if dev-checks succeeded — workflow_run fires on success
+    # AND failure, so we have to gate explicitly.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # workflow_run runs on the default branch's HEAD by default;
+          # explicitly check out the same SHA dev-checks ran against
+          # so the preview matches what was tested.
+          ref: ${{ github.event.workflow_run.head_sha || 'dev' }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages (dev branch)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # --branch=dev tags this deploy as a preview (not production).
+          # CF Pages routes dev preview deploys to dev.shouldidive.pages.dev
+          # automatically; production at shouldidive.com is unaffected.
+          command: pages deploy dist --project-name=shouldidive --branch=dev --commit-dirty=true
+
+      - name: Annotate run with preview URL
+        run: |
+          {
+            echo "## Dev preview deployed"
+            echo
+            echo "Preview URL: https://dev.shouldidive.pages.dev"
+            echo "Commit:      \`${{ github.event.workflow_run.head_sha || github.sha }}\`"
+            echo
+            echo "_Production at shouldidive.com is unchanged. To promote, open a PR from \`dev\` → \`main\`._"
+          } >> "$GITHUB_STEP_SUMMARY"
