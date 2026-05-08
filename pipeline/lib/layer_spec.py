@@ -247,20 +247,29 @@ LAYER_SPECS: dict[str, LayerSpec] = {
         extra_optional_keys=("p10_url", "p90_url", "quality_url"),
     ),
     "wave": LayerSpec(
+        # Published as a wave_png with height_range_m + period_range_s,
+        # same encoding as swell5d. Used as input to fetch_visibility,
+        # not rendered in the frontend.
         name="wave",
         category="swell",
-        range=(0.0, 8.0),
-        scale="linear",
-        unit="m",
-        payload="scalar_png",
+        range=None,
+        scale=None,
+        unit="m,s",
+        payload="wave_png",
         frontend_renders=False,
-        extra_optional_keys=("max_3d", "now"),
+        extra_required_keys=("height_range_m", "period_range_s"),
     ),
     "precip": LayerSpec(
+        # 7-day cumulative precip from NOAA CPC. Encoded against
+        # range_mm (per-layer key, like viz's range_ft) instead of a
+        # generic 'range' field, and the manifest does not currently
+        # carry a top-level 'scale' for this layer (encoding is
+        # implicit linear). Used as input to fetch_visibility, not
+        # rendered in the frontend.
         name="precip",
         category="forcing",
-        range=None,  # range_mm instead
-        scale="linear",
+        range=None,
+        scale=None,
         unit="mm",
         payload="scalar_png",
         frontend_renders=False,
