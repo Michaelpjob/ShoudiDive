@@ -32,7 +32,18 @@ function read(rel) {
   return readFileSync(resolve(REPO_ROOT, rel), "utf8");
 }
 
-const css    = read("src/styles/app.css");
+// 2026-05-09: app.css was split into per-area files. The barrel
+// `app.css` only carries @imports now, so individual rule patterns
+// (media queries, env() values, 100dvh, etc.) live in their respective
+// area files. Concat them all so the contract assertions below work
+// regardless of which file the rule lands in.
+const css    =
+  read("src/styles/app.css") +
+  read("src/styles/tokens.css") +
+  read("src/styles/shell.css") +
+  read("src/styles/popups.css") +
+  read("src/styles/mobile.css") +
+  read("src/styles/wind.css");
 const guards = read("src/lib/mapInteractionGuards.js");
 
 

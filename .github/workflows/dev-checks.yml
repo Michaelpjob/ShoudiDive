@@ -334,3 +334,24 @@ jobs:
           chmod +x actionlint
       - name: Lint .github/workflows
         run: ./actionlint -color
+
+  # ---------------------------------------------------------------------
+  # Manifest contract validator — catches range/scale drift between
+  # the pipeline's encoder and the frontend's decoder. The committed
+  # public/data/manifest.json must match the LayerSpec contract in
+  # pipeline/lib/layer_spec.py; if a fetcher silently changed its
+  # output range without updating the spec (or vice versa), this
+  # job fires before the bad manifest reaches production.
+  #
+  # Stdlib-only Python — no install layer needed. Runs in <5 s.
+  # ---------------------------------------------------------------------
+  manifest-validate:
+    name: manifest-validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Validate committed manifest against LayerSpec contract
+        run: python -m pipeline.validate_manifest

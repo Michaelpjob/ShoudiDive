@@ -91,6 +91,7 @@ The full taxonomy lives in [`tests/CHECKPOINTS.md`](tests/CHECKPOINTS.md)
 | `mobile-static`    | dev    | RN data-layer + colormap jest tests |
 | `secrets-scan`     | dev    | Committed API keys, `.env`, PEM private keys |
 | `workflow-lint`    | dev    | actionlint on `.github/workflows/*.yml` |
+| `manifest-validate`| dev    | LayerSpec contract — range/scale drift between pipeline encoder and frontend decoder |
 
 Required-status-checks list lives in
 `scripts/setup-branch-protection.sh`. Adding a new GATING check =

@@ -1,0 +1,615 @@
+/* ---------- Responsive layout (no phone-frame, real mobile) ---------- */
+
+/* ---------- Mobile shell (peek strip + pull-up sheet) ----------
+ *
+ * The shell is a single bottom-anchored container. Its peek strip
+ * (status row + drag handle + layer chips) is always visible and reads
+ * the map at a glance. Tap the handle to slide a full-height sheet up
+ * with time controls, spots, legend, and info — no tabs, single
+ * scrollable column.
+ *
+ * Heights (after the 2026-05-04 tap-target fix):
+ *   ms-status  ~48 px (padding 10+content+10)
+ *   ms-handle  ~44 px (4px bar + 20px padding each side, HIG min)
+ *   ms-chips   ~52 px
+ *   total peek ~144 px + safe-area-inset-bottom
+ *
+ * Anything that floats above the strip (zoom-ctl, mpa-banner, the
+ * wind/swell timeline) needs a `bottom` offset of ~156 px on phones.
+ * Update `.map-stage`'s bottom calc below + the .zoom-ctl override
+ * if you nudge any of the heights above.
+ */
+
+.mobile-shell {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  pointer-events: none; /* let map gestures through gaps */
+}
+
+.ms-peek {
+  pointer-events: auto;
+  background: var(--bg-panel-solid);
+  border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom);
+  /* prevent iOS rubber-band gesture from dragging the shell */
+  overscroll-behavior: contain;
+  box-shadow: 0 -2px 12px rgb(0 0 0 / 0.06);
+}
+
+.ms-overlay-quick {
+  pointer-events: auto;
+  position: absolute;
+  left: 8px;
+  bottom: calc(100% + 8px);
+  display: flex;
+  gap: 8px;
+  z-index: 2;
+}
+.mobile-shell.open .ms-overlay-quick {
+  display: none;
+}
+.ms-overlay-quick .mpa-pill {
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--bg-panel-solid);
+  box-shadow: var(--shadow-1);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  border-color: var(--line);
+}
+.ms-overlay-quick .mpa-pill.active {
+  background: var(--ink);
+  color: var(--bg-panel-solid);
+  border-color: var(--ink);
+}
+
+.ms-status {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  /* Extra vertical padding so the status row doubles as a tap-to-open
+     zone (combined with .ms-handle's expanded hit area below, the
+     whole top of the peek strip is tappable, not just the 14px
+     visual handle bar). */
+  padding: 10px 12px;
+  font-size: 11.5px;
+  color: var(--ink-2);
+  border-bottom: 1px solid var(--line-2);
+  min-height: 28px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: rgb(15 23 42 / 0.06);
+}
+.ms-status-layer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+  min-width: 0;
+  white-space: nowrap;
+}
+.ms-status-layer strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ms-status-layer .dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: rgb(34 197 94);
+  box-shadow: 0 0 0 3px rgb(34 197 94 / 0.18);
+}
+.ms-status-val {
+  min-width: 0;
+  text-align: center;
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ms-status-where {
+  color: var(--ink-3);
+  font-weight: 400;
+  font-size: 11px;
+  margin-left: 6px;
+}
+.ms-status-time {
+  min-width: 0;
+  text-align: right;
+  color: var(--ink-3);
+  font-size: 10.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 38vw;
+}
+
+.ms-handle {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  width: 100%;
+  /* Visual bar stays small; padding gives a 44px tappable height
+     so the button passes Apple HIG / WCAG 2.5.5. */
+  height: auto;
+  padding: 20px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: rgb(15 23 42 / 0.06);
+}
+.ms-handle-bar {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  transition: background 0.15s, width 0.15s;
+}
+.mobile-shell.open .ms-handle-bar {
+  background: var(--ink-2);
+  width: 48px;
+}
+
+.ms-chips {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px 8px 8px;
+}
+.ms-chip {
+  appearance: none;
+  border: 1px solid transparent;
+  background: var(--bg-sunken);
+  font: inherit;
+  padding: 7px 4px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--ink-2);
+  cursor: pointer;
+  min-height: 44px; /* iOS HIG min tap target */
+  min-width: 0;
+  overflow: hidden;
+}
+.ms-chip.active {
+  background: var(--ink);
+  color: var(--bg-panel-solid);
+  border-color: var(--ink);
+}
+.ms-chip-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ms-chip-sub {
+  font-size: 9px;
+  opacity: 0.75;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.ms-chip.active .ms-chip-sub {
+  opacity: 0.85;
+}
+
+.ms-sheet {
+  pointer-events: auto;
+  position: relative;
+  max-height: 78vh;
+  overflow-y: auto;
+  background: var(--bg-panel-solid);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 14px 14px 18px;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  /* slide-up animation */
+  animation: ms-slide-up 0.18s ease-out;
+}
+@keyframes ms-slide-up {
+  from { transform: translateY(20%); opacity: 0; }
+  to   { transform: translateY(0);   opacity: 1; }
+}
+
+.ms-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--ink-3);
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+.ms-close:hover { background: var(--bg-sunken); color: var(--ink); }
+
+.ms-section + .ms-section {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-2);
+}
+.ms-section-h {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  margin: 0 0 8px;
+}
+.ms-section-sub {
+  font-size: 10px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink-3);
+  opacity: 0.8;
+}
+.ms-pin-clear {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: transparent;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+  color: var(--ink-2);
+  cursor: pointer;
+  margin-left: auto;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.ms-pin-clear:hover { background: var(--bg-sunken); color: var(--ink); }
+
+.ms-row-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  margin: 0 0 6px;
+}
+.ms-row-label + .ms-row-label,
+.ms-overlay-row + .ms-row-label,
+.ms-time-row + .ms-row-label,
+.ms-window + .ms-row-label {
+  margin-top: 14px;
+}
+
+.ms-layer-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+.ms-layer-toggle button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  padding: 10px 4px;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.ms-layer-toggle button.active {
+  background: var(--bg-panel-solid);
+  color: var(--ink);
+  box-shadow: var(--shadow-1);
+}
+.ms-lt-label { font-size: 13px; font-weight: 600; }
+.ms-lt-sub { font-size: 10px; color: var(--ink-3); }
+
+.ms-time-row {
+  display: grid;
+  gap: 4px;
+}
+.ms-time-row button {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: var(--bg-panel-solid);
+  font: inherit;
+  padding: 9px 4px;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  color: var(--ink-2);
+  cursor: pointer;
+  min-width: 60px;
+}
+.ms-time-row button.active {
+  background: var(--ink);
+  color: var(--bg-panel-solid);
+  border-color: var(--ink);
+}
+.ms-time-label { font-size: 12px; font-weight: 600; }
+.ms-time-tag { font-size: 9.5px; opacity: 0.7; }
+
+.ms-window {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--bg-sunken);
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--ink-3);
+  display: flex;
+  justify-content: space-between;
+}
+.ms-window .mono { color: var(--ink-2); }
+
+.ms-overlay-row {
+  display: flex;
+  gap: 10px;
+}
+.ms-overlay-row .mpa-pill {
+  flex: 1;
+  /* Bumped from padding: 9px 8px (~29px tall) to a 44px tappable
+     button. User report 2026-05-04: "the turning on and off of
+     the mpa + bottom layer is difficult". */
+  padding: 14px 10px;
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  min-height: 44px;
+}
+
+.ms-spots {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ms-spot {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 8px;
+  border-radius: 6px;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+}
+.ms-spot.active { background: var(--bg-sunken); }
+.ms-spot-pin {
+  width: 9px; height: 9px; border-radius: 50%;
+  border: 1.5px solid currentColor;
+  display: inline-block;
+}
+.ms-spot-name { font-size: 13px; font-weight: 500; }
+.ms-spot-val { font-size: 13px; font-weight: 500; }
+.ms-spot-val .unit { color: var(--ink-3); margin-left: 2px; font-size: 10px; }
+
+.ms-legend-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.ms-legend-head strong {
+  font-size: 13px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ms-info .info-section + .info-section {
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+/* ---------- Responsive overrides ---------- */
+
+@media (max-width: 760px), (hover: none) and (pointer: coarse) {
+  .topbar { padding: env(safe-area-inset-top) 10px 0 10px; }
+  .brand-tag { display: none; }
+  /* Sources line + the long Last-update line both vanish on phones —
+     the new MobileShell peek strip carries layer/value/time info, so
+     the topbar only needs the brand mark + a settings cog. */
+  .topbar-meta > span { display: none; }
+  .topbar-meta { gap: 8px; }
+  /* The old `Live` chip in the topbar is now redundant — MobileShell's
+     own status row shows the same liveness via the green dot next to
+     the layer name. Hide it to reclaim vertical space. */
+  .topbar-meta .mobile-status { display: none !important; }
+
+  /* Make the map stage end ABOVE the peek strip on phones so the
+     SVG bbox (and its pillarboxing) gets recomputed for the actually-
+     visible vertical space. Without this the map renders thinking it
+     has the full viewport height, shoves all the pillarbox to the
+     top, and ends up hiding Catalina/SD/Coronados behind the strip.
+
+     Bumped from 94 -> 144 after the tap-target fix grew the peek
+     strip (ms-status padding 6->10, ms-handle 14->44 hit area).
+     Without this bump the wind/swell timeline at bottom:8 was
+     getting buried behind the now-taller strip — see user report
+     2026-05-04 "slider is blocked". */
+  .map-stage {
+    bottom: calc(144px + env(safe-area-inset-bottom));
+  }
+
+  /* MPA Coronados disclaimer — float just above the peek strip.
+     Map-stage now ends above the strip, so a small inset reads as
+     the line directly above the chips. */
+  .mpa-banner {
+    top: auto;
+    bottom: 8px;
+    left: 8px;
+    right: 8px;
+    max-width: none;
+    transform: none;
+    font-size: 10.5px;
+    padding: 6px 10px;
+  }
+
+  /* Hide the desktop floating panels — MobileShell replaces them. */
+  .controls-tl,
+  .info-tr,
+  .info-toggle,
+  .spots-bl,
+  .legend-br {
+    display: none !important;
+  }
+
+  /* Zoom controls float at the bottom of the (shorter) map-stage —
+     i.e. just above the peek strip. */
+  .zoom-ctl {
+    right: 8px;
+    /* Lift the column above the peek strip. The strip is ~144 px tall
+       on mobile (status row + handle + chip row), and we need a small
+       gap. Without this, the bottom button (recenter) is fully buried. */
+    bottom: 156px;
+  }
+  .zoom-ctl button { width: 44px; height: 44px; }
+  .attribution { display: none; }
+  .tooltip { font-size: 11px; }
+
+  /* Popups become bottom sheets on phones (anchored above the peek
+     strip so the layer chips remain reachable). The .mpa-popup-overlay
+     fills the whole .map-stage which already excludes the strip; no
+     extra margin needed. */
+  .mpa-popup-overlay { padding: 0; align-items: flex-end; }
+  .mpa-popup {
+    width: 100%;
+    max-width: none;
+    max-height: 70vh;
+    margin-bottom: 0;
+    border-radius: 16px 16px 0 0;
+    border-bottom: none;
+    padding-top: 22px;
+    position: relative;
+  }
+  .mpa-popup::before {
+    content: "";
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--line);
+  }
+}
+
+/* Phone landscape has too little vertical room to reserve the full peek
+   strip below the map. Let the map keep its natural stage height and float a
+   compact control strip over it; otherwise the geographic fit is calculated
+   against a squat viewport and the coast reads stretched/squeezed. */
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+  .map-stage {
+    bottom: 0;
+  }
+
+  .mobile-shell {
+    left: calc(8px + env(safe-area-inset-left));
+    right: calc(8px + env(safe-area-inset-right));
+    bottom: calc(8px + env(safe-area-inset-bottom));
+  }
+
+  .ms-peek {
+    display: grid;
+    grid-template-columns: minmax(130px, 0.9fr) minmax(0, 1.6fr);
+    align-items: stretch;
+    padding-bottom: 0;
+    border: 1px solid var(--line);
+    border-radius: var(--r-2);
+    overflow: hidden;
+    box-shadow: var(--shadow-2);
+  }
+
+  .ms-overlay-quick {
+    left: 0;
+    bottom: calc(100% + 6px);
+  }
+
+  .ms-status {
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 7px 10px;
+    border-bottom: 0;
+    border-right: 1px solid var(--line-2);
+    min-height: 44px;
+  }
+
+  .ms-status-val {
+    text-align: right;
+  }
+
+  .ms-status-where,
+  .ms-status-time,
+  .ms-handle {
+    display: none;
+  }
+
+  .ms-chips {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    padding: 4px;
+  }
+
+  .ms-chip {
+    min-height: 44px;
+    padding: 5px 4px;
+    border-radius: 5px;
+  }
+
+  .ms-chip-label {
+    font-size: 10.5px;
+  }
+
+  .ms-chip-sub {
+    display: none;
+  }
+
+  .ms-sheet {
+    margin-bottom: 6px;
+    max-height: calc(100dvh - 92px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    border: 1px solid var(--line);
+    border-radius: var(--r-2);
+    box-shadow: var(--shadow-2);
+  }
+
+  .zoom-ctl {
+    bottom: 12px;
+  }
+}
+
