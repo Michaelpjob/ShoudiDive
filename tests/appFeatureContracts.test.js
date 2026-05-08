@@ -51,7 +51,7 @@ test("Current, swell, wind, and mobile overlay features remain wired", () => {
 test("CI runs frontend and data feature contracts before publishing", () => {
   const pkg = JSON.parse(read("package.json"));
   const deployWorkflow = read(".github/workflows/refresh-data.yml");
-  const frontendWorkflow = read(".github/workflows/frontend-tests.yml");
+  const devChecksWorkflow = read(".github/workflows/dev-checks.yml");
 
   // Relaxed from `assert.equal` to `assert.match` so adding more glob
   // targets to the test script (e.g. tests/checkpoints/*.test.js)
@@ -62,6 +62,11 @@ test("CI runs frontend and data feature contracts before publishing", () => {
     "pkg.scripts.test must run `node --test` over the top-level tests/*.test.js glob, " +
     "optionally followed by additional globs (e.g. tests/checkpoints/*.test.js)");
   assert.equal(pkg.scripts["test:data-contracts"], "node tests/dataFeatureContracts.mjs");
-  assert.match(frontendWorkflow, /Run frontend regression tests[\s\S]*npm test[\s\S]*Build[\s\S]*npm run build/);
+  // dev-checks.yml is the canonical pre-merge gate — it runs `npm test`
+  // (web-tests job) and `npm run build` (web-build job). The legacy
+  // `frontend-tests.yml` was deleted 2026-05-08 because dev-checks
+  // covers the same surface plus lint/smoke/visual-paint.
+  assert.match(devChecksWorkflow, /name:\s*web-tests[\s\S]*npm test/);
+  assert.match(devChecksWorkflow, /name:\s*web-build[\s\S]*npm run build/);
   assert.match(deployWorkflow, /Run frontend regression tests[\s\S]*npm test[\s\S]*Run data feature contracts[\s\S]*npm run test:data-contracts[\s\S]*Build[\s\S]*npm run build/);
 });

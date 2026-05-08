@@ -2768,3 +2768,68 @@ body {
     padding: 3px 6px;
   }
 }
+
+/* ---- Error boundary --------------------------------------------------
+   Renders when DesktopView throws during render. The TopBar above it
+   keeps painting, so the user can still see the "Demo data / Live"
+   status indicator (and the gear icon if they want to toggle theme).
+   Visual style mirrors .mpa-popup-overlay so the failure mode looks
+   intentional rather than glitched. */
+.error-boundary {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.55);
+  z-index: 100;
+  padding: 16px;
+}
+.error-boundary-card {
+  max-width: 480px;
+  width: 100%;
+  background: var(--bg-1, #fff);
+  border: 1px solid var(--ink-4, #e2e8f0);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+}
+.error-boundary-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink-1, #0f172a);
+  margin-bottom: 8px;
+}
+.error-boundary-body {
+  margin: 0 0 12px 0;
+  color: var(--ink-2, #475569);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.error-boundary-detail {
+  background: var(--bg-2, #f8fafc);
+  border: 1px solid var(--ink-4, #e2e8f0);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--ink-2, #475569);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 160px;
+  overflow: auto;
+  margin: 0 0 16px 0;
+}
+.error-boundary-reload {
+  background: var(--accent-1, #0369a1);
+  color: #fff;
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.error-boundary-reload:hover {
+  filter: brightness(1.05);
+}
+

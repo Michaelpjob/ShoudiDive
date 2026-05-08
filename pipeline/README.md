@@ -101,8 +101,10 @@ bash pipeline/scripts/validate.sh --skip-fetch  # 1+2+4, reuse on-disk fetch
 
 CI:
 
-* `.github/workflows/test.yml` runs `--unit` on every push to main + every
-  PR touching `pipeline/`. Fast, deterministic, no NOAA dependency.
+* `.github/workflows/dev-checks.yml`'s `pipeline-tests` job runs `--unit`
+  on every push to dev + every PR to main. Fast, deterministic, no NOAA
+  dependency. The standalone `test.yml` workflow it replaced was deleted
+  2026-05-09 to consolidate the gating surface.
 * `.github/workflows/refresh-data.yml` runs the equivalent of layer 3 + 4
   via `assert_outputs.py` after the daily NOAA fetch. Soft-fail
   (`continue-on-error: true`) so a flaky NOAA day doesn't block the
