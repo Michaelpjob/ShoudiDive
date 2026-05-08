@@ -1,0 +1,219 @@
+name: Verify live deploy
+
+# Runs against shouldidive.com (production) immediately after every
+# successful refresh-data.yml run + on every wind-only refresh, plus
+# on a 4-hour cron as continuous monitoring + on workflow_dispatch
+# for manual re-runs.
+#
+# This is the gate that closes the "deployed but broken" gap. The
+# 2026-05-07 white-screen incident showed up in production for
+# ~25 minutes; this workflow would have flagged it within ~3 min of
+# Cloudflare serving the bad bundle, opened an issue, and
+# (eventually, if wired) auto-rolled-back.
+#
+# See tests/CHECKPOINTS.md "live-cp-*" rows for what each step asserts.
+#
+# Output:
+#   - inline annotations on the run page
+#   - rolling GitHub issue tagged `live-deploy-broken` (auto-opened
+#     on failure, auto-closed on next pass)
+
+on:
+  workflow_run:
+    # Fire only after the upstream deploy workflows complete.
+    # `types: [completed]` includes both success + failure; we gate
+    # explicitly on conclusion below so we don't probe a deploy that
+    # didn't actually happen.
+    workflows: ["Refresh ocean data + deploy", "Refresh wind + deploy"]
+    types: [completed]
+  schedule:
+    # Continuous monitoring — every 4 hours, independent of deploys.
+    # Catches bugs that only manifest after a CDN edge cache cycles,
+    # or upstream feeds going red after we've shipped.
+    - cron: "15 */4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write   # for the rolling "live-deploy-broken" issue
+
+concurrency:
+  group: deploy-verify
+  cancel-in-progress: true
+
+jobs:
+
+  # ---------------------------------------------------------------------
+  # Skip if the upstream deploy itself failed — we'd just be probing
+  # the LAST successful deploy, which already passed verification.
+  # workflow_dispatch + schedule run unconditionally.
+  # ---------------------------------------------------------------------
+  gate:
+    name: gate
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.decide.outputs.should_run }}
+    steps:
+      - id: decide
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            if [ "${{ github.event.workflow_run.conclusion }}" = "success" ]; then
+              echo "should_run=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "should_run=false" >> "$GITHUB_OUTPUT"
+              echo "Upstream deploy concluded with '${{ github.event.workflow_run.conclusion }}' — skipping"
+            fi
+          else
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ---------------------------------------------------------------------
+  # live-cp-manifest + live-cp-pngs + live-cp-perf — fast HTTP probe
+  # of the live deploy. Pure node:fetch, no browser. ~10 s.
+  # ---------------------------------------------------------------------
+  live-cp-manifest:
+    name: live-cp-manifest
+    needs: gate
+    if: needs.gate.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Probe manifest + PNGs + perf budget
+        env:
+          LIVE_BASE_URL: https://shouldidive.com
+        run: node tests/live-checkpoints/live-manifest.mjs
+
+  # ---------------------------------------------------------------------
+  # live-cp-render — Puppeteer hits the live homepage and asserts the
+  # bundle mounts cleanly + the SST overlay paints + saved-spots
+  # populate. ~60 s.
+  # ---------------------------------------------------------------------
+  live-cp-render:
+    name: live-cp-render
+    needs: gate
+    if: needs.gate.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - name: Install (puppeteer + Chromium)
+        run: npm install --no-audit --no-fund
+      - name: Headless browser smoke against shouldidive.com
+        env:
+          LIVE_BASE_URL: https://shouldidive.com
+        run: npm run test:live-runtime
+
+  # ---------------------------------------------------------------------
+  # On any live-* check failing, open / update a rolling GitHub Issue
+  # tagged `live-deploy-broken`. On all-pass, close the issue.
+  #
+  # Same upsert pattern as the validation watchdog block in
+  # refresh-data.yml — single rolling issue, never spammy.
+  # ---------------------------------------------------------------------
+  sync-issue:
+    name: sync-issue
+    needs: [live-cp-manifest, live-cp-render]
+    # if: always() — run regardless of upstream verdict so we can also
+    # CLOSE the issue when checks pass after a previous failure.
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compute outcome + body
+        id: compute
+        run: |
+          set +e
+          manifest_outcome="${{ needs.live-cp-manifest.result }}"
+          render_outcome="${{ needs.live-cp-render.result }}"
+
+          # `result` is "success" | "failure" | "cancelled" | "skipped".
+          # Treat anything other than "success" as red, EXCEPT
+          # "skipped" (when upstream-deploy-failure caused us to skip).
+          fail_count=0
+          [ "$manifest_outcome" != "success" ] && [ "$manifest_outcome" != "skipped" ] && fail_count=$((fail_count + 1))
+          [ "$render_outcome"   != "success" ] && [ "$render_outcome"   != "skipped" ] && fail_count=$((fail_count + 1))
+
+          # If everything was skipped (upstream failed), don't
+          # touch the issue — the upstream deploy already alerted.
+          if [ "$manifest_outcome" = "skipped" ] && [ "$render_outcome" = "skipped" ]; then
+            echo "outcome=skipped" >> "$GITHUB_OUTPUT"
+          elif [ "$fail_count" -gt 0 ]; then
+            echo "outcome=fail" >> "$GITHUB_OUTPUT"
+            {
+              echo "title=Live deploy verification failed (${fail_count}/2 checks)"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "outcome=pass" >> "$GITHUB_OUTPUT"
+          fi
+          echo "manifest_outcome=$manifest_outcome" >> "$GITHUB_OUTPUT"
+          echo "render_outcome=$render_outcome"     >> "$GITHUB_OUTPUT"
+
+      - name: Render issue body
+        id: body
+        if: steps.compute.outputs.outcome == 'fail'
+        run: |
+          {
+            echo "# Live deploy verification failed"
+            echo
+            echo "_Triggered by: \`${{ github.event_name }}\` at $(date -u '+%Y-%m-%d %H:%MZ')_"
+            echo
+            echo "[View this run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+            echo
+            echo "## Status"
+            echo
+            echo "| Check               | Result |"
+            echo "|---------------------|--------|"
+            echo "| live-cp-manifest    | ${{ steps.compute.outputs.manifest_outcome }} |"
+            echo "| live-cp-render      | ${{ steps.compute.outputs.render_outcome }} |"
+            echo
+            echo "Open the failing job(s) in the run for the actionable detail."
+            echo
+            echo "---"
+            echo
+            echo "_This issue is auto-managed by \`.github/workflows/deploy-verify.yml\`._"
+            echo "_It will close itself when the next live verification passes._"
+          } > issue-body.md
+
+      - name: Sync GitHub Issue
+        if: steps.compute.outputs.outcome != 'skipped'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OUTCOME: ${{ steps.compute.outputs.outcome }}
+          TITLE: ${{ steps.compute.outputs.title }}
+        run: |
+          set -e
+          gh label create live-deploy-broken \
+            --color "B91C1C" \
+            --description "Auto-managed by .github/workflows/deploy-verify.yml" \
+            2>/dev/null || true
+
+          existing=$(gh issue list \
+            --label live-deploy-broken \
+            --state open \
+            --json number \
+            --jq '.[0].number' || true)
+
+          if [ "$OUTCOME" = "fail" ]; then
+            if [ -n "$existing" ]; then
+              gh issue edit "$existing" \
+                --title "$TITLE" \
+                --body-file issue-body.md
+              echo "Updated live-deploy-broken issue #$existing"
+            else
+              gh issue create \
+                --label live-deploy-broken \
+                --title "$TITLE" \
+                --body-file issue-body.md
+              echo "Opened new live-deploy-broken issue"
+            fi
+          elif [ "$OUTCOME" = "pass" ] && [ -n "$existing" ]; then
+            gh issue close "$existing" \
+              --comment "Live deploy verification passing as of $(date -u '+%Y-%m-%dT%H:%MZ')."
+            echo "Closed live-deploy-broken issue #$existing"
+          fi

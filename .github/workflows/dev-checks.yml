@@ -181,6 +181,49 @@ jobs:
         run: npm run test:runtime-smoke
 
   # ---------------------------------------------------------------------
+  # Web visual paint (Puppeteer × 3 viewports × 5 layers)
+  #
+  # For each viewport (desktop / tablet / mobile), boots the bundle
+  # and walks every layer chip, asserting the canvas paints non-
+  # trivial pixels. Catches "this layer renders blank at mobile width"
+  # regressions that the single-viewport runtime-smoke can't.
+  #
+  # Slower than runtime-smoke (~120 s) so it runs in its own job +
+  # is NOT a required check yet — runs on every PR for visibility but
+  # doesn't gate merge until the false-positive rate is understood.
+  # See tests/CHECKPOINTS.md for the rationale.
+  # ---------------------------------------------------------------------
+  cp-visual-paint:
+    name: cp-visual-paint
+    needs: web-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - name: Install
+        run: npm install --no-audit --no-fund
+      - name: Download dist artifact from web-build
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist-${{ github.sha }}
+          path: dist/
+      - name: 3 viewports × 5 layers paint check
+        run: npm run test:visual-paint
+      - name: Upload screenshots
+        # 15 PNGs (3 viewports × 5 layers) + summary.json. Lets a
+        # reviewer download the artifact to spot-check what each
+        # combination actually rendered.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-paint-${{ github.sha }}
+          path: test-output/visual-paint/
+          retention-days: 7
+
+  # ---------------------------------------------------------------------
   # Mobile (jest unit tests + package alignment)
   #
   # We deliberately skip the heavier puppeteer / expo-export layers from

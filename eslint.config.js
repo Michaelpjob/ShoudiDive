@@ -81,7 +81,11 @@ export default [
       "no-duplicate-imports":      "error",
       "no-constant-condition":     ["error", { checkLoops: false }],
       "no-empty":                  ["error", { allowEmptyCatch: true }],
-      "no-cond-assign":            ["error", "always"],
+      // "except-parens" allows the canonical `while ((m = regex.exec(s)))`
+      // idiom when the assignment is explicitly parenthesized — flags
+      // the genuinely-mistaken cases (`if (x = y)` without parens) but
+      // doesn't fight common JS patterns.
+      "no-cond-assign":            ["error", "except-parens"],
 
       // ---- React hooks gotchas. These cost nothing and catch real
       // bugs (stale closures, conditional hook calls).

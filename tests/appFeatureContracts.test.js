@@ -53,7 +53,14 @@ test("CI runs frontend and data feature contracts before publishing", () => {
   const deployWorkflow = read(".github/workflows/refresh-data.yml");
   const frontendWorkflow = read(".github/workflows/frontend-tests.yml");
 
-  assert.equal(pkg.scripts.test, "node --test tests/*.test.js");
+  // Relaxed from `assert.equal` to `assert.match` so adding more glob
+  // targets to the test script (e.g. tests/checkpoints/*.test.js)
+  // doesn't break the contract — what matters is that `npm test`
+  // covers tests/*.test.js. Tightening this back to assert.equal
+  // would defeat the per-folder checkpoint pattern in CHECKPOINTS.md.
+  assert.match(pkg.scripts.test, /^node --test tests\/\*\.test\.js\b/,
+    "pkg.scripts.test must run `node --test` over the top-level tests/*.test.js glob, " +
+    "optionally followed by additional globs (e.g. tests/checkpoints/*.test.js)");
   assert.equal(pkg.scripts["test:data-contracts"], "node tests/dataFeatureContracts.mjs");
   assert.match(frontendWorkflow, /Run frontend regression tests[\s\S]*npm test[\s\S]*Build[\s\S]*npm run build/);
   assert.match(deployWorkflow, /Run frontend regression tests[\s\S]*npm test[\s\S]*Run data feature contracts[\s\S]*npm run test:data-contracts[\s\S]*Build[\s\S]*npm run build/);

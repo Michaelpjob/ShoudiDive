@@ -69,7 +69,9 @@ jobs:
         run: python pipeline/check_manifest_freshness.py --layers wind,wind5d,swell5d,current5d --skip-top-level
 
       - name: Install JS dependencies
-        run: npm ci
+        # `npm install` rather than `npm ci` to tolerate the lockfile
+        # drift introduced 2026-05-07 (new ESLint + puppeteer deps).
+        run: npm install --no-audit --no-fund
 
       - name: Build
         run: npm run build
