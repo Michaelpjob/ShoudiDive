@@ -30,7 +30,12 @@ jobs:
           cache: npm
 
       - name: Install JS dependencies
-        run: npm ci
+        # `npm install` rather than `npm ci` until the lockfile is
+        # regenerated locally with the new ESLint + puppeteer deps
+        # added 2026-05-07. Drop back to `npm ci` after the next
+        # local `npm install`. Same drift-tolerance the dev-checks
+        # web jobs use.
+        run: npm install --no-audit --no-fund
 
       - name: Run frontend regression tests
         run: npm test

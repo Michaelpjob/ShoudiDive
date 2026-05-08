@@ -263,7 +263,11 @@ jobs:
           fi
 
       - name: Install JS dependencies
-        run: npm ci
+        # `npm install` rather than `npm ci` to tolerate the lockfile
+        # drift introduced 2026-05-07 (new ESLint + puppeteer deps;
+        # not regenerated locally because no node on the user's host).
+        # Drop back to `npm ci` after a local `npm install` commit.
+        run: npm install --no-audit --no-fund
 
       - name: Run frontend regression tests
         # Soft-fail. The dev-checks gate runs the same tests on every
