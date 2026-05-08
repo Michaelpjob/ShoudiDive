@@ -56,25 +56,40 @@ jobs:
         # (AQUA_MODIS, SNPP_VIIRS, S3A_OLCI — all ~1-2 day lag). Without
         # it the chl blender silently falls back to NOAA-only sources
         # (~4 day lag floor).
+        # timeout-minutes added 2026-05-08: this step has hung
+        # twice on NOAA ERDDAP timeouts, blocking subsequent Build +
+        # Deploy steps for 25+ min and stranding hotfixes. Hard cap
+        # at 8 minutes so a stuck fetch can't take down a deploy.
         continue-on-error: true
+        timeout-minutes: 8
         env:
           EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
         run: python pipeline/fetch.py
 
+      # Per-step timeout-minutes added 2026-05-08 across every external-
+      # network step. Same root cause as the fetch.py step above: a
+      # single hung NOAA / NOMADS connection would hold the whole
+      # workflow (and therefore the deploy) for the GitHub Actions
+      # default of 6 hours. 5-min budget per step is plenty for normal
+      # operation and bounded enough to never strand a hotfix.
       - name: Fetch latest WaveWatch III
         continue-on-error: true
+        timeout-minutes: 5
         run: python pipeline/fetch_waves.py
 
       - name: Fetch 7-day precipitation (NOAA CPC)
         continue-on-error: true
+        timeout-minutes: 5
         run: python pipeline/fetch_precip.py
 
       - name: Fetch CA river discharge (USGS NWIS)
         continue-on-error: true
+        timeout-minutes: 5
         run: python pipeline/fetch_rivers.py
 
       - name: Fetch CA tide range (NOAA CO-OPS)
         continue-on-error: true
+        timeout-minutes: 5
         run: python pipeline/fetch_tides.py
 
       - name: Fetch surface currents
@@ -82,6 +97,7 @@ jobs:
         # lunar phase, and the committed wind forecast buckets into an
         # explicitly labeled short-horizon surface-current estimate.
         continue-on-error: true
+        timeout-minutes: 5
         run: python pipeline/fetch_currents.py
 
       - name: Refresh climatology if needed
@@ -105,6 +121,7 @@ jobs:
         # back to the shelf-from-distance approximation when bathy.png
         # is missing.
         continue-on-error: true
+        timeout-minutes: 5
         run: python pipeline/fetch_bathy.py
 
       - name: Probe all external feeds
@@ -115,6 +132,7 @@ jobs:
         # reads. Soft-fail so a single broken feed doesn't block the
         # deploy — fetch scripts have their own retries and fallbacks.
         continue-on-error: true
+        timeout-minutes: 5
         env:
           EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
         run: python pipeline/check_feeds.py
