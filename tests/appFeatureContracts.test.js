@@ -25,10 +25,20 @@ test("Temp keeps historical and beta forecast SST timelines instead of reverting
   assert.match(app, /layer === "sst" && hasSstTimeline \?\s*\(\s*<div className="composite wind-grid-host">[\s\S]*Sea temp forecast[\s\S]*<SstModeToggle[\s\S]*<SstCurrentCard sel=\{sstActiveSel\} units=\{units\} mode=\{activeSstMode\} \/>/);
   assert.match(mobileSheet, /layer === "sst" && hasSstTimeline \? `Sea temp/);
   assert.match(mobileSheet, /layer === "sst" && hasSstTimeline \?\s*\(\s*<>[\s\S]*<SstModeToggle[\s\S]*<SstCurrentCard sel=\{activeSstSel\} units=\{units\} mode=\{activeSstMode\} \/>/);
-  assert.match(dataSource, /if \(layer === "sst7d"\)/);
-  assert.match(dataSource, /else if \(layer === "sst5d"\)/);
-  assert.match(dataSource, /state\.layers\.sst7d = \{ summary \}/);
-  assert.match(dataSource, /state\.layers\.sst5d = \{ summary \}/);
+  // 2026-05-09: dataSource.js's loadManifest if/else if chain was split
+  // into per-layer files under src/lib/loaders/. The state.layers.sst7d /
+  // sst5d assignment lines now live in those files. Read them so the
+  // contract still pins the same data shape regardless of where in the
+  // codebase the assignment happens.
+  const sst7dLoader = read("src/lib/loaders/sst7d.js");
+  const sst5dLoader = read("src/lib/loaders/sst5d.js");
+  // Loader registry must dispatch to a per-layer loader, not run an
+  // inline if/else chain that's prone to duplicate-branch bugs.
+  assert.match(dataSource, /LAYER_LOADERS\[layer\]/);
+  assert.match(dataSource, /from "\.\/loaders\/index\.js"/);
+  // The actual sst7d/sst5d state writes now live in the per-layer files.
+  assert.match(sst7dLoader, /state\.layers\.sst7d = \{ summary \}/);
+  assert.match(sst5dLoader, /state\.layers\.sst5d = \{ summary \}/);
 });
 
 test("Current, swell, wind, and mobile overlay features remain wired", () => {
