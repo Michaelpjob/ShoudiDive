@@ -1,0 +1,520 @@
+/* ---------- Wind 5-day grid (replaces the legacy 4-pill control) -------- */
+
+.wind-day-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wind-day-grid.empty {
+  color: var(--ink-3);
+  font-size: 12px;
+  padding: 12px;
+}
+
+.wind-best-window {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--r-2);
+  background: rgb(34 197 94 / 0.10);
+  border: 1px solid rgb(34 197 94 / 0.45);
+  color: var(--ink);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+.wind-best-window:hover {
+  background: rgb(34 197 94 / 0.18);
+}
+.wind-best-window .best-dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: rgb(34 197 94);
+  box-shadow: 0 0 0 3px rgb(34 197 94 / 0.18);
+}
+.wind-best-window .best-text { line-height: 1.3; }
+
+.wind-days {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wind-day-grid.layout-row .wind-days {
+  flex-direction: row;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  scroll-snap-type: x mandatory;
+}
+.wind-day-grid.layout-row .wind-day-card {
+  min-width: 240px;
+  scroll-snap-align: start;
+  flex: 0 0 auto;
+}
+
+.wind-day-card {
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  background: var(--bg-panel-solid);
+  padding: 8px 10px;
+}
+.wind-day-card.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.wind-day-card.conf-medium {
+  border-left: 2px dashed var(--warn);
+}
+.wind-day-card.conf-low {
+  border-left: 2px dashed var(--warn);
+  opacity: 0.92;
+}
+
+.day-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line-2);
+}
+.day-header-text { display: flex; gap: 8px; align-items: baseline; }
+.day-weekday { font-weight: 600; font-size: 12.5px; }
+.day-date { color: var(--ink-3); font-size: 11px; }
+.day-confidence {
+  color: var(--warn);
+  font-size: 10.5px;
+  font-style: italic;
+}
+
+.bucket-stack { display: flex; flex-direction: column; gap: 4px; }
+
+.bucket-cell {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--r-1);
+  background: transparent;
+  color: var(--ink);
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  font-size: 11.5px;
+  position: relative;
+}
+.bucket-cell:hover { background: var(--bg-sunken); }
+.bucket-cell.active {
+  background: var(--bg-sunken);
+  border-color: var(--accent);
+}
+.bucket-cell.warn { /* small craft territory — no special bg, just the ⚠ icon */ }
+
+.bucket-time {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.bucket-icon { font-size: 13px; }
+.bucket-label { font-weight: 500; }
+.bucket-hours { color: var(--ink-3); font-size: 10.5px; }
+
+.bucket-dir {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  color: var(--ink-2);
+}
+.bucket-arrow { font-size: 14px; line-height: 1; }
+.bucket-cardinal { font-weight: 500; }
+
+.bucket-speed {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 56px;
+  text-align: right;
+}
+
+.bucket-range {
+  grid-column: 1 / -1;
+  position: relative;
+  height: 4px;
+  background: var(--line-2);
+  border-radius: 2px;
+  margin-top: 4px;
+  overflow: hidden;
+}
+.bucket-range-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 2px;
+  opacity: 0.85;
+}
+
+.bucket-warn {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 11px;
+  color: var(--warn);
+}
+
+.bucket-overnight {
+  font-size: 10.5px;
+  color: var(--ink-3);
+  padding: 4px 8px;
+}
+
+.hourly-toggle {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+  font-family: inherit;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: var(--r-1);
+  cursor: pointer;
+  margin-top: 4px;
+}
+.hourly-toggle:hover { background: var(--bg-sunken); }
+
+/* Hourly drill-down — 18 cells from 4 am to 9 pm. */
+.hourly-strip {
+  margin-top: 6px;
+  padding: 8px;
+  background: var(--bg-sunken);
+  border-radius: var(--r-1);
+}
+.hourly-row {
+  display: grid;
+  grid-template-columns: repeat(18, 1fr);
+  gap: 2px;
+  align-items: end;
+}
+.hourly-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 9px;
+  font-family: "JetBrains Mono", monospace;
+  color: var(--ink-2);
+  gap: 2px;
+}
+.hourly-time { font-size: 9px; color: var(--ink-3); }
+.hourly-bar-wrap {
+  width: 100%;
+  height: 28px;
+  background: var(--line-2);
+  border-radius: 1px;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+}
+.hourly-bar {
+  width: 100%;
+  border-radius: 1px;
+  min-height: 2px;
+  transition: height 200ms ease;
+}
+.hourly-kt { font-size: 9px; font-weight: 600; color: var(--ink); }
+.hourly-arrow { font-size: 11px; line-height: 1; }
+.hourly-note {
+  margin-top: 6px;
+  font-size: 9.5px;
+  color: var(--ink-3);
+  font-style: italic;
+}
+
+/* ---------- Wind current-selection card (panel summary above timeline) ---- */
+
+.wind-current-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wind-current-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  background: var(--bg-panel-solid);
+}
+.wcs-headline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.wcs-time {
+  font-size: 11px;
+  color: var(--ink-3);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wcs-kt-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.wcs-kt {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.wcs-kt-unit {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-3);
+  margin-left: 2px;
+}
+.wcs-dir {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.wcs-confidence {
+  font-size: 10.5px;
+  color: var(--warn);
+  font-style: italic;
+}
+.current-beta-note {
+  color: oklch(0.48 0.13 80);
+}
+[data-theme="dark"] .current-beta-note {
+  color: oklch(0.86 0.12 80);
+}
+
+/* ---------- Wind timeline (Windy-style scrubber, sticky bottom of map) ---- */
+
+.wind-timeline {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(900px, calc(100% - 24px));
+  height: 64px;
+  background: var(--bg-panel);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  box-shadow: var(--shadow-2);
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  z-index: 18;
+  overflow: visible;
+}
+.wind-timeline.dragging { cursor: grabbing; }
+
+.tl-days {
+  position: absolute;
+  inset: 0 0 32px 0;        /* leaves bottom 32px for ticks */
+  border-bottom: 1px solid var(--line-2);
+}
+.tl-day-cell {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  padding: 5px 8px;
+  border-right: 1px solid var(--line-2);
+}
+.tl-day-cell:last-child { border-right: none; }
+.tl-day-cell.odd  { background: rgb(255 255 255 / 0.02); }
+.tl-day-cell.conf-medium .tl-day-label::after {
+  content: " ~";
+  color: var(--warn);
+}
+.tl-day-cell.conf-low .tl-day-label::after {
+  content: " ~~";
+  color: var(--warn);
+}
+.tl-day-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-2);
+  letter-spacing: 0.02em;
+}
+
+.tl-tickrow {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 32px;
+  pointer-events: none;
+}
+.tl-tick {
+  position: absolute;
+  bottom: 0;
+  transform: translateX(-50%);
+}
+.tl-tick.day {
+  width: 1.5px;
+  height: 32px;
+  background: var(--line);
+}
+.tl-tick.major {
+  width: 1px;
+  height: 14px;
+  background: var(--ink-3);
+  opacity: 0.6;
+}
+.tl-tick.minor {
+  width: 1px;
+  height: 6px;
+  background: var(--ink-3);
+  opacity: 0.3;
+}
+.tl-hour-label {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  font-family: "JetBrains Mono", monospace;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.tl-playhead {
+  position: absolute;
+  top: -10px;
+  bottom: 0;
+  pointer-events: none;
+  /* When the user releases a drag, we want the playhead to glide to its
+     snap point rather than jump. cubic-bezier(0.2, 0.7, 0.3, 1) is the
+     standard "ease-out" curve that feels responsive without overshoot.
+     During an active drag we set follow-finger 1:1 by overriding the
+     transition (.wind-timeline.dragging .tl-playhead below). */
+  transition: left 140ms cubic-bezier(0.2, 0.7, 0.3, 1);
+  will-change: left;
+}
+.wind-timeline.dragging .tl-playhead {
+  /* Follow the finger 1:1 while dragging — no animation lag.
+     The pointermove handler writes raw pixel position; on pointerup
+     we drop dragX, the snapped position re-renders, and the
+     above transition gracefully eases the playhead to the snap point. */
+  transition: none;
+}
+/* Day cells get a quiet hover affordance on desktop so users can see
+   "release here lands you on this day". Disabled on coarse pointers
+   where hover is meaningless and the press-down feedback handles it. */
+@media (hover: hover) and (pointer: fine) {
+  .tl-day-cell {
+    transition: background 100ms ease-out;
+  }
+  .wind-timeline:not(.dragging) .tl-day-cell:hover {
+    background: rgb(255 255 255 / 0.04);
+  }
+}
+.tl-playhead-stem {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  background: var(--accent);
+  transform: translateX(-50%);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.18);
+}
+.tl-playhead-badge {
+  position: absolute;
+  top: -28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-panel-solid);
+  border: 1px solid var(--accent);
+  color: var(--ink);
+  padding: 4px 8px;
+  border-radius: var(--r-1);
+  font-size: 11px;
+  white-space: nowrap;
+  box-shadow: var(--shadow-1);
+  font-family: "JetBrains Mono", monospace;
+}
+.tl-playhead-badge.align-center { left: 50%; transform: translateX(-50%); }
+.tl-playhead-badge.align-left   { left: 0;   transform: translateX(-4px); }
+.tl-playhead-badge.align-right  { right: 0;  transform: translateX(4px); left: auto; }
+.tl-pb-time { font-weight: 600; }
+.tl-pb-kt {
+  color: rgb(15 23 42);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 600;
+  font-size: 10.5px;
+}
+.tl-pb-dir { font-size: 10.5px; color: var(--ink-2); }
+.tl-pb-est { color: var(--ink-3); font-style: italic; margin-left: 2px; }
+.sst-timeline .tl-day-label {
+  font-size: 10px;
+}
+
+@media (max-width: 760px), (hover: none) and (pointer: coarse) {
+  .wind-timeline {
+    /* User asked 2026-05-04: move slider to top middle, smaller
+       footprint. Also fixes a rendering bug — the desktop rule sets
+       transform: translateX(-50%) which the previous mobile override
+       didn't reset, so combined with left: 6 the timeline got
+       translated ~200 px off the left edge of the screen ("left side
+       cut off"). Anchored top-center now, narrower width, transform
+       reused for centering. */
+    top: 12px;
+    bottom: auto;
+    height: 56px;
+    width: min(360px, calc(100% - 24px));
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+  }
+  /* When the slider is at the top, push the moon widget below it so
+     they stack instead of fighting for the same upper-right corner.
+     This class is added by App.jsx on wind/swell layers; on
+     temp/chl/viz layers (no timeline) the moon stays at the default
+     top: 8 from the base .moon-widget mobile rule. */
+  .moon-widget.below-timeline {
+    top: 80px;
+  }
+  .tl-day-label {
+    font-size: 10px;
+  }
+  .sst-timeline .tl-day-cell {
+    padding: 5px 3px;
+  }
+  .sst-timeline .tl-day-label {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: clip;
+    white-space: nowrap;
+    font-size: 8px;
+  }
+  .tl-hour-label {
+    font-size: 8px;
+  }
+  .tl-playhead-badge {
+    font-size: 10px;
+    padding: 3px 6px;
+  }
+}

@@ -39,6 +39,9 @@ REQUIRED_CHECKS=(
   "mobile-static"
   "secrets-scan"
   "workflow-lint"
+  "manifest-validate" # LayerSpec contract — catches range/scale drift
+                      # between pipeline encoder and frontend decoder
+                      # (added 2026-05-09 in the Tier-2 architecture PR)
 )
 
 # Build the JSON contexts list inline.

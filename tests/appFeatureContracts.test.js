@@ -34,7 +34,17 @@ test("Temp keeps historical and beta forecast SST timelines instead of reverting
 test("Current, swell, wind, and mobile overlay features remain wired", () => {
   const app = read("src/App.jsx");
   const mobileSheet = read("src/components/MobileSheet.jsx");
-  const styles = read("src/styles/app.css");
+  // 2026-05-09: app.css was split into per-area files (tokens, shell,
+  // popups, mobile, wind) — read them all and concat for the grep
+  // contract checks below. The barrel `app.css` only carries @imports
+  // now, so individual rule names live in their respective area files.
+  const styles =
+    read("src/styles/app.css") +
+    read("src/styles/tokens.css") +
+    read("src/styles/shell.css") +
+    read("src/styles/popups.css") +
+    read("src/styles/mobile.css") +
+    read("src/styles/wind.css");
 
   assert.match(app, /<CurrentTimeline sel=\{currentSel\} setSel=\{setCurrentSel\} \/>/);
   assert.match(app, /<CurrentCurrentCard sel=\{currentSel\} \/>/);
