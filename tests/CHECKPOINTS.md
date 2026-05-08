@@ -30,6 +30,7 @@ The test pyramid runs in two distinct stages:
 | `cp-workflow-lint`    | dev   | <10 s    | Malformed `.github/workflows/*.yml`                                                      | Workflow logic bugs                                          |
 | `cp-pipeline-unit`    | dev   | <30 s    | Python static-compile + pytest unit layer (kriging, scoring, watchdog, forecast math)    | Pipeline integration failures (NOAA timeouts etc.)          |
 | `cp-data-shape`       | dev   | <5 s     | Manifest schema regressions (missing layer keys, broken decoders)                        | "Manifest is fresh" — that's a live-side concern             |
+| `cp-manifest-validate`| dev   | <5 s     | LayerSpec contract — range/scale drift between pipeline encoder and frontend decoder     | Per-cell pixel-value drift (need a baseline diff for that)   |
 | `cp-rendering-math`   | dev   | <5 s     | Colormap stops, `project()`/`unproject()` round-trip, sst-trend palette                  | Visual rendering (see `cp-visual-paint`)                     |
 | `cp-sst-trend-math`   | dev   | <5 s     | Phase A `getSstTrend` math, sparkline shape, NaN propagation                             | Trend feels right (subjective)                               |
 | `cp-mobile-adaptive`  | dev   | <5 s     | Mobile breakpoint helpers, gesture-isolation classes, touch-target floors                | iOS Safari runtime quirks                                    |
