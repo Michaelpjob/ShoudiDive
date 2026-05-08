@@ -558,42 +558,58 @@ body {
   vertical-align: baseline;
 }
 
-/* Tip jar — same visual register as the rest of "How to read this"
-   so it doesn't feel like an ad, just a footer note. The link picks
-   up the existing accent for affordance. */
-.info-tip {
-  border-top: 1px solid var(--line);
-  margin-top: 8px;
-  padding-top: 10px;
-}
-.info-tip .info-p {
-  font-size: 11px;
-  color: var(--ink-3);
-  margin: 0;
-}
-.tip-link {
-  color: var(--accent);
+/* Topbar tip jar — small inline fish icon + "click for WSB" text,
+   linking to the creator's Venmo. Designed to read as a wink to the
+   spearfishing community (WSB = white sea bass, the SoCal trophy
+   fish), not an ad. Lives between Sources and Settings.
+   The .info-tip + .ms-tip rules that previously styled an in-panel
+   tip note are removed — same content moved here as a single
+   always-visible affordance. */
+.tip-fish {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ink-2);
   text-decoration: none;
-  border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
-  padding-bottom: 1px;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  transition: color 0.12s, background 0.12s, border-color 0.12s;
   white-space: nowrap;
 }
-.tip-link:hover {
-  border-bottom-color: var(--accent);
+.tip-fish:hover {
+  color: var(--ink);
+  background: var(--bg-sunken);
+  border-color: var(--line);
 }
-
-/* Mobile sheet tip-jar variant. ms-section already has its own
-   spacing rhythm — we just style the wrapper + match the desktop
-   muted-footer feel. */
-.ms-tip {
-  border-top: 1px solid var(--line);
-  padding-top: 12px;
+.tip-fish:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
-.ms-tip-text {
-  font-size: 11.5px;
-  color: var(--ink-3);
-  margin: 0;
-  line-height: 1.5;
+.tip-fish-icon {
+  flex-shrink: 0;
+  /* Subtle horizontal float — barely perceptible swim. Reduced-motion
+     users get a static icon. */
+  animation: tip-fish-swim 2.4s ease-in-out infinite;
+}
+@keyframes tip-fish-swim {
+  0%, 100% { transform: translateX(0); }
+  50%      { transform: translateX(2px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tip-fish-icon { animation: none; }
+}
+.tip-fish-text {
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+/* On narrow / coarse-pointer screens the topbar gets cramped —
+   keep the fish icon, hide the text. The tooltip + the icon alone
+   carry the affordance. */
+@media (max-width: 760px), (hover: none) and (pointer: coarse) {
+  .tip-fish-text { display: none; }
+  .tip-fish { padding: 4px 6px; }
 }
 
 /* Saved spots — bottom-left */

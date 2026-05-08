@@ -448,6 +448,34 @@ function TopBar({ onSettings, settingsOpen, dataState }) {
         <span>
           Sources: <strong>NOAA · IOOS · NASA OB.DAAC · Copernicus</strong>
         </span>
+        {/* Tip jar — visible on every layer, every device. The WSB
+            joke (white sea bass — the trophy spear fish in SoCal) +
+            small fish silhouette reads as a wink to free divers
+            specifically. Click opens the Venmo profile in a new tab. */}
+        <a
+          href="https://venmo.com/u/michaelpjob"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="tip-fish"
+          title="Tip the creator on Venmo (@michaelpjob)"
+        >
+          <svg
+            className="tip-fish-icon"
+            width="16"
+            height="14"
+            viewBox="0 0 32 28"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            {/* Simple silhouette: oval body + triangle tail. Renders
+                crisp at 14-18 px, scales to retina without blurring. */}
+            <path d="M19 4 C 11 4, 4 9, 2 14 C 4 19, 11 24, 19 24
+                     C 23 24, 26 22, 28 20 L 31 24 L 31 4 L 28 8
+                     C 26 6, 23 4, 19 4 Z M 21 12 a 1.5 1.5 0 1 1 0 3
+                     a 1.5 1.5 0 0 1 0 -3 Z" />
+          </svg>
+          <span className="tip-fish-text">click for WSB</span>
+        </a>
         {/* The MobileShell peek strip carries layer/value/time info on
             phones — the topbar just keeps the brand mark + settings cog
             on small screens (timestamp + sources are hidden via the
@@ -1601,23 +1629,6 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
                   : layer === "swell"
                   ? "NOAA WaveWatch III (gfswave wcoast 0.16°). HTSGW + PERPW + DIRPW pulled per hour via NOMADS byte-range fetch. 5-day forecast with hourly resolution; refreshed every cycle."
                   : "NOAA Coral Reef Watch · NASA OB.DAAC MODIS-Aqua · Copernicus GLO-MFC. Daily L3 composites, ~1 km grid, regridded to bounding box."}
-              </p>
-            </div>
-            {/* Tip jar — kept understated so it reads as a footer note,
-                not an ad. Independent of layer state. */}
-            <div className="info-section info-tip">
-              <p className="info-p">
-                Built by Michael for the CA dive community. If this saved
-                you a bad dive,{" "}
-                <a
-                  href="https://venmo.com/u/michaelpjob"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="tip-link"
-                >
-                  tip on Venmo @michaelpjob
-                </a>
-                .
               </p>
             </div>
           </div>
