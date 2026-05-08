@@ -24,7 +24,15 @@ on:
     # `types: [completed]` includes both success + failure; we gate
     # explicitly on conclusion below so we don't probe a deploy that
     # didn't actually happen.
-    workflows: ["Refresh ocean data + deploy", "Refresh wind + deploy"]
+    #
+    # The three workflows that produce a production CF Pages deploy:
+    #   - Deploy production (code-only fast path)  — push-to-main
+    #   - Refresh ocean data + deploy              — daily cron + dispatch
+    #   - Refresh wind + deploy                    — wind-only schedule
+    workflows:
+      - "Deploy production (code-only fast path)"
+      - "Refresh ocean data + deploy"
+      - "Refresh wind + deploy"
     types: [completed]
   schedule:
     # Continuous monitoring — every 4 hours, independent of deploys.
