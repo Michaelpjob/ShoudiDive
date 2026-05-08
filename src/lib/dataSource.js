@@ -55,22 +55,43 @@ export async function loadManifest() {
     }
     const manifest = await res.json();
     state.manifest = manifest;
-    for (const [layer, info] of Object.entries(manifest.layers || {})) {
-      // The init line: for every layer EXCEPT sst, zero out any
-      // existing slot map. For sst, preserve it so the sst7d/sst5d
-      // loaders (which write into state.layers.sst[<slot>]) can
-      // accumulate even when sst's own iteration runs first.
-      state.layers[layer] = layer === "sst" ? (state.layers.sst || {}) : {};
 
+    // 2026-05-09: dispatch loaders in PARALLEL instead of one-by-one.
+    // The previous serial `for await` ran sst → sst7d → sst5d → swell5d
+    // → wind5d → current5d → wind → viz → chl back-to-back, where each
+    // layer's full network round-trip + decode blocked the next. Boot
+    // time was the SUM of every layer's load time even though they're
+    // entirely independent.
+    //
+    // The parallel version awaits the slowest, not the sum, and each
+    // loader calls notify() on its own success so subscribed
+    // components (DataOverlay, timelines, saved-spots) re-render
+    // progressively as data arrives. The active layer paints as soon
+    // as IT is ready — the user doesn't wait for swell5d to decode 25
+    // PNGs to see SST.
+    //
+    // Safety: every loader writes only into state.layers[<its-name>]
+    // (or, for sst7d/sst5d, into state.layers.sst[<slot>] which is a
+    // disjoint key namespace from sst's own 1d/2d/3d slots). No two
+    // loaders write the same key, so parallelism is conflict-free.
+    // The init line below preserves the sst object across the
+    // sst/sst7d/sst5d trio for the same reason.
+    const tasks = [];
+    for (const [layer, info] of Object.entries(manifest.layers || {})) {
+      state.layers[layer] = layer === "sst" ? (state.layers.sst || {}) : {};
       const loader = LAYER_LOADERS[layer];
-      if (loader) {
-        await loader(info, state);
-      }
+      if (!loader) continue;
+      tasks.push(
+        loader(info, state)
+          .then(() => notify())
+          .catch((e) => console.warn(`dataSource: ${layer} loader threw`, e)),
+      );
       // Layers absent from LAYER_LOADERS (wave, precip, kd490 today)
       // are silently skipped — they're pipeline inputs the frontend
       // doesn't render. Adding one in the future = drop a new file
       // in src/lib/loaders/ and register it in loaders/index.js.
     }
+    await Promise.all(tasks);
   } catch (e) {
     console.warn("dataSource: manifest load failed, using mock data", e);
   } finally {
