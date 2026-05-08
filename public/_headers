@@ -87,9 +87,12 @@
 /data/*/*.json
   Cache-Control: public, max-age=300, must-revalidate
 
-# ---- Default for anything not matched above ------------------------
-# Conservative: tells the browser "you can cache, but check with us
-# first." Avoids the 4-hour CF default + the indefinite browser
-# default for unknown content.
-/*
-  Cache-Control: public, max-age=0, must-revalidate
+# Catch-all `/*` rule REMOVED 2026-05-08:
+# Cloudflare Pages MERGES every matching `_headers` rule into a
+# single response, so a fallback /* combined with the more specific
+# rules above produced ugly duplicate Cache-Control directives:
+#   `Cache-Control: public, max-age=60, must-revalidate, public, max-age=0, must-revalidate`
+# Browsers handle that fine (RFC 9111 takes the first max-age) but
+# the response headers were unreadable. Letting CF use its built-in
+# default (4 h browser TTL) for any URL not matched above is fine —
+# the explicit rules above cover every path that actually matters.

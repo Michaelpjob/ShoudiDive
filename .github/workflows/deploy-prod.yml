@@ -1,0 +1,86 @@
+name: Deploy production (code-only fast path)
+
+# Fast path for code-only changes. Triggered on every push to main —
+# typically a UI / pipeline / config change that doesn't need a fresh
+# data refresh. Total time: ~2 min (install → build → CF Pages).
+#
+# When this exists alongside refresh-data.yml:
+#   - push to main         → deploy-prod.yml only (this file)
+#   - schedule (daily 06z) → refresh-data.yml (data + build + deploy)
+#   - workflow_dispatch    → either, on demand
+#
+# Architectural rationale:
+# Until 2026-05-08 every push to main triggered the full
+# refresh-data.yml workflow, which runs ~12 upstream HTTP fetches
+# (NOAA / NASA / NOMADS / USGS / etc.) BEFORE the build + deploy step.
+# The data fetches are gated by `continue-on-error: true` but they
+# still consume their full time budget — and a single hung fetch
+# stranded code-only deploys for 25-30 min on the worst day. There's
+# no reason a UI change has to wait for NOAA to respond before going
+# live; the previously-committed PNGs in public/data/ are good enough
+# for the new bundle to read.
+#
+# This workflow is the orthogonal half: "ship the code, leave the
+# data alone." Build reads whatever PNGs were last committed (which
+# refresh-data.yml + refresh-wind.yml are already updating on their
+# own schedules), and pushes a new bundle to Cloudflare Pages.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# A push that arrives mid-deploy supersedes the in-flight one — we
+# only ever want the latest commit live. The old run is cancelled
+# automatically by GitHub.
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Hard cap on the whole job. Build typically lands in ~90 s; if
+    # we're past 5 min something's wrong (CF Pages hung etc.) and
+    # we'd rather fail fast than strand the deploy.
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install
+        # `npm install` rather than `npm ci` until the lockfile is
+        # regenerated locally. Same drift-tolerance every other web
+        # job in the repo currently uses.
+        run: npm install --no-audit --no-fund
+
+      - name: Build
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # --branch=main marks this deploy as production. CF Pages
+          # routes it to shouldidive.com (the production custom domain).
+          command: pages deploy dist --project-name=shouldidive --branch=main --commit-dirty=true
+
+      - name: Annotate run summary
+        run: |
+          {
+            echo "## Code-only deploy"
+            echo
+            echo "Bundle built and pushed to Cloudflare Pages production."
+            echo "Commit: \`${{ github.sha }}\`"
+            echo
+            echo "Data PNGs in \`public/data/\` were NOT refreshed by this workflow —"
+            echo "the daily \`refresh-data.yml\` cron handles that on its own schedule."
+          } >> "$GITHUB_STEP_SUMMARY"
