@@ -292,6 +292,23 @@ export default function MobileShell({
             <div className="ms-section-h">How to read this</div>
             <Info layer={layer} />
           </section>
+
+          {/* TIP JAR ------------------------------------------------------ */}
+          <section className="ms-section ms-tip">
+            <p className="ms-tip-text">
+              Built by Michael for the CA dive community. If this saved
+              you a bad dive,{" "}
+              <a
+                href="https://venmo.com/u/michaelpjob"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="tip-link"
+              >
+                tip on Venmo @michaelpjob
+              </a>
+              .
+            </p>
+          </section>
         </div>
       )}
 
