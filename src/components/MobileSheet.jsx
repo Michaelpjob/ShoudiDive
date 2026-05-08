@@ -292,23 +292,12 @@ export default function MobileShell({
             <div className="ms-section-h">How to read this</div>
             <Info layer={layer} />
           </section>
-
-          {/* TIP JAR ------------------------------------------------------ */}
-          <section className="ms-section ms-tip">
-            <p className="ms-tip-text">
-              Built by Michael for the CA dive community. If this saved
-              you a bad dive,{" "}
-              <a
-                href="https://venmo.com/u/michaelpjob"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="tip-link"
-              >
-                tip on Venmo @michaelpjob
-              </a>
-              .
-            </p>
-          </section>
+          {/* Tip-jar moved 2026-05-08: now lives in the topbar (the
+              tiny fish "click for WSB" link), visible on every layer
+              from the start. The mobile peek strip already hides the
+              topbar at narrow widths, so the topbar tip falls back
+              into view in the open sheet via the .topbar inside the
+              fixed shell — same affordance, less duplication. */}
         </div>
       )}
 
