@@ -558,6 +558,44 @@ body {
   vertical-align: baseline;
 }
 
+/* Tip jar — same visual register as the rest of "How to read this"
+   so it doesn't feel like an ad, just a footer note. The link picks
+   up the existing accent for affordance. */
+.info-tip {
+  border-top: 1px solid var(--line);
+  margin-top: 8px;
+  padding-top: 10px;
+}
+.info-tip .info-p {
+  font-size: 11px;
+  color: var(--ink-3);
+  margin: 0;
+}
+.tip-link {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  padding-bottom: 1px;
+  white-space: nowrap;
+}
+.tip-link:hover {
+  border-bottom-color: var(--accent);
+}
+
+/* Mobile sheet tip-jar variant. ms-section already has its own
+   spacing rhythm — we just style the wrapper + match the desktop
+   muted-footer feel. */
+.ms-tip {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.ms-tip-text {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  margin: 0;
+  line-height: 1.5;
+}
+
 /* Saved spots — bottom-left */
 .spots-bl {
   bottom: 12px;

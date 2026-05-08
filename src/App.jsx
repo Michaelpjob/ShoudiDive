@@ -1603,6 +1603,23 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
                   : "NOAA Coral Reef Watch · NASA OB.DAAC MODIS-Aqua · Copernicus GLO-MFC. Daily L3 composites, ~1 km grid, regridded to bounding box."}
               </p>
             </div>
+            {/* Tip jar — kept understated so it reads as a footer note,
+                not an ad. Independent of layer state. */}
+            <div className="info-section info-tip">
+              <p className="info-p">
+                Built by Michael for the CA dive community. If this saved
+                you a bad dive,{" "}
+                <a
+                  href="https://venmo.com/u/michaelpjob"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="tip-link"
+                >
+                  tip on Venmo @michaelpjob
+                </a>
+                .
+              </p>
+            </div>
           </div>
         </>)}
       </div>
