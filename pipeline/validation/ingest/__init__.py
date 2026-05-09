@@ -20,10 +20,13 @@ from .bdoutdoors import BdOutdoorsScraper
 from .beachcitiescuba import BeachCitiesCubaScraper
 from .cdip import CDIPScraper
 from .diveviz import DiveVizScraper
-from .eagle4 import Eagle4Scraper
 from .justgetwet import JustGetWetScraper
 from .ndbc import NDBCScraper
 from .reddit import RedditCAScraper
+from .southcoastdivers import SouthCoastDiversScraper
+# eagle4 retired 2026-05-09 — domain dead (DNS doesn't resolve from
+# GitHub Actions or the user's network). File kept on disk for
+# possible future revival.
 
 
 # Scraper roster for the hourly cron. Order doesn't matter — each
@@ -50,6 +53,13 @@ SCRAPERS = [
 
     # Tier 2 — prose, LLM-extracted (no-ops gracefully without API key)
     DiveVizScraper(),      # SD + LA + OC dive shop, two-blog feed, conf 0.85
+    SouthCoastDiversScraper(),  # Laguna group blog (Rich Parker / Louis
+                                # Umphenour). Daily prose posts at custom
+                                # PHP endpoint, dated filename timestamps.
+                                # Covers Bluebird Canyon + Woods Cove +
+                                # live-cam inferences from N/S Laguna —
+                                # complements BeachCitiesCuba (Shaw's Cove).
+                                # conf 0.80.
     BdOutdoorsScraper(),   # XenForo fishing/spear forum RSS — 4 feeds:
                            # central-CA fishing, SoCal offshore, CA sport,
                            # spearfishing. First central-CA signal in the
@@ -59,23 +69,18 @@ SCRAPERS = [
                            # Posts only (comments are 10x cost; revisit
                            # once we see the post-only signal). conf 0.80.
 
-    # Tier 1/2 — best-effort URL probe; URL in handoff didn't resolve
-    Eagle4Scraper(),       # Channel Islands dive shop, conf 0.85
+    # Eagle4Scraper retired 2026-05-09: eagle4pacific.com fails DNS
+    # resolution from both GitHub Actions runners and the user's
+    # network. Confirmed dead, not just sandbox-restricted. The
+    # scraper file is kept under source control so a future revival
+    # (if the shop renames/reopens) can re-import it; it just isn't
+    # in the active roster.
 
-    # Sources evaluated and skipped this round:
-    #   aquariusdivers.com/conditions    — link farm to CDIP/buoy widgets, no own data
-    #   beachcitiescuba.com/pages/...    — JS-rendered, BS4 sees empty body
-    #   spectreboat.com/weather          — affiliate widget linking to vizfinder.com
-    #   22ndstreet / H&M / Davey's       — JS-rendered SPAs (no RSS endpoint found)
-    #   vizfinder.com / spearfactor.com  — peer forecasters (Tier 1.5),
-    #     JS-rendered SPAs. Per the handoff: "reach out before scraping —
-    #     these are friendly small teams." Better as a partnership / API
-    #     ask than a scrape. When an RSS or JSON endpoint exists, drop in
-    #     a PeerForecasterScraper that writes to a SEPARATE
-    #     peer_forecasts.jsonl (NOT observations.jsonl) so score.py can
-    #     compute the three-way agreement metric documented in
-    #     01-architecture.md without conflating peer forecasts with
-    #     ground-truth.
+    # Sources evaluated and skipped this round (full audit in
+    # CANDIDATES.md). Most are link-aggregator pages that point at
+    # CDIP buoys (already covered by CDIPScraper) or webcams (need
+    # image-analysis pipeline, not text scraping). The handful with
+    # actual visibility numbers are wired above.
     # Re-evaluate quarterly; a working URL or a static fallback would
     # let any of these slot into the same scraper pattern.
 ]
