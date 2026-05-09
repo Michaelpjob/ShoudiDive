@@ -27,7 +27,7 @@ from PIL import Image, ImageDraw
 from scipy.spatial import cKDTree
 
 
-BBOX = dict(lat_min=31.8, lat_max=37.6, lng_min=-124.0, lng_max=-116.8)
+BBOX = dict(lat_min=31.8, lat_max=42.0, lng_min=-124.0, lng_max=-116.8)
 GRID_W, GRID_H = 280, 220
 UV_RANGE = (-1.5, 1.5)  # m/s, roughly 0..3 kt in either component.
 HORIZON_DAYS = 5

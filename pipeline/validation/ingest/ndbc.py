@@ -53,10 +53,14 @@ BUOYS: list[dict] = [
     {"stn": "46028", "name": "Cape San Martin",     "lat": 35.763, "lng": -121.893},
     {"stn": "46042", "name": "Monterey",            "lat": 36.787, "lng": -122.408},
 
-    # NorCal (out of bbox, skip until bbox extends):
-    # {"stn": "46013", "name": "Bodega Bay",         "lat": 38.235, "lng": -123.317},
-    # {"stn": "46014", "name": "Pt Arena",           "lat": 39.225, "lng": -123.980},
-    # {"stn": "46026", "name": "San Francisco",      "lat": 37.750, "lng": -122.838},
+    # NorCal — enabled 2026-05-09 alongside the bbox extension to
+    # latMax=42.0. Adds SST + swell coverage from SF Bay through
+    # Pt Arena, no secchi (buoys don't measure water clarity).
+    # Together with the central-coast buoys above, this gives full
+    # CA-coast scalar-grid coverage for the SST + Hs models.
+    {"stn": "46013", "name": "Bodega Bay",          "lat": 38.235, "lng": -123.317},
+    {"stn": "46014", "name": "Pt Arena",            "lat": 39.225, "lng": -123.980},
+    {"stn": "46026", "name": "San Francisco",       "lat": 37.750, "lng": -122.838},
 ]
 
 

@@ -37,7 +37,7 @@ from scipy.spatial import cKDTree
 from viz_predict import predict as viz_predict
 
 # Match the existing app's bbox.
-BBOX = dict(lat_min=31.8, lat_max=37.6, lng_min=-124.0, lng_max=-116.8)
+BBOX = dict(lat_min=31.8, lat_max=42.0, lng_min=-124.0, lng_max=-116.8)
 
 # Output grid (regular lat/lng over bbox). Same shape as wind for visual consistency.
 GRID_W, GRID_H = 140, 110

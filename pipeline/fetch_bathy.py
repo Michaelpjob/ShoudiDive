@@ -33,7 +33,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 OUT_PATH = REPO_ROOT / "public" / "data" / "bathy.png"
 
 # Match the rest of the pipeline's CA bbox.
-BBOX = dict(lat_min=31.8, lat_max=37.6, lng_min=-124.0, lng_max=-116.8)
+BBOX = dict(lat_min=31.8, lat_max=42.0, lng_min=-124.0, lng_max=-116.8)
 
 # Output PNG dimensions. 4× the model's standard 140×110 to preserve
 # shelf-edge detail; consumers bilinear-resample to their own grid.

@@ -2,7 +2,12 @@
 // Bounding box: lat 31.8°N–37.6°N, lng -124.0° to -116.8° (extended south to
 // include Las Islas Coronado and east to give Tijuana coast breathing room).
 
-export const BBOX = { latMin: 31.8, latMax: 37.6, lngMin: -124.0, lngMax: -116.8 };
+// 2026-05-09 — bumped latMax from 37.6 → 42.0 to expand from
+// SoCal+Bay-edge coverage to full California coast (Coronado Islands
+// → Oregon border). See docs/expansion-norcal.md for the full plan.
+// The aspect ratio shifts from ~0.81 (wide) to ~1.42 (tall); fitted-
+// rectangle math in getFitted() keys off this and scales automatically.
+export const BBOX = { latMin: 31.8, latMax: 42.0, lngMin: -124.0, lngMax: -116.8 };
 
 // Geographic aspect ratio (lng-degrees-as-distance / lat-degrees) at the
 // bbox's mid latitude. Lng degrees shrink by cos(lat); we compute it once
