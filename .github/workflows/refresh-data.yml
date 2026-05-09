@@ -345,6 +345,15 @@ jobs:
         run: npm run build
 
       - name: Deploy to Cloudflare Pages
+        # PRODUCTION DEPLOY GUARD: this step targets `--branch=main`,
+        # which is what CF Pages routes to shouldidive.com. Only fire
+        # when the workflow itself is running against the `main` ref.
+        # Without this guard, a workflow_dispatch run on any feature
+        # branch (e.g. expand-norcal) would publish that branch's
+        # untested bundle straight to production. The 2026-05-09
+        # NorCal-expansion preview triggered exactly that path —
+        # caught + cancelled mid-run. Defense-in-depth fix here.
+        if: ${{ github.ref == 'refs/heads/main' }}
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
