@@ -38,7 +38,20 @@ from PIL import Image
 # host, stride, pre_xy_dims, fallbacks, emit_age_sidecar) on top of
 # the contract-specified fields. Changing a range or scale = edit
 # LAYER_SPECS, not this file.
-from pipeline.lib.layer_spec import LAYER_SPECS
+#
+# Import handles BOTH invocation styles:
+#   * `python pipeline/fetch.py`  → cwd repo root, but sys.path[0] = pipeline/.
+#                                    Falls through to the second arm.
+#   * `python -m pipeline.fetch`   → sys.path[0] = repo root. First arm wins.
+# refresh-data.yml uses the script-style invocation (line 72), so the
+# second arm is the path the production cron actually takes. Without this
+# fallback, the daily refresh fails at module load with
+# `ModuleNotFoundError: No module named 'pipeline'` — caught the first
+# time on 2026-05-08 21:09 UTC, after PR #21 landed.
+try:
+    from pipeline.lib.layer_spec import LAYER_SPECS
+except ModuleNotFoundError:
+    from lib.layer_spec import LAYER_SPECS
 
 BBOX = dict(lat_min=31.8, lat_max=37.6, lng_min=-124.0, lng_max=-116.8)
 ERDDAP_BASE = "https://coastwatch.pfeg.noaa.gov/erddap/griddap"

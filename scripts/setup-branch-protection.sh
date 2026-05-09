@@ -11,18 +11,32 @@
 # What this enforces on the `main` branch:
 #
 #   - require pull request before merging
-#   - require all five dev-checks status contexts to pass
+#   - require all listed dev-checks status contexts to pass
 #   - require branch up-to-date with base before merging
 #   - disallow force pushes
 #   - disallow deletion
 #   - allow admin override (so the user can break-glass if the gate
 #     itself ever blocks a real emergency fix)
+#   - ALLOW github-actions bot to bypass the PR requirement (so the
+#     scheduled data-refresh + ingest workflows can commit refreshed
+#     PNGs / observations.jsonl directly to main without opening a PR
+#     each cycle — see bypass_pull_request_allowances below)
 #
 # Adding a new required check:
 #   1. Add a job to .github/workflows/dev-checks.yml — copy an existing
 #      job's pattern. Job-name = check-context.
 #   2. Append the new context to REQUIRED_CHECKS below.
 #   3. Re-run this script.
+#
+# 2026-05-08 update — bypass list added:
+#   The refresh-data, refresh-wind, and ingest-ground-truth workflows
+#   were all failing on push with `GH006: Protected branch update
+#   failed for refs/heads/main. - Changes must be made through a pull
+#   request.` That's by design — the PR-required rule applies to
+#   everyone by default. This script now grants the github-actions
+#   GitHub App an explicit bypass for that single rule, so scheduled
+#   bot pushes succeed while human + agent commits still go through
+#   the normal dev-checks gate.
 
 set -euo pipefail
 
@@ -65,7 +79,12 @@ payload=$(cat <<EOF
   "required_pull_request_reviews": {
     "dismiss_stale_reviews": false,
     "require_code_owner_reviews": false,
-    "required_approving_review_count": 0
+    "required_approving_review_count": 0,
+    "bypass_pull_request_allowances": {
+      "users": [],
+      "teams": [],
+      "apps": ["github-actions"]
+    }
   },
   "restrictions": null,
   "allow_force_pushes": false,
