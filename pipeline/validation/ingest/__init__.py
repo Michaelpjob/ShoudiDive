@@ -17,6 +17,7 @@ import sys
 from datetime import datetime, timezone
 
 from .bdoutdoors import BdOutdoorsScraper
+from .beachcitiescuba import BeachCitiesCubaScraper
 from .cdip import CDIPScraper
 from .diveviz import DiveVizScraper
 from .eagle4 import Eagle4Scraper
@@ -39,7 +40,13 @@ SCRAPERS = [
                            # has no nearby station.
 
     # Tier 1 — labelled prose, regex-extractable, no LLM dependency
-    JustGetWetScraper(),   # SD dive shop, La Jolla / Pt Loma / Coronados, conf 0.85
+    JustGetWetScraper(),         # SD dive shop, La Jolla / Pt Loma / Coronados, conf 0.85
+    BeachCitiesCubaScraper(),    # Laguna Beach dive shop, central-OC kelp coverage,
+                                 # conf 0.85. Single spot per page, daily updates.
+                                 # 2026-05-09 re-probe of the "JS-rendered" site
+                                 # in the previous skip-list — turns out it parses
+                                 # cleanly with the same labelled-field pattern
+                                 # JustGetWet uses.
 
     # Tier 2 — prose, LLM-extracted (no-ops gracefully without API key)
     DiveVizScraper(),      # SD + LA + OC dive shop, two-blog feed, conf 0.85
