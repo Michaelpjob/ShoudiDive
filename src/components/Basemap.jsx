@@ -68,6 +68,22 @@ function geomBoundsArea(geom, w, h) {
 // render them in SVG anymore (they grew too big at zoom and overlapped).
 // `priority`: bigger ones win collisions (cities > regions > water).
 export const PLACE_LABELS = [
+  // ---- NorCal (added 2026-05-09 with bbox extension to 42°N) ----
+  // Coordinates are nominal city centroids; each label renders at
+  // the projected (lng, lat) by MapLabels.jsx. Priority follows the
+  // same convention as SoCal labels: cities ≥ 5, regions/water ≤ 4.
+  { key: "lbl-crescent-city",     text: "CRESCENT CITY",      lng: -124.20, lat: 41.76, fontSize: 11, priority: 5 },
+  { key: "lbl-eureka",            text: "EUREKA",             lng: -124.16, lat: 40.81, fontSize: 11, weight: 500, priority: 6 },
+  { key: "lbl-cape-mendocino",    text: "CAPE MENDOCINO",     lng: -124.41, lat: 40.44, fontSize: 11, weight: 500, priority: 6 },
+  { key: "lbl-fort-bragg",        text: "FORT BRAGG",         lng: -123.81, lat: 39.45, fontSize: 11, priority: 4 },
+  { key: "lbl-mendocino",         text: "MENDOCINO",          lng: -123.80, lat: 39.30, fontSize: 11, priority: 5 },
+  { key: "lbl-bodega-bay",        text: "BODEGA BAY",         lng: -123.05, lat: 38.33, fontSize: 11, priority: 4 },
+  { key: "lbl-pt-reyes",          text: "PT. REYES",          lng: -123.00, lat: 38.02, fontSize: 11, priority: 5 },
+  { key: "lbl-san-francisco",     text: "SAN FRANCISCO",      lng: -122.42, lat: 37.77, fontSize: 12, weight: 500, priority: 7 },
+  { key: "lbl-half-moon-bay",     text: "HALF MOON BAY",      lng: -122.43, lat: 37.46, fontSize: 11, priority: 4 },
+  { key: "lbl-santa-cruz",        text: "SANTA CRUZ",         lng: -122.03, lat: 36.97, fontSize: 11, priority: 5 },
+
+  // ---- Central + SoCal (existing) ----
   { key: "lbl-monterey-bay",      text: "MONTEREY BAY",       lng: -121.95, lat: 36.78, fontSize: 11, weight: 500, priority: 6 },
   { key: "lbl-big-sur",           text: "BIG SUR",            lng: -121.65, lat: 36.10, fontSize: 11, priority: 5 },
   { key: "lbl-morro-bay",         text: "MORRO BAY",          lng: -120.82, lat: 35.36, fontSize: 11, priority: 5 },
@@ -80,7 +96,11 @@ export const PLACE_LABELS = [
   { key: "lbl-las-coronados",     text: "LAS CORONADOS",      lng: -117.32, lat: 32.30, fontSize: 10, italic: true, color: "var(--ink-3)", priority: 4 },
   { key: "lbl-channel-islands",   text: "CHANNEL ISLANDS",    lng: -119.85, lat: 33.78, fontSize: 10, italic: true, color: "var(--ink-3)", priority: 4 },
   { key: "lbl-socal-bight",       text: "SOUTHERN CA BIGHT",  lng: -118.95, lat: 33.20, fontSize: 11, italic: true, color: "var(--ink-3)", priority: 3 },
-  { key: "lbl-pacific",           text: "PACIFIC OCEAN",      lng: -122.40, lat: 35.20, fontSize: 13, italic: true, color: "var(--ink-3)", letterSpacing: "0.2em", priority: 2 },
+  // Region labels for the new NorCal area.
+  { key: "lbl-gulf-farallones",   text: "GULF OF THE FARALLONES", lng: -122.95, lat: 37.78, fontSize: 10, italic: true, color: "var(--ink-3)", priority: 3 },
+  { key: "lbl-mendocino-ridge",   text: "MENDOCINO RIDGE",    lng: -125.00, lat: 40.20, fontSize: 10, italic: true, color: "var(--ink-3)", priority: 3 },
+  // Pacific moves north-ish to recenter once the bbox is taller.
+  { key: "lbl-pacific",           text: "PACIFIC OCEAN",      lng: -123.50, lat: 38.50, fontSize: 13, italic: true, color: "var(--ink-3)", letterSpacing: "0.2em", priority: 2 },
 ];
 
 // ---- Sea (drawn UNDER the data overlay) ------------------------------------
