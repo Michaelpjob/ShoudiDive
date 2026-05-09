@@ -751,10 +751,18 @@ def main() -> None:
     if manifest_path.exists():
         manifest = json.loads(manifest_path.read_text())
     else:
-        manifest = {
-            "bbox": [BBOX["lng_min"], BBOX["lat_min"], BBOX["lng_max"], BBOX["lat_max"]],
-            "layers": {},
-        }
+        manifest = {"layers": {}}
+    # ALWAYS overwrite the top-level bbox with the current BBOX dict.
+    # Otherwise a bbox change in code (e.g. the 2026-05-09 NorCal
+    # expansion: latMax 37.6 → 42.0) doesn't propagate to the manifest
+    # on the next refresh — fetch.py merges into the existing JSON
+    # which still carries the OLD bbox values, and the frontend reads
+    # those stale values when computing layer-data extents.
+    manifest["bbox"] = [
+        BBOX["lng_min"], BBOX["lat_min"],
+        BBOX["lng_max"], BBOX["lat_max"],
+    ]
+    manifest.setdefault("layers", {})
     generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
     if args.layer == "all":
         manifest["generated_at"] = generated_at
