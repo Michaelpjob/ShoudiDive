@@ -30,6 +30,14 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Personal repos can't bypass PR-required for github-actions[bot],
+          # so the daily commit-back step needs to authenticate as a user
+          # with admin rights. BOT_PUSH_TOKEN is an owner-PAT with `repo`
+          # scope. Falls back to GITHUB_TOKEN if the secret isn't set —
+          # everything else in this workflow keeps working, only the
+          # final `git push` fails with GH006 until the PAT is added.
+          token: ${{ secrets.BOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-python@v5
         with:
