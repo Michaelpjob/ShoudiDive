@@ -21,6 +21,17 @@ on:
     types: [completed]
     branches: [dev]
   workflow_dispatch:
+    inputs:
+      branch:
+        description: "Git ref to deploy (branch name or commit SHA)"
+        required: true
+        default: "dev"
+        type: string
+      preview_branch:
+        description: "Cloudflare Pages preview slug (becomes <slug>.shouldidive.pages.dev). Defaults to the git ref."
+        required: false
+        default: ""
+        type: string
 
 # Don't pile up deploys on rapid-fire dev pushes.
 concurrency:
@@ -41,8 +52,11 @@ jobs:
         with:
           # workflow_run runs on the default branch's HEAD by default;
           # explicitly check out the same SHA dev-checks ran against
-          # so the preview matches what was tested.
-          ref: ${{ github.event.workflow_run.head_sha || 'dev' }}
+          # so the preview matches what was tested. workflow_dispatch
+          # accepts a branch input so any branch can be deployed to
+          # its own preview URL on demand (used for visually reviewing
+          # big changes like the NorCal expansion before merging).
+          ref: ${{ github.event.workflow_run.head_sha || inputs.branch || 'dev' }}
 
       - uses: actions/setup-node@v4
         with:
@@ -57,23 +71,45 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Deploy to Cloudflare Pages (dev branch)
+      - name: Resolve preview slug
+        id: slug
+        # `--branch=<slug>` on the wrangler command tags the deploy as
+        # a CF Pages preview (NOT production). The slug becomes the
+        # subdomain: <slug>.shouldidive.pages.dev. For workflow_run
+        # triggers we always use "dev"; for workflow_dispatch the user
+        # picks the slug explicitly OR we sanitize the git ref.
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            slug="${{ inputs.preview_branch }}"
+            if [ -z "$slug" ]; then
+              slug="${{ inputs.branch }}"
+            fi
+          else
+            slug="dev"
+          fi
+          # CF Pages slug must be DNS-safe: lowercase, [a-z0-9-], <= 28 chars.
+          slug=$(echo "$slug" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-' | sed 's/-\+/-/g' | sed 's/^-//;s/-$//' | cut -c1-28)
+          if [ -z "$slug" ]; then slug="dev"; fi
+          echo "slug=$slug" >> "$GITHUB_OUTPUT"
+          echo "Deploying to slug: $slug"
+
+      - name: Deploy to Cloudflare Pages (preview)
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # --branch=dev tags this deploy as a preview (not production).
-          # CF Pages routes dev preview deploys to dev.shouldidive.pages.dev
+          # --branch=<slug> tags this deploy as a preview (not production).
+          # CF Pages routes the preview to <slug>.shouldidive.pages.dev
           # automatically; production at shouldidive.com is unaffected.
-          command: pages deploy dist --project-name=shouldidive --branch=dev --commit-dirty=true
+          command: pages deploy dist --project-name=shouldidive --branch=${{ steps.slug.outputs.slug }} --commit-dirty=true
 
       - name: Annotate run with preview URL
         run: |
           {
-            echo "## Dev preview deployed"
+            echo "## Preview deployed"
             echo
-            echo "Preview URL: https://dev.shouldidive.pages.dev"
+            echo "Preview URL: https://${{ steps.slug.outputs.slug }}.shouldidive.pages.dev"
             echo "Commit:      \`${{ github.event.workflow_run.head_sha || github.sha }}\`"
             echo
-            echo "_Production at shouldidive.com is unchanged. To promote, open a PR from \`dev\` → \`main\`._"
+            echo "_Production at shouldidive.com is unchanged. To promote, merge the matching PR to \`main\`._"
           } >> "$GITHUB_STEP_SUMMARY"
