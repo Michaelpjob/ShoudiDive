@@ -1,5 +1,5 @@
 {
-  "computed_at": "2026-05-09T20:56:12Z",
+  "computed_at": "2026-05-09T23:54:12Z",
   "manifest": "public/data/manifest.json",
   "layers_checked": [
     "sst",
@@ -16,30 +16,16 @@
     "precip"
   ],
   "summary": {
-    "total_findings": 3,
+    "total_findings": 1,
     "healthy": false
   },
   "findings": [
     {
-      "severity": "high",
-      "code": "layer_date_stale",
-      "title": "Layer wind is 2.4d old",
-      "layer": "wind",
-      "detail": "threshold=1d window=now"
-    },
-    {
-      "severity": "high",
-      "code": "summary_generated_at_stale",
-      "title": "Layer wind5d summary is 54.1h old",
-      "layer": "wind5d",
-      "detail": "threshold=8h"
-    },
-    {
-      "severity": "high",
-      "code": "summary_generated_at_stale",
-      "title": "Layer swell5d summary is 54.1h old",
-      "layer": "swell5d",
-      "detail": "threshold=8h"
+      "severity": "medium",
+      "code": "sst_source_query_failed",
+      "title": "Could not query latest MUR SST source time",
+      "layer": "sst",
+      "detail": "HTTPError: 403 Client Error:  for url: https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.csv?analysed_sst%5B(last)%5D%5B(32.93)%5D%5B(-118.49)%5D"
     }
   ]
 }
