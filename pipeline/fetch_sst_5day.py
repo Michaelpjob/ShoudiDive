@@ -336,10 +336,19 @@ def main() -> int:
     manifest["layers"]["sst5d"] = {
         "summary_url":  "/data/sst5d/summary.json",
         "horizon_days": HORIZON_DAYS,
+        # ``range`` is the LayerSpec contract field that the
+        # manifest-validate dev-checks job enforces. ``range_c`` is
+        # kept as a legacy alias for any older readers that still
+        # depend on it. Drift between the contract and what we emit
+        # here was the cause of the pipeline-tests failure on
+        # PR #30 (and by extension the daily refresh-data run).
+        "range":        list(SST_RANGE_C),
         "range_c":      list(SST_RANGE_C),
+        "scale":        SST_SCALE,
         "unit":         SST_UNIT_C,
         "grid":         {"width": W, "height": H},
         "method":       "persistence_decay",
+        "beta":         True,
     }
     MANIFEST_PATH.write_text(json.dumps(manifest, indent=2))
     print(f"[sst5d] manifest entry written")
