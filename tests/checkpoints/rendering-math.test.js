@@ -44,11 +44,13 @@ test("cp-rendering-math: BBOX is sane (lat/lng ordered, CA coast)", () => {
     `BBOX latMin must be < latMax (got ${BBOX.latMin} >= ${BBOX.latMax})`);
   assert.equal(BBOX.lngMin < BBOX.lngMax, true,
     `BBOX lngMin must be < lngMax (got ${BBOX.lngMin} >= ${BBOX.lngMax})`);
-  // Sanity: should cover CA coast roughly 31.8..37.6 N, -124..-116.8 W.
-  // Anything wildly outside this range = the bbox got corrupted during
-  // editing.
+  // Sanity: should cover the CA coast. Initially scoped to SoCal +
+  // Bay Area edge (31.8..37.6 N); 2026-05-09 expanded to full CA
+  // coast (31.8..42.0 N — see docs/expansion-norcal.md). The bounds
+  // here are loose enough to allow either era + tight enough to flag
+  // a corruption (e.g. someone accidentally typed 420 instead of 42).
   assert.equal(
-    BBOX.latMin > 30 && BBOX.latMax < 40,
+    BBOX.latMin > 30 && BBOX.latMax <= 43,
     true, `BBOX latitude range looks wrong: ${BBOX.latMin}..${BBOX.latMax}`,
   );
   assert.equal(
