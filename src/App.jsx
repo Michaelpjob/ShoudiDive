@@ -70,6 +70,7 @@ import {
   isMapGestureChildTarget,
   shouldPinMapTap,
 } from "./lib/mapInteractionGuards.js";
+import { track } from "./lib/analytics.js";
 
 // Reactive viewport hook for the bottom-sheet mobile UI.
 //
@@ -317,7 +318,30 @@ export default function App() {
 
   function setPref(key, val) {
     setPrefs((p) => ({ ...p, [key]: val }));
+    // Track settings changes — answers "do users actually toggle theme,
+    // change opacity, switch units?". Don't include the value as a
+    // string for free-form fields; just the key + a JSON-safe value.
+    track("settings_change", { key, val });
   }
+
+  // Wrapped state setters that fire analytics events alongside the
+  // setState. Passing these down to DesktopView (and through to
+  // MobileSheet) means every layer-chip click — desktop or mobile —
+  // gets one event, regardless of where in the JSX tree the click
+  // originated. The closure captures the previous value so we can
+  // emit `from`/`to` and answer "what's the most-common transition?".
+  const trackedSetLayer = (next) => {
+    if (next !== layer) {
+      track("layer_change", { from: layer, to: next });
+    }
+    setLayer(next);
+  };
+  const trackedSetSstMode = (next) => {
+    if (next !== sstMode) {
+      track("sst_mode_change", { from: sstMode, to: next });
+    }
+    setSstMode(next);
+  };
 
   // Moon-phase icon should track the active time slider when those
   // layers are active, otherwise show "now". Computed at render time
@@ -336,11 +360,11 @@ export default function App() {
       )}
       <DesktopView
         layer={layer}
-        setLayer={setLayer}
+        setLayer={trackedSetLayer}
         composite={composite}
         setComposite={setComposite}
         sstMode={sstMode}
-        setSstMode={setSstMode}
+        setSstMode={trackedSetSstMode}
         sstSel={sstSel}
         setSstSel={setSstSel}
         sstForecastSel={sstForecastSel}
@@ -458,6 +482,7 @@ function TopBar({ onSettings, settingsOpen, dataState }) {
           rel="noopener noreferrer"
           className="tip-fish"
           title="Tip the creator on Venmo (@michaelpjob)"
+          onClick={() => track("tip_click", { source: "topbar" })}
         >
           <svg
             className="tip-fish-icon"
@@ -603,7 +628,17 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
   const stageRef = useRef(null);
   const [size, setSize] = useState({ w: 1200, h: 700 });
   const [hover, setHover] = useState(null);
-  const [activeSpot, setActiveSpot] = useState("lajolla");
+  const [activeSpot, setActiveSpotRaw] = useState("lajolla");
+  // Wrap setActiveSpot so every saved-spot click — desktop list or
+  // mobile sheet — fires one analytics event. Answers "which spots
+  // do users actually look at, and is it the same on mobile vs
+  // desktop?".
+  const setActiveSpot = (next) => {
+    if (next !== activeSpot) {
+      track("spot_click", { from: activeSpot, to: next, layer });
+    }
+    setActiveSpotRaw(next);
+  };
   const [infoOpen, setInfoOpen] = useState(true);
   const [controlsOpen, setControlsOpen] = useState(true);
   const [spotsOpen, setSpotsOpen] = useState(true);
@@ -1111,7 +1146,10 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
           width={size.w}
           height={size.h}
           active={mpaOn}
-          onSelect={setSelectedMpa}
+          onSelect={(mpa) => {
+            track("popup_open", { kind: "mpa", type: mpa?.type || "unknown" });
+            setSelectedMpa(mpa);
+          }}
         />
 
         <BathyLayer
@@ -1119,7 +1157,10 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
           height={size.h}
           active={bathyOn}
           zoomLevel={zoomLevel}
-          onSelect={setSelectedBathy}
+          onSelect={(feat) => {
+            track("popup_open", { kind: "bathy", class: feat?.class || "unknown" });
+            setSelectedBathy(feat);
+          }}
         />
 
         <g className="spot-pins">
