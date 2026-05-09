@@ -39,17 +39,33 @@ grep -iE "vis(ibility)?|viz|[0-9]{1,2}\s*(ft|feet|')" /tmp/probe.html | head
 
 ## SoCal dive shops (highest priority — fills viz gaps)
 
+The dev sandbox couldn't reach these domains directly (`ECONNREFUSED`
+in WebFetch — likely an upstream allowlist on small-shop hostnames,
+not real unreachability). Probe each from your terminal with:
+
+```bash
+curl -sL -A "Mozilla/5.0" https://CANDIDATE/ -o /tmp/probe.html
+echo "size: $(wc -c </tmp/probe.html) bytes"
+grep -iE "vis(ibility)?|viz|[0-9]{1,2}\s*(ft|feet|')" /tmp/probe.html | head -10
+```
+
+If size > 10 KB and grep shows visibility lines, the source is
+viable — paste the URL + a sample of the matching lines back to me
+and I'll wire a scraper for it.
+
 | Candidate | URL | Region | Notes |
 |-----------|-----|--------|-------|
 | **Anacapa Divers** | https://anacapadivers.com/ | Channel Islands (Oxnard) | Day-boat to Anacapa + Santa Cruz. Currently no Channel Islands scraper. |
-| **Truth Aquatics** | https://truthaquatics.com/ | Channel Islands (Santa Barbara) | Liveaboard fleet (Vision/Conception). Posts trip reports. |
-| **Peace Divers** | https://www.peacedivers.com/ | Channel Islands (Ventura) | Day boat. |
+| **Anacapa Dive Charters** | https://www.anacapadivecharters.com/ | Channel Islands | Alternate spelling — try both. |
+| **Truth Aquatics** | https://truthaquatics.com/trip-reports/ | Channel Islands (Santa Barbara) | Liveaboard fleet (Vision/Conception). Posts trip reports. |
+| **Peace Divers** | https://www.peacedivers.com/news/ | Channel Islands (Ventura) | Day boat. |
 | **Dive Ventura** | https://diveventura.com/ | Ventura | Local boat fleet. |
 | **Searcher Charters** | https://searcherboat.com/ | Long Beach offshore | Same family as Spectre, may share a CMS. |
 | **Dudedivers / Bottom Scratchers** | https://www.dudedivers.com/ | LB / OC | Trip reports historically. |
 | **Aquarius Divers** | https://aquariusdivers.com/conditions | SD | Already noted as link-farm to CDIP/buoy widgets. **Skip.** |
-| **22nd Street Sportfishing** | https://www.22ndstreet.com/fishreports.php | LA Harbor | Static HTML, but reports are catch-focused. **Probably skip** — no viz signal. |
-| **Davey's Locker** | https://www.daveyslocker.com/news/ | Newport Beach | Whale watching + fishing. **Probably skip** — no viz signal. |
+| **22nd Street Sportfishing** | https://www.22ndstreet.com/fishreports.php | LA Harbor | Verified 2026-05-09 — static HTML reachable, but reports are catch-focused with no viz signal. **Skip.** |
+| **Davey's Locker** | https://www.daveyslocker.com/news/ | Newport Beach | Verified 2026-05-09 — whale watching + fishing focus, no viz signal. **Skip.** |
+| **Spectre Boat** | https://www.spectreboat.com/weather | LB offshore | Verified 2026-05-09 — page links out to vizfinder.com, no own data. **Skip — pursue vizfinder partnership instead.** |
 
 ## Peer forecasters (partnership > scraping)
 
