@@ -1,0 +1,113 @@
+name: Refresh static data (coastline + bathy)
+
+# Manual / on-demand regeneration of the 'one-shot' static datasets
+# that don't run on the daily refresh-data cron:
+#
+#   * public/data/land.geojson         (from pipeline/fetch_coastline.py)
+#   * public/data/bathy.png            (from pipeline/fetch_bathy.py)
+#   * public/data/bathy-features.geojson
+#
+# These are bbox-locked but rarely change in real life — a coastline
+# regeneration is needed when the bbox itself shifts (e.g. the
+# 2026-05-09 NorCal expansion: latMax 37.6 → 42.0 left land.geojson
+# stuck at the SoCal-only polygon set, leaving the map's NorCal
+# region as empty ocean until this workflow runs).
+#
+# Default behaviour: run on demand via workflow_dispatch + commit
+# the regenerated files back to the SAME branch the workflow ran
+# from. That way you can preview a bbox change on a feature branch
+# without touching dev or main.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch / SHA to regenerate against (defaults to caller's ref)"
+        required: false
+        default: ""
+        type: string
+      include_coastline:
+        description: "Run fetch_coastline.py (Overpass — slow, throttled)"
+        required: false
+        default: true
+        type: boolean
+      include_bathy:
+        description: "Run fetch_bathy.py (GMRT — slow, single-shot)"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-static-${{ github.ref }}
+  cancel-in-progress: false   # one-shot fetches; don't kill mid-Overpass
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          # PAT lets the bot push back to a protected branch.
+          # Falls back to GITHUB_TOKEN when unset (push will fail
+          # with GH006 unless the target branch isn't protected).
+          token: ${{ secrets.BOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+
+      - name: Install pipeline dependencies
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Fetch coastline (Overpass → land.geojson)
+        if: ${{ inputs.include_coastline }}
+        # Overpass is sensitive — single attempt with a hard cap.
+        # Soft-fail so a temporary Overpass outage doesn't block
+        # the bathy step that follows.
+        continue-on-error: true
+        timeout-minutes: 8
+        run: python pipeline/fetch_coastline.py
+
+      - name: Fetch bathymetry (GMRT → bathy.png)
+        if: ${{ inputs.include_bathy }}
+        continue-on-error: true
+        timeout-minutes: 8
+        run: python pipeline/fetch_bathy.py
+
+      - name: Commit refreshed static data
+        run: |
+          set -e
+          if git diff --quiet HEAD -- public/data/land.geojson public/data/bathy.png public/data/bathy-features.geojson; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/data/land.geojson public/data/bathy.png public/data/bathy-features.geojson 2>/dev/null || true
+          if git diff --staged --quiet; then
+            echo "No staged changes."
+            exit 0
+          fi
+          git commit -m "data: refresh static (coastline + bathy) $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push
+
+      - name: Annotate run
+        run: |
+          {
+            echo "## Static data refresh"
+            echo
+            echo "Branch: \`${{ inputs.ref || github.ref_name }}\`"
+            echo "Commit: \`${{ github.sha }}\`"
+            echo
+            echo "Coastline run: ${{ inputs.include_coastline }}"
+            echo "Bathy run:     ${{ inputs.include_bathy }}"
+            echo
+            echo "_Re-run \`Deploy dev preview\` against this branch to see the result._"
+          } >> "$GITHUB_STEP_SUMMARY"
