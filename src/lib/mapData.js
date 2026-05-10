@@ -2,18 +2,20 @@
 // Bounding box: lat 31.8°N–37.6°N, lng -124.0° to -116.8° (extended south to
 // include Las Islas Coronado and east to give Tijuana coast breathing room).
 
-// 2026-05-09 — bumped latMax from 37.6 → 42.0 to expand from
-// SoCal+Bay-edge coverage to full California coast (Coronado Islands
-// → Oregon border). See docs/expansion-norcal.md for the full plan.
-// 2026-05-09 (later) — cropped lngMax from -116.8 → -117.5 because
-// the wider eastern bound was filling the right side of the map with
-// inland CA (Sacramento Valley, Inland Empire, Riverside) — irrelevant
-// for a dive forecast and visually overwhelming. -117.5 keeps coastal
-// SoCal + Catalina + the Coronados; loses Tijuana-east and inland LA.
-// Aspect: 6.5° lng × 10.2° lat (~5.2 × 11.3 km/° → real distance
-// ratio 0.46) — even more portrait-oriented, but the side panels in
-// the desktop layout fill the pillarbox margins, so it's fine.
-export const BBOX = { latMin: 31.8, latMax: 42.0, lngMin: -124.0, lngMax: -117.5 };
+// 2026-05-09 — bumped latMax from 37.6 → 42.0 (full CA coast,
+// Coronado Islands → Oregon border). See docs/expansion-norcal.md.
+// 2026-05-09 (later) — cropped lngMax from -116.8 → -117.5 to drop
+// inland CA (Sacramento Valley, Inland Empire, Riverside) which was
+// dominating the right side of the map. Keeps SoCal coast + Catalina
+// + Coronados; loses Tijuana-east + inland LA basin.
+// 2026-05-10 — bumped lngMin from -124.0 → -124.6 because Cape
+// Mendocino sits at -124.41°W (Crescent City -124.20°W, Eureka
+// -124.16°W). The previous lng_min was clipping the westernmost CA
+// land (the upper-left chunk of the map). -124.6 leaves a ~13 km
+// ocean buffer west of Cape Mendocino so the coast has breathing room.
+// Aspect: 7.1° lng × 10.2° lat (~5.7 × 11.3 km/° → real distance
+// ratio 0.50). Side panels fill the pillarbox margins on desktop.
+export const BBOX = { latMin: 31.8, latMax: 42.0, lngMin: -124.6, lngMax: -117.5 };
 
 // Geographic aspect ratio (lng-degrees-as-distance / lat-degrees) at the
 // bbox's mid latitude. Lng degrees shrink by cos(lat); we compute it once
