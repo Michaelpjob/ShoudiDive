@@ -3,9 +3,22 @@ from dataclasses import dataclass
 from typing import Dict
 
 
-# Latitude zone boundaries (deg N).
+# Latitude zone boundaries (deg N). Each entry is (lower, upper) where
+# the upper bound is exclusive at the next zone's lower bound (a cell
+# at lat==lower goes into THIS zone, never the one below).
+#
+# v3.5 (2026-05-10) — added `norcal` band per PR-NC-1 / docs/expansion-
+# norcal.md. The previous `central` zone (34.45..90) lumped Cambria,
+# Big Sur, Monterey Bay, the Farallons, and Pioneer/Davidson seamounts
+# under one set of coefficients. They're structurally different water:
+# north of Pt. Sur the shelf narrows, swell exposure jumps, and the
+# upwelling regime becomes persistent rather than pulsed. Splitting at
+# 36.00°N (Pt. Sur) puts Monterey Bay / Año Nuevo / Farallons / Pioneer
+# / Davidson into `norcal`; Cambria / Morro Bay / Avila stay in
+# `central`. See norcal-formula-review.md § 2 for the rationale.
 LAT_ZONE_BOUNDS = {
-    "central":    (34.45, 90.0),
+    "norcal":     (36.00, 90.0),
+    "central":    (34.45, 36.00),
     "transition": (33.70, 34.45),
     "bight":      (-90.0, 33.70),
 }
@@ -37,6 +50,12 @@ CHANNEL_ISLAND_CENTROIDS = {
 
 
 PERSISTENCE_TAU_DAYS: Dict[str, float] = {
+    # v3.5 (2026-05-10) — norcal_* added per PR-NC-1.
+    # Tighter τ than central because NorCal upwelling pulses flip
+    # nearshore anomalies in days rather than weeks; offshore is
+    # also faster because the SF Bay / Farallons regime swings hard
+    # on the relaxation cycle.
+    "norcal_nearshore": 1.0, "norcal_islands": 2.0, "norcal_offshore": 4.5,
     "central_nearshore": 1.5, "central_islands": 2.5, "central_offshore": 4.5,
     "transition_nearshore": 2.0, "transition_islands": 3.0, "transition_offshore": 5.0,
     "bight_nearshore": 2.5, "bight_islands": 3.5, "bight_offshore": 6.0,
@@ -58,13 +77,27 @@ class DriverCoefficients:
 
 
 DRIVER_COEFFS: Dict[str, DriverCoefficients] = {
-    # Central CA (Monterey ↑ — anything above 34.45°N) is an upwelling-
-    # dominated zone: cold water, persistent spring/summer blooms, often
-    # green nearshore even on otherwise calm days. v2's optimistic
-    # seasonal/upwell cuts didn't make sense for this region — Tempbreak
-    # consistently shows greener water here than v3 was predicting. v3.1
-    # restores upwell + seasonal coefficients to ~v0.2 levels for ALL
-    # central zones (the productivity assumption is real, not a bug).
+    # v3.5 (2026-05-10) — norcal_* added per PR-NC-1.
+    # NorCal nearshore is the most upwelling- + bloom-driven water on
+    # the CA coast. Higher seasonal + exposure than central; bigger
+    # swell coefficient because Mendocino-area shorelines see real
+    # ocean swell unlike Monterey's lee-protected pockets. Sst sign
+    # flipped slightly more negative because cold-anomaly here often
+    # comes WITH a clearer-water relaxation rather than a green bloom.
+    "norcal_nearshore":   DriverCoefficients(upwell=0.25, swell=0.35, precip=0.25, river=0.35, sst=-0.10, seasonal=0.45, exposure=0.30, tide=0.10, substrate=0.18, cloud=-0.06),
+    "norcal_islands":     DriverCoefficients(upwell=0.16, swell=0.12, precip=0.06, river=0.06, sst=-0.07, seasonal=0.40, exposure=0.35, tide=0.02, substrate=0.05, cloud=-0.05),
+    "norcal_offshore":    DriverCoefficients(upwell=0.14, swell=0.02, precip=0.00, river=0.00, sst=-0.05, seasonal=0.35, exposure=0.05, tide=0.00, substrate=0.00, cloud=-0.03),
+
+    # Central CA (Monterey area, 34.45–36.00°N as of v3.5) is an
+    # upwelling-dominated zone: cold water, persistent spring/summer
+    # blooms, often green nearshore even on otherwise calm days. v2's
+    # optimistic seasonal/upwell cuts didn't make sense for this region
+    # — Tempbreak consistently shows greener water here than v3 was
+    # predicting. v3.1 restored upwell + seasonal coefficients to ~v0.2
+    # levels for ALL central zones (the productivity assumption is
+    # real, not a bug).
+    # v3.5: lat boundary moved from 34.45..90 to 34.45..36.00 — Big Sur,
+    # Monterey, Farallons, etc. now classify as `norcal_*` instead.
     "central_nearshore":  DriverCoefficients(upwell=0.18, swell=0.30, precip=0.20, river=0.30, sst=-0.06, seasonal=0.40, exposure=0.20, tide=0.10, substrate=0.15, cloud=-0.08),
     "central_islands":    DriverCoefficients(upwell=0.12, swell=0.10, precip=0.05, river=0.05, sst=-0.05, seasonal=0.35, exposure=0.30, tide=0.02, substrate=0.05, cloud=-0.06),
     "central_offshore":   DriverCoefficients(upwell=0.10, swell=0.02, precip=0.00, river=0.00, sst=-0.04, seasonal=0.30, exposure=0.05, tide=0.00, substrate=0.00, cloud=-0.04),
@@ -80,6 +113,12 @@ DRIVER_COEFFS: Dict[str, DriverCoefficients] = {
 
 
 SIGMA_LOG_CHL: Dict[str, float] = {
+    # v3.5 (2026-05-10) — norcal_* added per PR-NC-1.
+    # Higher than central because chl variance is greater up the coast
+    # (relaxation cycle alternates clear with bloomed water on multi-
+    # day windows). Offshore drops to 0.40 since cold-deep regimes
+    # there are more stable than nearshore's bloom-pulse swings.
+    "norcal_nearshore": 0.65, "norcal_islands": 0.55, "norcal_offshore": 0.40,
     "central_nearshore": 0.55, "central_islands": 0.45, "central_offshore": 0.35,
     "transition_nearshore": 0.50, "transition_islands": 0.40, "transition_offshore": 0.32,
     "bight_nearshore": 0.45, "bight_islands": 0.38, "bight_offshore": 0.30,
@@ -122,6 +161,15 @@ SECCHI_COEFFS: Dict[str, SecchiCoefficients] = {
     #   central_nearshore  4.0   4.5   3.5    (kelp at chl 2 → ~9 ft, Poor/Fair edge)
     #   central_islands    6.5   6.5   5.0
     #   central_offshore   8.5   8.0   5.5    (chl 0.2 → ~31 ft, mid-Good)
+    # v3.5 (2026-05-10) — norcal_* added per PR-NC-1.
+    # Slightly lower nearshore `a` than central (NorCal nearshore is
+    # generally greener on bloom days) but offshore `a` higher
+    # (Pioneer/Davidson/Farallons see genuine deep-blue water on
+    # relaxation days). Re-evaluate once residuals accumulate against
+    # NorCal observations — see norcal-formula-review.md § 2.
+    "norcal_nearshore":     SecchiCoefficients(a=3.0, b=0.28),
+    "norcal_islands":       SecchiCoefficients(a=5.5, b=0.30),
+    "norcal_offshore":      SecchiCoefficients(a=6.5, b=0.32),
     "central_nearshore":    SecchiCoefficients(a=3.5, b=0.28),
     "central_islands":      SecchiCoefficients(a=5.0, b=0.30),
     "central_offshore":     SecchiCoefficients(a=5.5, b=0.32),
@@ -169,6 +217,15 @@ TURBIDITY_CORRECTIONS: Dict[str, TurbidityCorrections] = {
     # sheds canopy debris when waves stir the column. Numeric values for
     # nearshore stayed the same; islands bumped 1.0 → 1.5 to compensate
     # for the now-conditional firing.
+    # v3.5 (2026-05-10) — norcal_* added per PR-NC-1.
+    # Bigger swell + runoff + river penalties than central because
+    # NorCal nearshore takes the brunt of Pacific groundswell + the
+    # Russian/Eel/Klamath river plumes drop big sediment loads after
+    # winter atmospheric rivers. Islands stays similar; offshore is
+    # zero (clean water beyond ~10 km from any plume mouth).
+    "norcal_nearshore":     TurbidityCorrections(swell=9.0, runoff=5.0, river=6.0, kelp=2.5, substrate=2.5, tide=2.5),
+    "norcal_islands":       TurbidityCorrections(swell=2.5, runoff=0.6, river=0.6, kelp=2.0, substrate=0.5, tide=0.3),
+    "norcal_offshore":      TurbidityCorrections(swell=0.0, runoff=0.0, river=0.0, kelp=0.0, substrate=0.0, tide=0.0),
     "central_nearshore":    TurbidityCorrections(swell=8.0, runoff=4.0, river=5.0, kelp=2.0, substrate=2.5, tide=1.5),
     "central_islands":      TurbidityCorrections(swell=2.0, runoff=0.5, river=0.5, kelp=1.5, substrate=0.5, tide=0.2),
     "central_offshore":     TurbidityCorrections(swell=0.0, runoff=0.0, river=0.0, kelp=0.0, substrate=0.0, tide=0.0),

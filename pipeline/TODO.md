@@ -190,6 +190,155 @@ Spec: dashboard overlays doc (`CLAUDE (9).md`).
 
 ---
 
+## NorCal expansion — viz-model fixes (PR-NC-1 .. PR-NC-5)
+
+Five-PR sequence to recalibrate the visibility model now that the
+bbox extends to 42°N. Spec + rationale lives in
+`outputs/norcal-formula-review.md`. Don't ship without explicit
+go-ahead per PR — Michael picks them up sequentially and wants
+residuals to settle between rollouts.
+
+Order of operations (from the handoff):
+1. PR-NC-1 (zones)             — ship first, additive only
+2. PR-NC-2 (coast_normal)      — independent, can ship in parallel with #1
+3. PR-NC-5 (Farallons centroid) — right after #1 so norcal_islands works
+4. *(wait one week, run validation harness)*
+5. PR-NC-4 (wind relaxation)
+6. *(wait another week)*
+7. PR-NC-3 (SF Bay outflow)    — gated behind `ENABLE_BAY_OUTFLOW=1`
+8. PR-NC-6 (tidal currents)    — DEFERRED indefinitely
+
+---
+
+### PR-NC-1 — Add `norcal` lat band ✅ (LANDED 2026-05-10)
+
+**Symptom**: cells north of ~36°N use `central_*` priors that were
+calibrated on Monterey kelp + Pt. Conception → Cambria observations.
+Reef Check / MBARI Secchi data shows NorCal nearshore systematically
+over-predicted on bloom days and Davidson/Pioneer seamount cells
+under-predicted on calm relaxation days.
+
+**Root cause**: `LAT_ZONE_BOUNDS` lumped everything 34.45..90 into
+`central`. No NorCal zone existed.
+
+**Fix**: split at 36.00°N (Pt. Sur). Added 9 new keys (`norcal_*`)
+to all five per-zone dicts. Made `zones.py:classify_zone` generic
+so future band additions are config-only.
+
+Files: `pipeline/viz_predict/config.py`,
+`pipeline/viz_predict/zones.py`, `pipeline/tests/test_zones.py`.
+
+---
+
+### PR-NC-2 — Per-cell `coast_normal_deg` for upwelling (~5 LOC)
+
+**Symptom**: upwelling anomaly uses a hardcoded coast-normal of 295°.
+The CA coast bends substantially (Big Sur ~290°, Monterey ~270°,
+Pt. Reyes ~280°). Single scalar is wrong everywhere except SoCal-ish.
+
+**Fix**: `features.py:upwelling_anomaly_5d` already broadcasts when
+an array is passed. `predict.py` already passes
+`coast_normal_deg_field` (per-cell) for `exposure_index`. Wire the
+same array into the upwelling call instead of the 295° scalar.
+
+Files: `pipeline/viz_predict/features.py`,
+`pipeline/viz_predict/predict.py`.
+
+Risk: low. No new data dependency.
+
+---
+
+### PR-NC-5 — Add Farallons to `CHANNEL_ISLAND_CENTROIDS` (~5 LOC)
+
+**Symptom**: `nearest_channel_island` returns nothing for cells north
+of San Miguel because the centroids dict is hardcoded SoCal-only.
+PR-NC-1's `norcal_islands` zone has no NorCal islands to match
+against without this.
+
+**Fix**: add south_farallon, north_farallon, maintop, ano_nuevo to
+`CHANNEL_ISLAND_CENTROIDS`. All four use `"open"` for current-regime
+side (the east/west labels are SoCal-bight-specific).
+
+Files: `pipeline/viz_predict/config.py`.
+
+Dependencies: PR-NC-1 (so `norcal_islands` exists).
+
+---
+
+### PR-NC-4 — Wind-relaxation feature (~15 LOC)
+
+**Symptom**: NorCal vis spikes are driven by wind RELAXATION events
+(sustained NW upwelling-favorable wind followed by 1-2 days of calm).
+The model only sees a 5-day mean alongshore anomaly which can't
+distinguish a sustained pattern from a relaxation pulse.
+
+**Fix**: new `wind_relaxation_index_5d` feature in `features.py`.
+Compares last-2-day alongshore wind against days -5..-2 mean,
+returns tanh(positive_relax / 4 m/s). Coefficient zero everywhere
+except `norcal_nearshore` (-0.20) and `norcal_islands` (-0.15) so
+SoCal residuals don't move.
+
+Files: `pipeline/viz_predict/features.py`,
+`pipeline/viz_predict/config.py` (add `wind_relax` to
+DriverCoefficients), `pipeline/viz_predict/model.py` (add term to
+`driver_adjustment`).
+
+Dependencies: PR-NC-1.
+
+---
+
+### PR-NC-3 — SF Bay outflow as a synthetic river (~30 LOC + new fetch)
+
+**Symptom**: cells near the Golden Gate (37.81°N) don't see the
+Sacramento + San Joaquin discharge — largest plume on the West
+Coast (5,000 cfs baseline → 250,000+ cfs after big atmospheric
+rivers). `fetch_rivers.py` doesn't include SF Bay because it's
+an estuary, not a USGS river-mouth gauge.
+
+**Fix**: add synthetic river `sf_bay_outflow` at (37.81, -122.48).
+Fetcher pulls CDEC Dayflow `OUT` value (station `DTO`, sensor 23,
+daily). Per-river e-folding distance: SF Bay = 20 km (its plume
+genuinely extends ~20-30 km on big outflow days); USGS rivers stay
+at 5/8 km defaults.
+
+Gated behind `ENABLE_BAY_OUTFLOW=1` env var so it can A/B before
+becoming default.
+
+Files: `pipeline/fetch_rivers.py`, `pipeline/viz_predict/features.py`
+(or new `bay_outflow_index` if cleaner), `pipeline/viz_predict/config.py`,
+`pipeline/tests/test_features.py`.
+
+Risk: medium — new external API (CDEC). Need graceful fallback to
+climatology (~10,000 cfs mean Bay outflow) on HTTP failure.
+
+Dependencies: PR-NC-1.
+
+---
+
+### PR-NC-6 (DEFERRED) — Tidal currents
+
+Spec'd in `outputs/norcal-formula-review.md` § 3.3. Punted until
+~3 months of NorCal observations accumulate against the new zones.
+Narrow benefit (Golden Gate, Tomales, etc.) at high implementation
+cost. New external API (NOAA Tidal Current Predictions). Wait until
+PR-NC-1..5 residuals stabilize.
+
+---
+
+### Validation harness (cross-PR)
+
+`pipeline/validation/norcal_residuals.py` (new file): pulls Reef
+Check + MBARI Secchi obs for cells north of 36°N, runs them through
+the model with the new zones, writes a residuals plot.
+
+Acceptable: `viz_p50_ft` within ±5 ft of observed Secchi on 80% of
+NorCal observations. Below 80% means PR-NC-1 priors need calibration.
+
+Run after every PR in the chain. Don't promote PR-NC-1 to default
+until the harness passes against at least 20 NorCal observations.
+
+---
+
 ## Queue policy
 
 - Items are picked up in order. PR1 → PR2 → PR3, AND/OR PR4 in parallel.
