@@ -29,7 +29,7 @@ from shapely.geometry import (
 )
 from shapely.ops import polygonize, unary_union
 
-BBOX = dict(lat_min=31.8, lat_max=42.0, lng_min=-124.0, lng_max=-116.8)
+BBOX = dict(lat_min=31.8, lat_max=42.0, lng_min=-124.0, lng_max=-117.5)
 
 # Pad the Overpass query a little so coastline ways straddling the corners
 # come back complete. We re-clip to the exact bbox at write time.

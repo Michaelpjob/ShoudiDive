@@ -5,9 +5,15 @@
 // 2026-05-09 — bumped latMax from 37.6 → 42.0 to expand from
 // SoCal+Bay-edge coverage to full California coast (Coronado Islands
 // → Oregon border). See docs/expansion-norcal.md for the full plan.
-// The aspect ratio shifts from ~0.81 (wide) to ~1.42 (tall); fitted-
-// rectangle math in getFitted() keys off this and scales automatically.
-export const BBOX = { latMin: 31.8, latMax: 42.0, lngMin: -124.0, lngMax: -116.8 };
+// 2026-05-09 (later) — cropped lngMax from -116.8 → -117.5 because
+// the wider eastern bound was filling the right side of the map with
+// inland CA (Sacramento Valley, Inland Empire, Riverside) — irrelevant
+// for a dive forecast and visually overwhelming. -117.5 keeps coastal
+// SoCal + Catalina + the Coronados; loses Tijuana-east and inland LA.
+// Aspect: 6.5° lng × 10.2° lat (~5.2 × 11.3 km/° → real distance
+// ratio 0.46) — even more portrait-oriented, but the side panels in
+// the desktop layout fill the pillarbox margins, so it's fine.
+export const BBOX = { latMin: 31.8, latMax: 42.0, lngMin: -124.0, lngMax: -117.5 };
 
 // Geographic aspect ratio (lng-degrees-as-distance / lat-degrees) at the
 // bbox's mid latitude. Lng degrees shrink by cos(lat); we compute it once
