@@ -24,38 +24,18 @@ export const GEO_ASPECT =
 // container's aspect ratio. Returns the rectangle inside (0..w, 0..h) that
 // the geographic content should occupy.
 //
-// 2026-05-09 — when the geographic aspect ratio is wildly mismatched
-// from the container's, strict aspect preservation produces a useless
-// narrow strip (e.g. NorCal expansion: GEO_ASPECT≈0.565 in a desktop
-// container with aspect≈1.7 leaves the map a 23%-of-width pillarbox).
-// We preserve aspect when the mismatch is moderate (≤2x in either
-// direction — the SoCal era stays untouched) and fill the container
-// otherwise. Aspect-fill stretches lng-axis vs lat-axis slightly, but
-// the projection math (project / unproject) stays linear in both axes
-// independently, so a heatmap cell at (lng, lat) still lands at the
-// correct (x, y); only the visual proportion of land features bends.
-const ASPECT_MISMATCH_TOLERANCE = 2.0;
-
+// Aspect ratio is ALWAYS preserved — `1 km north` and `1 km east` are
+// always the same number of pixels. A previous (2026-05-09 morning)
+// attempt to fall back to aspect-fill when geo-aspect ≠ container-aspect
+// produced visibly stretched land features for the NorCal expansion
+// (CA coast looked ~3x too wide). Pillarbox is the right tradeoff —
+// the desktop layout's aspect should be matched to GEO_ASPECT instead
+// (handled at the .map-stage CSS level, not here).
 export function getFitted(w, h) {
   if (!(w > 0) || !(h > 0)) {
     return { marginX: 0, marginY: 0, innerW: w || 0, innerH: h || 0 };
   }
   const containerAspect = w / h;
-  const mismatch = containerAspect / GEO_ASPECT;
-  // mismatch < 1: container is taller than geography (usually triggers
-  // letterbox). mismatch > 1: container is wider (pillarbox).
-  // When |mismatch| exceeds ~2x in either direction we'd be hiding more
-  // than half the container. Fall back to fill-the-container instead.
-  const inTolerance =
-    mismatch >= 1 / ASPECT_MISMATCH_TOLERANCE &&
-    mismatch <= ASPECT_MISMATCH_TOLERANCE;
-
-  if (!inTolerance) {
-    // Stretch to fill. Geographic features stretch with it but
-    // (lng, lat) → (x, y) mapping stays correct.
-    return { marginX: 0, marginY: 0, innerW: w, innerH: h };
-  }
-
   let innerW;
   let innerH;
   if (containerAspect > GEO_ASPECT) {
