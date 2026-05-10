@@ -1,18 +1,18 @@
-# Validation watchdog — 2026-05-10T02:25Z
+# Validation watchdog — 2026-05-10T03:49Z
 
 **2 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
-### 🔴 1. Only 16 observations in the last 24h (floor: 50)
+### 🔴 1. Only 15 observations in the last 24h (floor: 50)
 
 Multiple scrapers may be silently broken.
 
 **Suggested action:** Open the latest hourly ingest workflow run; look for `FAILED` lines per scraper.
 
-### ⚠️ 2. 2 non-critical external feed(s) are red
+### ⚠️ 2. 1 non-critical external feed(s) are red
 
-Red feeds: cpc_precip_psl, ingest_eagle4. Fallbacks may keep the model running, but redundancy is degraded.
+Red feeds: ingest_eagle4. Fallbacks may keep the model running, but redundancy is degraded.
 
 **Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
 
