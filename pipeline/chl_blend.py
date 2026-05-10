@@ -52,7 +52,7 @@ from PIL import Image
 
 # ---- Common bbox + grid (matches fetch.py exactly) ------------------------
 
-BBOX = dict(lat_min=31.8, lat_max=42.0, lng_min=-124.6, lng_max=-117.5)
+BBOX = dict(lat_min=31.8, lat_max=42.0, lng_min=-124.6, lng_max=-116.8)
 
 # Output grid — kept at the legacy ERDDAP stride-1 dims for backward compat
 # with manifest.json consumers (React MapCanvas, RN MapScreen, viz_predict).

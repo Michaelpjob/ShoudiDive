@@ -53,7 +53,7 @@ try:
 except ModuleNotFoundError:
     from lib.layer_spec import LAYER_SPECS
 
-BBOX = dict(lat_min=31.8, lat_max=42.0, lng_min=-124.6, lng_max=-117.5)
+BBOX = dict(lat_min=31.8, lat_max=42.0, lng_min=-124.6, lng_max=-116.8)
 ERDDAP_BASE = "https://coastwatch.pfeg.noaa.gov/erddap/griddap"
 REQUEST_HEADERS = {
     "User-Agent": "shouldidive-data-pipeline/1.0 (+https://shouldidive.com)",
