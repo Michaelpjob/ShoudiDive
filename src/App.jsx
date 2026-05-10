@@ -1878,7 +1878,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
       </div>
 
       <div className="attribution">
-        zoom 7 · 34.6°N −120.3°W · CA Coast bbox 31.8°→42.0°N · −124.0°→−117.5°W
+        zoom 7 · 34.6°N −120.3°W · CA Coast bbox 31.8°→42.0°N · −124.6°→−117.5°W
       </div>
 
       {mpaOn && <CoronadosBanner vb={renderVb} size={size} />}
