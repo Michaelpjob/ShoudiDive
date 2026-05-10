@@ -333,6 +333,12 @@ jobs:
         run: npm run build
 
       - name: Deploy to Cloudflare Pages
+        # PRODUCTION DEPLOY GUARD: this step targets `--branch=main`,
+        # which is what CF Pages routes to shouldidive.com. Only fire
+        # when the workflow itself is running against the `main` ref.
+        # Without this guard, a workflow_dispatch run on any feature
+        # branch (e.g. `dev`) would push that branch's bundle to prod.
+        if: github.ref == 'refs/heads/main'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -340,7 +346,12 @@ jobs:
           command: pages deploy dist --project-name=shouldidive --branch=main --commit-dirty=true
 
       - name: Commit refreshed data
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        # always() so a failure in an earlier step (e.g. CF deploy on a
+        # feature branch when the prod guard skipped it but the runner
+        # carried a previous failure) doesn't drop the freshly-refreshed
+        # data on the floor. The schedule/workflow_dispatch gate stays
+        # so PR-triggered runs don't try to push commits.
+        if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
