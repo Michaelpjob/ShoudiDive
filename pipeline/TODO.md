@@ -337,6 +337,15 @@ NorCal observations. Below 80% means PR-NC-1 priors need calibration.
 Run after every PR in the chain. Don't promote PR-NC-1 to default
 until the harness passes against at least 20 NorCal observations.
 
+**Data-source playbook lives in `docs/norcal-vis-validation-sources.md`.**
+Tiered checklist of CeNCOOS / MBARI / BAUE / Reef Check / ScubaBoard
+sources to populate `pipeline/validation/data/norcal_observations.csv`
+(the input file `norcal_residuals.py` reads). Tier 1 + 2 are the
+fastest path to a useful first validation pass (CeNCOOS + BAUE),
+Tier 3 is the long-tail backfill (ScubaBoard scraping), Tier 4 is
+the gold-standard agency datasets (Reef Check). Don't start any of
+this work until PR-NC-1 lands on main; this is queued, not active.
+
 ---
 
 ## Queue policy
