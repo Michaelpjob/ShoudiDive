@@ -1,5 +1,5 @@
 {
-  "computed_at": "2026-05-10T03:49:03Z",
+  "computed_at": "2026-05-10T19:47:22Z",
   "manifest": "public/data/manifest.json",
   "layers_checked": [
     "sst",
@@ -16,8 +16,30 @@
     "precip"
   ],
   "summary": {
-    "total_findings": 0,
-    "healthy": true
+    "total_findings": 3,
+    "healthy": false
   },
-  "findings": []
+  "findings": [
+    {
+      "severity": "high",
+      "code": "layer_date_stale",
+      "title": "Layer wind is 1.1d old",
+      "layer": "wind",
+      "detail": "threshold=1d window=now"
+    },
+    {
+      "severity": "high",
+      "code": "summary_generated_at_stale",
+      "title": "Layer wind5d summary is 22.7h old",
+      "layer": "wind5d",
+      "detail": "threshold=8h"
+    },
+    {
+      "severity": "high",
+      "code": "summary_generated_at_stale",
+      "title": "Layer swell5d summary is 22.7h old",
+      "layer": "swell5d",
+      "detail": "threshold=8h"
+    }
+  ]
 }
