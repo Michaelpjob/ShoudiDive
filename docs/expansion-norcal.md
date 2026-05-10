@@ -2,11 +2,19 @@
 
 **Goal:** extend shouldidive.com from current bbox `lat ∈ [31.8°, 37.6°]`
 (SoCal + Bay Area edge) to `lat ∈ [31.8°, 42.0°]` — full California
-coast, Coronado Islands → Oregon border. Lng range stays the same
-(`-124.0° → -116.8°`).
+coast, Coronado Islands → Oregon border.
+
+**Lng range was also cropped** during the visual review:
+`lng ∈ [-124.0°, -116.8°]` → `[-124.0°, -117.5°]`. The original eastern
+bound was filling the right side of the map with inland CA (Sacramento
+Valley, Inland Empire, Riverside) — irrelevant for a dive forecast.
+`-117.5°` keeps the SoCal coast (LA, La Jolla, San Diego harbor),
+Catalina, and the Coronado Islands; drops Tijuana-east and the inland
+LA basin.
 
 That's a **+4.4° lat extension** = ~310 nm = a 76% increase in N-S
-coverage. The grid grows from 144×117 to 144×~205 cells.
+coverage, **with a -0.7° lng tightening** that cuts ~10% of the
+lng range. Net grid growth is ~60% larger area.
 
 ## TL;DR effort estimate
 
