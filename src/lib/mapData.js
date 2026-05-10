@@ -4,18 +4,20 @@
 
 // 2026-05-09 — bumped latMax from 37.6 → 42.0 (full CA coast,
 // Coronado Islands → Oregon border). See docs/expansion-norcal.md.
-// 2026-05-09 (later) — cropped lngMax from -116.8 → -117.5 to drop
-// inland CA (Sacramento Valley, Inland Empire, Riverside) which was
-// dominating the right side of the map. Keeps SoCal coast + Catalina
-// + Coronados; loses Tijuana-east + inland LA basin.
 // 2026-05-10 — bumped lngMin from -124.0 → -124.6 because Cape
 // Mendocino sits at -124.41°W (Crescent City -124.20°W, Eureka
 // -124.16°W). The previous lng_min was clipping the westernmost CA
 // land (the upper-left chunk of the map). -124.6 leaves a ~13 km
 // ocean buffer west of Cape Mendocino so the coast has breathing room.
-// Aspect: 7.1° lng × 10.2° lat (~5.7 × 11.3 km/° → real distance
-// ratio 0.50). Side panels fill the pillarbox margins on desktop.
-export const BBOX = { latMin: 31.8, latMax: 42.0, lngMin: -124.6, lngMax: -117.5 };
+// 2026-05-10 — restored lngMax to -116.8 (had briefly cropped to
+// -117.5 to drop inland CA, but that clipped La Jolla -117.27°W,
+// Pt Loma -117.25°W, Coronados -117.27 to -117.30°W). The inland-CA
+// "fat" on the right side at NorCal latitudes is the trade-off and
+// is acknowledged — a region selector (Phase 5 in
+// docs/expansion-norcal.md) is the right long-term answer.
+// Aspect: 7.8° lng × 10.2° lat (~6.2 × 11.3 km/° → real distance
+// ratio 0.55). Side panels fill the pillarbox margins on desktop.
+export const BBOX = { latMin: 31.8, latMax: 42.0, lngMin: -124.6, lngMax: -116.8 };
 
 // Geographic aspect ratio (lng-degrees-as-distance / lat-degrees) at the
 // bbox's mid latitude. Lng degrees shrink by cos(lat); we compute it once

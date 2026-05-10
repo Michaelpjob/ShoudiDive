@@ -15,7 +15,7 @@ from pathlib import Path
 
 import requests
 
-BBOX = dict(lat_min=31.8, lat_max=42.0, lng_min=-124.6, lng_max=-117.5)
+BBOX = dict(lat_min=31.8, lat_max=42.0, lng_min=-124.6, lng_max=-116.8)
 
 # CDFW Open Data Portal — California Marine Protected Areas (ds582).
 # Direct GeoJSON download in WGS84.
