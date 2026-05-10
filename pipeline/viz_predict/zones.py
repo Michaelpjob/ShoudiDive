@@ -14,19 +14,39 @@ from .config import (
 
 
 def classify_zone(lat, dist_to_shore_km, dist_to_island_km, depth_m):
-    """Return per-pixel zone strings like 'central_nearshore'."""
+    """Return per-pixel zone strings like 'central_nearshore'.
+
+    Latitude band is determined by walking ``LAT_ZONE_BOUNDS`` from
+    highest lower-bound downward and assigning the first match. This
+    means adding a new band (e.g. PR-NC-1's `norcal` at 36.00..90)
+    is a config-only change — no edits needed here.
+    """
     lat = np.asarray(lat)
     dts = np.asarray(dist_to_shore_km)
     dti = np.asarray(dist_to_island_km)
     dpt = np.asarray(depth_m)
 
-    # Latitude band
-    central_lo, _ = LAT_ZONE_BOUNDS["central"]
-    transition_lo, _ = LAT_ZONE_BOUNDS["transition"]
-    lat_label = np.where(
-        lat >= central_lo, "central",
-        np.where(lat >= transition_lo, "transition", "bight"),
+    # Latitude band — generic walk over all configured zones, ordered
+    # by descending lower-bound so the first ``lat >= lo`` match wins.
+    # The lowest band's lower-bound is conventionally negative-infinity
+    # (e.g. -90.0 for `bight`) so it acts as the catch-all default.
+    bands = sorted(
+        LAT_ZONE_BOUNDS.items(),
+        key=lambda kv: kv[1][0],
+        reverse=True,
     )
+    # Default to the lowest band's name as the fallback so cells south
+    # of all configured bounds (shouldn't happen in practice — bbox
+    # already filters them out) still get a deterministic label.
+    fallback_name = bands[-1][0]
+    lat_label = np.full(lat.shape, fallback_name, dtype="U12")
+    # Walk highest-first, assigning each band only to cells that have
+    # not already been claimed by a higher band.
+    claimed = np.zeros(lat.shape, dtype=bool)
+    for name, (lo, _hi) in bands:
+        match = (lat >= lo) & (~claimed)
+        lat_label = np.where(match, name, lat_label)
+        claimed = claimed | (lat >= lo)
 
     # Distance band: islands wins if within radius; else nearshore if close to
     # shore or shallow; else offshore.
