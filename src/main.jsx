@@ -2,12 +2,23 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
 import "./styles/app.css";
+import { initAnalytics } from "./lib/analytics.js";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <App />
   </React.StrictMode>
 );
+
+// Privacy-respecting in-app analytics. Honors Do-Not-Track + a
+// localStorage opt-out flag. No cookies, no third-party trackers,
+// no PII — events post to our own /api/analytics/event Pages
+// Function. See src/lib/analytics.js for the contract +
+// functions/api/analytics/event.js for the receiver.
+//
+// Init AFTER the React tree mounts so the pageview event isn't
+// counted before the app actually renders something visible.
+initAnalytics();
 
 // Register the service worker after the page has settled. Production only —
 // during dev the SW would intercept hot-reload assets and break Vite.

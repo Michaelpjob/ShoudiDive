@@ -2,24 +2,15 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import { SeaBasemap, LandBasemap, OceanMaskDefs, PLACE_LABELS } from "./components/Basemap.jsx";
 import DataOverlay from "./components/DataOverlay.jsx";
 import WindParticles from "./components/WindParticles.jsx";
-import MpaLayer from "./components/MpaLayer.jsx";
+import MpaLayer, { styleForType } from "./components/MpaLayer.jsx";
 import BathyLayer, {
+  styleForClass,
   loadBathyFeatures,
   visibleBathyFeatures,
   bathyLabels,
 } from "./components/BathyLayer.jsx";
 import MapLabels from "./components/MapLabels.jsx";
 import MobileSheet from "./components/MobileSheet.jsx";
-// 2026-05-09 architecture split — these were inline in App.jsx and
-// pulled out into per-component files so a render bug in one popup
-// can't take down map view + ErrorBoundary catches what's left.
-import TopBar from "./components/TopBar.jsx";
-import SettingsPopover from "./components/SettingsPopover.jsx";
-import MpaPopup from "./components/MpaPopup.jsx";
-import BathyPopup from "./components/BathyPopup.jsx";
-import CoronadosBanner from "./components/CoronadosBanner.jsx";
-import Tooltip from "./components/Tooltip.jsx";
-import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import {
   project,
   unproject,
@@ -79,6 +70,7 @@ import {
   isMapGestureChildTarget,
   shouldPinMapTap,
 } from "./lib/mapInteractionGuards.js";
+import { track } from "./lib/analytics.js";
 
 // Reactive viewport hook for the bottom-sheet mobile UI.
 //
@@ -97,6 +89,30 @@ function getMobileSnapshot() {
 }
 function useIsMobile() {
   return useSyncExternalStore(subscribeMatchMedia, getMobileSnapshot, () => false);
+}
+
+// Dive flag — the universal "diver below" maritime symbol. Red square,
+// white diagonal stripe. Reads instantly at any size (the previous
+// freediver silhouette degraded into a fuzzy Y at the topbar's ~20 px
+// rendering). Explicit colors so it stays legible in both light and
+// dark themes without depending on currentColor.
+function FreediverLogo() {
+  return (
+    <svg
+      className="brand-mark"
+      viewBox="0 0 32 32"
+      aria-hidden="true"
+      role="img"
+    >
+      <rect x="3" y="3" width="26" height="26" rx="5" fill="#dc2626" />
+      <path
+        d="M27 6 L 6 27"
+        stroke="#ffffff"
+        strokeWidth="5.2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
 }
 
 function Chevron({ open }) {
@@ -302,7 +318,30 @@ export default function App() {
 
   function setPref(key, val) {
     setPrefs((p) => ({ ...p, [key]: val }));
+    // Track settings changes — answers "do users actually toggle theme,
+    // change opacity, switch units?". Don't include the value as a
+    // string for free-form fields; just the key + a JSON-safe value.
+    track("settings_change", { key, val });
   }
+
+  // Wrapped state setters that fire analytics events alongside the
+  // setState. Passing these down to DesktopView (and through to
+  // MobileSheet) means every layer-chip click — desktop or mobile —
+  // gets one event, regardless of where in the JSX tree the click
+  // originated. The closure captures the previous value so we can
+  // emit `from`/`to` and answer "what's the most-common transition?".
+  const trackedSetLayer = (next) => {
+    if (next !== layer) {
+      track("layer_change", { from: layer, to: next });
+    }
+    setLayer(next);
+  };
+  const trackedSetSstMode = (next) => {
+    if (next !== sstMode) {
+      track("sst_mode_change", { from: sstMode, to: next });
+    }
+    setSstMode(next);
+  };
 
   // Moon-phase icon should track the active time slider when those
   // layers are active, otherwise show "now". Computed at render time
@@ -319,40 +358,32 @@ export default function App() {
       {settingsOpen && (
         <SettingsPopover prefs={prefs} setPref={setPref} onClose={() => setSettingsOpen(false)} />
       )}
-      {/* ErrorBoundary scoped to DesktopView only — TopBar + Settings
-          stay reachable so the user can see the data status indicator
-          and toggle theme even when the map view crashes during render.
-          The 2026-05-07 white-screen incident took down the WHOLE tree
-          for ~25 min; with this boundary, the same bug class shows a
-          recoverable panel instead. */}
-      <ErrorBoundary>
-        <DesktopView
-          layer={layer}
-          setLayer={setLayer}
-          composite={composite}
-          setComposite={setComposite}
-          sstMode={sstMode}
-          setSstMode={setSstMode}
-          sstSel={sstSel}
-          setSstSel={setSstSel}
-          sstForecastSel={sstForecastSel}
-          setSstForecastSel={setSstForecastSel}
-          windSel={windSel}
-          setWindSel={setWindSel}
-          swellSel={swellSel}
-          setSwellSel={setSwellSel}
-          currentSel={currentSel}
-          setCurrentSel={setCurrentSel}
-          opacity={prefs.opacity}
-          units={prefs.units}
-          dataState={dataState}
-          mpaOn={prefs.mpaOn}
-          setMpaOn={(v) => setPref("mpaOn", v)}
-          bathyOn={prefs.bathyOn}
-          setBathyOn={(v) => setPref("bathyOn", v)}
-          viewingDate={viewingDate}
-        />
-      </ErrorBoundary>
+      <DesktopView
+        layer={layer}
+        setLayer={trackedSetLayer}
+        composite={composite}
+        setComposite={setComposite}
+        sstMode={sstMode}
+        setSstMode={trackedSetSstMode}
+        sstSel={sstSel}
+        setSstSel={setSstSel}
+        sstForecastSel={sstForecastSel}
+        setSstForecastSel={setSstForecastSel}
+        windSel={windSel}
+        setWindSel={setWindSel}
+        swellSel={swellSel}
+        setSwellSel={setSwellSel}
+        currentSel={currentSel}
+        setCurrentSel={setCurrentSel}
+        opacity={prefs.opacity}
+        units={prefs.units}
+        dataState={dataState}
+        mpaOn={prefs.mpaOn}
+        setMpaOn={(v) => setPref("mpaOn", v)}
+        bathyOn={prefs.bathyOn}
+        setBathyOn={(v) => setPref("bathyOn", v)}
+        viewingDate={viewingDate}
+      />
     </div>
   );
 }
@@ -403,6 +434,171 @@ function resolveSstMode(requested, historySummary, forecastSummary) {
   return "history";
 }
 
+function TopBar({ onSettings, settingsOpen, dataState }) {
+  const generated = dataState?.manifest?.generated_at;
+  const lastUpdate = generated
+    ? new Date(generated).toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "UTC",
+        timeZoneName: "short",
+      })
+    : "Apr 24, 2026 06:42 UTC";
+  const status = !dataState?.ready
+    ? "Loading"
+    : generated
+    ? "Live"
+    : "Demo data";
+  return (
+    <div className="topbar">
+      <div className="brand">
+        <FreediverLogo />
+        <div>
+          <div className="brand-name">ShouldIDive</div>
+        </div>
+        <span className="brand-tag">
+          Sea Temp · Water Clarity · Wind · Current · CA Coast 31.8°–37.6°N
+        </span>
+      </div>
+      <div className="topbar-meta">
+        <span>
+          <span className="dot"></span>
+          <strong>{status}</strong> · Last update{" "}
+          <span className="mono">{lastUpdate}</span>
+        </span>
+        <span>
+          Sources: <strong>NOAA · IOOS · NASA OB.DAAC · Copernicus</strong>
+        </span>
+        {/* Tip jar — visible on every layer, every device. The WSB
+            joke (white sea bass — the trophy spear fish in SoCal) +
+            small fish silhouette reads as a wink to free divers
+            specifically. Click opens the Venmo profile in a new tab. */}
+        <a
+          href="https://venmo.com/u/michaelpjob"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="tip-fish"
+          title="Tip the creator on Venmo (@michaelpjob)"
+          onClick={() => track("tip_click", { source: "topbar" })}
+        >
+          <svg
+            className="tip-fish-icon"
+            width="16"
+            height="14"
+            viewBox="0 0 32 28"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            {/* Simple silhouette: oval body + triangle tail. Renders
+                crisp at 14-18 px, scales to retina without blurring. */}
+            <path d="M19 4 C 11 4, 4 9, 2 14 C 4 19, 11 24, 19 24
+                     C 23 24, 26 22, 28 20 L 31 24 L 31 4 L 28 8
+                     C 26 6, 23 4, 19 4 Z M 21 12 a 1.5 1.5 0 1 1 0 3
+                     a 1.5 1.5 0 0 1 0 -3 Z" />
+          </svg>
+          <span className="tip-fish-text">click for WSB</span>
+        </a>
+        {/* The MobileShell peek strip carries layer/value/time info on
+            phones — the topbar just keeps the brand mark + settings cog
+            on small screens (timestamp + sources are hidden via the
+            mobile-shell @media block in app.css; that media query
+            mirrors MOBILE_QUERY above so JS and CSS agree on what
+            counts as "mobile"). */}
+        <button
+          className="icon-btn"
+          aria-label="Settings"
+          aria-pressed={settingsOpen}
+          onClick={onSettings}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SettingsPopover({ prefs, setPref, onClose }) {
+  return (
+    <div className="settings-pop" role="dialog" aria-label="Settings">
+      {/* Close button — was missing entirely; on mobile the popover
+          covers most of the screen and there was no way to dismiss
+          short of tapping the gear again, which most users wouldn't
+          discover. */}
+      {onClose && (
+        <button
+          type="button"
+          className="sp-close"
+          aria-label="Close settings"
+          onClick={onClose}
+        >
+          ×
+        </button>
+      )}
+      <div className="sp-section">
+        <div className="sp-h">Theme</div>
+        <div className="sp-row">
+          <span>Appearance</span>
+          <div className="sp-seg">
+            <button
+              className={prefs.theme === "light" ? "active" : ""}
+              onClick={() => setPref("theme", "light")}
+            >
+              Light
+            </button>
+            <button
+              className={prefs.theme === "dark" ? "active" : ""}
+              onClick={() => setPref("theme", "dark")}
+            >
+              Dark
+            </button>
+          </div>
+        </div>
+      </div>
+      <div className="sp-section">
+        <div className="sp-h">Map</div>
+        <div className="sp-row">
+          <span>Overlay opacity</span>
+          <span className="sp-val mono">{Math.round(prefs.opacity * 100)}%</span>
+        </div>
+        <input
+          type="range"
+          min={20}
+          max={100}
+          step={2}
+          value={Math.round(prefs.opacity * 100)}
+          onChange={(e) => setPref("opacity", Number(e.target.value) / 100)}
+        />
+      </div>
+      <div className="sp-section">
+        <div className="sp-h">Units</div>
+        <div className="sp-row">
+          <span>Temperature</span>
+          <div className="sp-seg">
+            <button
+              className={prefs.units === "F" ? "active" : ""}
+              onClick={() => setPref("units", "F")}
+            >
+              °F
+            </button>
+            <button
+              className={prefs.units === "C" ? "active" : ""}
+              onClick={() => setPref("units", "C")}
+            >
+              °C
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSstMode, sstSel, setSstSel, sstForecastSel, setSstForecastSel, windSel, setWindSel, swellSel, setSwellSel, currentSel, setCurrentSel, opacity, units, dataState, mpaOn, setMpaOn, bathyOn, setBathyOn, viewingDate }) {
   // Timeline layers use a slot-key string derived from their selection
   // state; helpers fall back to a valid slot if the requested one has no
@@ -432,7 +628,17 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
   const stageRef = useRef(null);
   const [size, setSize] = useState({ w: 1200, h: 700 });
   const [hover, setHover] = useState(null);
-  const [activeSpot, setActiveSpot] = useState("lajolla");
+  const [activeSpot, setActiveSpotRaw] = useState("lajolla");
+  // Wrap setActiveSpot so every saved-spot click — desktop list or
+  // mobile sheet — fires one analytics event. Answers "which spots
+  // do users actually look at, and is it the same on mobile vs
+  // desktop?".
+  const setActiveSpot = (next) => {
+    if (next !== activeSpot) {
+      track("spot_click", { from: activeSpot, to: next, layer });
+    }
+    setActiveSpotRaw(next);
+  };
   const [infoOpen, setInfoOpen] = useState(true);
   const [controlsOpen, setControlsOpen] = useState(true);
   const [spotsOpen, setSpotsOpen] = useState(true);
@@ -940,7 +1146,10 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
           width={size.w}
           height={size.h}
           active={mpaOn}
-          onSelect={setSelectedMpa}
+          onSelect={(mpa) => {
+            track("popup_open", { kind: "mpa", type: mpa?.type || "unknown" });
+            setSelectedMpa(mpa);
+          }}
         />
 
         <BathyLayer
@@ -948,7 +1157,10 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
           height={size.h}
           active={bathyOn}
           zoomLevel={zoomLevel}
-          onSelect={setSelectedBathy}
+          onSelect={(feat) => {
+            track("popup_open", { kind: "bathy", class: feat?.class || "unknown" });
+            setSelectedBathy(feat);
+          }}
         />
 
         <g className="spot-pins">
@@ -1707,5 +1919,310 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
       />
     )}
     </>
+  );
+}
+
+function BathyPopup({ feature, onClose }) {
+  const sty = styleForClass(feature.class);
+  const isCommunity = feature.class === "community-spot";
+  const classLabel =
+    feature.class === "seamount" ? "Seamount"
+    : feature.class === "bank" ? "Bank"
+    : feature.class === "reef" ? "Reef"
+    : feature.class === "basin" ? "Basin"
+    : feature.class === "trough" ? "Trough"
+    : feature.class === "anchorage" ? "Anchorage"
+    : feature.class === "landmark" ? "Landmark"
+    : "Community spot";
+  return (
+    <div className="mpa-popup-overlay" onClick={onClose}>
+      <div className="mpa-popup" onClick={(e) => e.stopPropagation()}>
+        <div className="mpa-popup-head">
+          <div>
+            <div className="mpa-popup-name">{feature.name}</div>
+            <div className="mpa-popup-fullname">{classLabel}</div>
+          </div>
+          <span
+            className="mpa-pill"
+            style={{
+              background: "transparent",
+              borderColor: sty.color,
+              color: sty.color,
+            }}
+          >
+            {sty.glyph} {feature.shortName || feature.name}
+          </span>
+        </div>
+
+        {(feature.minDepthFt || feature.minDepthM) && (
+          <p className="mpa-popup-meta mono">
+            {feature.minDepthFt ? `Min depth ${feature.minDepthFt} ft` : ""}
+            {feature.minDepthFt && feature.minDepthM ? ` (${feature.minDepthM} m)` : ""}
+            {!feature.minDepthFt && feature.minDepthM ? `Min depth ${feature.minDepthM} m` : ""}
+          </p>
+        )}
+
+        {feature.description && (
+          <p className="mpa-popup-body">{feature.description}</p>
+        )}
+
+        <p className="mpa-popup-meta mono">
+          Source: {feature.source || "n/a"}
+        </p>
+
+        {isCommunity && (
+          <p className="mpa-popup-disclaimer">
+            Community-sourced. Verify locally and stay clear of MPAs.
+          </p>
+        )}
+        {!isCommunity && (
+          <p className="mpa-popup-disclaimer">
+            For navigation, verify with current NOAA charts.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// US-Mexico maritime boundary is at ~32.534°N. When the MPA layer is on
+// AND the visible viewBox dips below that, surface a small disclaimer.
+// Dismissable: an × button hides it for the rest of the page session
+// (mobile users repeatedly hit it covering the bottom strip when
+// they're zoomed in on Coronados, which is half the reason to look at
+// that part of the map).
+function CoronadosBanner({ vb, size }) {
+  const [dismissed, setDismissed] = useState(false);
+  if (!vb || !size.h) return null;
+  if (dismissed) return null;
+  const [, visibleSouthLat] = unproject(0, vb.y + vb.h, size.w, size.h);
+  if (visibleSouthLat > 32.534) return null;
+  return (
+    <div className="mpa-banner">
+      <span>
+        MPA data covers California waters only. The Coronados sit inside
+        Mexico's Islas del Pacífico Biosphere Reserve — see{" "}
+        <a href="https://www.gob.mx/conanp" target="_blank" rel="noreferrer">CONANP</a>.
+      </span>
+      <button
+        className="mpa-banner-close"
+        onClick={() => setDismissed(true)}
+        aria-label="Dismiss notice"
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
+function MpaPopup({ mpa, onClose }) {
+  const style = styleForType(mpa.type);
+  const officialUrl =
+    "https://wildlife.ca.gov/Conservation/Marine/MPAs/Network";
+  const verdict = verdictForType(mpa.type);
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+  return (
+    <div className="mpa-popup-overlay" onClick={onClose} role="presentation">
+      <div
+        className="mpa-popup"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${mpa.name} MPA details`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          className="mpa-popup-close"
+          onClick={onClose}
+          aria-label="Close MPA details"
+        >
+          ×
+        </button>
+        <div className="mpa-popup-head">
+          <div>
+            <div className="mpa-popup-name">{mpa.name}</div>
+            <div className="mpa-popup-fullname">{fullNameForType(mpa.type)}</div>
+          </div>
+          <span className="mpa-pill" style={{ background: style.fill, borderColor: style.stroke, color: style.stroke }}>
+            {mpa.type}
+          </span>
+        </div>
+        <div className={"mpa-verdict mpa-verdict-" + verdict.kind}>
+          <span className="mpa-verdict-icon">{verdict.icon}</span>
+          <strong>{verdict.label}</strong>
+        </div>
+        <p className="mpa-popup-body">
+          {verdict.kind === "no" && (
+            <>Take of any living marine resource is generally prohibited inside this area.</>
+          )}
+          {verdict.kind === "limited" && (
+            <>Limited recreational take is allowed — specific species and methods only. <strong>Verify with CDFW before harvesting.</strong></>
+          )}
+          {verdict.kind === "ok" && (
+            <>Most recreational take is allowed within this area; specific exclusions may apply.</>
+          )}
+        </p>
+        <p className="mpa-popup-meta mono">
+          {mpa.areaKm2 ? `${mpa.areaKm2} km² · ` : ""}
+          {mpa.ccrCitation || "CCR Title 14 §632"}
+        </p>
+        <a
+          className="mpa-popup-link"
+          href={officialUrl}
+          target="_blank"
+          rel="noreferrer"
+        >
+          ↗ Official CDFW regulation page
+        </a>
+        <p className="mpa-popup-disclaimer">
+          Information shown is for planning purposes only. Verify with CDFW before harvesting.
+        </p>
+        <button
+          type="button"
+          className="mpa-popup-done"
+          onClick={onClose}
+        >
+          Back to map
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function verdictForType(type) {
+  if (!type) return { kind: "limited", icon: "⚠", label: "CHECK RULES" };
+  const t = type.toUpperCase();
+  if (t.includes("NO-TAKE") || t === "SMR" || t === "FMR")
+    return { kind: "no", icon: "⛔", label: "NO TAKE" };
+  if (t === "SMP" || t === "SMRMA")
+    return { kind: "ok", icon: "✓", label: "TAKE ALLOWED" };
+  return { kind: "limited", icon: "⚠", label: "LIMITED TAKE" };
+}
+
+function fullNameForType(type) {
+  const map = {
+    SMR: "State Marine Reserve",
+    SMCA: "State Marine Conservation Area",
+    "SMCA (No-Take)": "State Marine Conservation Area · No Take",
+    SMP: "State Marine Park",
+    SMRMA: "State Marine Recreational Management Area",
+    FMR: "Federal Marine Reserve",
+    FMCA: "Federal Marine Conservation Area",
+    "Special Closure": "Special Closure",
+  };
+  return map[type] || "Marine Protected Area";
+}
+
+function Tooltip({ x, y, layer, composite, lng, lat, units }) {
+  let title, big, sub;
+  if (layer === "sst") {
+    const val = getSST(lng, lat, composite);
+    title = "Sea Surface Temp";
+    if (!Number.isFinite(val)) {
+      big = "—";
+      sub = "no data here";
+    } else {
+      const f = val * 9 / 5 + 32;
+      big = units === "F" ? `${f.toFixed(1)}°F` : `${val.toFixed(1)}°C`;
+      sub =
+        f < 55 ? "Frigid · drysuit"
+        : f < 60 ? "Cold · 7 mm"
+        : f < 70 ? "Cool · 5 mm"
+        : f < 75 ? "Mild · 3 mm"
+        : f < 80 ? "Warm · springsuit"
+        : "Hot · trunks";
+    }
+  } else if (layer === "chl") {
+    const val = getChl(lng, lat, composite);
+    title = "Chl-a · Water Clarity";
+    if (!Number.isFinite(val)) {
+      big = "—";
+      sub = "no data here";
+    } else {
+      big = `${val.toFixed(2)} mg/m³`;
+      sub =
+        val < 0.3 ? "Gin clear"
+        : val < 1.0 ? "Clear"
+        : val < 3.5 ? "Moderate"
+        : val < 10  ? "Productive"
+        : "Bloom";
+    }
+  } else if (layer === "wind") {
+    title = "Wind · 10 m";
+    const { u, v } = getWindUV(lng, lat, composite);
+    const kt = getWindSpeed(lng, lat, composite);
+    if (Number.isFinite(kt) && Number.isFinite(u) && Number.isFinite(v)) {
+      const deg = windCompass(u, v);
+      big = `${kt.toFixed(1)} kt`;
+      sub = `from ${windCardinal(deg)} (${Math.round(deg)}°)`;
+    } else {
+      big = "—";
+      sub = "no data";
+    }
+  } else if (layer === "current") {
+    title = "Surface Current";
+    const { u, v } = getCurrentUV(lng, lat, composite);
+    const kt = getCurrentSpeed(lng, lat, composite);
+    if (Number.isFinite(kt) && Number.isFinite(u) && Number.isFinite(v)) {
+      const deg = (Math.atan2(u, v) * 180 / Math.PI + 360) % 360;
+      big = `${kt.toFixed(1)} kt`;
+      sub = `setting to ${windCardinal(deg)} (${Math.round(deg)} deg)`;
+    } else {
+      big = "—";
+      sub = "no current estimate";
+    }
+  } else if (layer === "swell") {
+    title = "Swell · WaveWatch III";
+    const w = getSwell5dStats(lng, lat, composite);
+    if (Number.isFinite(w.hs)) {
+      const ft = w.hs * 3.28084;
+      const tpStr = Number.isFinite(w.tp) ? ` · ${w.tp.toFixed(0)} s` : "";
+      const dpStr = Number.isFinite(w.dp)
+        ? ` · ${windCardinal(w.dp)} ${Math.round(w.dp)}°`
+        : "";
+      const periodTag =
+        !Number.isFinite(w.tp) ? ""
+        : w.tp >= 12 ? "long-period groundswell"
+        : w.tp >= 8  ? "mixed swell"
+        : "short-period windswell";
+      big = `${ft.toFixed(1)} ft`;
+      sub = `${tpStr.replace(/^ · /, "")}${dpStr}${periodTag ? `\n${periodTag}` : ""}`.trim();
+    } else {
+      big = "—";
+      sub = "no data";
+    }
+  } else {
+    // viz layer — model prediction, NOT a measurement
+    title = "Predicted Visibility";
+    const ft = getVizFt(lng, lat, composite);
+    if (Number.isFinite(ft)) {
+      const cat =
+        ft < 10 ? "Poor"
+        : ft < 20 ? "Fair"
+        : ft < 30 ? "Good"
+        : ft < 50 ? "Very Good"
+        : "Excellent";
+      big = `~${Math.round(ft)} ft`;
+      sub = `${cat} · model output`;
+    } else {
+      big = "—";
+      sub = "no prediction here";
+    }
+  }
+  return (
+    <div className="tooltip" style={{ left: x, top: y }}>
+      <div className="tooltip-title">{title}</div>
+      <div className="tooltip-val">{big}</div>
+      <div className="tooltip-sub">{sub}</div>
+      <div className="tooltip-coord">
+        {lat.toFixed(3)}°N · {Math.abs(lng).toFixed(3)}°W
+      </div>
+    </div>
   );
 }

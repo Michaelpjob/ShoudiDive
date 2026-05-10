@@ -29,6 +29,30 @@ import requests
 import xarray as xr
 from PIL import Image
 
+# Single source of truth for range / scale / unit per layer. Defined in
+# pipeline/lib/layer_spec.py; both this fetcher (encode side) and the
+# frontend's dataSource.js (decode side) look at the same numbers, so
+# a drift between the two is impossible.
+#
+# The merge below layers ENCODER-specific fields (dataset, variable,
+# host, stride, pre_xy_dims, fallbacks, emit_age_sidecar) on top of
+# the contract-specified fields. Changing a range or scale = edit
+# LAYER_SPECS, not this file.
+#
+# Import handles BOTH invocation styles:
+#   * `python pipeline/fetch.py`  → cwd repo root, but sys.path[0] = pipeline/.
+#                                    Falls through to the second arm.
+#   * `python -m pipeline.fetch`   → sys.path[0] = repo root. First arm wins.
+# refresh-data.yml uses the script-style invocation (line 72), so the
+# second arm is the path the production cron actually takes. Without this
+# fallback, the daily refresh fails at module load with
+# `ModuleNotFoundError: No module named 'pipeline'` — caught the first
+# time on 2026-05-08 21:09 UTC, after PR #21 landed.
+try:
+    from pipeline.lib.layer_spec import LAYER_SPECS
+except ModuleNotFoundError:
+    from lib.layer_spec import LAYER_SPECS
+
 BBOX = dict(lat_min=31.8, lat_max=37.6, lng_min=-124.0, lng_max=-116.8)
 ERDDAP_BASE = "https://coastwatch.pfeg.noaa.gov/erddap/griddap"
 REQUEST_HEADERS = {
@@ -39,13 +63,38 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = ROOT / "public" / "data"
 CACHE_DIR = ROOT / "pipeline" / ".cache"
 
+
+def _layer_config(spec_name: str, encoder_extras: dict) -> dict:
+    """Build a LAYERS-dict entry by pulling range/scale/unit from
+    pipeline.lib.layer_spec.LAYER_SPECS[spec_name] and layering the
+    encoder-specific config on top.
+
+    Failing here at import time is the point — if the registry doesn't
+    have the layer, this fetcher cannot encode it correctly anyway.
+    """
+    spec = LAYER_SPECS[spec_name]
+    if spec.range is None:
+        raise ValueError(
+            f"fetch.py: LayerSpec for {spec_name!r} has no range — cannot "
+            f"encode a scalar PNG without one. Either fix the spec or move "
+            f"this layer to a fetcher that handles its payload type."
+        )
+    if spec.scale is None:
+        raise ValueError(
+            f"fetch.py: LayerSpec for {spec_name!r} has no scale"
+        )
+    return {
+        "range": tuple(spec.range),
+        "scale": spec.scale,
+        "unit": spec.unit,
+        **encoder_extras,
+    }
+
+
 LAYERS: dict[str, dict] = {
-    "sst": {
+    "sst": _layer_config("sst", {
         "dataset": "jplMURSST41",
         "variable": "analysed_sst",
-        "range": (9.0, 25.0),
-        "scale": "linear",
-        "unit": "degC",
         "stride": 2,
         "history_days": 7,
         "max_back": 10,
@@ -65,8 +114,8 @@ LAYERS: dict[str, dict] = {
                 "source_label": "NOAA Geo-polar blended SST",
             }
         ],
-    },
-    "chl": {
+    }),
+    "chl": _layer_config("chl", {
         # Source moved off the deprecating coastwatch.pfeg.noaa.gov mirror:
         # PFEG is now redirecting (302) to coastwatch.noaa.gov, where the
         # SNPP/N20 NRT gap-filled product lives under a different dataset
@@ -80,14 +129,11 @@ LAYERS: dict[str, dict] = {
         "host":    "https://coastwatch.noaa.gov/erddap/griddap",
         "dataset": "noaacwNPPN20VIIRSDINEOFDaily",
         "variable": "chlor_a",
-        "range": (0.05, 20.0),
-        "scale": "log10",
-        "unit": "mg/m^3",
         "stride": 1,
         # VIIRS gap-filled has a single-element altitude dim at index 0
         "pre_xy_dims": "[0]",
-    },
-    "kd490": {
+    }),
+    "kd490": _layer_config("kd490", {
         # Diffuse attenuation coefficient at 490 nm — direct light-penetration
         # measure, far closer to "what a diver sees" than chl alone. The model
         # (Phase 2) blends Secchi = 1.7/Kd_490 against the chl-derived path,
@@ -106,12 +152,6 @@ LAYERS: dict[str, dict] = {
         "host":    "https://coastwatch.noaa.gov/erddap/griddap",
         "dataset": "noaacwNPPN20S3AkdSCIDINEOF2kmDaily",
         "variable": "kd_490",
-        # Coastal CA: ~0.04 (clear offshore SoCal Bight ~40 m Secchi) to ~3
-        # (turbid river plumes ~0.6 m Secchi). 0.02–10 gives one bit of
-        # headroom on each end; log10 keeps quantization even across 500x.
-        "range": (0.02, 10.0),
-        "scale": "log10",
-        "unit": "m^-1",
         # 2 km native resolution gives ~290×290 pixels over our bbox.
         "stride": 1,
         # Same altitude length-1 axis as VIIRS chl.
@@ -122,7 +162,7 @@ LAYERS: dict[str, dict] = {
         # Mandatory for the Phase-2 model: age sidecar is consumed by
         # fetch_visibility.py to gate "today's Kd observation" on age==0.
         "emit_age_sidecar": True,
-    },
+    }),
 }
 
 

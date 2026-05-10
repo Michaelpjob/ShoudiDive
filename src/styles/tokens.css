@@ -1,0 +1,80 @@
+/* CA Coast Ocean Conditions — NOAA-utility aesthetic */
+
+:root {
+  /* Light theme (default) */
+  --bg: oklch(0.985 0.005 85);
+  --bg-panel: oklch(0.995 0.003 85 / 0.92);
+  --bg-panel-solid: oklch(0.995 0.003 85);
+  --bg-sunken: oklch(0.96 0.006 85);
+  --ink: oklch(0.22 0.02 250);
+  --ink-2: oklch(0.42 0.015 250);
+  --ink-3: oklch(0.58 0.012 250);
+  --line: oklch(0.88 0.008 250);
+  --line-2: oklch(0.93 0.006 250);
+  --accent: oklch(0.48 0.13 230);
+  --accent-ink: oklch(0.98 0.005 230);
+  --warn: oklch(0.62 0.16 35);
+
+  /* Map / bathymetry */
+  --land: oklch(0.94 0.012 95);
+  --land-edge: oklch(0.78 0.02 95);
+  --sea: oklch(0.93 0.018 230);
+  --sea-deep: oklch(0.86 0.025 230);
+  --sea-deeper: oklch(0.79 0.03 235);
+  --bathy-line: oklch(0.72 0.025 230 / 0.45);
+  --grid: oklch(0.7 0.01 250 / 0.18);
+
+  --shadow-1: 0 1px 2px rgb(15 23 42 / 0.04), 0 2px 8px rgb(15 23 42 / 0.06);
+  --shadow-2: 0 4px 14px rgb(15 23 42 / 0.10), 0 1px 3px rgb(15 23 42 / 0.06);
+
+  --r-1: 4px;
+  --r-2: 6px;
+  --r-3: 10px;
+}
+
+[data-theme="dark"] {
+  --bg: oklch(0.16 0.018 250);
+  --bg-panel: oklch(0.22 0.02 250 / 0.86);
+  --bg-panel-solid: oklch(0.22 0.02 250);
+  --bg-sunken: oklch(0.13 0.015 250);
+  --ink: oklch(0.96 0.005 230);
+  --ink-2: oklch(0.78 0.012 230);
+  --ink-3: oklch(0.6 0.015 230);
+  --line: oklch(0.32 0.02 250);
+  --line-2: oklch(0.26 0.018 250);
+  --accent: oklch(0.78 0.14 220);
+  --accent-ink: oklch(0.16 0.02 250);
+
+  --land: oklch(0.24 0.02 95);
+  --land-edge: oklch(0.36 0.025 95);
+  --sea: oklch(0.21 0.025 235);
+  --sea-deep: oklch(0.17 0.03 240);
+  --sea-deeper: oklch(0.13 0.035 245);
+  --bathy-line: oklch(0.5 0.04 230 / 0.5);
+  --grid: oklch(0.5 0.01 250 / 0.18);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+
+body {
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-feature-settings: "ss01", "cv11", "tnum";
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  font-size: 14px;
+  line-height: 1.4;
+  overflow: hidden;
+  /* 100dvh (dynamic viewport height) so iOS Safari's collapsing
+     bottom toolbar doesn't eat the bottom of the page. With plain
+     100vh, the layer chip strip at the bottom of the peek bar lands
+     BEHIND Safari's chrome and is unreachable. dvh is supported in
+     Safari 15.4+, Chrome 108+, FF 101+ — universal at this point;
+     keep 100vh as a fallback for the truly ancient. */
+  height: 100vh;
+  height: 100dvh;
+}
+
+.mono { font-family: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, Consolas, monospace; font-feature-settings: "tnum"; }
+

@@ -91,6 +91,7 @@ The full taxonomy lives in [`tests/CHECKPOINTS.md`](tests/CHECKPOINTS.md)
 | `mobile-static`    | dev    | RN data-layer + colormap jest tests |
 | `secrets-scan`     | dev    | Committed API keys, `.env`, PEM private keys |
 | `workflow-lint`    | dev    | actionlint on `.github/workflows/*.yml` |
+| `manifest-validate`| dev    | LayerSpec contract — range/scale drift between pipeline encoder and frontend decoder |
 
 Required-status-checks list lives in
 `scripts/setup-branch-protection.sh`. Adding a new GATING check =
@@ -221,3 +222,63 @@ Repo admins can bypass branch protection via the GitHub UI's
 "Override" button. This exists for emergencies (e.g. if the gate
 itself breaks). Agents should never invoke this path; if a check is
 flaky, fix the check, not the bypass.
+
+## In-app analytics
+
+Privacy-respecting usage tracking: no cookies, no third-party
+trackers, no PII. Events post to our own Cloudflare Pages Function
+at `/api/analytics/event` from the same origin.
+
+Architecture:
+
+```
+React app (App.jsx, components)
+   │
+   │  track("layer_change", { from, to })
+   ▼
+src/lib/analytics.js   buffer 25 events / 30 s
+   │
+   │  POST /api/analytics/event   (sendBeacon for tab-close reliability)
+   ▼
+functions/api/analytics/event.js   (Cloudflare Pages Function)
+   │
+   ├── Phase 1 (today): console.log → Cloudflare Pages
+   │                    Real-time Logs tab
+   └── Phase 2 (todo):  also write to ANALYTICS_KV
+                        bound namespace; /stats page reads it
+```
+
+Tracked events today:
+- `pageview` — fired once per tab on init
+- `layer_change` — sst/chl/wind/swell/current/viz chip clicks (props: from, to)
+- `sst_mode_change` — history vs forecast toggle
+- `spot_click` — saved-spot panel selections (props: from, to, layer)
+- `popup_open` — MPA / bathy-feature popups
+- `settings_change` — theme, units, opacity, mpaOn, bathyOn
+- `tip_click` — Venmo tip jar in topbar
+
+**Reading the data (Phase 1 — right now):**
+```bash
+# Cloudflare dash → Workers & Pages → shouldidive → Logs tab → live tail.
+# Or via wrangler:
+npx wrangler pages deployment tail --project-name=shouldidive | grep ANALYTICS
+```
+
+**Privacy contract:**
+- No IP address logged (Cloudflare provides it; we discard it)
+- No User-Agent logged
+- Country code from `request.cf.country` is logged (already-anonymized
+  by Cloudflare, useful aggregate signal)
+- Session ID is a random 64-bit token in `sessionStorage` — dies on
+  tab close
+- Honors browser DNT and a `localStorage["sd:analytics:off"]="1"`
+  opt-out flag; analytics never fires for users who set either.
+
+**Adding a new event type:**
+1. Pick a name from the allowlist in
+   `functions/api/analytics/event.js`'s `ALLOWED_NAMES` set, or add a
+   new entry there. Names not in the allowlist are silently dropped
+   server-side (defends against client-side bugs flooding logs).
+2. Call `track("event_name", { prop1, prop2 })` from the React tree.
+   Props are flat primitives only (string/number/bool/null).
+3. Verify the event lands by tailing the Cloudflare logs (above).

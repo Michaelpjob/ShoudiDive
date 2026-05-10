@@ -11,12 +11,32 @@
 # What this enforces on the `main` branch:
 #
 #   - require pull request before merging
-#   - require all five dev-checks status contexts to pass
+#   - require all listed dev-checks status contexts to pass
 #   - require branch up-to-date with base before merging
 #   - disallow force pushes
 #   - disallow deletion
 #   - allow admin override (so the user can break-glass if the gate
 #     itself ever blocks a real emergency fix)
+#
+# How scheduled bot pushes get past PR-required:
+#   The refresh-data, refresh-wind, and ingest-ground-truth workflows
+#   commit refreshed data directly to main on cron. Personal repos
+#   can't use `bypass_pull_request_allowances` (that's org-only — the
+#   GitHub API returns 422 with 'Only organization repositories can
+#   have users and team restrictions'). The workaround on a personal
+#   repo: have the workflow's `git push` step authenticate as a token
+#   with admin permissions; admins are exempt from PR-required.
+#
+#   Setup (one-time, by repo owner):
+#     1. https://github.com/settings/tokens/new — classic PAT, scope:
+#        `repo`. Note: a fine-grained token with Contents:Write +
+#        repo:admin equivalents also works.
+#     2. Repo → Settings → Secrets → Actions → New: name BOT_PUSH_TOKEN,
+#        paste the PAT.
+#     3. The cron workflows already check ${{ secrets.BOT_PUSH_TOKEN }}
+#        and fall back to GITHUB_TOKEN if the secret is missing — so
+#        nothing breaks if you skip the PAT step, the bot push just
+#        keeps failing with GH006 until the secret is added.
 #
 # Adding a new required check:
 #   1. Add a job to .github/workflows/dev-checks.yml — copy an existing
@@ -39,6 +59,9 @@ REQUIRED_CHECKS=(
   "mobile-static"
   "secrets-scan"
   "workflow-lint"
+  "manifest-validate" # LayerSpec contract — catches range/scale drift
+                      # between pipeline encoder and frontend decoder
+                      # (added 2026-05-09 in the Tier-2 architecture PR)
 )
 
 # Build the JSON contexts list inline.

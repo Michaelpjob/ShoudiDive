@@ -271,11 +271,24 @@ def main() -> int:
             if np.any(np.isfinite(anom)) else None
         )
         days.append({
+            # ``slot`` is the in-memory key the frontend uses to reference
+            # this day in ``state.layers.sst[<slot>]``. The frontend's
+            # SstTimeline + sstSelToSlotKey + defaultSstSelection ALL
+            # require this field to exist; without it the loader's
+            # ``if (!d?.slot)`` guard skipped every day and the forecast
+            # heatmap silently never loaded (slider had nothing to render).
+            # Format ``f{lead}`` matches what fetch.py's parallel sst5d
+            # block emits, so the frontend stays consistent regardless
+            # of which forecaster wrote the most recent summary.
+            "slot":        f"f{d}",
             "day":         DAY_LABELS_REL[d],
             "offset":      d,
             "date":        (today + timedelta(days=d)).isoformat(),
             "url":         f"/data/sst5d/d{d}.png",
             "confidence":  CONFIDENCE_BY_DAY[d],
+            "mean":        st["mean"],     # frontend uses .mean for the
+                                           # timeline pill; mean_c kept
+                                           # below for backward compat.
             "mean_c":      st["mean"],
             "anom_c":      anom_mean,
             "min_c":       st["min"],
@@ -291,10 +304,20 @@ def main() -> int:
         "horizon_days": HORIZON_DAYS,
         "method":       "persistence_decay",
         "tz":           "UTC",
-        "range_c":      list(SST_RANGE_C),
+        "range":        list(SST_RANGE_C),  # frontend's loader reads
+                                            # info.range || summary.range
+        "range_c":      list(SST_RANGE_C),  # legacy field; keep for any
+                                            # downstream that already
+                                            # depends on it
         "scale":        SST_SCALE,
         "unit":         SST_UNIT_C,
         "grid":         {"width": W, "height": H},
+        # Defaults the frontend uses to pick the initial slider position
+        # before the user moves it. f0 = today.
+        "default_slot": "f0",
+        "latest_slot":  "f0",
+        "beta":         True,  # tells the SstModeToggle this is the beta
+                               # forecast tier; matches fetch.py emission
         "days":         days,
     }
     (SST5D_DIR / "summary.json").write_text(json.dumps(summary, indent=2))
@@ -313,10 +336,19 @@ def main() -> int:
     manifest["layers"]["sst5d"] = {
         "summary_url":  "/data/sst5d/summary.json",
         "horizon_days": HORIZON_DAYS,
+        # ``range`` is the LayerSpec contract field that the
+        # manifest-validate dev-checks job enforces. ``range_c`` is
+        # kept as a legacy alias for any older readers that still
+        # depend on it. Drift between the contract and what we emit
+        # here was the cause of the pipeline-tests failure on
+        # PR #30 (and by extension the daily refresh-data run).
+        "range":        list(SST_RANGE_C),
         "range_c":      list(SST_RANGE_C),
+        "scale":        SST_SCALE,
         "unit":         SST_UNIT_C,
         "grid":         {"width": W, "height": H},
         "method":       "persistence_decay",
+        "beta":         True,
     }
     MANIFEST_PATH.write_text(json.dumps(manifest, indent=2))
     print(f"[sst5d] manifest entry written")

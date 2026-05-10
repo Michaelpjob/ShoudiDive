@@ -2,9 +2,21 @@
 // (lng, lat, window) → value lookups. Returns NaN where the satellite
 // didn't capture data — callers must handle "no data" explicitly. We
 // intentionally do NOT synthesize fake data; correctness over completeness.
+//
+// 2026-05-09: the per-layer load logic that used to live inline in
+// loadManifest() (a 250-line if/else if chain) was carved out into
+// src/lib/loaders/. loadManifest is now a registry dispatch — each
+// new layer = one new file under loaders/, no more giant chain.
 
 import { BBOX } from "./mapData.js";
-import { buildLandMask, loadLandGeoJSON } from "./landMask.js";
+import {
+  LAYER_LOADERS,
+  decodeUVPng,
+  decodeWavePng,
+  computeSpeedKt,
+  bucketKey,
+  hourKey,
+} from "./loaders/index.js";
 
 const state = {
   ready: false,
@@ -13,7 +25,6 @@ const state = {
 };
 
 const subscribers = new Set();
-const currentSampleMasks = new Map();
 
 export function subscribe(cb) {
   subscribers.add(cb);
@@ -28,153 +39,10 @@ export function getDataState() {
   return state;
 }
 
-function loadImage(url) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error(`failed to load ${url}`));
-    img.src = url;
-  });
-}
-
-// Iterative dilation: each pass replaces NaN cells with the mean of
-// their finite 8-neighbours. K passes propagate valid data K cells
-// outward — fills small holes (cloud-shadowed satellite pixels) and
-// smears valid SoCal coverage into the marine-layer gaps that wipe out
-// the viz model otherwise. Mutates the grid in place.
-function fillNearestInPlace(grid, maxIters = 8) {
-  const { data, width, height } = grid;
-  for (let iter = 0; iter < maxIters; iter++) {
-    let changed = 0;
-    const snapshot = new Float32Array(data);
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const i = y * width + x;
-        if (Number.isFinite(snapshot[i])) continue;
-        let sum = 0, n = 0;
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            if (dx === 0 && dy === 0) continue;
-            const nx = x + dx, ny = y + dy;
-            if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
-            const v = snapshot[ny * width + nx];
-            if (Number.isFinite(v)) { sum += v; n++; }
-          }
-        }
-        if (n > 0) { data[i] = sum / n; changed++; }
-      }
-    }
-    if (changed === 0) break;
-  }
-}
-
-async function decodePng(url, scale, range) {
-  const img = await loadImage(url);
-  const c = document.createElement("canvas");
-  c.width = img.naturalWidth;
-  c.height = img.naturalHeight;
-  const ctx = c.getContext("2d", { willReadFrequently: true });
-  ctx.drawImage(img, 0, 0);
-  const id = ctx.getImageData(0, 0, c.width, c.height);
-  const out = new Float32Array(c.width * c.height);
-  const [lo, hi] = range;
-  if (scale === "log10") {
-    const llo = Math.log10(lo);
-    const lhi = Math.log10(hi);
-    for (let i = 0; i < out.length; i++) {
-      const px = id.data[i * 4];
-      out[i] = px === 0 ? NaN : Math.pow(10, llo + ((px - 1) / 254) * (lhi - llo));
-    }
-  } else {
-    for (let i = 0; i < out.length; i++) {
-      const px = id.data[i * 4];
-      out[i] = px === 0 ? NaN : lo + ((px - 1) / 254) * (hi - lo);
-    }
-  }
-  return { data: out, width: c.width, height: c.height };
-}
-
-async function decodeWavePng(url, heightRange, periodRange) {
-  // RGBA: R=Hs (m), G=Tp (s), B=Dp (deg), A=valid.
-  const img = await loadImage(url);
-  const c = document.createElement("canvas");
-  c.width = img.naturalWidth;
-  c.height = img.naturalHeight;
-  const ctx = c.getContext("2d", { willReadFrequently: true });
-  ctx.drawImage(img, 0, 0);
-  const id = ctx.getImageData(0, 0, c.width, c.height);
-  const N = c.width * c.height;
-  const hs = new Float32Array(N);
-  const tp = new Float32Array(N);
-  const dp = new Float32Array(N);
-  const speed = new Float32Array(N); // alias for `data` so DataOverlay's
-                                     // generic getLayerGrid path still works.
-  const [hLo, hHi] = heightRange;
-  const [pLo, pHi] = periodRange;
-  for (let i = 0; i < N; i++) {
-    const a = id.data[i * 4 + 3];
-    if (a === 0) {
-      hs[i] = NaN; tp[i] = NaN; dp[i] = NaN; speed[i] = NaN;
-    } else {
-      hs[i] = hLo + (id.data[i * 4]     / 255) * (hHi - hLo);
-      tp[i] = pLo + (id.data[i * 4 + 1] / 255) * (pHi - pLo);
-      dp[i] = (id.data[i * 4 + 2] / 255) * 360.0;
-      speed[i] = hs[i]; // Hs in metres drives the heatmap layer.
-    }
-  }
-  return {
-    hs, tp, dp,
-    width: c.width, height: c.height,
-    data: speed, // .data is what bilinear() / getLayerGrid() reads
-  };
-}
-
-async function decodeUVPng(url, uvRange) {
-  const img = await loadImage(url);
-  const c = document.createElement("canvas");
-  c.width = img.naturalWidth;
-  c.height = img.naturalHeight;
-  const ctx = c.getContext("2d", { willReadFrequently: true });
-  ctx.drawImage(img, 0, 0);
-  const id = ctx.getImageData(0, 0, c.width, c.height);
-  const u = new Float32Array(c.width * c.height);
-  const v = new Float32Array(c.width * c.height);
-  const [lo, hi] = uvRange;
-  const span = hi - lo;
-  for (let i = 0; i < u.length; i++) {
-    const a = id.data[i * 4 + 3];
-    if (a === 0) {
-      u[i] = NaN;
-      v[i] = NaN;
-    } else {
-      u[i] = lo + (id.data[i * 4] / 255) * span;
-      v[i] = lo + (id.data[i * 4 + 1] / 255) * span;
-    }
-  }
-  return { u, v, width: c.width, height: c.height };
-}
-
-async function currentSampleMask(width, height) {
-  const key = `${width}x${height}`;
-  if (currentSampleMasks.has(key)) return currentSampleMasks.get(key);
-  const maskPromise = loadLandGeoJSON().then((fc) => buildLandMask(fc?.features, width, height));
-  currentSampleMasks.set(key, maskPromise);
-  return maskPromise;
-}
-
-function landMaskedCurrentSample(uv, mask) {
-  const u = new Float32Array(uv.u);
-  const v = new Float32Array(uv.v);
-  if (mask) {
-    for (let i = 0; i < mask.length; i++) {
-      if (mask[i] === 1) {
-        u[i] = NaN;
-        v[i] = NaN;
-      }
-    }
-  }
-  return { u, v, width: uv.width, height: uv.height };
-}
+// Re-export bucketKey / hourKey for the timeline components
+// (CurrentTimeline.jsx, WindDayGrid.jsx) that still import them from
+// here. Keeps the public API stable across the loader-split refactor.
+export { bucketKey, hourKey };
 
 export async function loadManifest() {
   try {
@@ -187,260 +55,43 @@ export async function loadManifest() {
     }
     const manifest = await res.json();
     state.manifest = manifest;
+
+    // 2026-05-09: dispatch loaders in PARALLEL instead of one-by-one.
+    // The previous serial `for await` ran sst → sst7d → sst5d → swell5d
+    // → wind5d → current5d → wind → viz → chl back-to-back, where each
+    // layer's full network round-trip + decode blocked the next. Boot
+    // time was the SUM of every layer's load time even though they're
+    // entirely independent.
+    //
+    // The parallel version awaits the slowest, not the sum, and each
+    // loader calls notify() on its own success so subscribed
+    // components (DataOverlay, timelines, saved-spots) re-render
+    // progressively as data arrives. The active layer paints as soon
+    // as IT is ready — the user doesn't wait for swell5d to decode 25
+    // PNGs to see SST.
+    //
+    // Safety: every loader writes only into state.layers[<its-name>]
+    // (or, for sst7d/sst5d, into state.layers.sst[<slot>] which is a
+    // disjoint key namespace from sst's own 1d/2d/3d slots). No two
+    // loaders write the same key, so parallelism is conflict-free.
+    // The init line below preserves the sst object across the
+    // sst/sst7d/sst5d trio for the same reason.
+    const tasks = [];
     for (const [layer, info] of Object.entries(manifest.layers || {})) {
       state.layers[layer] = layer === "sst" ? (state.layers.sst || {}) : {};
-      if (layer === "sst7d") {
-        try {
-          const sres = await fetch(info.summary_url, { cache: "no-cache" });
-          if (!sres.ok) throw new Error(`sst summary ${info.summary_url} ${sres.status}`);
-          const summary = await sres.json();
-          state.layers.sst7d = { summary };
-          state.layers.sst = state.layers.sst || {};
-          const scale = info.scale || summary.scale || "linear";
-          const range = info.range || summary.range;
-          if (!range) throw new Error("sst7d has no range");
-          const tasks = [];
-          for (const d of summary.days || []) {
-            if (!d?.slot || !d?.url) continue;
-            tasks.push(
-              decodePng(d.url, scale, range)
-                .then((decoded) => {
-                  state.layers.sst[d.slot] = {
-                    ...decoded,
-                    dates: d.date ? [d.date] : [],
-                    history: true,
-                    stats: d,
-                  };
-                })
-                .catch((e) => console.warn(`sst7d ${d.slot} failed`, e))
-            );
-          }
-          await Promise.all(tasks);
-        } catch (e) {
-          console.warn("dataSource: sst7d summary load failed", e);
-        }
-      } else if (layer === "sst5d") {
-        try {
-          const sres = await fetch(info.summary_url, { cache: "no-cache" });
-          if (!sres.ok) throw new Error(`sst forecast summary ${info.summary_url} ${sres.status}`);
-          const summary = await sres.json();
-          state.layers.sst5d = { summary };
-          state.layers.sst = state.layers.sst || {};
-          const scale = info.scale || summary.scale || "linear";
-          const range = info.range || summary.range;
-          if (!range) throw new Error("sst5d has no range");
-          const tasks = [];
-          for (const d of summary.days || []) {
-            if (!d?.slot || !d?.url) continue;
-            tasks.push(
-              decodePng(d.url, scale, range)
-                .then((decoded) => {
-                  state.layers.sst[d.slot] = {
-                    ...decoded,
-                    dates: d.date ? [d.date] : [],
-                    forecast: true,
-                    stats: d,
-                  };
-                })
-                .catch((e) => console.warn(`sst5d ${d.slot} failed`, e))
-            );
-          }
-          await Promise.all(tasks);
-        } catch (e) {
-          console.warn("dataSource: sst5d summary load failed", e);
-        }
-      } else if (layer === "swell5d") {
-        // 5-day × 5-bucket swell forecast (gfswave). Load summary.json
-        // first; bucket + hourly wave PNGs (RGBA Hs/Tp/Dp) load in
-        // parallel with per-task error-tolerance.
-        try {
-          const sres = await fetch(info.summary_url, { cache: "no-cache" });
-          if (!sres.ok) throw new Error(`swell summary ${info.summary_url} ${sres.status}`);
-          const summary = await sres.json();
-          state.layers.swell5d = {
-            summary,
-            heightRange: info.height_range_m,
-            periodRange: info.period_range_s,
-            buckets:     {},
-            hourly:      {},
-            hourlyLoading: {},
-          };
-          const tasks = [];
-          for (const day of summary.days) {
-            for (const b of day.buckets) {
-              const key = bucketKey(day.day, b.bucket);
-              tasks.push(
-                decodeWavePng(b.wave_url, info.height_range_m, info.period_range_s)
-                  .then((wv) => {
-                    state.layers.swell5d.buckets[key] = wv;
-                  })
-                  .catch((e) => console.warn(`swell5d bucket ${key} failed`, e))
-              );
-            }
-          }
-          await Promise.all(tasks);
-        } catch (e) {
-          console.warn("dataSource: swell5d summary load failed", e);
-        }
-      } else if (layer === "wind5d") {
-        // 5-day × 5-bucket forecast (new wind UI). Pull summary.json first
-        // — keep the summary even if individual bucket PNGs fail to decode
-        // so the day grid still renders with whatever data we have.
-        try {
-          const sres = await fetch(info.summary_url, { cache: "no-cache" });
-          if (!sres.ok) throw new Error(`summary ${info.summary_url} ${sres.status}`);
-          const summary = await sres.json();
-          state.layers.wind5d = {
-            summary,
-            uvRange:    info.uv_range,
-            speedRange: info.speed_range,
-            buckets:    {},
-            hourly:     {},
-            hourlyLoading: {},
-          };
-          // Load every bucket UV in parallel. CRUCIAL: each task swallows
-          // its own error so one bad PNG can't take down the whole forecast.
-          const tasks = [];
-          let failed = 0;
-          let loaded = 0;
-          for (const day of summary.days) {
-            for (const b of day.buckets) {
-              const key = bucketKey(day.day, b.bucket);
-              tasks.push(
-                decodeUVPng(b.uv_url, info.uv_range)
-                  .then((uv) => {
-                    const speed = computeSpeedKt(uv);
-                    state.layers.wind5d.buckets[key] = {
-                      uvU: uv.u, uvV: uv.v,
-                      width: uv.width, height: uv.height,
-                      data: speed, speedKt: speed,
-                    };
-                    loaded++;
-                  })
-                  .catch((e) => {
-                    failed++;
-                    console.warn(`wind5d bucket ${key} failed`, e);
-                  })
-              );
-            }
-          }
-          await Promise.all(tasks);
-          if (failed) {
-            console.warn(`wind5d: ${loaded} buckets loaded, ${failed} failed`);
-          }
-        } catch (e) {
-          console.warn("dataSource: wind5d summary load failed", e);
-          // Don't null out — leave whatever summary did parse so the UI
-          // can show the day labels even if the heatmap is missing.
-        }
-      } else if (layer === "current5d") {
-        try {
-          const sres = await fetch(info.summary_url, { cache: "no-cache" });
-          if (!sres.ok) throw new Error(`currents summary ${info.summary_url} ${sres.status}`);
-          const summary = await sres.json();
-          state.layers.current5d = {
-            summary,
-            uvRange: info.uv_range,
-            speedRange: info.speed_range,
-            buckets: {},
-          };
-          const tasks = [];
-          let failed = 0;
-          let loaded = 0;
-          for (const day of summary.days || []) {
-            for (const b of day.buckets || []) {
-              const key = bucketKey(day.day, b.bucket);
-              tasks.push(
-                decodeUVPng(b.uv_url, info.uv_range)
-                  .then((uv) => {
-                    const maskPromise = currentSampleMask(uv.width, uv.height);
-                    return maskPromise.then((landMask) => ({ uv, landMask }));
-                  })
-                  .then(({ uv, landMask }) => {
-                    const speed = computeSpeedKt(uv);
-                    const sample = landMaskedCurrentSample(uv, landMask);
-                    const sampleSpeed = computeSpeedKt(sample);
-                    state.layers.current5d.buckets[key] = {
-                      uvU: sample.u, uvV: sample.v,
-                      visualUvU: uv.u, visualUvV: uv.v,
-                      width: uv.width, height: uv.height,
-                      data: speed, speedKt: speed,
-                      sampleData: sampleSpeed, sampleSpeedKt: sampleSpeed,
-                    };
-                    loaded++;
-                  })
-                  .catch((e) => {
-                    failed++;
-                    console.warn(`current5d bucket ${key} failed`, e);
-                  })
-              );
-            }
-          }
-          await Promise.all(tasks);
-          if (failed) {
-            console.warn(`current5d: ${loaded} buckets loaded, ${failed} failed`);
-          }
-        } catch (e) {
-          console.warn("dataSource: current5d summary load failed", e);
-        }
-      } else if (layer === "wind") {
-        const speedRange = info.speed_range;
-        const uvRange = info.uv_range;
-        for (const [slot, w] of Object.entries(info.windows || {})) {
-          const speed = await decodePng(w.speed_url, "linear", speedRange);
-          const uv = await decodeUVPng(w.uv_url, uvRange);
-          state.layers.wind[slot] = {
-            ...speed,           // .data, .width, .height for speed
-            uvU: uv.u,
-            uvV: uv.v,
-            valid_at: w.valid_at,
-            fcst_hour: w.fcst_hour,
-            source: w.source || null,  // "HRRR" / "GFS" — for the legend
-          };
-        }
-      } else if (layer === "viz") {
-        const range = info.range_ft;
-        for (const [slot, w] of Object.entries(info.windows || {})) {
-          const decoded = await decodePng(w.url, "linear", range);
-          // SoCal coverage is patchy: chl-a satellite passes get nuked
-          // by the marine layer over Catalina/SD/Coronados most cycles,
-          // and the viz model returns NaN wherever any input is missing.
-          // Smear valid neighbours into NaN cells (BFS-style up to 30
-          // iterations) so the user actually sees a colored map instead
-          // of a hatched bight. 8 iterations was leaving La Jolla and
-          // San Diego still NaN on heavy-marine-layer days; 30 reaches
-          // convergence on every cycle we've seen so far. LandBasemap
-          // paints over the land cells filled by the same pass, so
-          // coastline accuracy is unaffected.
-          fillNearestInPlace(decoded, 30);
-          state.layers.viz[slot] = { ...decoded, valid_at: w.valid_at };
-        }
-      } else if (layer === "sst" || layer === "chl") {
-        // Only the layers the frontend actually renders go through the
-        // generic decoder. wave + precip live in the manifest as inputs
-        // to the visibility pipeline (server-side); the frontend has no
-        // wave/precip overlays to paint, so trying to decode them would
-        // just throw on the missing `range` field and take down the
-        // entire loader's outer try/catch — which is exactly the bug
-        // that nuked every layer including wind5d.
-        const scale = info.scale || "linear";
-        const range = info.range;
-        if (!range) {
-          console.warn(`dataSource: ${layer} has no range, skipping`);
-        } else {
-          for (const [win, w] of Object.entries(info.windows || {})) {
-            try {
-              const decoded = await decodePng(w.url, scale, range);
-              state.layers[layer][win] = { ...decoded, dates: w.dates || [] };
-            } catch (e) {
-              console.warn(`dataSource: ${layer}/${win} decode failed`, e);
-            }
-          }
-        }
-      }
-      // Anything else (wave, precip, future server-only inputs) is ignored
-      // by the frontend on purpose.
+      const loader = LAYER_LOADERS[layer];
+      if (!loader) continue;
+      tasks.push(
+        loader(info, state)
+          .then(() => notify())
+          .catch((e) => console.warn(`dataSource: ${layer} loader threw`, e)),
+      );
+      // Layers absent from LAYER_LOADERS (wave, precip, kd490 today)
+      // are silently skipped — they're pipeline inputs the frontend
+      // doesn't render. Adding one in the future = drop a new file
+      // in src/lib/loaders/ and register it in loaders/index.js.
     }
+    await Promise.all(tasks);
   } catch (e) {
     console.warn("dataSource: manifest load failed, using mock data", e);
   } finally {
@@ -526,28 +177,11 @@ function slotKey(layer, composite) {
   return COMPOSITE_KEY[composite] || "1d";
 }
 
-// Bucket / hour slot key conventions used across the wind5d state.
-export function bucketKey(day, bucket) {
-  return `d${day}_${bucket}`;
-}
-export function hourKey(day, hour) {
-  return `d${day}_h${String(hour).padStart(2, "0")}`;
-}
-
-// Speed (kt) array derived from u/v components. Keeps DataOverlay rendering
-// the same kind of scalar grid the legacy wind layer used.
-function computeSpeedKt({ u, v, width, height }) {
-  const out = new Float32Array(width * height);
-  for (let i = 0; i < out.length; i++) {
-    const uu = u[i], vv = v[i];
-    if (Number.isFinite(uu) && Number.isFinite(vv)) {
-      out[i] = Math.sqrt(uu * uu + vv * vv) * 1.94384;  // m/s → kt
-    } else {
-      out[i] = NaN;
-    }
-  }
-  return out;
-}
+// Bucket / hour slot key conventions live in src/lib/loaders/decoders.js.
+// They're re-exported at the top of this file (`export { bucketKey,
+// hourKey }`) so existing call sites
+// (CurrentTimeline.jsx, WindDayGrid.jsx, etc.) keep importing them
+// from "./dataSource.js" without churn.
 
 export function getSST(lng, lat, composite = 1) {
   // Returns °C, or NaN if the satellite didn't capture this cell.

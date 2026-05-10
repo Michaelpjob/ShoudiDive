@@ -137,7 +137,10 @@ export default function SstTimeline({ sel, setSel, units, mode = "history" }) {
   const days = summary?.days || [];
   const numDays = days.length;
   const slot = sstSelToSlotKey(sel, summary);
-  const idx = Math.max(0, days.findIndex((d) => d.slot === slot));
+  // Match the same effectiveSlot resolution used by the helpers above
+  // so legacy summaries (no per-day .slot field) still position the
+  // playhead correctly when slot keys are synthesized as f<offset>.
+  const idx = Math.max(0, days.findIndex((d, i) => effectiveSlot(d, i) === slot));
 
   const drag = useTimelineDrag({
     ref,
@@ -151,7 +154,7 @@ export default function SstTimeline({ sel, setSel, units, mode = "history" }) {
     targetToFrac: (i) => (numDays > 1 ? i / (numDays - 1) : 0),
     onCommit: (nextIdx) => {
       const next = days[nextIdx];
-      if (next) setSel({ slot: next.slot });
+      if (next) setSel({ slot: effectiveSlot(next, nextIdx) });
     },
     step: (cur, delta) =>
       Math.max(0, Math.min(numDays - 1, cur + delta)),
@@ -174,7 +177,7 @@ export default function SstTimeline({ sel, setSel, units, mode = "history" }) {
     const width = 100 / numDays;
     return (
       <div
-        key={d.slot}
+        key={effectiveSlot(d, i)}
         className={`tl-day-cell ${i % 2 === 0 ? "even" : "odd"} conf-${d.confidence || "high"}`}
         style={{ left: `${left}%`, width: `${width}%` }}
       >
@@ -189,7 +192,7 @@ export default function SstTimeline({ sel, setSel, units, mode = "history" }) {
     const left = numDays > 1 ? (i / (numDays - 1)) * 100 : 0;
     return (
       <div
-        key={d.slot}
+        key={effectiveSlot(d, i)}
         className={`tl-tick ${i === 0 ? "day" : "major"}`}
         style={{ left: `${left}%` }}
       />
@@ -239,14 +242,35 @@ export default function SstTimeline({ sel, setSel, units, mode = "history" }) {
   );
 }
 
+// Tolerate summaries that omit the `slot` field on each day (legacy
+// fetch_sst_5day.py emissions before the 2026-05-09 fix). The loader
+// in src/lib/loaders/sst5d.js synthesizes `f<offset>` keys when the
+// slot is missing — the timeline must use the same synthesis so the
+// slider's `days` array references the same keys the loader wrote.
+//
+// Resolution order (must match loaders/sst5d.js):
+//   explicit d.slot  →  "f<offset>" if offset is an integer  →  "f<idx>"
+function effectiveSlot(d, idx) {
+  if (d?.slot) return d.slot;
+  if (Number.isInteger(d?.offset)) return `f${d.offset}`;
+  return `f${idx}`;
+}
+
 export function defaultSstSelection(summary) {
-  const slot = summary?.default_slot || summary?.latest_slot || summary?.days?.[summary.days.length - 1]?.slot;
-  return { slot: slot || "d0" };
+  const days = summary?.days || [];
+  const explicit = summary?.default_slot || summary?.latest_slot;
+  if (explicit) return { slot: explicit };
+  if (days.length === 0) return { slot: "d0" };
+  // Last day is the most-recent observation for history (sst7d) and
+  // furthest-out forecast for sst5d. defaultSstSelection used to
+  // pick the LAST day for both; matches the existing behaviour.
+  const last = days[days.length - 1];
+  return { slot: effectiveSlot(last, days.length - 1) };
 }
 
 export function sstSelectionHasData(summary, sel) {
   if (!summary?.days?.length || !sel?.slot) return false;
-  return summary.days.some((d) => d.slot === sel.slot);
+  return summary.days.some((d, idx) => effectiveSlot(d, idx) === sel.slot);
 }
 
 export function sstSelToSlotKey(sel, summary = null) {
