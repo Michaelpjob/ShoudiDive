@@ -45,7 +45,7 @@ from PIL import Image
 from scipy.spatial import cKDTree
 
 # Match the existing app's bbox.
-BBOX = dict(lat_min=31.8, lat_max=42.0, lng_min=-124.0, lng_max=-116.8)
+BBOX = dict(lat_min=31.8, lat_max=42.0, lng_min=-124.0, lng_max=-117.5)
 
 NOMADS_HRRR = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/hrrr/prod"
 NOMADS_GFS  = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod"

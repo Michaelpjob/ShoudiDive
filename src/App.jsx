@@ -460,7 +460,7 @@ function TopBar({ onSettings, settingsOpen, dataState }) {
           <div className="brand-name">ShouldIDive</div>
         </div>
         <span className="brand-tag">
-          Sea Temp · Water Clarity · Wind · Current · CA Coast 31.8°–37.6°N
+          Sea Temp · Water Clarity · Wind · Current · CA Coast 31.8°–42.0°N
         </span>
       </div>
       <div className="topbar-meta">
@@ -1878,7 +1878,7 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
       </div>
 
       <div className="attribution">
-        zoom 7 · 34.6°N −120.3°W · CA Coast bbox 31.8°→37.6°N · −124.0°→−116.8°W
+        zoom 7 · 34.6°N −120.3°W · CA Coast bbox 31.8°→42.0°N · −124.0°→−117.5°W
       </div>
 
       {mpaOn && <CoronadosBanner vb={renderVb} size={size} />}

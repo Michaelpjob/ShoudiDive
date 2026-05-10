@@ -64,7 +64,7 @@ DAY_LABELS_REL = ["Today", "+1", "+2", "+3", "+4", "+5", "+6"]
 CONFIDENCE_BY_DAY = ["high", "high", "medium", "medium", "low", "low", "low"]
 
 # Bbox + grid (matches fetch.py exactly).
-BBOX = dict(lat_min=31.8, lat_max=42.0, lng_min=-124.0, lng_max=-116.8)
+BBOX = dict(lat_min=31.8, lat_max=42.0, lng_min=-124.0, lng_max=-117.5)
 GRID_H = 291
 GRID_W = 361
 

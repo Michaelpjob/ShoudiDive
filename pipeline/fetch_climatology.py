@@ -34,7 +34,7 @@ import requests
 import xarray as xr
 from PIL import Image
 
-BBOX = dict(lat_min=31.8, lat_max=42.0, lng_min=-124.0, lng_max=-116.8)
+BBOX = dict(lat_min=31.8, lat_max=42.0, lng_min=-124.0, lng_max=-117.5)
 ERDDAP_BASE = "https://coastwatch.pfeg.noaa.gov/erddap/griddap"
 
 ROOT = Path(__file__).resolve().parents[1]

@@ -21,7 +21,7 @@ import numpy as np
 import xarray as xr
 from PIL import Image
 
-BBOX = dict(lat_min=31.8, lat_max=42.0, lng_min=-124.0, lng_max=-116.8)
+BBOX = dict(lat_min=31.8, lat_max=42.0, lng_min=-124.0, lng_max=-117.5)
 GRID_W, GRID_H = 140, 110
 
 PRECIP_RANGE_MM = (0.0, 200.0)
