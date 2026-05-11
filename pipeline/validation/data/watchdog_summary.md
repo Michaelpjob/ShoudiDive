@@ -1,4 +1,4 @@
-# Validation watchdog — 2026-05-11T18:16Z
+# Validation watchdog — 2026-05-11T18:36Z
 
 **5 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
