@@ -348,6 +348,122 @@ this work until PR-NC-1 lands on main; this is queued, not active.
 
 ---
 
+## Multi-region expansion — PNW + Florida/Caribbean
+
+Full scoping in `docs/expansion-regions.md`. Decisions locked:
+both regions in parallel, single app with a Region switcher, full
+feature parity (all 6 layers + predicted vis), saltwater only for
+FL v1. Companion PR-level handoffs (`pnw-v1-handoff.md`,
+`tropical-v1-handoff.md`) to be filed after the scoping doc lands.
+
+### PR-X-1 — Region-aware pipeline scaffold ✅ (LANDED ON DEV 2026-05-11)
+
+`pipeline/regions/` package with a `Region` dataclass, `get_region(name)`
+accessor, and three configs:
+  * `ca.py` — snapshot of today's hardcoded behavior
+  * `pnw.py` — skeleton (bbox + lat bands only)
+  * `tropical.py` — skeleton (sub-region bboxes + viz variant marker)
+
+Additive only — no running code imports from this yet. The drift
+test in `pipeline/tests/test_regions.py` gates against the CA
+snapshot diverging from `fetch.py` / `viz_predict/config.py` until
+PR-X-2 wires the migration.
+
+### PR-X-2 — Migrate pipeline fetchers to `regions/` (~150 LOC)
+
+Replace the hardcoded `BBOX = dict(...)` constant in every
+`pipeline/fetch*.py` + `pipeline/chl_blend.py` with
+`BBOX = get_region(args.region or "ca").bbox`. Add a `--region`
+CLI flag to each script (default `ca`). Update
+`pipeline/fetch.py`'s manifest-write to land in
+`public/data/<region>/manifest.json` instead of the top-level path
+so CA / PNW / tropical can coexist. No frontend changes yet — the
+CA bundle still serves from `public/data/` for backward compat
+during the transition.
+
+### PR-X-3 — CI matrix for multi-region refresh (~80 LOC)
+
+`refresh-data.yml` gets a matrix:
+```yaml
+strategy:
+  matrix:
+    region: [ca, pnw, tropical]
+```
+Per-region jobs run in parallel. The deploy step still only fires
+for `ca` until the frontend can route between regions (PR-FE-1).
+PNW + tropical jobs are allowed to fail without blocking the CA
+deploy (`continue-on-error: true` until the data sources are
+proven stable).
+
+### PR-FE-1 — Region switcher in frontend (~120 LOC)
+
+`src/components/RegionSwitcher.jsx` chip in the top bar; reads /
+writes `?region=` URL param + `localStorage.lastRegion`. `src/lib/
+dataSource.js` (new) routes fetches to `/data/<region>/...`.
+
+Open question per scoping doc: default region. Options are
+geo-IP, last-used, always CA. Decision needed before this PR
+starts.
+
+### PNW v1 series (PR-PNW-1..4)
+
+Scoping in `docs/expansion-regions.md` § 2. Tracked as four PRs:
+
+  * **PR-PNW-1** — PNW bbox + zone family + spot pins + Salish Sea
+    polygon (the `wa_inland` polygon zone).
+  * **PR-PNW-2** — SSCOFS THREDDS/OPeNDAP fetcher for Salish Sea
+    currents. The big new fetcher in this region.
+  * **PR-PNW-3** — `pnw_inland` viz_predict variant (Option A from
+    the doc — chl coefficient near zero, river coefficient high,
+    stratification term new).
+  * **PR-PNW-4** — Olympic Coast NMS + WA DNR Aquatic Reserves +
+    OR Marine Reserves polygons.
+
+Estimated total: 6–8 PRs once edge cases are itemised.
+
+### Tropical v1 series (PR-TROP-1..7)
+
+Scoping in `docs/expansion-regions.md` § 3. Tracked as seven PRs:
+
+  * **PR-TROP-1** — Two sub-region bboxes (`gulf_se` + `caribbean`)
+    + lat+lng zone classification + spot pin set.
+  * **PR-TROP-2** — HYCOM Gulf 1/25° + Global RTOFS 1/12°
+    currents fetcher.
+  * **PR-TROP-3** — NASA GEOS-FP Saharan dust fetcher + UI chip.
+    Open question: chip on the carousel, or feature-only input?
+  * **PR-TROP-4** — NOAA NHC hurricane track overlay + 5-day cone.
+    Open question: soft warning or hard cutoff during active
+    advisories?
+  * **PR-TROP-5** — New `subtractive_tropical` viz model. The
+    biggest single piece of new work in the whole expansion.
+    `secchi_m = base_vis - swell - plume - dust - rain - hurricane`.
+  * **PR-TROP-6** — International MPA polygons (WDPA + NMS).
+  * **PR-TROP-7** — Spot-pin curation pass (Caribbean operator
+    outreach for ground truth).
+
+Estimated total: 10–14 PRs.
+
+### Open questions blocking PR-FE-1 + tropical work
+
+From `docs/expansion-regions.md` § 6 — none of these block the
+PR-X scaffold series but they DO block specific later PRs. Surface
+them now so the answers can roll in async:
+
+1. Region menu wording ("PNW" vs "OR + WA"; "Caribbean" vs
+   "FL + Caribbean") — blocks PR-FE-1.
+2. Default region behavior (geo-IP / last-used / always CA) —
+   blocks PR-FE-1.
+3. Saharan dust as a chip vs. feature-only input — blocks PR-TROP-3.
+4. Hurricane advisory mode (soft banner vs. hard cutoff) —
+   blocks PR-TROP-4.
+5. Caribbean operator partnerships for validation data —
+   accelerates PR-TROP-7 if pursued.
+6. Springs back-burner (confirming freshwater is out of v1, but
+   the config layer must allow a future `freshwater` sibling).
+7. Branding update (single tagline vs. per-region SEO taglines).
+
+---
+
 ## Queue policy
 
 - Items are picked up in order. PR1 → PR2 → PR3, AND/OR PR4 in parallel.
