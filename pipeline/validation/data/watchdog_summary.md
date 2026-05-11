@@ -1,4 +1,4 @@
-# Validation watchdog — 2026-05-11T19:49Z
+# Validation watchdog — 2026-05-11T23:28Z
 
 **5 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
@@ -22,9 +22,9 @@ Expected `ndbc-buoy` to contribute at least one observation per cron. None seen 
 
 **Suggested action:** Inspect `pipeline/validation/ingest/ndbc.py` and the latest ingest cron's log.
 
-### ⚠️ 4. 1 non-critical external feed(s) are red
+### ⚠️ 4. 4 non-critical external feed(s) are red
 
-Red feeds: ingest_eagle4. Fallbacks may keep the model running, but redundancy is degraded.
+Red feeds: chl_dineof_nrt_4km, chl_dineof_sci_2km, kd490_dineof_2km, ingest_eagle4. Fallbacks may keep the model running, but redundancy is degraded.
 
 **Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
 
