@@ -32,8 +32,14 @@ from PIL import Image
 REPO_ROOT = Path(__file__).resolve().parents[1]
 OUT_PATH = REPO_ROOT / "public" / "data" / "bathy.png"
 
-# Match the rest of the pipeline's CA bbox.
-BBOX = dict(lat_min=31.8, lat_max=42.0, lng_min=-124.6, lng_max=-116.8)
+# Bbox sourced from `pipeline/regions/` (PR-X-1 scaffold). Same
+# CA/PNW/tropical switch as the rest of the fetchers.
+try:
+    from pipeline.regions import active_region
+except ModuleNotFoundError:
+    from regions import active_region
+
+BBOX = active_region().bbox
 
 # Output PNG dimensions. 4× the model's standard 140×110 to preserve
 # shelf-edge detail; consumers bilinear-resample to their own grid.

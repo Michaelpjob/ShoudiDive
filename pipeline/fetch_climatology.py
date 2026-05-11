@@ -34,7 +34,14 @@ import requests
 import xarray as xr
 from PIL import Image
 
-BBOX = dict(lat_min=31.8, lat_max=42.0, lng_min=-124.6, lng_max=-116.8)
+# Bbox via pipeline/regions/ (PR-X-1). CA / PNW / tropical switch on
+# SHOULDIDIVE_REGION; default `ca` preserves today's behavior.
+try:
+    from pipeline.regions import active_region
+except ModuleNotFoundError:
+    from regions import active_region
+
+BBOX = active_region().bbox
 ERDDAP_BASE = "https://coastwatch.pfeg.noaa.gov/erddap/griddap"
 
 ROOT = Path(__file__).resolve().parents[1]

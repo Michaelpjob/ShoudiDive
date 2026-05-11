@@ -135,49 +135,79 @@ def test_viz_model_variant_is_known():
 
 
 # ---------------------------------------------------------------------
-# CA-specific drift gates — keep regions/ca.py in lockstep with the
-# hardcoded values in fetch.py + viz_predict/config.py until PR-X-2
-# rewires the fetchers to import from regions/.
+# Wiring gates — every pipeline fetcher must source BBOX from
+# regions/, not redefine it. PR-X-2 migrated all 14 fetch_*.py +
+# chl_blend.py to `BBOX = active_region().bbox`. These tests catch
+# any future fetcher (or accidental regression) that reintroduces a
+# hardcoded dict-literal BBOX.
 # ---------------------------------------------------------------------
 
-def test_ca_bbox_matches_fetch_py():
-    """If you bump BBOX in fetch.py, bump regions/ca.py too — or
-    the scaffold's snapshot diverges from reality and PR-X-2 will
-    quietly behavior-change the production fetcher.
+import re
+
+# Files in pipeline/ that legitimately set BBOX. Migrated in PR-X-2.
+_FETCH_FILES = [
+    "fetch.py",
+    "chl_blend.py",
+    "fetch_bathy.py",
+    "fetch_climatology.py",
+    "fetch_coastline.py",
+    "fetch_currents.py",
+    "fetch_mpa.py",
+    "fetch_precip.py",
+    "fetch_sst_5day.py",
+    "fetch_swell_5day.py",
+    "fetch_visibility.py",
+    "fetch_waves.py",
+    "fetch_wind.py",
+    "fetch_wind_5day.py",
+]
+
+
+@pytest.mark.parametrize("fname", _FETCH_FILES)
+def test_fetcher_imports_bbox_from_regions(fname):
+    """Every fetcher sources BBOX via active_region(). If you add a
+    new pipeline/fetch_*.py, append it to ``_FETCH_FILES`` and make
+    sure it imports the same way — don't reintroduce a literal
+    `BBOX = dict(...)` in any production script.
     """
-    fetch_py = (ROOT / "fetch.py").read_text(encoding="utf-8")
-    # Match the literal BBOX line. Loose regex because numeric
-    # formatting in the source could vary (31.8 vs 31.80).
-    import re
-    m = re.search(
-        r"BBOX\s*=\s*dict\(\s*"
-        r"lat_min\s*=\s*([\d.\-]+)\s*,\s*"
-        r"lat_max\s*=\s*([\d.\-]+)\s*,\s*"
-        r"lng_min\s*=\s*([\d.\-]+)\s*,\s*"
-        r"lng_max\s*=\s*([\d.\-]+)\s*\)",
-        fetch_py,
+    text = (ROOT / fname).read_text(encoding="utf-8")
+    assert "BBOX = active_region().bbox" in text, (
+        f"pipeline/{fname} must read BBOX from regions/ via "
+        f"`BBOX = active_region().bbox` (PR-X-2 contract). "
+        f"See pipeline/fetch.py for the canonical pattern."
     )
-    assert m, (
-        "Couldn't find the BBOX = dict(...) line in pipeline/fetch.py. "
-        "If you renamed the constant or restructured the assignment, "
-        "update this test."
+    # The import must also be present (otherwise the BBOX line
+    # would NameError at runtime).
+    assert "from regions import active_region" in text or \
+           "from pipeline.regions import active_region" in text, (
+        f"pipeline/{fname} uses `active_region()` but does not import "
+        f"it. Add the try/except import block above the BBOX line."
     )
-    fetch_bbox = {
-        "lat_min": float(m.group(1)),
-        "lat_max": float(m.group(2)),
-        "lng_min": float(m.group(3)),
-        "lng_max": float(m.group(4)),
-    }
-    ca = get_region("ca")
-    assert ca.bbox == fetch_bbox, (
-        f"DRIFT: regions/ca.py bbox {ca.bbox} != fetch.py BBOX {fetch_bbox}. "
-        f"PR-X-2 will migrate fetch.py to import from regions/; until "
-        f"then keep both in sync."
+
+
+@pytest.mark.parametrize("fname", _FETCH_FILES)
+def test_fetcher_no_dict_literal_bbox(fname):
+    """No fetcher may carry a `BBOX = dict(lat_min=..., ...)` literal
+    anymore — the regions scaffold is the single source of truth.
+    """
+    text = (ROOT / fname).read_text(encoding="utf-8")
+    assert not re.search(
+        r"BBOX\s*=\s*dict\(\s*lat_min\s*=",
+        text,
+    ), (
+        f"pipeline/{fname} still has a hardcoded `BBOX = dict(lat_min=...)` "
+        f"literal. PR-X-2 migrated this to `BBOX = active_region().bbox`. "
+        f"Either re-apply the migration or, if you intentionally need a "
+        f"region-local bbox override, rename the constant so it's not "
+        f"shadowing the regions/ source-of-truth."
     )
 
 
 def test_ca_lat_zone_bounds_match_viz_predict_config():
-    """Same drift guard for the lat band definitions."""
+    """LAT_ZONE_BOUNDS still lives in viz_predict/config.py (not yet
+    migrated by PR-X-2). Drift gate stays until a future PR moves it
+    into regions/ as well.
+    """
     ca = get_region("ca")
     assert ca.lat_zone_bounds == LAT_ZONE_BOUNDS, (
         f"DRIFT: regions/ca.py.lat_zone_bounds != "

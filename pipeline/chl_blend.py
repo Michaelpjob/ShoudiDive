@@ -50,9 +50,17 @@ import xarray as xr
 from PIL import Image
 
 
-# ---- Common bbox + grid (matches fetch.py exactly) ------------------------
+# ---- Common bbox + grid (sourced from pipeline/regions/) -----------------
 
-BBOX = dict(lat_min=31.8, lat_max=42.0, lng_min=-124.6, lng_max=-116.8)
+# Bbox via the regions/ scaffold (PR-X-1). CA region snapshot matches
+# fetch.py bit-for-bit; SHOULDIDIVE_REGION env var switches PNW /
+# tropical when those regions are wired in PR-X-3.
+try:
+    from pipeline.regions import active_region
+except ModuleNotFoundError:
+    from regions import active_region
+
+BBOX = active_region().bbox
 
 # Output grid — kept at the legacy ERDDAP stride-1 dims for backward compat
 # with manifest.json consumers (React MapCanvas, RN MapScreen, viz_predict).

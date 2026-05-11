@@ -53,7 +53,17 @@ try:
 except ModuleNotFoundError:
     from lib.layer_spec import LAYER_SPECS
 
-BBOX = dict(lat_min=31.8, lat_max=42.0, lng_min=-124.6, lng_max=-116.8)
+# Bbox sourced from `pipeline/regions/` (PR-X-1 scaffold). The CA
+# region snapshot matches today's hardcoded values bit-for-bit; the
+# `SHOULDIDIVE_REGION` env var (default `ca`) switches to PNW or
+# tropical when the refresh-data CI matrix runs that region. Bumping
+# the CA bbox now happens in one place: `pipeline/regions/ca.py`.
+try:
+    from pipeline.regions import active_region
+except ModuleNotFoundError:
+    from regions import active_region
+
+BBOX = active_region().bbox
 ERDDAP_BASE = "https://coastwatch.pfeg.noaa.gov/erddap/griddap"
 REQUEST_HEADERS = {
     "User-Agent": "shouldidive-data-pipeline/1.0 (+https://shouldidive.com)",

@@ -1,0 +1,54 @@
+name: Refresh dev data (daily)
+
+# Keeps the dev preview at `dev.shouldidive.pages.dev` from going stale.
+#
+# GitHub Actions `schedule:` triggers always fire against the default
+# branch (main) — they can't directly run a workflow against `dev`.
+# This workflow's job is to dispatch `refresh-data.yml` against the dev
+# branch via the REST API. The dispatched run executes refresh-data on
+# dev's tree, fetches all upstream sources, runs viz_predict with
+# whatever's on dev's HEAD (today: PR-NC-1 norcal_* coefficients), and
+# commits the resulting PNGs back to dev. The production-deploy guard
+# in refresh-data.yml (`if: github.ref == 'refs/heads/main'`) skips the
+# Cloudflare prod push when ref is dev, so shouldidive.com is
+# untouched. The dev preview auto-redeploys via deploy-dev.yml's
+# `workflow_run` trigger once dev-checks goes green on the new commit.
+#
+# Cadence: 12:15 UTC = 05:15 PT. Six hours offset from main's 06:00 UTC
+# refresh so the two runs don't compete for upstream rate limits on
+# the shared NOAA / NASA / ERDDAP endpoints.
+#
+# Also exposes workflow_dispatch so a maintainer can fire a manual
+# refresh from the Actions tab without leaving the GH UI.
+
+on:
+  schedule:
+    - cron: '15 12 * * *'   # daily, 12:15 UTC
+  workflow_dispatch:
+
+# Don't pile up dev refreshes — if yesterday's dispatch is somehow
+# still running when today's fires, cancel the older one. (Refresh-
+# data is normally ~10 min so this guard is precautionary.)
+concurrency:
+  group: refresh-data-dev
+  cancel-in-progress: false
+
+permissions:
+  actions: write   # required for workflow_dispatch via REST
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch refresh-data against dev
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const res = await github.rest.actions.createWorkflowDispatch({
+              owner:       context.repo.owner,
+              repo:        context.repo.repo,
+              workflow_id: 'refresh-data.yml',
+              ref:         'dev',
+            });
+            core.info(`Dispatched refresh-data on dev (HTTP ${res.status})`);

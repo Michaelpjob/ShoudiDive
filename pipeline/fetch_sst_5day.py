@@ -63,8 +63,15 @@ HORIZON_DAYS = 7    # match fetch_wind_5day
 DAY_LABELS_REL = ["Today", "+1", "+2", "+3", "+4", "+5", "+6"]
 CONFIDENCE_BY_DAY = ["high", "high", "medium", "medium", "low", "low", "low"]
 
-# Bbox + grid (matches fetch.py exactly).
-BBOX = dict(lat_min=31.8, lat_max=42.0, lng_min=-124.6, lng_max=-116.8)
+# Bbox + grid sourced from pipeline/regions/ (PR-X-1). CA / PNW /
+# tropical switch on SHOULDIDIVE_REGION; default `ca` preserves
+# today's behavior.
+try:
+    from pipeline.regions import active_region
+except ModuleNotFoundError:
+    from regions import active_region
+
+BBOX = active_region().bbox
 GRID_H = 291
 GRID_W = 361
 
