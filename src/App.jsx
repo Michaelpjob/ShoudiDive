@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { SeaBasemap, LandBasemap, OceanMaskDefs, PLACE_LABELS } from "./components/Basemap.jsx";
+import RegionSwitcher from "./components/RegionSwitcher.jsx";
+import { activeRegion } from "./lib/region.js";
 import DataOverlay from "./components/DataOverlay.jsx";
 import WindParticles from "./components/WindParticles.jsx";
 import MpaLayer, { styleForType } from "./components/MpaLayer.jsx";
@@ -460,10 +462,16 @@ function TopBar({ onSettings, settingsOpen, dataState }) {
           <div className="brand-name">ShouldIDive</div>
         </div>
         <span className="brand-tag">
-          Sea Temp · Water Clarity · Wind · Current · CA Coast 31.8°–42.0°N
+          {(() => {
+            const r = activeRegion();
+            if (r === "pnw") return "Pacific Northwest (beta) · OR + WA + Salish Sea";
+            if (r === "tropical") return "FL + Caribbean (beta) · Gulf + Keys + Bahamas + Antilles";
+            return "Sea Temp · Water Clarity · Wind · Current · California Coast";
+          })()}
         </span>
       </div>
       <div className="topbar-meta">
+        <RegionSwitcher />
         <span>
           <span className="dot"></span>
           <strong>{status}</strong> · Last update{" "}
