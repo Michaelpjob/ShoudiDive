@@ -11,7 +11,7 @@
         "width": 101,
         "height": 141
       },
-      "generated_at": "2026-05-11T18:13:51Z",
+      "generated_at": "2026-05-11T18:59:24Z",
       "windows": {
         "1d": {
           "url": "/data/sst_1d.png",
@@ -274,7 +274,7 @@
         "width": 241,
         "height": 337
       },
-      "generated_at": "2026-05-11T18:15:32Z",
+      "generated_at": "2026-05-11T19:01:05Z",
       "windows": {
         "1d": {
           "url": "/data/kd490_1d.png",
@@ -312,25 +312,28 @@
       ],
       "scale": "linear",
       "unit": "degC",
-      "generated_at": "2026-05-11T18:13:51Z",
+      "generated_at": "2026-05-11T18:59:24Z",
       "tz": "UTC"
     },
     "sst5d": {
       "summary_url": "/data/sst5d/summary.json",
-      "grid": {
-        "width": 101,
-        "height": 141
-      },
+      "horizon_days": 7,
       "range": [
+        9.0,
+        25.0
+      ],
+      "range_c": [
         9.0,
         25.0
       ],
       "scale": "linear",
       "unit": "degC",
-      "generated_at": "2026-05-11T18:13:51Z",
-      "tz": "UTC",
-      "beta": true,
-      "method": "observed-trend persistence"
+      "grid": {
+        "width": 101,
+        "height": 141
+      },
+      "method": "persistence_decay",
+      "beta": true
     },
     "wave": {
       "height_range_m": [
@@ -346,7 +349,7 @@
         "height": 110
       },
       "source": "NOAA gfswave (WaveWatch III)",
-      "generated_at": "2026-05-11T18:15:35Z",
+      "generated_at": "2026-05-11T19:01:08Z",
       "windows": {
         "now": {
           "url": "/data/wave_now.png",
@@ -368,7 +371,7 @@
         "height": 110
       },
       "source": "NOAA CPC US Unified Daily Precip (7-day cumulative)",
-      "generated_at": "2026-05-11T18:15:37Z",
+      "generated_at": "2026-05-11T19:01:09Z",
       "windows": {
         "now": {
           "url": "/data/precip_7d.png",
@@ -400,7 +403,7 @@
       ],
       "unit": "kt",
       "vector_convention": "direction_to",
-      "generated_at": "2026-05-11T18:15:42Z",
+      "generated_at": "2026-05-11T19:01:17Z",
       "best_window": {
         "day": 3,
         "bucket": "evening",
@@ -414,5 +417,5 @@
     -122.0,
     49.0
   ],
-  "generated_at": "2026-05-11T18:15:32Z"
+  "generated_at": "2026-05-11T19:01:05Z"
 }
