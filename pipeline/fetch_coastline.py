@@ -74,13 +74,34 @@ LAND_SEEDS = [
     ("baja-mainland",       -116.95, 32.10),
 ]
 
-# Used to exclude the polygonize() face that represents the open Pacific.
-# Each seed sits comfortably offshore; any polygon containing one of them
-# is sea regardless of its size.
+# Used to exclude the polygonize() face that represents the open ocean.
+# Each seed must sit comfortably offshore for SOME region the pipeline
+# runs against. The keep_land_polygons() pass rejects any polygon
+# containing any ocean seed.
+#
+# 2026-05-11 — added PNW + tropical seeds. The previous CA-only list
+# would have classified the open Pacific west of OR/WA, the Caribbean,
+# and the Gulf of Mexico as "land", because no seed landed inside the
+# bbox of those regions. Result: PNW + tropical land.geojson contained
+# the entire ocean as a huge "land" feature, which made the frontend
+# paint cream-colored land on top of the real SST data overlay. Bug
+# caught in dev QA on the multi-region rollout.
 OCEAN_SEEDS = [
+    # CA region
     (-123.50, 36.00),  # central offshore
     (-123.20, 33.50),  # SoCal offshore
     (-122.50, 32.00),  # Mexican offshore
+    # PNW region — well west of the OR/WA coast, inside the (-127..-122,
+    # 42..49) bbox.
+    (-126.00, 45.00),  # OR offshore
+    (-126.00, 47.00),  # WA outer coast offshore
+    # Tropical region — Gulf of Mexico + Caribbean.
+    (-90.00,  25.00),  # central Gulf
+    (-82.00,  26.00),  # FL east, Atlantic side
+    (-78.00,  22.00),  # Bahamas channel
+    (-75.00,  18.00),  # Caribbean Sea, north of Hispaniola
+    (-70.00,  15.00),  # mid-Caribbean
+    (-65.00,  12.00),  # eastern Caribbean
 ]
 
 OVERPASS_ENDPOINTS = [
