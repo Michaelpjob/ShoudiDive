@@ -19,9 +19,11 @@ from datetime import datetime, timezone
 from .bdoutdoors import BdOutdoorsScraper
 from .beachcitiescuba import BeachCitiesCubaScraper
 from .cdip import CDIPScraper
+from .cencoos import CeNCOOSScraper
 from .diveviz import DiveVizScraper
 from .justgetwet import JustGetWetScraper
 from .ndbc import NDBCScraper
+from .rcca import RCCAScraper
 from .reddit import RedditCAScraper
 from .southcoastdivers import SouthCoastDiversScraper
 # eagle4 retired 2026-05-09 — domain dead (DNS doesn't resolve from
@@ -68,6 +70,21 @@ SCRAPERS = [
     RedditCAScraper(),     # r/scuba + r/spearfishing CA-keyword search.
                            # Posts only (comments are 10x cost; revisit
                            # once we see the post-only signal). conf 0.80.
+
+    # Tier 1 — NorCal-specific, automated feeds. Added 2026-05-10 to
+    # populate the `norcal_*` zone-coefficient validation set behind
+    # PR-NC-1. See docs/norcal-vis-validation-sources.md + the
+    # _norcal_pending.md sidecar for the discovery audit + the
+    # roadmap for the still-pending sources (BAUE, ScubaBoard, etc.).
+    CeNCOOSScraper(),      # Monterey Wharf (MLML) + Morro Bay (Cal Poly)
+                           # ERDDAP turbidity → Secchi conversion. Daily
+                           # mean per station, 7-day rolling lookback.
+                           # conf 0.70 (below dive shops — derived, not
+                           # eyeballed).
+    RCCAScraper(),         # Reef Check California 2014-2016 MPA Baseline
+                           # zip from data.cnra.ca.gov. Historical, 30-day
+                           # disk cache, NorCal lat-gated (≥36° N). conf 0.90 —
+                           # agency dataset with calibrated divers.
 
     # Eagle4Scraper retired 2026-05-09: eagle4pacific.com fails DNS
     # resolution from both GitHub Actions runners and the user's
