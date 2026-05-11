@@ -6,12 +6,14 @@
 // 2026-05-09 (Tier-1 follow-up).
 
 import { decodeWavePng, bucketKey } from "./decoders.js";
+import { rewriteManifestUrls } from "../region.js";
 
 export async function loadSwell5d(info, state) {
   try {
     const sres = await fetch(info.summary_url, { cache: "no-cache" });
     if (!sres.ok) throw new Error(`swell summary ${info.summary_url} ${sres.status}`);
-    const summary = await sres.json();
+    // Region rewrite: see sst7d.js.
+    const summary = rewriteManifestUrls(await sres.json());
     state.layers.swell5d = {
       summary,
       heightRange: info.height_range_m,

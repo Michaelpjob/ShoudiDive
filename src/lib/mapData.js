@@ -169,18 +169,57 @@ export const ISLANDS = [
   { name: "S. Coronado",      lng: -117.25, lat: 32.38, rx: 0.022, ry: 0.035 },
 ];
 
-export const SAVED_SPOTS = [
-  { id: "monterey",  name: "Monterey",       lng: -121.92, lat: 36.62 },
-  { id: "morro",     name: "Morro Bay",      lng: -120.88, lat: 35.36 },
-  { id: "pt-concep", name: "Pt. Conception", lng: -120.47, lat: 34.45 },
-  { id: "santabarb", name: "Santa Barbara",  lng: -119.70, lat: 34.40 },
-  { id: "santacruz", name: "Santa Cruz I.",  lng: -119.75, lat: 34.05 },
-  { id: "malibu",    name: "Malibu",         lng: -118.78, lat: 34.02 },
-  { id: "catalina",  name: "Catalina",       lng: -118.45, lat: 33.39 },
-  { id: "lajolla",   name: "La Jolla",       lng: -117.28, lat: 32.85 },
-  { id: "sandiego",  name: "San Diego",      lng: -117.18, lat: 32.70 },
-  { id: "coronados", name: "Coronados",      lng: -117.27, lat: 32.40 },
-];
+// Region-aware saved spots. CA's list is hand-curated; PNW + tropical
+// get a starter set chosen from the spot pins enumerated in
+// docs/expansion-regions.md (PNW § 2 spot list, tropical § 3 spot
+// list). The full curated rosters live behind PR-PNW-1 and PR-TROP-7;
+// these placeholders exist so the sidebar / mobile sheet has
+// SOMETHING geographically meaningful for non-CA regions instead of
+// leaking CA spots into a Pacific NW or Caribbean map.
+const REGION_SAVED_SPOTS = {
+  ca: [
+    { id: "monterey",  name: "Monterey",       lng: -121.92, lat: 36.62 },
+    { id: "morro",     name: "Morro Bay",      lng: -120.88, lat: 35.36 },
+    { id: "pt-concep", name: "Pt. Conception", lng: -120.47, lat: 34.45 },
+    { id: "santabarb", name: "Santa Barbara",  lng: -119.70, lat: 34.40 },
+    { id: "santacruz", name: "Santa Cruz I.",  lng: -119.75, lat: 34.05 },
+    { id: "malibu",    name: "Malibu",         lng: -118.78, lat: 34.02 },
+    { id: "catalina",  name: "Catalina",       lng: -118.45, lat: 33.39 },
+    { id: "lajolla",   name: "La Jolla",       lng: -117.28, lat: 32.85 },
+    { id: "sandiego",  name: "San Diego",      lng: -117.18, lat: 32.70 },
+    { id: "coronados", name: "Coronados",      lng: -117.27, lat: 32.40 },
+  ],
+  pnw: [
+    { id: "edmonds",     name: "Edmonds UWP",   lng: -122.382, lat: 47.812 },
+    { id: "seacrest",    name: "Seacrest",      lng: -122.378, lat: 47.578 },
+    { id: "three-tree",  name: "Three Tree Pt", lng: -122.391, lat: 47.451 },
+    { id: "limekiln",    name: "Lime Kiln",     lng: -123.151, lat: 48.516 },
+    { id: "pile-pt",     name: "Pile Point",    lng: -123.075, lat: 48.471 },
+    { id: "salt-creek",  name: "Salt Creek",    lng: -123.703, lat: 48.166 },
+    { id: "neah-bay",    name: "Neah Bay",      lng: -124.620, lat: 48.367 },
+    { id: "sund-rock",   name: "Sund Rock",     lng: -123.158, lat: 47.435 },
+    { id: "octopus-hole",name: "Octopus Hole",  lng: -123.149, lat: 47.421 },
+    { id: "yaquina-head",name: "Yaquina Head",  lng: -124.078, lat: 44.674 },
+    { id: "sunset-bay",  name: "Sunset Bay",    lng: -124.378, lat: 43.337 },
+  ],
+  tropical: [
+    { id: "blue-heron",  name: "Blue Heron Br",   lng:  -80.045, lat: 26.783 },
+    { id: "jupiter",     name: "Jupiter Ledge",   lng:  -80.057, lat: 26.943 },
+    { id: "looe-key",    name: "Looe Key",        lng:  -81.408, lat: 24.547 },
+    { id: "molasses",    name: "Molasses Reef",   lng:  -80.402, lat: 25.011 },
+    { id: "vandenberg",  name: "Vandenberg",      lng:  -81.788, lat: 24.488 },
+    { id: "spiegel",     name: "Spiegel Grove",   lng:  -80.298, lat: 25.069 },
+    { id: "flower-gdn",  name: "Flower Garden",   lng:  -93.846, lat: 27.872 },
+    { id: "stuart-cove", name: "Stuart Cove",     lng:  -77.531, lat: 24.991 },
+    { id: "bloody-bay",  name: "Bloody Bay Wall", lng:  -80.097, lat: 19.711 },
+    { id: "palancar",    name: "Palancar",        lng:  -87.027, lat: 20.358 },
+    { id: "bonaire-1k",  name: "1000 Steps",      lng:  -68.397, lat: 12.219 },
+    { id: "blue-hole",   name: "Blue Hole",       lng:  -87.535, lat: 17.316 },
+  ],
+};
+
+export const SAVED_SPOTS =
+  REGION_SAVED_SPOTS[activeRegion()] || REGION_SAVED_SPOTS.ca;
 
 export const SST_STOPS = [
   { t: 0.00, c: [12, 38, 130] },
