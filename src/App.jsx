@@ -1114,15 +1114,22 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
           const f = getFitted(size.w, size.h);
           return (
             <g clipPath="url(#ocean-clip)" mask="url(#ocean-mask)">
-              {/* No-data hatch — only inside the bbox area; outside is just sea. */}
-              <rect
-                x={f.marginX}
-                y={f.marginY}
-                width={f.innerW}
-                height={f.innerH}
-                fill="url(#noDataHatch)"
-                pointerEvents="none"
-              />
+              {/* No-data hatch — only inside the bbox area; outside is just sea.
+                  Suppressed for non-CA regions today because PNW + tropical
+                  have legitimately-sparse coverage (HFRNet has no Caribbean,
+                  rivers/tides are CA-station-only, etc.) and the hatch
+                  dominated the visible map. CA still gets it as a coverage
+                  indicator until the beta regions reach feature parity. */}
+              {activeRegion() === "ca" && (
+                <rect
+                  x={f.marginX}
+                  y={f.marginY}
+                  width={f.innerW}
+                  height={f.innerH}
+                  fill="url(#noDataHatch)"
+                  pointerEvents="none"
+                />
+              )}
 
               {/* Data overlay (positions itself inside the fitted box).
                   renderLayer is `layer` for normal modes and "sst-trend"
@@ -1886,10 +1893,24 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
       </div>
 
       <div className="attribution">
-        zoom 7 · 34.6°N −120.3°W · CA Coast bbox 31.8°→42.0°N · −124.6°→−116.8°W
+        {(() => {
+          const r = activeRegion();
+          const b = BBOX;
+          const tag =
+            r === "pnw"      ? "Pacific NW (beta)" :
+            r === "tropical" ? "FL + Caribbean (beta)" :
+            "CA Coast";
+          return `${tag} bbox ${b.latMin.toFixed(1)}°→${b.latMax.toFixed(1)}°N · ${b.lngMin.toFixed(1)}°→${b.lngMax.toFixed(1)}°W`;
+        })()}
       </div>
 
-      {mpaOn && <CoronadosBanner vb={renderVb} size={size} />}
+      {/* Coronados / CONANP disclaimer is CA-specific (the Coronados sit in
+          Mexican waters at the south end of the CA bbox). For PNW + tropical
+          the MPA layer doesn't even render CA data so the disclaimer is
+          irrelevant. Region-gate it explicitly. */}
+      {mpaOn && activeRegion() === "ca" && (
+        <CoronadosBanner vb={renderVb} size={size} />
+      )}
 
       {selectedMpa && (
         <MpaPopup mpa={selectedMpa} onClose={() => setSelectedMpa(null)} />
