@@ -1,23 +1,30 @@
 // Map projection helpers and mocked sea data.
-// Bounding box: lat 31.8°N–37.6°N, lng -124.0° to -116.8° (extended south to
-// include Las Islas Coronado and east to give Tijuana coast breathing room).
+//
+// 2026-05-11 — BBOX is now region-aware (PR-FE-1). The frontend reads
+// `activeRegion()` at module load and selects the matching bbox so the
+// projection math (project/unproject/getFitted/GEO_ASPECT) all align
+// with whichever region's data the manifest carries. Switching
+// regions in the RegionSwitcher triggers a full reload (see
+// region.js → setActiveRegion), so it's safe for BBOX to be a const
+// at module level — it just gets a different value on the next boot.
+//
+// CA history that matters:
+//   2026-05-09 — bumped CA latMax 37.6 → 42.0 to cover the full coast
+//                (NorCal expansion, docs/expansion-norcal.md).
+//   2026-05-10 — bumped CA lngMin -124.0 → -124.6 for Cape Mendocino,
+//                restored lngMax to -116.8 for La Jolla / Coronados.
+//
+// The values here must stay in lockstep with pipeline/regions/*.py.
+// If you bump a region's bbox there, mirror it here. (A drift test
+// across these two sides is a follow-up TODO.)
+import { activeRegion } from "./region.js";
 
-// 2026-05-09 — bumped latMax from 37.6 → 42.0 (full CA coast,
-// Coronado Islands → Oregon border). See docs/expansion-norcal.md.
-// 2026-05-10 — bumped lngMin from -124.0 → -124.6 because Cape
-// Mendocino sits at -124.41°W (Crescent City -124.20°W, Eureka
-// -124.16°W). The previous lng_min was clipping the westernmost CA
-// land (the upper-left chunk of the map). -124.6 leaves a ~13 km
-// ocean buffer west of Cape Mendocino so the coast has breathing room.
-// 2026-05-10 — restored lngMax to -116.8 (had briefly cropped to
-// -117.5 to drop inland CA, but that clipped La Jolla -117.27°W,
-// Pt Loma -117.25°W, Coronados -117.27 to -117.30°W). The inland-CA
-// "fat" on the right side at NorCal latitudes is the trade-off and
-// is acknowledged — a region selector (Phase 5 in
-// docs/expansion-norcal.md) is the right long-term answer.
-// Aspect: 7.8° lng × 10.2° lat (~6.2 × 11.3 km/° → real distance
-// ratio 0.55). Side panels fill the pillarbox margins on desktop.
-export const BBOX = { latMin: 31.8, latMax: 42.0, lngMin: -124.6, lngMax: -116.8 };
+const REGION_BBOX = {
+  ca:       { latMin: 31.8, latMax: 42.0, lngMin: -124.6, lngMax: -116.8 },
+  pnw:      { latMin: 42.0, latMax: 49.0, lngMin: -127.0, lngMax: -122.0 },
+  tropical: { latMin: 10.0, latMax: 31.0, lngMin:  -98.0, lngMax:  -60.0 },
+};
+export const BBOX = REGION_BBOX[activeRegion()] || REGION_BBOX.ca;
 
 // Geographic aspect ratio (lng-degrees-as-distance / lat-degrees) at the
 // bbox's mid latitude. Lng degrees shrink by cos(lat); we compute it once

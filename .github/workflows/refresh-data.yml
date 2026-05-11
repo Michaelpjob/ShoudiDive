@@ -155,6 +155,19 @@ jobs:
         timeout-minutes: 5
         run: python pipeline/fetch_bathy.py
 
+      - name: Fetch coastline (one-shot, bbox-locked)
+        # Pulls land.geojson from OpenStreetMap via Overpass and clips
+        # to the current BBOX. Like fetch_bathy.py this is idempotent —
+        # only changes when the bbox itself changes (e.g. the
+        # 2026-05-09 NorCal expansion, the 2026-05-11 PNW/tropical
+        # region rollout). Soft-fail because Overpass throttles
+        # aggressively and a transient outage shouldn't block the
+        # deploy; the existing committed land.geojson is still good
+        # enough to render the previous bbox.
+        continue-on-error: true
+        timeout-minutes: 8
+        run: python pipeline/fetch_coastline.py
+
       - name: Probe all external feeds
         # Reachability + sanity check on every external HTTP source
         # (NASA OB.DAAC, NOAA NOMADS, ERDDAP mirrors, USGS NWIS, NOAA
