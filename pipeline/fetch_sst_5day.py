@@ -37,6 +37,15 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+# Region config sourced from pipeline/regions/ (PR-X-1). CA / PNW /
+# tropical switch on SHOULDIDIVE_REGION; default `ca` preserves
+# today's behavior. Imported here (above PUBLIC_DATA) because
+# active_region() is also used at module load to set PUBLIC_DATA.
+try:
+    from pipeline.regions import active_region
+except ModuleNotFoundError:
+    from regions import active_region
+
 
 ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_DATA = active_region().data_output_dir(ROOT)
@@ -63,14 +72,8 @@ HORIZON_DAYS = 7    # match fetch_wind_5day
 DAY_LABELS_REL = ["Today", "+1", "+2", "+3", "+4", "+5", "+6"]
 CONFIDENCE_BY_DAY = ["high", "high", "medium", "medium", "low", "low", "low"]
 
-# Bbox + grid sourced from pipeline/regions/ (PR-X-1). CA / PNW /
-# tropical switch on SHOULDIDIVE_REGION; default `ca` preserves
-# today's behavior.
-try:
-    from pipeline.regions import active_region
-except ModuleNotFoundError:
-    from regions import active_region
-
+# Bbox + grid — active_region() imported at top of file (above
+# PUBLIC_DATA assignment).
 BBOX = active_region().bbox
 GRID_H = 291
 GRID_W = 361
