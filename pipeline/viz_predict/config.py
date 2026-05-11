@@ -51,11 +51,28 @@ CHANNEL_ISLAND_CENTROIDS = {
 
 PERSISTENCE_TAU_DAYS: Dict[str, float] = {
     # v3.5 (2026-05-10) — norcal_* added per PR-NC-1.
-    # Tighter τ than central because NorCal upwelling pulses flip
-    # nearshore anomalies in days rather than weeks; offshore is
-    # also faster because the SF Bay / Farallons regime swings hard
-    # on the relaxation cycle.
-    "norcal_nearshore": 1.0, "norcal_islands": 2.0, "norcal_offshore": 4.5,
+    # v3.5.1 (2026-05-11) — norcal_* tau values BUMPED UP after a
+    # dev-preview review showed the chl PNG painting bloomed water
+    # in Monterey Bay while the viz prediction stayed in Good. Root
+    # cause: with the original tight tau (1.0d nearshore), a 14-day-
+    # old bloom observation gets weight exp(-14) ≈ 1e-6 in the
+    # persistence blend, so the viz model effectively saw climatology
+    # while the chl LAYER still painted the bloom. NorCal marine-
+    # layer/fog frequently blocks the satellite for 10-30 days at a
+    # stretch; the persistence tau has to be long enough that those
+    # gaps don't silently flip the prediction to "normal water."
+    #
+    # v3.5 → v3.5.1 trajectory:
+    #   norcal_nearshore   1.0 → 7.0  (14-day-old bloom keeps ~14% weight)
+    #   norcal_islands     2.0 → 5.0
+    #   norcal_offshore    4.5 → 5.5  (mild bump for consistency)
+    #
+    # The original "NorCal flips fast on relaxation" rationale is
+    # real but ignores the data-availability constraint: we can't
+    # track day-to-day relaxation when the satellite is fogged out.
+    # Trust the most recent observation longer; the prediction
+    # converges anyway once a fresh observation arrives.
+    "norcal_nearshore": 7.0, "norcal_islands": 5.0, "norcal_offshore": 5.5,
     "central_nearshore": 1.5, "central_islands": 2.5, "central_offshore": 4.5,
     "transition_nearshore": 2.0, "transition_islands": 3.0, "transition_offshore": 5.0,
     "bight_nearshore": 2.5, "bight_islands": 3.5, "bight_offshore": 6.0,
