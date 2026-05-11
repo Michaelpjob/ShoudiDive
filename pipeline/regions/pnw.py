@@ -48,6 +48,15 @@ REGION = Region(
     dist_labels=["nearshore", "islands", "offshore"],
     viz_model_variant="chl_based",
     data_dir_slug="pnw",
+    layer_range_overrides={
+        # PNW water is colder. CA range (9-25°C) wastes ~half the
+        # encoding band on temperatures we'll never see in the
+        # Olympic Coast / Salish Sea / OR outer coast. 5-20°C covers
+        # the realistic surface-temp window for this region.
+        "sst":   (5.0, 20.0),
+        "sst7d": (5.0, 20.0),
+        "sst5d": (5.0, 20.0),
+    },
     notes=(
         "SKELETON — bbox + lat bands only. Salish Sea polygon, "
         "SSCOFS fetcher, and PNW-tuned coefficients land in "

@@ -575,11 +575,27 @@
   .tip-fish { padding: 4px 6px; }
 }
 
-/* Saved spots — bottom-left */
+/* Saved spots — bottom-left.
+ *
+ * max-height caps so the panel cannot grow tall enough to crash into
+ * the .controls-tl layer panel at top: 56px. Caught in QA at 1280x720
+ * where the 10-spot CA list overflowed upward and covered the layer
+ * toggles + forecast controls. Reserve 380px for everything above the
+ * spots panel (topbar + layer controls + how-to-read), then scroll the
+ * spots list inside whatever height is left.
+ */
 .spots-bl {
   bottom: 12px;
   left: 12px;
   width: 248px;
+  max-height: calc(100vh - 380px);
+  display: flex;
+  flex-direction: column;
+}
+.spots-bl .panel-body {
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .spots-list {
   display: flex;

@@ -266,7 +266,24 @@ function loadPrefs() {
   }
 }
 
+// Region-aware browser tab title. index.html ships a static
+// "ShouldIDive — CA Coast Conditions" fallback; this overrides it
+// once the React app boots so PNW + tropical visitors don't see
+// "CA Coast" in their tab.
+function useRegionAwareTitle() {
+  useEffect(() => {
+    const r = activeRegion();
+    const subtitle =
+      r === "pnw"      ? "Pacific NW Conditions" :
+      r === "tropical" ? "FL + Caribbean Conditions" :
+      "California Coast Conditions";
+    document.title = `ShouldIDive — ${subtitle}`;
+  }, []);
+}
+
+
 export default function App() {
+  useRegionAwareTitle();
   const [prefs, setPrefs] = useState(loadPrefs);
   const [layer, setLayer] = useState("sst");
   const [composite, setComposite] = useState(2);
@@ -1466,25 +1483,50 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
             {layer === "sst" ? (
               <div className="info-section">
                 <h4 className="info-h">Sea Surface Temperature</h4>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(40,130,210)" }}></span>
-                  <strong>Blue</strong> means cold — typical Central Coast (54–57°F) and
-                  upwelling near Pt. Conception.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(120,220,220)" }}></span>
-                  <strong>Cyan</strong> is the transition zone — comfortable for divers in
-                  spring suits.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(240,220,110)" }}></span>
-                  <strong>Yellow</strong> is warm SoCal summer water (66–70°F). Trunks weather.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(170,20,35)" }}></span>
-                  <strong>Red</strong> means anomaly — possible marine heatwave. Watch for
-                  kelp stress and harmful algal blooms.
-                </p>
+                {(() => {
+                  const r = activeRegion();
+                  const sstCopy = {
+                    ca: {
+                      blue:   "cold — typical Central Coast (54–57°F) and upwelling near Pt. Conception.",
+                      cyan:   "the transition zone — comfortable for divers in spring suits.",
+                      yellow: "warm SoCal summer water (66–70°F). Trunks weather.",
+                      red:    "anomaly — possible marine heatwave. Watch for kelp stress and harmful algal blooms.",
+                    },
+                    pnw: {
+                      blue:   "cold — typical Salish Sea / Olympic Coast (45–52°F). Drysuit conditions.",
+                      cyan:   "warmer outer-coast summer water (54–58°F). Thick wetsuit OK on calmer days.",
+                      yellow: "rare warm anomaly (60–65°F). Watch for stratification + bloom triggers.",
+                      red:    "extreme anomaly — marine heatwave territory. Kelp stress, harmful algal blooms.",
+                    },
+                    tropical: {
+                      blue:   "rare cold pocket (~72–76°F), upwelling near the Keys or Yucatan shelf.",
+                      cyan:   "typical winter Caribbean / Bahamas (76–80°F). Light wetsuit on long dives.",
+                      yellow: "typical summer Caribbean (82–86°F). Rash guard + boardies.",
+                      red:    "extreme warm anomaly — coral bleaching threshold (>86°F sustained).",
+                    },
+                  };
+                  const c = sstCopy[r] || sstCopy.ca;
+                  return (
+                    <>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(40,130,210)" }}></span>
+                        <strong>Blue</strong> means {c.blue}
+                      </p>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(120,220,220)" }}></span>
+                        <strong>Cyan</strong> is {c.cyan}
+                      </p>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(240,220,110)" }}></span>
+                        <strong>Yellow</strong> is {c.yellow}
+                      </p>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(170,20,35)" }}></span>
+                        <strong>Red</strong> means {c.red}
+                      </p>
+                    </>
+                  );
+                })()}
               </div>
             ) : layer === "chl" ? (
               <div className="info-section">

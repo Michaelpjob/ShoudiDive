@@ -97,8 +97,16 @@ def _layer_config(spec_name: str, encoder_extras: dict) -> dict:
         raise ValueError(
             f"fetch.py: LayerSpec for {spec_name!r} has no scale"
         )
+    # Region range override (PR-X-3a follow-up). Tropical SST is 20-32°C
+    # not 9-25; PNW is cooler than CA. The override lives on the Region
+    # dataclass so PNW / tropical encoders span the right band without
+    # touching the shared LAYER_SPECS defaults.
+    layer_range = tuple(spec.range)
+    overrides = getattr(active_region(), "layer_range_overrides", {}) or {}
+    if spec_name in overrides:
+        layer_range = tuple(overrides[spec_name])
     return {
-        "range": tuple(spec.range),
+        "range": layer_range,
         "scale": spec.scale,
         "unit": spec.unit,
         **encoder_extras,

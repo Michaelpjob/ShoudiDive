@@ -57,6 +57,12 @@ class Region:
     viz_model_variant: VizModelVariant
     data_dir_slug: str
     subregion_bboxes: dict = field(default_factory=dict)
+    # Per-layer range overrides used by the PNG encoder. LAYER_SPECS in
+    # pipeline/lib/layer_spec.py carries CA-calibrated defaults; non-CA
+    # regions override here so the 8-bit PNG encoding spans the right
+    # temperature / chl / etc. window for that water. Without this,
+    # tropical SST (25-32°C) clips at 25°C and shows uniform red.
+    layer_range_overrides: dict = field(default_factory=dict)
     notes: str = ""
 
     @property

@@ -67,6 +67,16 @@ REGION = Region(
     dist_labels=["nearshore", "islands", "offshore"],
     viz_model_variant="subtractive_tropical",
     data_dir_slug="tropical",
+    layer_range_overrides={
+        # Tropical SST runs 20-32°C year-round (Caribbean rarely below
+        # 25, summer up to 32). The CA default (9-25°C) clipped
+        # everything above 25 to a flat saturated red on the frontend.
+        # 20-32 lets the colormap actually spread across the realistic
+        # surface-temp window.
+        "sst":   (20.0, 32.0),
+        "sst7d": (20.0, 32.0),
+        "sst5d": (20.0, 32.0),
+    },
     notes=(
         "SKELETON — bbox hull + sub-region bboxes + viz variant marker. "
         "The chl-based model is the WRONG SHAPE for this water; do not "

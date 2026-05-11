@@ -229,7 +229,18 @@ export const SST_STOPS = [
   { t: 0.85, c: [230, 110, 60] },
   { t: 1.00, c: [170, 20, 35] },
 ];
-export const SST_RANGE = [9, 25]; // °C
+// Region-aware SST color range. Must match the per-region encoder
+// override in pipeline/regions/{ca,pnw,tropical}.py
+// (layer_range_overrides.sst). If the frontend used a fixed CA range
+// against tropical data, the 25-32°C top end would saturate to flat
+// red — same bug the user caught in QA.
+const REGION_SST_RANGE = {
+  ca:       [9,  25], // °C — legacy CA calibration
+  pnw:      [5,  20], // °C — Olympic + Salish + OR outer coast
+  tropical: [20, 32], // °C — Caribbean / Gulf / Florida year-round
+};
+export const SST_RANGE =
+  REGION_SST_RANGE[activeRegion()] || REGION_SST_RANGE.ca;
 
 // ---- ΔT trend ramp (Phase A) -----------------------------------------
 // Diverging palette for the 3-day SST trend view. Centered at 0 °C

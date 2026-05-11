@@ -62,7 +62,7 @@ from sst_predict.config import (   # noqa: E402
     SIGMA_SST_BY_LEAD,
     LAT_LABELS,
     DIST_LABELS,
-    SST_RANGE_C,
+    SST_RANGE_C as _SST_RANGE_DEFAULT,
     SST_SCALE,
     SST_UNIT_C,
 )
@@ -75,6 +75,13 @@ CONFIDENCE_BY_DAY = ["high", "high", "medium", "medium", "low", "low", "low"]
 # Bbox + grid — active_region() imported at top of file (above
 # PUBLIC_DATA assignment).
 BBOX = active_region().bbox
+
+# Region-aware SST encoding range. CA uses the legacy (9, 25); tropical
+# overrides to (20, 32) so 25-32°C water doesn't clip to 255 and read
+# back as a flat saturated max. PNW uses (5, 20). See
+# pipeline/regions/{ca,pnw,tropical}.py.layer_range_overrides.
+_overrides = getattr(active_region(), "layer_range_overrides", {}) or {}
+SST_RANGE_C = tuple(_overrides.get("sst5d", _overrides.get("sst", _SST_RANGE_DEFAULT)))
 GRID_H = 291
 GRID_W = 361
 
