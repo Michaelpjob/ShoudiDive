@@ -81,6 +81,49 @@
   font-weight: 500;
 }
 
+/* Region switcher chip — sits at the left of the topbar-meta cluster.
+ * Same visual weight as the status pill so it doesn't dominate, but
+ * always-visible to make multi-region discoverable. */
+.region-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-3);
+  font-size: 11px;
+  cursor: pointer;
+}
+.region-switcher-label {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 10px;
+  color: var(--ink-3);
+}
+.region-switcher select {
+  background: var(--bg-sunken);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+                    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 12px) center, calc(100% - 7px) center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 22px;
+}
+.region-switcher select:hover {
+  border-color: var(--ink-3);
+}
+.region-switcher select:focus {
+  outline: 2px solid var(--accent, oklch(0.65 0.15 230));
+  outline-offset: 1px;
+}
+
 .icon-btn {
   display: inline-flex;
   align-items: center;

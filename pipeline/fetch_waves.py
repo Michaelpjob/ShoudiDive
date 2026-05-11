@@ -52,7 +52,7 @@ PERIOD_RANGE_S = (0.0, 25.0)
 # Direction stays 0..360 mapped to 0..255 byte (linear).
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT_DIR = ROOT / "public" / "data"
+OUT_DIR = active_region().data_output_dir(ROOT)
 CACHE_DIR = ROOT / "pipeline" / ".cache"
 
 SESSION = requests.Session()

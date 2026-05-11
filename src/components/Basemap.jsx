@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { project, BBOX } from "../lib/mapData.js";
+import { dataPath } from "../lib/region.js";
 
 // ---- Coastline + island GeoJSON (clipped Natural Earth 10 m) ---------------
 
@@ -10,7 +11,7 @@ function loadLand() {
   // the CDN's ETag instead of pinning the first-fetched copy forever.
   // force-cache used to make sense when the coastline never changed; with
   // OSM-derived geometry that's no longer true.
-  landPromise = fetch("/data/land.geojson")
+  landPromise = fetch(dataPath("/data/land.geojson"))
     .then((r) => (r.ok ? r.json() : null))
     .catch(() => null);
   return landPromise;

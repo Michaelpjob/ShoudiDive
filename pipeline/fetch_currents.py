@@ -43,7 +43,7 @@ PT = ZoneInfo("America/Los_Angeles")
 HFR_USWC_6KM = "https://dods.ndbc.noaa.gov/thredds/dodsC/hfradar_uswc_6km"
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA_DIR = ROOT / "public" / "data"
+DATA_DIR = active_region().data_output_dir(ROOT)
 OUT_DIR = DATA_DIR / "currents"
 BUCKETS_DIR = OUT_DIR / "buckets"
 LAND_PATH = DATA_DIR / "land.geojson"

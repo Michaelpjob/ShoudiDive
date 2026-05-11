@@ -30,16 +30,16 @@ import requests
 from PIL import Image
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-OUT_PATH = REPO_ROOT / "public" / "data" / "bathy.png"
 
-# Bbox sourced from `pipeline/regions/` (PR-X-1 scaffold). Same
-# CA/PNW/tropical switch as the rest of the fetchers.
+# Bbox + output path sourced from `pipeline/regions/` (PR-X-1 scaffold).
+# Same CA/PNW/tropical switch as the rest of the fetchers.
 try:
     from pipeline.regions import active_region
 except ModuleNotFoundError:
     from regions import active_region
 
 BBOX = active_region().bbox
+OUT_PATH = active_region().data_output_dir(REPO_ROOT) / "bathy.png"
 
 # Output PNG dimensions. 4× the model's standard 140×110 to preserve
 # shelf-edge detail; consumers bilinear-resample to their own grid.

@@ -68,7 +68,7 @@ DAY_LABELS_REL = ["Today", "+1", "+2", "+3", "+4"]
 CONFIDENCE_BY_DAY = ["high", "high", "high", "medium", "medium"]
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT_DIR = ROOT / "public" / "data" / "swell"
+OUT_DIR = active_region().data_output_dir(ROOT) / "swell"
 HOURLY_DIR  = OUT_DIR / "hourly"
 BUCKETS_DIR = OUT_DIR / "buckets"
 CACHE_DIR   = ROOT / "pipeline" / ".cache"
@@ -467,7 +467,7 @@ def main() -> None:
     print(f"wrote {OUT_DIR / 'summary.json'}")
 
     # 6) Patch top-level manifest so the frontend can discover the layer.
-    manifest_path = ROOT / "public" / "data" / "manifest.json"
+    manifest_path = active_region().data_output_dir(ROOT) / "manifest.json"
     if manifest_path.exists():
         manifest = json.loads(manifest_path.read_text())
     else:

@@ -15,11 +15,29 @@ on:
   schedule:
     # 06:00 UTC daily (~23:00 PT prior day) — after MUR L4 typically publishes.
     - cron: "0 6 * * *"
-  workflow_dispatch: # manual run from the Actions tab
+  workflow_dispatch:
+    inputs:
+      region:
+        description: "Region bbox to refresh (ca | pnw | tropical). Sets $SHOULDIDIVE_REGION."
+        required: false
+        default: "ca"
+        type: choice
+        options:
+          - ca
+          - pnw
+          - tropical
 
 jobs:
   refresh-and-deploy:
     runs-on: ubuntu-latest
+    env:
+      # PR-X-3a/b: pipeline scripts read SHOULDIDIVE_REGION at module
+      # load to pick bbox + output dir from pipeline/regions/. The
+      # scheduled cron path leaves it at "ca" (the default) so CA's
+      # daily refresh keeps working bit-for-bit. workflow_dispatch
+      # accepts `region` input so a maintainer can fire a non-CA
+      # refresh from the Actions tab or `gh workflow run ... -f region=pnw`.
+      SHOULDIDIVE_REGION: ${{ inputs.region || 'ca' }}
     permissions:
       contents: write
       # `issues: write` is what the watchdog needs to create the

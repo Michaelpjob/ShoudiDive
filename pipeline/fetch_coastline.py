@@ -90,7 +90,7 @@ OVERPASS_ENDPOINTS = [
 ]
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "public" / "data" / "land.geojson"
+OUT = active_region().data_output_dir(ROOT) / "land.geojson"
 
 
 def overpass_query(buffered_bbox: dict) -> dict:

@@ -78,7 +78,7 @@ CONFIDENCE_BY_DAY = ["high", "high", "medium", "medium", "low", "low", "low"]
 HORIZON_DAYS = len(DAY_LABELS_REL)  # 7
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT_DIR = ROOT / "public" / "data" / "wind"
+OUT_DIR = active_region().data_output_dir(ROOT) / "wind"
 HOURLY_DIR  = OUT_DIR / "hourly"
 BUCKETS_DIR = OUT_DIR / "buckets"
 CACHE_DIR   = ROOT / "pipeline" / ".cache"
@@ -496,7 +496,7 @@ def main() -> None:
     #    layer payload intact (still consumed by the current 4-slot UI) and
     #    add a new `wind5d` block alongside it. Once the new UI lands the
     #    legacy one can be dropped.
-    manifest_path = ROOT / "public" / "data" / "manifest.json"
+    manifest_path = active_region().data_output_dir(ROOT) / "manifest.json"
     if manifest_path.exists():
         manifest = json.loads(manifest_path.read_text())
     else:

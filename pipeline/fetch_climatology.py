@@ -45,7 +45,7 @@ BBOX = active_region().bbox
 ERDDAP_BASE = "https://coastwatch.pfeg.noaa.gov/erddap/griddap"
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT_DIR = ROOT / "public" / "data"
+OUT_DIR = active_region().data_output_dir(ROOT)
 CACHE_DIR = ROOT / "pipeline" / ".cache"
 
 # Match the daily fetcher's encoding so the visibility orchestrator can

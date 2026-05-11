@@ -68,3 +68,25 @@ class Region:
         """
         b = self.bbox
         return [b["lng_min"], b["lat_min"], b["lng_max"], b["lat_max"]]
+
+    def data_output_dir(self, repo_root) -> "Path":  # type: ignore[name-defined]
+        """Where this region's data PNGs / JSON outputs live under ``public/data/``.
+
+        Convention:
+          * CA stays at ``public/data/`` for backward compatibility
+            (every existing PNG path the frontend expects).
+          * Every other region nests under ``public/data/<slug>/``.
+
+        The directory is created on access so callers can write to
+        it immediately without their own mkdir bookkeeping.
+        """
+        from pathlib import Path
+
+        root = Path(repo_root)
+        base = root / "public" / "data"
+        if self.name == "ca":
+            base.mkdir(parents=True, exist_ok=True)
+            return base
+        out = base / self.data_dir_slug
+        out.mkdir(parents=True, exist_ok=True)
+        return out

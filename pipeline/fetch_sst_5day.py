@@ -39,7 +39,7 @@ from PIL import Image
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PUBLIC_DATA = ROOT / "public" / "data"
+PUBLIC_DATA = active_region().data_output_dir(ROOT)
 SST5D_DIR   = PUBLIC_DATA / "sst5d"
 MANIFEST_PATH = PUBLIC_DATA / "manifest.json"
 

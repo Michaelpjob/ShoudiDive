@@ -38,7 +38,7 @@ CPC_LON_MIN = (BBOX["lng_min"] + 360.0) % 360.0
 CPC_LON_MAX = (BBOX["lng_max"] + 360.0) % 360.0
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT_DIR = ROOT / "public" / "data"
+OUT_DIR = active_region().data_output_dir(ROOT)
 
 
 def latest_url() -> str:

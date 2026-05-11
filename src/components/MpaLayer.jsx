@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { project } from "../lib/mapData.js";
+import { dataPath } from "../lib/region.js";
 
 // Color/style by MPA type, per design spec.
 // Outline 2 px, fill 10–12% opacity.
@@ -25,7 +26,7 @@ function loadMpaBoundaries() {
   if (mpaPromise) return mpaPromise;
   // Default cache mode so the browser revalidates with the CDN instead of
   // serving a permanently-pinned copy from disk.
-  mpaPromise = fetch("/data/mpa-boundaries.geojson")
+  mpaPromise = fetch(dataPath("/data/mpa-boundaries.geojson"))
     .then((r) => (r.ok ? r.json() : null))
     .catch(() => null);
   return mpaPromise;

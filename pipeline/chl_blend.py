@@ -81,7 +81,7 @@ CHL_UNIT = "mg/m^3"
 # ---- Storage -----------------------------------------------------------
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT_DIR = ROOT / "public" / "data"
+OUT_DIR = active_region().data_output_dir(ROOT)
 CACHE_DIR = ROOT / "pipeline" / ".cache"
 
 # How far back each NASA source will walk if today's data is missing. NASA

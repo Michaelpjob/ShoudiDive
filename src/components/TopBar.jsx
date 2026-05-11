@@ -1,7 +1,16 @@
-// Top bar — brand + last-update timestamp + Venmo tip + settings cog.
+// Top bar — brand + last-update timestamp + region switcher + Venmo tip + settings cog.
 // Carved out of App.jsx (2026-05-09) as part of the Tier-1 architecture
 // split. Lives outside the ErrorBoundary so the status indicator + gear
 // stay reachable even if DesktopView crashes during render.
+
+import RegionSwitcher from "./RegionSwitcher.jsx";
+import { activeRegion } from "../lib/region.js";
+
+const REGION_TAGLINES = {
+  ca:       "Sea Temp · Water Clarity · Wind · Current · California Coast",
+  pnw:      "Pacific Northwest (beta) · Oregon + Washington + Salish Sea",
+  tropical: "FL + Caribbean (beta) · Gulf + Keys + Bahamas + Greater & Lesser Antilles",
+};
 
 // Dive flag — the universal "diver below" maritime symbol. Red square,
 // white diagonal stripe. Reads instantly at any size (the previous
@@ -53,10 +62,11 @@ export default function TopBar({ onSettings, settingsOpen, dataState }) {
           <div className="brand-name">ShouldIDive</div>
         </div>
         <span className="brand-tag">
-          Sea Temp · Water Clarity · Wind · Current · CA Coast 31.8°–37.6°N
+          {REGION_TAGLINES[activeRegion()] || REGION_TAGLINES.ca}
         </span>
       </div>
       <div className="topbar-meta">
+        <RegionSwitcher />
         <span>
           <span className="dot"></span>
           <strong>{status}</strong> · Last update{" "}

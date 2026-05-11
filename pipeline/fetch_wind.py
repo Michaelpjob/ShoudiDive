@@ -71,7 +71,7 @@ SPEED_RANGE = (0.0, 50.0)   # knots
 UV_RANGE = (-30.0, 30.0)    # m/s
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT_DIR = ROOT / "public" / "data"
+OUT_DIR = active_region().data_output_dir(ROOT)
 CACHE_DIR = ROOT / "pipeline" / ".cache"
 
 # NOMADS HTTP/2 implementation is broken; force HTTP/1.1.

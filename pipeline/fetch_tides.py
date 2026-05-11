@@ -25,7 +25,15 @@ from pathlib import Path
 import requests
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT_DIR = ROOT / "public" / "data"
+
+# Region-aware output dir. CA stays at public/data/; PNW + tropical
+# land under public/data/<region>/. See pipeline/regions/ (PR-X-1).
+try:
+    from pipeline.regions import active_region
+except ModuleNotFoundError:
+    from regions import active_region
+
+OUT_DIR = active_region().data_output_dir(ROOT)
 
 STATIONS = [
     {"name": "monterey",      "id": "9413450", "lat": 36.605, "lng": -121.888},

@@ -63,7 +63,7 @@ QUALITY_CODES = {
 }
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT_DIR = ROOT / "public" / "data"
+OUT_DIR = active_region().data_output_dir(ROOT)
 PIPELINE_DIR = ROOT / "pipeline"
 
 
