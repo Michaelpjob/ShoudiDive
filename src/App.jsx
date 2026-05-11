@@ -20,6 +20,7 @@ import {
   chlColor,
   getFitted,
   SAVED_SPOTS,
+  BBOX,
 } from "./lib/mapData.js";
 import {
   loadManifest,
