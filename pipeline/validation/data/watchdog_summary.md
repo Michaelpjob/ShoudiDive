@@ -1,4 +1,4 @@
-# Validation watchdog — 2026-05-11T05:05Z
+# Validation watchdog — 2026-05-11T18:16Z
 
 **5 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
@@ -28,9 +28,9 @@ Red feeds: ingest_eagle4. Fallbacks may keep the model running, but redundancy i
 
 **Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
 
-### 🔴 5. Published-data freshness gate found 3 issue(s)
+### 🔴 5. Published-data freshness gate found 4 issue(s)
 
-Freshness/completeness failures: wind:layer_date_stale, wind5d:summary_generated_at_stale, swell5d:summary_generated_at_stale.
+Freshness/completeness failures: wind:layer_date_stale, wind5d:summary_generated_at_stale, swell5d:summary_generated_at_stale, current5d:summary_generated_at_stale.
 
 **Suggested action:** Open `pipeline/validation/data/freshness_health.json`; fix the failing fetcher or rerun the matching workflow before trusting the deploy.
 
