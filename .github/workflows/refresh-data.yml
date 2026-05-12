@@ -87,12 +87,20 @@ jobs:
         # (AQUA_MODIS, SNPP_VIIRS, S3A_OLCI — all ~1-2 day lag). Without
         # it the chl blender silently falls back to NOAA-only sources
         # (~4 day lag floor).
-        # timeout-minutes added 2026-05-08: this step has hung
-        # twice on NOAA ERDDAP timeouts, blocking subsequent Build +
-        # Deploy steps for 25+ min and stranding hotfixes. Hard cap
-        # at 8 minutes so a stuck fetch can't take down a deploy.
+        # timeout-minutes added 2026-05-08 (was 8 minutes): this step
+        # has hung twice on NOAA ERDDAP timeouts, blocking subsequent
+        # Build + Deploy steps for 25+ min and stranding hotfixes.
+        # Bumped to 15 min on 2026-05-11 after PNW + tropical refreshes
+        # hit the timeout mid-chl-blend: a non-CA bbox fetches the same
+        # 5 chl sources but the bigger / different bboxes take more
+        # bytes to deliver, and the step was timing out BEFORE fetch.py
+        # finished and wrote the manifest. The missing manifest write
+        # meant the SST range override never landed (the previous CA
+        # range [9, 25] kept being served from the stale manifest, so
+        # tropical SST looked CA-clipped and PNW colormaps didn't
+        # spread correctly).
         continue-on-error: true
-        timeout-minutes: 8
+        timeout-minutes: 15
         env:
           EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
         run: python pipeline/fetch.py
