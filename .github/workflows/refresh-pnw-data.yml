@@ -119,6 +119,13 @@ jobs:
         run: npm run build
 
       - name: Deploy to Cloudflare Pages (pnw-beta preview)
+        # Soft-fail: a Cloudflare auth or quota hiccup must NOT block
+        # the commit-refreshed-data step below. Without continue-on-error,
+        # a 10001 'Unable to authenticate' (seen during the 2026-05-12
+        # rollout when the API token's permission scope on --branch=pnw-beta
+        # was still being figured out) cascaded into the commit step and
+        # dropped the fresh data on the floor.
+        continue-on-error: true
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -138,6 +145,6 @@ jobs:
             for attempt in 1 2 3; do
               if git push; then break; fi
               echo "push failed (attempt $attempt) — rebasing"
-              git pull --rebase origin "$(git rev-parse --abbrev-ref HEAD)"
+              git pull --rebase --autostash origin "$(git rev-parse --abbrev-ref HEAD)"
             done
           fi
