@@ -1,18 +1,9 @@
-name: Refresh tropical
+name: Refresh tropical — data (daily)
 
-# Florida + Gulf + Caribbean — daily 07:00 UTC. Full pipeline writes
-# to public/data/tropical/ and deploys to
-# tropical-beta.shouldidive.pages.dev (Cloudflare Pages preview
-# branch within the same project as prod).
-#
-# Cannot touch shouldidive.com:
-#   1. SHOULDIDIVE_REGION=tropical, so fetchers write to /data/tropical/
-#   2. Wrangler step uses --branch=tropical-beta, not --branch=main
-#   3. CA-only validation steps skipped
-#
-# Schedule fires against `dev` by default. PR-TROP-5 (subtractive viz
-# model) needs to land before this region can have trustworthy viz
-# predictions — see docs/expansion-regions.md § 3.
+# Florida + Gulf + Caribbean — DAILY data refresh at 07:00 UTC.
+# Writes to public/data/tropical/ and deploys to
+# tropical-beta.shouldidive.pages.dev (Cloudflare preview branch —
+# wrangler --branch=tropical-beta cannot reach shouldidive.com).
 
 on:
   schedule:
@@ -20,13 +11,13 @@ on:
   workflow_dispatch:
     inputs:
       branch:
-        description: "Git ref to refresh against (default: dev for staging)"
+        description: "Git ref to refresh against (default: dev)"
         required: false
         default: "dev"
         type: string
 
 concurrency:
-  group: refresh-tropical
+  group: refresh-tropical-data
   cancel-in-progress: false
 
 jobs:
@@ -57,8 +48,6 @@ jobs:
       - name: Install pipeline dependencies
         run: pip install -r pipeline/requirements.txt
 
-      # ---- Fetch all tropical data sources ---------------------------
-
       - name: Fetch latest ocean data (SST, chl, kd490)
         continue-on-error: true
         timeout-minutes: 15
@@ -66,12 +55,7 @@ jobs:
           EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
         run: python pipeline/fetch.py
 
-      - name: Fetch WaveWatch III
-        continue-on-error: true
-        timeout-minutes: 5
-        run: python pipeline/fetch_waves.py
-
-      - name: Fetch 7-day precipitation (NOAA CPC — global coverage)
+      - name: Fetch 7-day precipitation
         continue-on-error: true
         timeout-minutes: 5
         run: python pipeline/fetch_precip.py
@@ -81,7 +65,7 @@ jobs:
         timeout-minutes: 5
         run: python pipeline/fetch_rivers.py
 
-      - name: Fetch tide range (no-op for tropical — CA CO-OPS stations only)
+      - name: Fetch tide range (no-op for tropical — CA CO-OPS only)
         continue-on-error: true
         timeout-minutes: 5
         run: python pipeline/fetch_tides.py
@@ -95,35 +79,15 @@ jobs:
         timeout-minutes: 5
         run: python pipeline/fetch_bathy.py
 
-      - name: Fetch coastline (one-shot, bbox-locked)
+      - name: Fetch coastline (one-shot)
         continue-on-error: true
         timeout-minutes: 8
         run: python pipeline/fetch_coastline.py
 
-      - name: Fetch MPA boundaries (empty for tropical — CDFW is CA-only)
+      - name: Fetch MPA boundaries (empty for tropical until PR-TROP-6)
         continue-on-error: true
         timeout-minutes: 5
         run: python pipeline/fetch_mpa.py
-
-      - name: Fetch wind (HRRR — partial coverage; Caribbean south of ~22N misses)
-        continue-on-error: true
-        timeout-minutes: 5
-        run: python pipeline/fetch_wind.py
-
-      - name: Fetch 5-day hourly wind
-        continue-on-error: true
-        timeout-minutes: 15
-        run: python pipeline/fetch_wind_5day.py
-
-      - name: Fetch 5-day hourly swell
-        continue-on-error: true
-        timeout-minutes: 10
-        run: python pipeline/fetch_swell_5day.py
-
-      - name: Fetch surface currents (HFRNet has zero Caribbean — fallback only)
-        continue-on-error: true
-        timeout-minutes: 5
-        run: python pipeline/fetch_currents.py
 
       - name: Probe all external feeds
         continue-on-error: true
@@ -132,20 +96,16 @@ jobs:
           EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
         run: python pipeline/check_feeds.py
 
-      # ---- Derived layers --------------------------------------------
-
       - name: Run 5-day SST forecast
         continue-on-error: true
         run: python pipeline/fetch_sst_5day.py
 
       - name: Run visibility prediction
-        # PR-TROP-5 will introduce subtractive_tropical viz. Until then
-        # this runs the chl-based CA model which is the wrong shape
-        # for tropical water (oligotrophic) — predictions unreliable.
+        # PR-TROP-5 introduces subtractive_tropical viz model — until
+        # then the chl-based CA model runs against tropical (oligotrophic)
+        # water and predicts ~100ft viz everywhere. Known wrong.
         continue-on-error: true
         run: python pipeline/fetch_visibility.py
-
-      # ---- Build + deploy + commit -----------------------------------
 
       - name: Install JS dependencies
         run: npm install --no-audit --no-fund
@@ -153,9 +113,7 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Deploy to Cloudflare Pages (tropical-beta)
-        # Preview branch within the shouldidive Cloudflare project.
-        # Cloudflare auto-serves at tropical-beta.shouldidive.pages.dev.
+      - name: Deploy to Cloudflare Pages (tropical-beta preview)
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -173,10 +131,8 @@ jobs:
           else
             git commit -m "data: refresh tropical $(date -u +%Y-%m-%d)"
             for attempt in 1 2 3; do
-              if git push; then
-                break
-              fi
-              echo "push failed (attempt $attempt) — pulling rebase and retrying"
+              if git push; then break; fi
+              echo "push failed (attempt $attempt) — rebasing"
               git pull --rebase origin "$(git rev-parse --abbrev-ref HEAD)"
             done
           fi

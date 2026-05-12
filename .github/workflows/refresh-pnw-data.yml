@@ -1,18 +1,14 @@
-name: Refresh PNW
+name: Refresh PNW — data (daily)
 
-# Pacific Northwest — daily 06:30 UTC. Full pipeline writes to
-# public/data/pnw/ and deploys to pnw-beta.shouldidive.pages.dev
-# (Cloudflare Pages preview branch within the same project as prod).
+# Pacific Northwest — DAILY data refresh at 06:30 UTC (30 min offset
+# from CA's 06:00 slot so they don't compete for upstream rate limits).
+# Writes to public/data/pnw/ and deploys to
+# pnw-beta.shouldidive.pages.dev (Cloudflare preview branch within the
+# same project as prod — wrangler --branch=pnw-beta cannot reach
+# shouldidive.com).
 #
-# Cannot touch shouldidive.com:
-#   1. SHOULDIDIVE_REGION=pnw, so fetchers write to /data/pnw/
-#   2. Wrangler step uses --branch=pnw-beta, not --branch=main
-#   3. The CA-only validation steps are skipped (no observations yet)
-#
-# Schedule fires against `dev` by default — staging surface for PNW.
-# workflow_dispatch lets you point at main once PNW reaches feature
-# parity and you want pnw-beta.shouldidive.pages.dev to track prod
-# instead of dev.
+# Schedule fires against `dev` by default — staging surface for PNW
+# until you green-light prod.
 
 on:
   schedule:
@@ -20,13 +16,13 @@ on:
   workflow_dispatch:
     inputs:
       branch:
-        description: "Git ref to refresh against (default: dev for staging)"
+        description: "Git ref to refresh against (default: dev)"
         required: false
         default: "dev"
         type: string
 
 concurrency:
-  group: refresh-pnw
+  group: refresh-pnw-data
   cancel-in-progress: false
 
 jobs:
@@ -57,8 +53,6 @@ jobs:
       - name: Install pipeline dependencies
         run: pip install -r pipeline/requirements.txt
 
-      # ---- Fetch all PNW data sources --------------------------------
-
       - name: Fetch latest ocean data (SST, chl, kd490)
         continue-on-error: true
         timeout-minutes: 15
@@ -66,22 +60,17 @@ jobs:
           EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
         run: python pipeline/fetch.py
 
-      - name: Fetch WaveWatch III
-        continue-on-error: true
-        timeout-minutes: 5
-        run: python pipeline/fetch_waves.py
-
-      - name: Fetch 7-day precipitation (NOAA CPC)
+      - name: Fetch 7-day precipitation
         continue-on-error: true
         timeout-minutes: 5
         run: python pipeline/fetch_precip.py
 
-      - name: Fetch river discharge (CA-station list today, no-op for PNW until PR-PNW-3)
+      - name: Fetch river discharge (no-op for PNW until PR-PNW-3)
         continue-on-error: true
         timeout-minutes: 5
         run: python pipeline/fetch_rivers.py
 
-      - name: Fetch tide range (CA-station list today, no-op for PNW)
+      - name: Fetch tide range (no-op for PNW until PR-PNW-3)
         continue-on-error: true
         timeout-minutes: 5
         run: python pipeline/fetch_tides.py
@@ -95,35 +84,15 @@ jobs:
         timeout-minutes: 5
         run: python pipeline/fetch_bathy.py
 
-      - name: Fetch coastline (one-shot, bbox-locked)
+      - name: Fetch coastline (one-shot)
         continue-on-error: true
         timeout-minutes: 8
         run: python pipeline/fetch_coastline.py
 
-      - name: Fetch MPA boundaries (CDFW source — empty for PNW until PR-PNW-4)
+      - name: Fetch MPA boundaries (empty for PNW until PR-PNW-4)
         continue-on-error: true
         timeout-minutes: 5
         run: python pipeline/fetch_mpa.py
-
-      - name: Fetch wind (HRRR — full PNW coverage)
-        continue-on-error: true
-        timeout-minutes: 5
-        run: python pipeline/fetch_wind.py
-
-      - name: Fetch 5-day hourly wind
-        continue-on-error: true
-        timeout-minutes: 15
-        run: python pipeline/fetch_wind_5day.py
-
-      - name: Fetch 5-day hourly swell
-        continue-on-error: true
-        timeout-minutes: 10
-        run: python pipeline/fetch_swell_5day.py
-
-      - name: Fetch surface currents (HFRNet sparse in PNW; model-inference fallback)
-        continue-on-error: true
-        timeout-minutes: 5
-        run: python pipeline/fetch_currents.py
 
       - name: Probe all external feeds
         continue-on-error: true
@@ -132,20 +101,16 @@ jobs:
           EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
         run: python pipeline/check_feeds.py
 
-      # ---- Derived layers --------------------------------------------
-
       - name: Run 5-day SST forecast
         continue-on-error: true
         run: python pipeline/fetch_sst_5day.py
 
       - name: Run visibility prediction
-        # PR-PNW-3 will introduce the pnw_inland viz variant for Salish
-        # Sea. Until then PNW viz uses the chl-based model calibrated
-        # for CA — predictions are not yet trustworthy for the Salish.
+        # PR-PNW-3 introduces pnw_inland viz variant; until then the
+        # chl-based CA model runs against PNW data — predictions in
+        # the Salish Sea will not be trustworthy.
         continue-on-error: true
         run: python pipeline/fetch_visibility.py
-
-      # ---- Build + deploy + commit -----------------------------------
 
       - name: Install JS dependencies
         run: npm install --no-audit --no-fund
@@ -153,11 +118,7 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Deploy to Cloudflare Pages (pnw-beta)
-        # Preview branch within the shouldidive Cloudflare project.
-        # Cloudflare auto-serves at pnw-beta.shouldidive.pages.dev.
-        # CANNOT affect shouldidive.com — wrong --branch value, and
-        # the production branch (main) is locked to refresh-ca.yml.
+      - name: Deploy to Cloudflare Pages (pnw-beta preview)
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -169,19 +130,14 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          # Only PNW data lives under public/data/pnw/ — staging that
-          # tree exclusively means a PNW refresh cannot accidentally
-          # commit a CA-data delta if some shared file got touched.
           git add public/data/pnw/
           if git diff --staged --quiet; then
             echo "No PNW data changes to commit."
           else
             git commit -m "data: refresh pnw $(date -u +%Y-%m-%d)"
             for attempt in 1 2 3; do
-              if git push; then
-                break
-              fi
-              echo "push failed (attempt $attempt) — pulling rebase and retrying"
+              if git push; then break; fi
+              echo "push failed (attempt $attempt) — rebasing"
               git pull --rebase origin "$(git rev-parse --abbrev-ref HEAD)"
             done
           fi

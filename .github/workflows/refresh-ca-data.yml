@@ -1,12 +1,14 @@
-name: Refresh CA
+name: Refresh CA — data (daily)
 
-# California — daily 06:00 UTC. Full pipeline (fetch + viz + wind +
-# swell + currents + validation + build + deploy + commit). This is
-# the workflow that publishes shouldidive.com.
+# California — DAILY data refresh at 06:00 UTC.
+# Pulls SST + chl + kd490 + viz + precip + rivers + tides + bathy +
+# coastline + MPA. Bathy + coastline are one-shots (idempotent). The
+# wind/swell/currents layers refresh on their own hourly schedule —
+# see refresh-ca-wind.yml. Splitting wind off keeps wind fresh while
+# keeping the heavy chl-blender + viz prediction on a daily cadence
+# that matches the underlying satellite product update cycles.
 #
-# Self-contained — every step is inlined here so a single failure
-# can never cascade across regions, and so the per-region pipelines
-# can drift independently as each region's data sources evolve.
+# This workflow publishes shouldidive.com (when running on main).
 
 on:
   schedule:
@@ -14,13 +16,13 @@ on:
   workflow_dispatch:
     inputs:
       branch:
-        description: "Git ref to refresh against (default: main for prod, dev for staging)"
+        description: "Git ref to refresh against (default: main)"
         required: false
         default: "main"
         type: string
 
 concurrency:
-  group: refresh-ca
+  group: refresh-ca-data
   cancel-in-progress: false
 
 jobs:
@@ -52,19 +54,12 @@ jobs:
       - name: Install pipeline dependencies
         run: pip install -r pipeline/requirements.txt
 
-      # ---- Fetch all CA data sources ---------------------------------
-
       - name: Fetch latest ocean data (SST, chl, kd490)
         continue-on-error: true
         timeout-minutes: 15
         env:
           EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
         run: python pipeline/fetch.py
-
-      - name: Fetch WaveWatch III
-        continue-on-error: true
-        timeout-minutes: 5
-        run: python pipeline/fetch_waves.py
 
       - name: Fetch 7-day precipitation (NOAA CPC)
         continue-on-error: true
@@ -100,34 +95,12 @@ jobs:
         timeout-minutes: 5
         run: python pipeline/fetch_mpa.py
 
-      - name: Fetch wind (HRRR now / +6h / +24h)
-        continue-on-error: true
-        timeout-minutes: 5
-        run: python pipeline/fetch_wind.py
-
-      - name: Fetch 5-day hourly wind
-        continue-on-error: true
-        timeout-minutes: 15
-        run: python pipeline/fetch_wind_5day.py
-
-      - name: Fetch 5-day hourly swell
-        continue-on-error: true
-        timeout-minutes: 10
-        run: python pipeline/fetch_swell_5day.py
-
-      - name: Fetch surface currents
-        continue-on-error: true
-        timeout-minutes: 5
-        run: python pipeline/fetch_currents.py
-
       - name: Probe all external feeds
         continue-on-error: true
         timeout-minutes: 5
         env:
           EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
         run: python pipeline/check_feeds.py
-
-      # ---- Derived layers --------------------------------------------
 
       - name: Run 5-day SST forecast
         continue-on-error: true
@@ -137,8 +110,7 @@ jobs:
         continue-on-error: true
         run: python pipeline/fetch_visibility.py
 
-      # ---- Assertions + validation -----------------------------------
-
+      # ---- CA validation ----
       - name: Assert chl freshness sidecar
         continue-on-error: true
         run: python -m pipeline.tests.assert_outputs fetch_chl
@@ -149,9 +121,9 @@ jobs:
 
       - name: Assert local manifest freshness budgets
         continue-on-error: true
-        run: python pipeline/check_manifest_freshness.py --layers sst,sst7d,sst5d,chl,kd490,wind,wind5d,swell5d,current5d,viz,wave,precip --check-sst-source
+        run: python pipeline/check_manifest_freshness.py --layers sst,sst7d,sst5d,chl,kd490,viz,wave,precip --check-sst-source
 
-      - name: Score SST predictions vs buoy + dive-log obs
+      - name: Score SST predictions
         continue-on-error: true
         run: python -m validation.sst_score
         working-directory: pipeline
@@ -181,10 +153,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
-          gh label create validation-watchdog \
-            --color C1880F \
-            --description "Auto-managed by pipeline/validation/watchdog.py" \
-            2>/dev/null || true
+          gh label create validation-watchdog --color C1880F \
+            --description "Auto-managed by pipeline/validation/watchdog.py" 2>/dev/null || true
           summary_file=pipeline/validation/data/watchdog_summary.md
           existing=$(gh issue list --label validation-watchdog --state open --json number --jq '.[0].number')
           if [ "${{ steps.watchdog.outcome }}" = "failure" ]; then
@@ -198,8 +168,6 @@ jobs:
           elif [ -n "$existing" ]; then
             gh issue close "$existing" --comment "All findings cleared as of $(date -u +%Y-%m-%dT%H:%MZ)."
           fi
-
-      # ---- Build + deploy + commit -----------------------------------
 
       - name: Install JS dependencies
         run: npm install --no-audit --no-fund
@@ -216,11 +184,6 @@ jobs:
         run: npm run build
 
       - name: Deploy to Cloudflare Pages (production)
-        # PRODUCTION DEPLOY: --branch=main routes to shouldidive.com.
-        # Gated on the checkout ref being `main` so a dispatch against
-        # dev never pushes to prod. The scheduled-cron path always
-        # checks out main (see ref: above), so the daily cron at 06:00
-        # UTC publishes prod as expected.
         if: github.ref == 'refs/heads/main'
         uses: cloudflare/wrangler-action@v3
         with:
@@ -245,10 +208,8 @@ jobs:
           else
             git commit -m "data: refresh ca $(date -u +%Y-%m-%d)"
             for attempt in 1 2 3; do
-              if git push; then
-                break
-              fi
-              echo "push failed (attempt $attempt) — pulling rebase and retrying"
+              if git push; then break; fi
+              echo "push failed (attempt $attempt) — rebasing"
               git pull --rebase origin "$(git rev-parse --abbrev-ref HEAD)"
             done
           fi
