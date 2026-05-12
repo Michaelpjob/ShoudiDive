@@ -70,7 +70,7 @@ test("Current, swell, wind, and mobile overlay features remain wired", () => {
 
 test("CI runs frontend and data feature contracts before publishing", () => {
   const pkg = JSON.parse(read("package.json"));
-  const deployWorkflow = read(".github/workflows/refresh-data.yml");
+  const deployWorkflow = read(".github/workflows/refresh-ca-data.yml");
   const devChecksWorkflow = read(".github/workflows/dev-checks.yml");
 
   // Relaxed from `assert.equal` to `assert.match` so adding more glob
