@@ -9,10 +9,25 @@ on:
     # Every hour at :15 — gives NOMADS a buffer to publish the freshest run.
     - cron: "15 * * * *"
   workflow_dispatch:
+    inputs:
+      region:
+        description: "Region bbox to refresh (ca | pnw | tropical). Sets $SHOULDIDIVE_REGION."
+        required: false
+        default: "ca"
+        type: choice
+        options:
+          - ca
+          - pnw
+          - tropical
 
 jobs:
   refresh-wind:
     runs-on: ubuntu-latest
+    env:
+      # Mirror of refresh-data.yml: scheduled cron path is CA-only; manual
+      # workflow_dispatch can pick a region so PNW + tropical get their
+      # own wind/swell/current PNGs under public/data/<region>/.
+      SHOULDIDIVE_REGION: ${{ inputs.region || 'ca' }}
     permissions:
       contents: write
 
@@ -81,6 +96,11 @@ jobs:
         run: npm run build
 
       - name: Deploy to Cloudflare Pages
+        # PRODUCTION DEPLOY GUARD: only fire when running against `main`.
+        # Mirrors the guard added to refresh-data.yml on 2026-05-10.
+        # Without it, a workflow_dispatch on `dev` would push the dev
+        # bundle to shouldidive.com.
+        if: github.ref == 'refs/heads/main'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -88,6 +108,7 @@ jobs:
           command: pages deploy dist --project-name=shouldidive --branch=main --commit-dirty=true
 
       - name: Commit refreshed data
+        if: always()
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
