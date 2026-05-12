@@ -79,6 +79,8 @@ jobs:
         run: npm run build
 
       - name: Deploy to Cloudflare Pages (pnw-beta preview)
+        # Soft-fail (see refresh-pnw-data.yml for context).
+        continue-on-error: true
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
