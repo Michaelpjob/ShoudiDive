@@ -1,0 +1,103 @@
+name: Refresh PNW — wind (hourly)
+
+# Pacific Northwest — HOURLY wind/swell/currents refresh at :30 past
+# every hour. Matches the cadence of NOAA HRRR + GFS + WW3 upstream
+# sources. 15-min offset from CA's :15 slot to spread NOMADS load.
+
+on:
+  schedule:
+    - cron: "30 * * * *"
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Git ref to refresh against (default: dev)"
+        required: false
+        default: "dev"
+        type: string
+
+concurrency:
+  group: refresh-pnw-wind
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    env:
+      SHOULDIDIVE_REGION: pnw
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || (github.event_name == 'schedule' && 'dev' || github.ref) }}
+          token: ${{ secrets.BOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install pipeline dependencies
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Fetch wind (HRRR — full PNW coverage)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_wind.py
+
+      - name: Fetch 5-day hourly wind
+        continue-on-error: true
+        timeout-minutes: 15
+        run: python pipeline/fetch_wind_5day.py
+
+      - name: Fetch 5-day hourly swell
+        continue-on-error: true
+        timeout-minutes: 10
+        run: python pipeline/fetch_swell_5day.py
+
+      - name: Fetch WaveWatch III nowcast
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_waves.py
+
+      - name: Fetch surface currents (HFRNet sparse — model-inference fallback)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_currents.py
+
+      - name: Install JS dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages (pnw-beta preview)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=shouldidive --branch=pnw-beta --commit-dirty=true
+
+      - name: Commit refreshed PNW wind data
+        if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/data/pnw/
+          if git diff --staged --quiet; then
+            echo "No PNW wind data changes to commit."
+          else
+            git commit -m "wind: refresh pnw $(date -u +%Y-%m-%dT%H:%MZ)"
+            for attempt in 1 2 3; do
+              if git push; then break; fi
+              echo "push failed (attempt $attempt) — rebasing"
+              git pull --rebase origin "$(git rev-parse --abbrev-ref HEAD)"
+            done
+          fi
