@@ -1,18 +1,18 @@
-# Validation watchdog — 2026-05-11T09:35Z
+# Validation watchdog — 2026-05-12T08:37Z
 
 **3 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
-### 🔴 1. Only 17 observations in the last 24h (floor: 50)
+### 🔴 1. Only 19 observations in the last 24h (floor: 50)
 
 Multiple scrapers may be silently broken.
 
 **Suggested action:** Open the latest hourly ingest workflow run; look for `FAILED` lines per scraper.
 
-### ⚠️ 2. 1 non-critical external feed(s) are red
+### ⚠️ 2. 2 non-critical external feed(s) are red
 
-Red feeds: ingest_eagle4. Fallbacks may keep the model running, but redundancy is degraded.
+Red feeds: coops_predictions, ingest_eagle4. Fallbacks may keep the model running, but redundancy is degraded.
 
 **Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
 
@@ -26,15 +26,14 @@ Freshness/completeness failures: wind5d:summary_generated_at_stale, swell5d:summ
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_nearshore` | 5 | 10.32 | +2.21 | 100% | -0.69 |
+| `bight_nearshore` | 4 | 9.07 | -0.53 | 100% | -0.75 |
 
 ## Per-source bias (informational)
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `dive-shop-diveviz` | 1 | -12.13 ft |
-| `dive-shop-justgetwet` | 3 | +5.79 ft |
-| `forum-bdoutdoors` | 1 | +5.82 ft |
+| `dive-shop-diveviz` | 1 | -11.88 ft |
+| `dive-shop-justgetwet` | 3 | +3.25 ft |
 
 ## How to act on this issue
 
