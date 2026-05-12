@@ -3,7 +3,7 @@
 // param so a refreshed tab and a bookmarked URL both reach the same
 // view. See `src/lib/region.js` for the resolution logic.
 
-import { activeRegion, setActiveRegion } from "../lib/region.js";
+import { activeRegion, setActiveRegion, isRegionLocked } from "../lib/region.js";
 
 const REGIONS = [
   { id: "ca",       label: "California" },
@@ -12,6 +12,11 @@ const REGIONS = [
 ];
 
 export default function RegionSwitcher() {
+  // On pnw-beta.shouldidive.pages.dev / tropical-beta.shouldidive.pages.dev
+  // the hostname locks the region — switching here would be a no-op
+  // since activeRegion() reads hostname first. Hide the chip entirely
+  // so visitors to those subdomains don't see a misleading control.
+  if (isRegionLocked()) return null;
   const current = activeRegion();
   return (
     <label className="region-switcher" title="Switch ocean region">

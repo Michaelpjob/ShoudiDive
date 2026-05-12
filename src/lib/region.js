@@ -15,12 +15,49 @@ const DEFAULT_REGION = "ca";
 let _cached = null;
 
 /**
- * Read the active region. URL > localStorage > default. Cached on
- * first read so every consumer sees the same value within a page
- * load (avoids weird mid-session swaps).
+ * Hostname → region lock. Each Cloudflare Pages preview branch gets
+ * its own subdomain (pnw-beta.shouldidive.pages.dev,
+ * tropical-beta.shouldidive.pages.dev). If a visitor lands on one of
+ * those URLs we lock the region to that subdomain regardless of any
+ * URL param or localStorage value — the WHOLE POINT of the per-region
+ * preview is that PNW beta testers see only PNW.
+ *
+ * Returns null when the hostname doesn't match a known beta slug
+ * (= use URL/localStorage/default as before).
+ */
+function _regionFromHostname() {
+  try {
+    const h = (window.location.hostname || "").toLowerCase();
+    if (h.startsWith("pnw-beta.")) return "pnw";
+    if (h.startsWith("tropical-beta.")) return "tropical";
+  } catch {
+    // SSR or no-window — fall through.
+  }
+  return null;
+}
+
+/**
+ * Read the active region. Resolution order:
+ *   1. Hostname (locks pnw-beta.* / tropical-beta.* subdomains)
+ *   2. ?region= URL param
+ *   3. localStorage.region
+ *   4. Default: "ca"
+ * Cached on first read so every consumer sees the same value within
+ * a page load.
  */
 export function activeRegion() {
   if (_cached !== null) return _cached;
+
+  // Hostname-pinned region wins over everything else. Without this
+  // the bundle on pnw-beta.shouldidive.pages.dev would default to
+  // "ca" on a clean visit and show CA data despite the URL — which
+  // is exactly what the user saw on first beta-URL load.
+  const fromHost = _regionFromHostname();
+  if (fromHost) {
+    _cached = fromHost;
+    return fromHost;
+  }
+
   let resolved = DEFAULT_REGION;
   try {
     const params = new URLSearchParams(window.location.search);
@@ -37,6 +74,15 @@ export function activeRegion() {
   }
   _cached = resolved;
   return resolved;
+}
+
+/**
+ * True when the current hostname pins the region (= a beta subdomain).
+ * Used by the RegionSwitcher to hide itself — switching regions on
+ * pnw-beta would be a no-op since hostname overrides the URL param.
+ */
+export function isRegionLocked() {
+  return _regionFromHostname() !== null;
 }
 
 /**
