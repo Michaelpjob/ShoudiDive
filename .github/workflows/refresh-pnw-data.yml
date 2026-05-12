@@ -1,0 +1,143 @@
+name: Refresh PNW — data (daily)
+
+# Pacific Northwest — DAILY data refresh at 06:30 UTC (30 min offset
+# from CA's 06:00 slot so they don't compete for upstream rate limits).
+# Writes to public/data/pnw/ and deploys to
+# pnw-beta.shouldidive.pages.dev (Cloudflare preview branch within the
+# same project as prod — wrangler --branch=pnw-beta cannot reach
+# shouldidive.com).
+#
+# Schedule fires against `dev` by default — staging surface for PNW
+# until you green-light prod.
+
+on:
+  schedule:
+    - cron: "30 6 * * *"
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Git ref to refresh against (default: dev)"
+        required: false
+        default: "dev"
+        type: string
+
+concurrency:
+  group: refresh-pnw-data
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    env:
+      SHOULDIDIVE_REGION: pnw
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || (github.event_name == 'schedule' && 'dev' || github.ref) }}
+          token: ${{ secrets.BOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install pipeline dependencies
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Fetch latest ocean data (SST, chl, kd490)
+        continue-on-error: true
+        timeout-minutes: 15
+        env:
+          EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
+        run: python pipeline/fetch.py
+
+      - name: Fetch 7-day precipitation
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_precip.py
+
+      - name: Fetch river discharge (no-op for PNW until PR-PNW-3)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_rivers.py
+
+      - name: Fetch tide range (no-op for PNW until PR-PNW-3)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_tides.py
+
+      - name: Refresh climatology if needed
+        continue-on-error: true
+        run: python pipeline/fetch_climatology.py
+
+      - name: Fetch bathymetry (one-shot)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_bathy.py
+
+      - name: Fetch coastline (one-shot)
+        continue-on-error: true
+        timeout-minutes: 8
+        run: python pipeline/fetch_coastline.py
+
+      - name: Fetch MPA boundaries (empty for PNW until PR-PNW-4)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_mpa.py
+
+      - name: Probe all external feeds
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
+        run: python pipeline/check_feeds.py
+
+      - name: Run 5-day SST forecast
+        continue-on-error: true
+        run: python pipeline/fetch_sst_5day.py
+
+      - name: Run visibility prediction
+        # PR-PNW-3 introduces pnw_inland viz variant; until then the
+        # chl-based CA model runs against PNW data — predictions in
+        # the Salish Sea will not be trustworthy.
+        continue-on-error: true
+        run: python pipeline/fetch_visibility.py
+
+      - name: Install JS dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages (pnw-beta preview)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=shouldidive --branch=pnw-beta --commit-dirty=true
+
+      - name: Commit refreshed PNW data
+        if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/data/pnw/
+          if git diff --staged --quiet; then
+            echo "No PNW data changes to commit."
+          else
+            git commit -m "data: refresh pnw $(date -u +%Y-%m-%d)"
+            for attempt in 1 2 3; do
+              if git push; then break; fi
+              echo "push failed (attempt $attempt) — rebasing"
+              git pull --rebase origin "$(git rev-parse --abbrev-ref HEAD)"
+            done
+          fi

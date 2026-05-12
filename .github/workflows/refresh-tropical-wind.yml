@@ -1,0 +1,105 @@
+name: Refresh tropical — wind (hourly)
+
+# Florida + Gulf + Caribbean — HOURLY wind/swell/currents at :45.
+# 30 min offset from PNW's :30 slot. HRRR has full FL coverage but
+# misses south of ~22°N (Caribbean Sea); fetch_wind.py falls back to
+# GFS for the gap. Currents are model-inferred for the entire region
+# (HFRNet has zero Caribbean coverage).
+
+on:
+  schedule:
+    - cron: "45 * * * *"
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Git ref to refresh against (default: dev)"
+        required: false
+        default: "dev"
+        type: string
+
+concurrency:
+  group: refresh-tropical-wind
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    env:
+      SHOULDIDIVE_REGION: tropical
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || (github.event_name == 'schedule' && 'dev' || github.ref) }}
+          token: ${{ secrets.BOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install pipeline dependencies
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Fetch wind (HRRR FL east + Gulf; GFS fallback for Caribbean)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_wind.py
+
+      - name: Fetch 5-day hourly wind
+        continue-on-error: true
+        timeout-minutes: 15
+        run: python pipeline/fetch_wind_5day.py
+
+      - name: Fetch 5-day hourly swell
+        continue-on-error: true
+        timeout-minutes: 10
+        run: python pipeline/fetch_swell_5day.py
+
+      - name: Fetch WaveWatch III nowcast
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_waves.py
+
+      - name: Fetch surface currents (model-inferred — zero Caribbean HFR coverage)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_currents.py
+
+      - name: Install JS dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages (tropical-beta preview)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=shouldidive --branch=tropical-beta --commit-dirty=true
+
+      - name: Commit refreshed tropical wind data
+        if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/data/tropical/
+          if git diff --staged --quiet; then
+            echo "No tropical wind data changes to commit."
+          else
+            git commit -m "wind: refresh tropical $(date -u +%Y-%m-%dT%H:%MZ)"
+            for attempt in 1 2 3; do
+              if git push; then break; fi
+              echo "push failed (attempt $attempt) — rebasing"
+              git pull --rebase origin "$(git rev-parse --abbrev-ref HEAD)"
+            done
+          fi

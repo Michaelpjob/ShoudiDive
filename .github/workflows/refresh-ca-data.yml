@@ -1,0 +1,215 @@
+name: Refresh CA — data (daily)
+
+# California — DAILY data refresh at 06:00 UTC.
+# Pulls SST + chl + kd490 + viz + precip + rivers + tides + bathy +
+# coastline + MPA. Bathy + coastline are one-shots (idempotent). The
+# wind/swell/currents layers refresh on their own hourly schedule —
+# see refresh-ca-wind.yml. Splitting wind off keeps wind fresh while
+# keeping the heavy chl-blender + viz prediction on a daily cadence
+# that matches the underlying satellite product update cycles.
+#
+# This workflow publishes shouldidive.com (when running on main).
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Git ref to refresh against (default: main)"
+        required: false
+        default: "main"
+        type: string
+
+concurrency:
+  group: refresh-ca-data
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    env:
+      SHOULDIDIVE_REGION: ca
+    permissions:
+      contents: write
+      issues: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || (github.event_name == 'schedule' && 'main' || github.ref) }}
+          token: ${{ secrets.BOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install pipeline dependencies
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Fetch latest ocean data (SST, chl, kd490)
+        continue-on-error: true
+        timeout-minutes: 15
+        env:
+          EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
+        run: python pipeline/fetch.py
+
+      - name: Fetch 7-day precipitation (NOAA CPC)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_precip.py
+
+      - name: Fetch CA river discharge (USGS NWIS)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_rivers.py
+
+      - name: Fetch CA tide range (NOAA CO-OPS)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_tides.py
+
+      - name: Refresh climatology if needed
+        continue-on-error: true
+        run: python pipeline/fetch_climatology.py
+
+      - name: Fetch bathymetry (one-shot)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_bathy.py
+
+      - name: Fetch coastline (one-shot)
+        continue-on-error: true
+        timeout-minutes: 8
+        run: python pipeline/fetch_coastline.py
+
+      - name: Fetch MPA boundaries
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_mpa.py
+
+      - name: Probe all external feeds
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
+        run: python pipeline/check_feeds.py
+
+      - name: Run 5-day SST forecast
+        continue-on-error: true
+        run: python pipeline/fetch_sst_5day.py
+
+      - name: Run visibility prediction
+        continue-on-error: true
+        run: python pipeline/fetch_visibility.py
+
+      # ---- CA validation ----
+      - name: Assert chl freshness sidecar
+        continue-on-error: true
+        run: python -m pipeline.tests.assert_outputs fetch_chl
+
+      - name: Assert visibility outputs
+        continue-on-error: true
+        run: python -m pipeline.tests.assert_outputs visibility
+
+      - name: Assert local manifest freshness budgets
+        continue-on-error: true
+        run: python pipeline/check_manifest_freshness.py --layers sst,sst7d,sst5d,chl,kd490,viz,wave,precip --check-sst-source
+
+      - name: Score SST predictions
+        continue-on-error: true
+        run: python -m validation.sst_score
+        working-directory: pipeline
+
+      - name: SST watchdog
+        continue-on-error: true
+        id: sst_watchdog
+        run: python -m validation.sst_watchdog
+        working-directory: pipeline
+
+      - name: Score visibility predictions
+        continue-on-error: true
+        run: python -m pipeline.validation.score
+
+      - name: Regression guard
+        run: python -m pipeline.validation.check_regression
+
+      - name: Watchdog
+        id: watchdog
+        continue-on-error: true
+        run: python -m pipeline.validation.watchdog
+
+      - name: Sync watchdog GitHub Issue
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          gh label create validation-watchdog --color C1880F \
+            --description "Auto-managed by pipeline/validation/watchdog.py" 2>/dev/null || true
+          summary_file=pipeline/validation/data/watchdog_summary.md
+          existing=$(gh issue list --label validation-watchdog --state open --json number --jq '.[0].number')
+          if [ "${{ steps.watchdog.outcome }}" = "failure" ]; then
+            count=$(grep -c '^### ' "$summary_file" || true)
+            title="Validation watchdog — ${count} finding(s)"
+            if [ -n "$existing" ]; then
+              gh issue edit "$existing" --title "$title" --body-file "$summary_file"
+            else
+              gh issue create --label validation-watchdog --title "$title" --body-file "$summary_file"
+            fi
+          elif [ -n "$existing" ]; then
+            gh issue close "$existing" --comment "All findings cleared as of $(date -u +%Y-%m-%dT%H:%MZ)."
+          fi
+
+      - name: Install JS dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Run frontend regression tests
+        continue-on-error: true
+        run: npm test
+
+      - name: Run data feature contracts
+        continue-on-error: true
+        run: npm run test:data-contracts
+
+      - name: Build
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages (production)
+        if: github.ref == 'refs/heads/main'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=shouldidive --branch=main --commit-dirty=true
+
+      - name: Commit refreshed data
+        if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/data/
+          git add pipeline/validation/data/per_zone_metrics.json \
+                  pipeline/validation/data/residuals.jsonl \
+                  pipeline/validation/data/watchdog_summary.md \
+                  pipeline/validation/data/feed_health.json \
+                  pipeline/validation/data/freshness_health.json \
+                  pipeline/validation/data/ingest_health.json 2>/dev/null || true
+          if git diff --staged --quiet; then
+            echo "No data changes to commit."
+          else
+            git commit -m "data: refresh ca $(date -u +%Y-%m-%d)"
+            for attempt in 1 2 3; do
+              if git push; then break; fi
+              echo "push failed (attempt $attempt) — rebasing"
+              git pull --rebase origin "$(git rev-parse --abbrev-ref HEAD)"
+            done
+          fi
