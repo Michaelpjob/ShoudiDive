@@ -1,0 +1,29 @@
+name: Refresh tropical
+
+# Florida + Gulf + Caribbean. All layers under public/data/tropical/.
+# Cron at 07:00 UTC — 30 min offset from PNW's 06:30 slot, 60 min
+# from CA's 06:00 slot, so all three regions can hit NOAA / NASA in
+# sequence without rate-limit collisions.
+#
+# Dev-only today. The chl-based viz_predict is the wrong shape for
+# tropical water (Caribbean is oligotrophic — chl < 0.1 mg/m^3
+# almost everywhere); PR-TROP-5 implements the subtractive_tropical
+# variant. Until then the viz layer on this region is intentionally
+# unreliable.
+
+on:
+  schedule:
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    uses: ./.github/workflows/_refresh-region.yml
+    with:
+      region: tropical
+      deploy_prod: false
+    secrets: inherit
+
+concurrency:
+  group: refresh-tropical
+  cancel-in-progress: false

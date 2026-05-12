@@ -1,0 +1,30 @@
+name: Refresh CA
+
+# California — all layers (SST, chl, viz, wind, swell, currents, etc.)
+# Cron at 06:00 UTC daily (matches the pre-split refresh-data.yml
+# cadence so the CA prod refresh slot is unchanged). Also fires the
+# Cloudflare production deploy that publishes shouldidive.com.
+#
+# Calls the reusable _refresh-region.yml with region=ca. All step
+# definitions live there; this file is intentionally thin.
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    uses: ./.github/workflows/_refresh-region.yml
+    with:
+      region: ca
+      # CA is the only region today that publishes to shouldidive.com.
+      # The reusable workflow's deploy step ALSO gates on github.ref ==
+      # main, so dev-branch dispatches still won't push to prod.
+      deploy_prod: true
+    secrets: inherit
+
+  # Stop two scheduled CA refreshes from stomping each other.
+concurrency:
+  group: refresh-ca
+  cancel-in-progress: false

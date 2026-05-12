@@ -1,0 +1,26 @@
+name: Refresh PNW
+
+# Pacific Northwest (OR + WA + Salish Sea). All layers under
+# public/data/pnw/. Offset 30 min from CA's 06:00 UTC slot so the two
+# refreshes don't compete for upstream NOAA / NASA rate limits.
+#
+# Dev-only today — no production deploy. Once PNW reaches feature
+# parity + you green-light it, flip deploy_prod=true (and the
+# reusable workflow will only fire wrangler when running on `main`).
+
+on:
+  schedule:
+    - cron: "30 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    uses: ./.github/workflows/_refresh-region.yml
+    with:
+      region: pnw
+      deploy_prod: false
+    secrets: inherit
+
+concurrency:
+  group: refresh-pnw
+  cancel-in-progress: false
