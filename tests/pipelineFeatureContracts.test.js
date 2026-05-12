@@ -25,7 +25,7 @@ test("SST beta forecast is generated and guarded as a first-class data product",
   const fetchPipeline = read("pipeline/fetch.py");
   const freshness = read("pipeline/check_manifest_freshness.py");
   const published = read("pipeline/check_published.py");
-  const workflow = read(".github/workflows/refresh-data.yml");
+  const workflow = read(".github/workflows/refresh-ca-data.yml");
 
   assert.match(fetchPipeline, /def build_sst_forecast\(/);
   assert.match(fetchPipeline, /"forecast_summary_url":?|\["forecast_summary_url"\]/);
