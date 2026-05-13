@@ -20,19 +20,19 @@ name: Verify live deploy
 
 on:
   workflow_run:
-    # Fire only after the upstream deploy workflows complete.
+    # Fire only after the upstream deploy workflow completes.
     # `types: [completed]` includes both success + failure; we gate
     # explicitly on conclusion below so we don't probe a deploy that
     # didn't actually happen.
     #
-    # The three workflows that produce a production CF Pages deploy:
-    #   - Deploy production (code-only fast path)  — push-to-main
-    #   - Refresh ocean data + deploy              — daily cron + dispatch
-    #   - Refresh wind + deploy                    — wind-only schedule
+    # As of 2026-05-13 every production CF Pages publish flows through
+    # deploy-prod.yml — the refresh-ca-{data,wind}.yml workflows are
+    # now data-only and fire deploy-prod.yml via workflow_dispatch
+    # after their commit lands. So listening here on deploy-prod
+    # alone covers both code-only pushes AND post-data-refresh
+    # deploys.
     workflows:
       - "Deploy production (code-only fast path)"
-      - "Refresh ocean data + deploy"
-      - "Refresh wind + deploy"
     types: [completed]
   schedule:
     # Continuous monitoring — every 4 hours, independent of deploys.

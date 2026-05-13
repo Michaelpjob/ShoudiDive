@@ -28,6 +28,7 @@ jobs:
       SHOULDIDIVE_REGION: tropical
     permissions:
       contents: write
+      actions: write   # for `gh workflow run deploy-tropical-beta.yml` at the end
 
     steps:
       - uses: actions/checkout@v4
@@ -40,11 +41,6 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: pipeline/requirements.txt
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
 
       - name: Install pipeline dependencies
         run: pip install -r pipeline/requirements.txt
@@ -74,25 +70,9 @@ jobs:
         timeout-minutes: 5
         run: python pipeline/fetch_currents.py
 
-      - name: Install JS dependencies
-        run: npm install --no-audit --no-fund
+      # Build + deploy steps were removed 2026-05-13 — data-only flow.
+      # deploy-tropical-beta.yml (triggered below) handles the publish.
 
-      - name: Build
-        run: npm run build
-
-      - name: Deploy to Cloudflare Pages (tropical-beta preview)
-        # Soft-fail (see refresh-pnw-data.yml for context).
-        continue-on-error: true
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          # Bypass cloudflare/wrangler-action@v3 — moving tag started
-          # rejecting tokens with whitespace 2026-05-13 (Headers.set strict
-          # validation in newer wrangler). Strip whitespace defensively
-          # and call wrangler directly with a pinned version.
-          export CLOUDFLARE_API_TOKEN=$(printf '%s' "$CLOUDFLARE_API_TOKEN" | tr -d '[:space:]')
-          npx wrangler@4.85.0 pages deploy dist --project-name=shouldidive --branch=tropical-beta --commit-dirty=true
       - name: Commit refreshed tropical wind data
         if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         run: |
@@ -109,3 +89,9 @@ jobs:
               git pull --rebase --autostash origin "$(git rev-parse --abbrev-ref HEAD)"
             done
           fi
+
+      - name: Trigger tropical-beta deploy
+        if: success() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run deploy-tropical-beta.yml --ref dev

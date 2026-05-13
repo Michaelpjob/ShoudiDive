@@ -44,33 +44,16 @@ jobs:
           # so the preview matches what was tested.
           ref: ${{ github.event.workflow_run.head_sha || 'dev' }}
 
-      - uses: actions/setup-node@v4
+      # --branch=dev tags this deploy as a Cloudflare Pages preview
+      # (not production). CF Pages routes dev preview deploys to
+      # dev.shouldidive.pages.dev automatically; shouldidive.com is
+      # unaffected. Wrangler-bypass logic lives in the composite.
+      - uses: ./.github/actions/deploy-cloudflare
         with:
-          node-version: "20"
-          cache: npm
-
-      - name: Install
-        # `npm install` rather than `npm ci` to tolerate the lockfile
-        # drift introduced 2026-05-07 (new ESLint + puppeteer deps).
-        run: npm install --no-audit --no-fund
-
-      - name: Build
-        run: npm run build
-
-      - name: Deploy to Cloudflare Pages (dev branch)
-        # --branch=dev tags this deploy as a preview (not production).
-        # CF Pages routes dev preview deploys to dev.shouldidive.pages.dev
-        # automatically; production at shouldidive.com is unaffected.
-        # Bypass cloudflare/wrangler-action@v3 — moving tag broke
-        # 2026-05-13 with 'Headers.set: *** invalid header value' under
-        # the newer wrangler's strict fetch. Direct invocation + token
-        # whitespace strip + pinned wrangler version.
+          branch: dev
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          export CLOUDFLARE_API_TOKEN=$(printf '%s' "$CLOUDFLARE_API_TOKEN" | tr -d '[:space:]')
-          npx wrangler@4.85.0 pages deploy dist --project-name=shouldidive --branch=dev --commit-dirty=true
 
       - name: Annotate run with preview URL
         run: |
