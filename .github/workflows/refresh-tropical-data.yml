@@ -113,6 +113,17 @@ jobs:
         continue-on-error: true
         run: python pipeline/fetch_visibility.py
 
+      - name: Fetch RTOFS ocean-model forecast (tropical only)
+        # Pulls NOAA RTOFS Global 2ds prog NetCDFs from NOMADS for
+        # forecast leads +1d / +3d / +5d / +7d. ~620 MB transfer.
+        # Adds parallel SST forecast track + surface currents for
+        # the Caribbean basin (where HFRNet has zero coverage).
+        # 25-minute timeout is generous: NOMADS streams ~155 MB
+        # files in 1-2 min each on a healthy day.
+        continue-on-error: true
+        timeout-minutes: 25
+        run: python pipeline/fetch_rtofs.py
+
       # Build + deploy steps were removed 2026-05-13 — data-only flow.
       # deploy-tropical-beta.yml (triggered below) handles the publish.
 
