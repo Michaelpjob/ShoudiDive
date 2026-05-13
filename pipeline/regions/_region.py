@@ -63,6 +63,12 @@ class Region:
     # temperature / chl / etc. window for that water. Without this,
     # tropical SST (25-32°C) clips at 25°C and shows uniform red.
     layer_range_overrides: dict = field(default_factory=dict)
+    # NOAA CO-OPS tide stations used by fetch_tides.py. Each entry:
+    # ``{"name": "san-juan", "id": "9755371", "lat": 18.46, "lng": -66.12}``.
+    # The visibility orchestrator nearest-neighbors each output cell to
+    # one of these. Empty list → fetch_tides.py becomes a no-op for
+    # this region (visibility falls back to its default tide_index).
+    tide_stations: list = field(default_factory=list)
     notes: str = ""
 
     @property

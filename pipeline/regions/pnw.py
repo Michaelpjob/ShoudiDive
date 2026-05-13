@@ -57,6 +57,21 @@ REGION = Region(
         "sst7d": (5.0, 20.0),
         "sst5d": (5.0, 20.0),
     },
+    # NOAA CO-OPS stations covering OR outer coast → WA outer coast →
+    # Strait of Juan de Fuca → Salish Sea. Big tides here (Puget Sound
+    # can hit 4-5 m spring ranges) so tide_index will have real signal
+    # once PR-PNW-3 lands the inland viz variant.
+    tide_stations=[
+        {"name": "port-orford",      "id": "9431647", "lat": 42.738, "lng": -124.498},
+        {"name": "south-beach-or",   "id": "9435380", "lat": 44.625, "lng": -124.043},
+        {"name": "astoria",          "id": "9439040", "lat": 46.207, "lng": -123.768},
+        {"name": "la-push",          "id": "9442396", "lat": 47.913, "lng": -124.637},
+        {"name": "neah-bay",         "id": "9443090", "lat": 48.367, "lng": -124.601},
+        {"name": "port-angeles",     "id": "9444090", "lat": 48.125, "lng": -123.441},
+        {"name": "port-townsend",    "id": "9444900", "lat": 48.113, "lng": -122.760},
+        {"name": "seattle",          "id": "9447130", "lat": 47.603, "lng": -122.339},
+        {"name": "friday-harbor",    "id": "9449880", "lat": 48.546, "lng": -123.013},
+    ],
     notes=(
         "SKELETON — bbox + lat bands only. Salish Sea polygon, "
         "SSCOFS fetcher, and PNW-tuned coefficients land in "

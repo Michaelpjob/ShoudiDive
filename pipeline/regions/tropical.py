@@ -77,6 +77,27 @@ REGION = Region(
         "sst7d": (20.0, 32.0),
         "sst5d": (20.0, 32.0),
     },
+    # NOAA CO-OPS stations across FL, FL Keys, PR, USVI. Caribbean
+    # tides are small (~0.3 m range typical, semi-diurnal) so the
+    # tide_index signal will be weaker than CA/PNW, but still
+    # captures spring-vs-neap variation. Station IDs verified against
+    # https://tidesandcurrents.noaa.gov/stations.html as of 2026-05-13.
+    tide_stations=[
+        # Florida Gulf + Keys
+        {"name": "naples-fl",        "id": "8725110", "lat": 26.131, "lng": -81.808},
+        {"name": "fort-myers-fl",    "id": "8725520", "lat": 26.647, "lng": -81.871},
+        {"name": "vaca-key-fl",      "id": "8723970", "lat": 24.711, "lng": -81.107},
+        {"name": "key-west-fl",      "id": "8724580", "lat": 24.555, "lng": -81.808},
+        # Florida east coast
+        {"name": "virginia-key-fl",  "id": "8723214", "lat": 25.732, "lng": -80.162},
+        {"name": "lake-worth-fl",    "id": "8722670", "lat": 26.612, "lng": -80.038},
+        # Puerto Rico + USVI
+        {"name": "magueyes-island",  "id": "9759110", "lat": 17.970, "lng": -67.046},
+        {"name": "san-juan-pr",      "id": "9755371", "lat": 18.460, "lng": -66.118},
+        {"name": "lime-tree-bay",    "id": "9751381", "lat": 17.692, "lng": -64.754},
+        {"name": "christiansted",    "id": "9751364", "lat": 17.748, "lng": -64.705},
+        {"name": "lameshur-bay",     "id": "9751401", "lat": 18.318, "lng": -64.724},
+    ],
     notes=(
         "SKELETON — bbox hull + sub-region bboxes + viz variant marker. "
         "The chl-based model is the WRONG SHAPE for this water; do not "

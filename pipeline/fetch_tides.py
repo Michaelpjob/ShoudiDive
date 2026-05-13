@@ -1,4 +1,4 @@
-"""Fetch today's tide range for major CA tide stations from NOAA CO-OPS.
+"""Fetch today's tide range for the active region's NOAA CO-OPS stations.
 
 The visibility model's `tide_index` feature uses the daily tide range (max
 minus min over a 24h window) as a proxy for tidal mixing energy. Range is
@@ -9,10 +9,12 @@ We pull the next-24-hour hi/lo predictions for each station, take max-min,
 and emit a per-station JSON for the orchestrator to spread spatially via
 nearest-station sampling.
 
-Stations are evenly distributed along the CA coast inside our bbox; the
-visibility orchestrator picks the closest one per cell.
+2026-05-13: the per-region station list moved out of this file into
+`pipeline/regions/{ca,pnw,tropical}.py` (the `tide_stations` field on
+the Region dataclass). Add a new region's stations there; this file
+stays generic.
 
-Output: public/data/tides.json
+Output: public/data/[<region>/]tides.json
 
 Run: python pipeline/fetch_tides.py
 """
@@ -33,16 +35,9 @@ try:
 except ModuleNotFoundError:
     from regions import active_region
 
-OUT_DIR = active_region().data_output_dir(ROOT)
-
-STATIONS = [
-    {"name": "monterey",      "id": "9413450", "lat": 36.605, "lng": -121.888},
-    {"name": "port-san-luis", "id": "9412110", "lat": 35.169, "lng": -120.755},
-    {"name": "santa-barbara", "id": "9411340", "lat": 34.404, "lng": -119.693},
-    {"name": "los-angeles",   "id": "9410660", "lat": 33.720, "lng": -118.272},
-    {"name": "la-jolla",      "id": "9410230", "lat": 32.866, "lng": -117.257},
-    {"name": "san-diego",     "id": "9410170", "lat": 32.713, "lng": -117.173},
-]
+REGION = active_region()
+OUT_DIR = REGION.data_output_dir(ROOT)
+STATIONS = REGION.tide_stations
 
 API = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
 
@@ -92,6 +87,12 @@ def fetch_tide_range_m(station_id: str) -> float | None:
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     now = datetime.now(timezone.utc)
+    if not STATIONS:
+        # Region declares no tide stations (e.g., a brand-new region
+        # skeleton). Skip silently — the visibility model will fall
+        # back to its default tide_index when tides.json is missing.
+        print(f"[tides] region={REGION.name} has no tide_stations — skip")
+        return
     out_stations = []
     for st in STATIONS:
         rng = fetch_tide_range_m(st["id"])

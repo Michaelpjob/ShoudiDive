@@ -37,6 +37,16 @@ REGION = Region(
     dist_labels=["nearshore", "islands", "offshore"],
     viz_model_variant="chl_based",
     data_dir_slug="ca",
+    # NOAA CO-OPS stations — even coverage from Monterey to San Diego
+    # (mirrors the hardcoded list previously living in fetch_tides.py).
+    tide_stations=[
+        {"name": "monterey",      "id": "9413450", "lat": 36.605, "lng": -121.888},
+        {"name": "port-san-luis", "id": "9412110", "lat": 35.169, "lng": -120.755},
+        {"name": "santa-barbara", "id": "9411340", "lat": 34.404, "lng": -119.693},
+        {"name": "los-angeles",   "id": "9410660", "lat": 33.720, "lng": -118.272},
+        {"name": "la-jolla",      "id": "9410230", "lat": 32.866, "lng": -117.257},
+        {"name": "san-diego",     "id": "9410170", "lat": 32.713, "lng": -117.173},
+    ],
     notes=(
         "Source of truth for behavior today — the bbox + lat zones "
         "here match fetch.py / viz_predict/config.py / src/lib/mapData.js. "
