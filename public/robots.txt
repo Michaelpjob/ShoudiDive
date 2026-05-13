@@ -1,0 +1,25 @@
+# ShouldIDive — crawler policy.
+#
+# Allow well-behaved crawlers to index the public pages so divers
+# searching Google for "California water visibility" / "PNW dive
+# conditions" / "Caribbean SST" can find us. Disallow the data API
+# and analytics endpoint — those are read by the React client, not
+# humans, and have no SEO value (just bandwidth churn from crawlers
+# hammering 5-min-max-age PNGs).
+#
+# Bad bots (the ones spiking from CN / IN / RU IP ranges and probing
+# `/.env`, `/wp-admin`, etc.) ignore robots.txt entirely. They're
+# handled by `_redirects` returning hard 404s and by Cloudflare WAF.
+# robots.txt only governs the well-behaved crawlers (Google, Bing,
+# DuckDuckGo, etc.) — and those we want.
+
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /data/
+Disallow: /sw.js
+Disallow: /manifest.webmanifest
+
+# Sitemap pointer — keeps the index fresh + signals "this is the
+# canonical entry point" to consolidate trailing-slash variants.
+Sitemap: https://shouldidive.com/sitemap.xml
