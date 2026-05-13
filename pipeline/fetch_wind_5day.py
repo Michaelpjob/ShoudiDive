@@ -335,9 +335,21 @@ def main() -> None:
     HRRR_END = 49  # exclusive
     GFS_END = GFS_HORIZON_HRS + 1  # exclusive
 
+    # Region-aware: skip HRRR entirely for tropical because HRRR's
+    # CONUS domain ends at ~21°N, leaving the Caribbean half of the
+    # tropical bbox without data. GFS (0.25° global) covers the whole
+    # tropical bbox uniformly. CA + PNW are inside CONUS so they keep
+    # the high-res HRRR mix for f00..f48.
+    region_name = active_region().name
+    use_hrrr = region_name != "tropical"
+    if not use_hrrr:
+        print(f"region={region_name}: skipping HRRR (outside CONUS), using GFS f000..f168")
+
     fetched = 0
     failed  = 0
-    for fhour in range(0, HRRR_END):
+    hrrr_range = range(0, HRRR_END) if use_hrrr else range(0)
+    gfs_start = HRRR_END if use_hrrr else 0
+    for fhour in hrrr_range:
         try:
             grib = fetch_hrrr_slice(hrrr_d, hrrr_h, fhour)
             lat2d, lng2d, u_native, v_native = open_uv(grib)
@@ -347,7 +359,7 @@ def main() -> None:
         except Exception as e:
             print(f"  HRRR f{fhour:02d}: {e!s}")
             failed += 1
-    for fhour in range(HRRR_END, GFS_END):
+    for fhour in range(gfs_start, GFS_END):
         try:
             grib = fetch_gfs_slice(gfs_d, gfs_h, fhour)
             lat2d, lng2d, u_native, v_native = open_uv(grib)

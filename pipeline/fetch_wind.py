@@ -45,12 +45,36 @@ NOMADS_GFS = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod"
 
 # Per-slot config: (source, fcst_hour). HRRR for short-range; GFS for +72h
 # since HRRR maxes out at f48.
-SLOTS = {
-    "now":  {"source": "hrrr", "fhour": 0},
-    "p6h":  {"source": "hrrr", "fhour": 6},
-    "p24h": {"source": "hrrr", "fhour": 24},
-    "p72h": {"source": "gfs",  "fhour": 72},
-}
+#
+# 2026-05-12 — region-aware fallback. HRRR's CONUS domain ends at
+# ~21°N, so the Caribbean half of the tropical bbox (10-22°N) is
+# outside it. Tropical refreshes that requested HRRR got a CONUS-only
+# wind PNG with the Caribbean cells NaN — visible to the user as
+# "wind only over US waters." For tropical, use GFS (global 0.25°)
+# for every slot instead. Lower resolution than HRRR but covers the
+# full bbox uniformly. CA + PNW keep HRRR for short-range.
+def _slots_for_active_region():
+    try:
+        from pipeline.regions import active_region
+    except ModuleNotFoundError:
+        from regions import active_region
+    if active_region().name == "tropical":
+        return {
+            "now":  {"source": "gfs", "fhour": 0},
+            "p6h":  {"source": "gfs", "fhour": 6},
+            "p24h": {"source": "gfs", "fhour": 24},
+            "p72h": {"source": "gfs", "fhour": 72},
+        }
+    # CA + PNW are inside HRRR's CONUS domain — keep the high-res mix.
+    return {
+        "now":  {"source": "hrrr", "fhour": 0},
+        "p6h":  {"source": "hrrr", "fhour": 6},
+        "p24h": {"source": "hrrr", "fhour": 24},
+        "p72h": {"source": "gfs",  "fhour": 72},
+    }
+
+
+SLOTS = _slots_for_active_region()
 
 # History slots: prior daily GFS f000 analyses, used by the visibility model
 # to compute upwelling anomalies (5-day along-shore wind mean). HRRR isn't

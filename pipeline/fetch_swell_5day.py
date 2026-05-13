@@ -87,12 +87,32 @@ def _head_ok(url: str) -> bool:
         return False
 
 
+# ---- Region-aware gfswave subset selection ---------------------------------
+#
+# NOAA publishes gfswave in geographically-narrow subsets so consumers
+# don't have to download the global grid. CA + PNW use `wcoast.0p16`
+# (US West Coast box). Tropical (Gulf + Caribbean + East FL) needs
+# `atlocn.0p16` (Atlantic + Gulf). Without this branch, fetch_swell_5day
+# silently produced empty bucket arrays for tropical — the user-visible
+# symptom was a grey swell layer with no data.
+def _gfswave_subset() -> str:
+    try:
+        from pipeline.regions import active_region
+    except ModuleNotFoundError:
+        from regions import active_region
+    name = active_region().name
+    if name == "tropical":
+        return "atlocn.0p16"
+    # CA + PNW (and any future West Coast region) use wcoast.
+    return "wcoast.0p16"
+
+
 # ---- Run discovery ----------------------------------------------------------
 
 def _idx_url(run_date: date, run_hour: int, fhour: int) -> str:
     return (
         f"{NOMADS_GFS}/gfs.{run_date.strftime('%Y%m%d')}/{run_hour:02d}/wave/gridded/"
-        f"gfswave.t{run_hour:02d}z.wcoast.0p16.f{fhour:03d}.grib2.idx"
+        f"gfswave.t{run_hour:02d}z.{_gfswave_subset()}.f{fhour:03d}.grib2.idx"
     )
 
 
@@ -113,14 +133,15 @@ def find_latest_gfswave_run_with_horizon(hours: int = 120) -> tuple[date, int]:
 
 def fetch_wave_slice(run_date: date, run_hour: int, fhour: int) -> Path:
     """Pull HTSGW + PERPW + DIRPW (surface level) for a single forecast hour."""
-    slug = f"gfswave_{run_date.strftime('%Y%m%d')}_t{run_hour:02d}z_f{fhour:03d}"
+    subset = _gfswave_subset()
+    slug = f"gfswave_{subset.replace('.', '_')}_{run_date.strftime('%Y%m%d')}_t{run_hour:02d}z_f{fhour:03d}"
     grib_path = CACHE_DIR / f"{slug}.grib2"
     if grib_path.exists():
         return grib_path
 
     base = (
         f"{NOMADS_GFS}/gfs.{run_date.strftime('%Y%m%d')}/{run_hour:02d}/wave/gridded/"
-        f"gfswave.t{run_hour:02d}z.wcoast.0p16.f{fhour:03d}.grib2"
+        f"gfswave.t{run_hour:02d}z.{subset}.f{fhour:03d}.grib2"
     )
     idx = SESSION.get(base + ".idx", timeout=60).text
     lines = idx.strip().split("\n")
