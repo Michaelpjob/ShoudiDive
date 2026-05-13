@@ -1,96 +1,17 @@
-# Cloudflare Pages `_redirects` — hard 404s for scanner-known paths.
+# Cloudflare Pages `_redirects` — currently a stub.
 #
-# The problem this file fixes:
-#   Cloudflare Pages serves index.html as the SPA fallback for any
-#   URL that doesn't match a real file. That's correct for React
-#   client-side routing, but it means a request for `/.env`,
-#   `/.git/config`, or `/wp-login.php` returns HTTP 200 + the
-#   homepage HTML body. Bot scanners interpret 200 as "this file
-#   exists" and immediately escalate: deeper recursive probes,
-#   automated exploit attempts, brokered onto attack-target lists.
+# The hard-404 logic for scanner-known paths (/.env, /.git/*, etc.)
+# used to live here but CF Pages `_redirects` only supports status
+# codes 200/301/302/303/307/308 — NOT 404. Cloudflare silently
+# ignored those rules.
 #
-# Fix:
-#   Match the exact prefixes scanners hammer and return HTTP 404
-#   *before* the SPA fallback fires. The destination URL is irrelevant
-#   — CF only honors the status code when it's 404/410. We use a
-#   placeholder `/_not_found` that doesn't exist; CF serves its
-#   default 404 body. Format: `<from> <to> <status>`.
+# That logic now lives in `functions/_middleware.js` which DOES support
+# arbitrary status codes. See the middleware file for the full path
+# allowlist + rationale.
 #
-# Why this matters for the user's stated concern (traffic from
-# China / India / etc.):
-#   Most of that traffic is automated reconnaissance. Returning a
-#   crisp 404 lowers our priority in scanner queues. Combined with
-#   the security headers (see _headers) + the same-origin
-#   /api/analytics/event endpoint design, the attack surface
-#   shrinks to what's structurally minimal.
-#
-# Maintenance:
-#   Add new patterns whenever Cloudflare Analytics shows a path
-#   class spiking. Common offenders below cover ~90% of what bots
-#   try. Wildcards (`*`) work in CF Pages _redirects.
+# This file is kept (empty of rules) for:
+#   1. Future legitimate redirects (e.g., trailing-slash canonicalisation,
+#      domain migrations, deprecated routes).
+#   2. So nothing else in the deploy assumes the file is missing.
 
-# --- dotfile probes (config + secrets exfil attempts) -----------------
-/.env*           /_not_found  404
-/.git/*          /_not_found  404
-/.git            /_not_found  404
-/.svn/*          /_not_found  404
-/.hg/*           /_not_found  404
-/.htaccess       /_not_found  404
-/.htpasswd       /_not_found  404
-/.aws/*          /_not_found  404
-/.ssh/*          /_not_found  404
-/.DS_Store       /_not_found  404
-/.vscode/*       /_not_found  404
-/.idea/*         /_not_found  404
-/.well-known/security.txt /security.txt 200
-/.well-known/*   /_not_found  404
-
-# --- WordPress probes (overwhelmingly the #1 bot class) ---------------
-/wp-admin*       /_not_found  404
-/wp-login*       /_not_found  404
-/wp-includes/*   /_not_found  404
-/wp-content/*    /_not_found  404
-/wp-config*      /_not_found  404
-/wp-json/*       /_not_found  404
-/xmlrpc.php      /_not_found  404
-/wlwmanifest.xml /_not_found  404
-
-# --- PHP application probes ------------------------------------------
-/phpmyadmin*     /_not_found  404
-/phpMyAdmin*     /_not_found  404
-/pma/*           /_not_found  404
-/phpinfo*        /_not_found  404
-/info.php        /_not_found  404
-/test.php        /_not_found  404
-/admin.php       /_not_found  404
-/adminer.php     /_not_found  404
-
-# --- generic admin / config probes -----------------------------------
-/admin/*         /_not_found  404
-/administrator/* /_not_found  404
-/manager/html    /_not_found  404
-/server-status   /_not_found  404
-/server-info     /_not_found  404
-/cgi-bin/*       /_not_found  404
-/console/*       /_not_found  404
-/jenkins/*       /_not_found  404
-/.travis.yml     /_not_found  404
-
-# --- secret / build-artifact leaks -----------------------------------
-/composer.json   /_not_found  404
-/composer.lock   /_not_found  404
-/package-lock.json /_not_found  404
-/yarn.lock       /_not_found  404
-/pnpm-lock.yaml  /_not_found  404
-/Dockerfile      /_not_found  404
-/.dockerignore   /_not_found  404
-/docker-compose.yml /_not_found  404
-/private/*       /_not_found  404
-/backup/*        /_not_found  404
-/backups/*       /_not_found  404
-/dump.sql        /_not_found  404
-/db.sql          /_not_found  404
-/database.sql    /_not_found  404
-
-# --- sourcemap probes (we don't ship source maps, but make it crisp) -
-/assets/*.map    /_not_found  404
+# (no rules yet — middleware handles all 404 logic)
