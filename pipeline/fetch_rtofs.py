@@ -424,6 +424,66 @@ def main() -> None:
     summary_path.write_text(json.dumps(summary, indent=2))
     print(f"[rtofs] wrote {summary_path}")
 
+    if not days_summary:
+        print("[rtofs] no successful leads — skipping manifest patch")
+        return
+    _patch_manifest(summary, summary_path, now)
+
+
+def _patch_manifest(summary: dict, summary_path: Path, now: datetime) -> None:
+    """Add / update the `rtofs5d` entry in this region's manifest.json.
+
+    fetch.py runs BEFORE fetch_rtofs.py and writes the top-level
+    manifest without an rtofs5d section. We patch it in afterwards so
+    the frontend can discover the layer alongside `sst5d`. Idempotent —
+    re-running just overwrites the entry.
+
+    Schema lives next to existing forecast layers; the frontend
+    decoder consumes the same fields as sst5d (range, scale, unit,
+    summary_url) plus RTOFS-specific extras (uv_range, init_cycle,
+    model).
+    """
+    manifest_path = REGION.data_output_dir(ROOT) / "manifest.json"
+    if not manifest_path.exists():
+        print(f"[rtofs] no manifest at {manifest_path} — skip patch")
+        return
+
+    try:
+        manifest = json.loads(manifest_path.read_text())
+    except Exception as e:
+        print(f"[rtofs] manifest read failed ({e!s}) — skip patch")
+        return
+
+    if "layers" not in manifest or not isinstance(manifest["layers"], dict):
+        manifest["layers"] = {}
+
+    # Use the manifest-style URL (relative path starting at /data/).
+    rel_summary_url = (
+        "/" + str(summary_path.relative_to(ROOT / "public")).replace("\\", "/")
+    )
+
+    # Borrow grid + bbox from the first day's stats; all four leads
+    # share the same subset rectangle.
+    first = summary["days"][0]
+    manifest["layers"]["rtofs5d"] = {
+        "summary_url": rel_summary_url,
+        "model": summary["model"],
+        "init_cycle": summary["init_cycle"],
+        "range": summary["sst_range_c"],   # SST range — matches sst5d for shared decoder
+        "scale": "linear",
+        "unit": summary["unit_sst"],
+        "uv_range": summary["uv_range_ms"],
+        "uv_unit": summary["unit_uv"],
+        "grid": first["grid"],
+        "horizon_days": max(d["day_offset"] for d in summary["days"]),
+        "leads_day_offsets": [d["day_offset"] for d in summary["days"]],
+        "generated_at": summary["generated_at"],
+        "tz": "UTC",
+        "beta": True,
+    }
+    manifest_path.write_text(json.dumps(manifest, indent=2))
+    print(f"[rtofs] patched manifest.json with rtofs5d entry")
+
 
 if __name__ == "__main__":
     main()
