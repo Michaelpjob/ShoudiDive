@@ -1,5 +1,5 @@
 {
-  "computed_at": "2026-05-13T03:48:04Z",
+  "computed_at": "2026-05-13T03:56:57Z",
   "manifest": "public/data/manifest.json",
   "layers_checked": [
     "sst",
@@ -12,8 +12,16 @@
     "precip"
   ],
   "summary": {
-    "total_findings": 0,
-    "healthy": true
+    "total_findings": 1,
+    "healthy": false
   },
-  "findings": []
+  "findings": [
+    {
+      "severity": "medium",
+      "code": "sst_source_query_failed",
+      "title": "Could not query latest MUR SST source time",
+      "layer": "sst",
+      "detail": "HTTPError: 403 Client Error:  for url: https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.csv?analysed_sst%5B(last)%5D%5B(32.93)%5D%5B(-118.49)%5D"
+    }
+  ]
 }
