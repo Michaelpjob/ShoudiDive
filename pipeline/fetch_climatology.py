@@ -50,7 +50,18 @@ CACHE_DIR = ROOT / "pipeline" / ".cache"
 
 # Match the daily fetcher's encoding so the visibility orchestrator can
 # decode climo PNGs the same way it decodes today's PNGs.
-SST_RANGE = (9.0, 25.0)             # linear °C
+#
+# 2026-05-13 — region-aware override. Until today SST_RANGE was hardcoded
+# (9, 25) for CA. Tropical SST_RANGE is (20, 32), so a Caribbean climo
+# pixel of 28°C got CLIPPED to 25 during encode, saturating pixel 255,
+# and then fetch_sst_5day.py decoded that 255 with tropical's (20, 32)
+# range → 32°C. Every tropical climatology cell came out ~7°C too hot,
+# the nowcast anomaly read ~-4.4°C (artifact), and the 5-day forecast
+# decayed toward the false-ceiling climatology — painting 85–89°F across
+# the Caribbean in May. Reading the encoding range from the active region
+# closes the encode/decode mismatch.
+_sst_overrides = active_region().layer_range_overrides
+SST_RANGE = tuple(_sst_overrides.get("sst", (9.0, 25.0)))   # linear °C
 CHL_RANGE = (0.05, 20.0)            # log10 mg/m³
 
 # Sample days per month: we average these slices for the monthly climo.

@@ -45,6 +45,15 @@ except ModuleNotFoundError:
 
 BBOX = active_region().bbox
 
+# Region-aware SST encoding range — must match the encoder used by
+# fetch.py / fetch_climatology.py. Hardcoding (9, 25) was a tropical
+# bug: the SST + climo PNGs are encoded with the region's range
+# (tropical = [20, 32]), so decoding with (9, 25) here read every
+# Caribbean cell as ~7°C colder than it actually was, polluting the
+# visibility model's anomaly features. (CA = (9, 25) unchanged.)
+_sst_overrides = active_region().layer_range_overrides
+SST_RANGE = tuple(_sst_overrides.get("sst", (9.0, 25.0)))
+
 # Output grid (regular lat/lng over bbox). Same shape as wind for visual consistency.
 GRID_W, GRID_H = 140, 110
 
@@ -481,7 +490,7 @@ def main():
         sys.exit(1)
 
     # Decode source PNGs
-    sst_src = decode_linear_png(sst_path, 9.0, 25.0)             # degC
+    sst_src = decode_linear_png(sst_path, *SST_RANGE)             # degC, region-aware
     chl_src = decode_log10_png(chl_path, 0.05, 20.0)              # mg/m³ (log10-encoded)
     u_src, v_src = decode_uv_png(wind_uv_path, -30.0, 30.0)
 
@@ -512,7 +521,7 @@ def main():
     chl_annual_path = OUT_DIR / "chl_climo_annual.png"
 
     if sst_climo_path.exists():
-        sst_climo_src = decode_linear_png(sst_climo_path, 9.0, 25.0)
+        sst_climo_src = decode_linear_png(sst_climo_path, *SST_RANGE)
         sst_climo_grid = bilinear_sample(sst_climo_src, sst_climo_src.shape[1], sst_climo_src.shape[0], lng_grid, lat_grid)
         print(f"  using SST climo: {np.nanmean(sst_climo_grid):.2f} °C mean "
               f"({np.isnan(sst_climo_grid).mean() * 100:.0f}% NaN cells)")
