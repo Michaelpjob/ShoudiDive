@@ -1,32 +1,63 @@
-# Cloudflare Pages — per-pattern Cache-Control headers.
+# Cloudflare Pages — per-pattern security + caching headers.
 #
-# THE problem this file fixes:
-#   "I have to open the site in private mode to get the latest update."
+# Two concerns layered into this file:
 #
-# Without explicit Cache-Control, Cloudflare's edge caches HTML for
-# its default 4-hour TTL AND the user's browser caches it indefinitely.
-# Returning users see the old HTML, which references the OLD asset
-# hash, until their browser TTL expires (sometimes weeks). Combined
-# with our service worker's previous cache-first shell strategy, that
-# gave returning users last-week's app for one full visit cycle on
-# every deploy.
+# 1. CACHING (the original purpose):
+#    The fix for "I have to open the site in private mode to get the
+#    latest update." Without explicit Cache-Control, Cloudflare's edge
+#    caches HTML for its default 4-hour TTL AND the user's browser
+#    caches it indefinitely. Returning users see old HTML referencing
+#    old asset hashes for a week+. Layered strategy:
+#      - HTML / SW / manifest:    no-cache (re-validate, small payload)
+#      - Hashed JS/CSS bundles:   1-year immutable (Vite content-hashes)
+#      - /data/manifest.json:     1-min max-age + must-revalidate
+#      - /data/*.png + /data/*.json: 5-min max-age + must-revalidate
 #
-# Layered cache strategy:
-#   - HTML / SW / manifest:    no-cache  (always re-validate, content
-#                                          is small + identifying)
-#   - Hashed JS/CSS bundles:   immutable + 1-year max-age
-#                              (Vite includes a content hash in the
-#                              filename — when the content changes,
-#                              the URL changes; safe to cache forever)
-#   - /data/manifest.json:     short max-age + must-revalidate
-#                              (changes every cron cycle)
-#   - /data/*.png and similar: 5-minute max-age
-#                              (changes daily; 5 min is the longest
-#                              window where stale data matters less
-#                              than the per-fetch cost)
+# 2. SECURITY (added 2026-05-13 hardening pass):
+#    Cloudflare's default response has only `referrer-policy` +
+#    `x-content-type-options: nosniff`. Browsers can't enforce CSP,
+#    clickjacking protection, HSTS, or origin isolation without us
+#    declaring them. The "/*" block at the bottom of this file
+#    declares the minimum strong policy across every served response;
+#    per-path blocks above /*  layer on cache-control + tighten where
+#    appropriate.
 #
-# The /* match-all at the bottom is a safety net; explicit patterns
-# above it take precedence (Cloudflare _headers uses first-match).
+#    CSP rationale:
+#      script-src 'self'                       — no inline <script>; Vite
+#                                                emits hashed external JS
+#      style-src 'self' 'unsafe-inline'        — React inline `style={}` is
+#         https://fonts.googleapis.com           a style ATTRIBUTE (allowed
+#                                                by default), but the Google
+#                                                Fonts CSS comes in via a
+#                                                <link rel="stylesheet"> tag
+#                                                so we allow that host.
+#                                                'unsafe-inline' on style-src
+#                                                permits the same on attrs
+#                                                across all browsers.
+#      font-src 'self' https://fonts.gstatic.com — Google Fonts woff2 files
+#      img-src 'self' data: blob:              — PNGs from /data/; data: for
+#                                                inline SVGs we generate;
+#                                                blob: for canvas tile rendering
+#      connect-src 'self'                      — sendBeacon + fetch hit /api/* + /data/*
+#      worker-src 'self'                       — service worker scope
+#      manifest-src 'self'                     — manifest.webmanifest
+#      frame-ancestors 'none'                  — clickjacking protection
+#      base-uri 'self'                         — block <base> tag injection
+#      form-action 'self'                      — we have no forms, but lock it
+#      object-src 'none'                       — no <object>/<embed>
+#      upgrade-insecure-requests               — auto-upgrade http→https
+#
+#    HSTS: max-age=31536000; includeSubDomains. NO preload flag yet —
+#    preload requires submission to hstspreload.org and a 1-year
+#    commitment; we add it after verifying the policy works for a
+#    couple weeks without breakage.
+#
+#    Permissions-Policy: deny everything we don't use, so a future
+#    third-party script (analytics, ads, embed widget) can't quietly
+#    activate sensors / cameras / payment APIs.
+#
+#    The /* match-all at the bottom is a safety net; explicit patterns
+#    above it take precedence (Cloudflare _headers uses first-match).
 
 # ---- HTML + service worker + PWA manifest ---------------------------
 /
@@ -87,12 +118,28 @@
 /data/*/*.json
   Cache-Control: public, max-age=300, must-revalidate
 
-# Catch-all `/*` rule REMOVED 2026-05-08:
+# Catch-all `/*` rule REMOVED 2026-05-08 for Cache-Control reasons:
 # Cloudflare Pages MERGES every matching `_headers` rule into a
 # single response, so a fallback /* combined with the more specific
-# rules above produced ugly duplicate Cache-Control directives:
-#   `Cache-Control: public, max-age=60, must-revalidate, public, max-age=0, must-revalidate`
-# Browsers handle that fine (RFC 9111 takes the first max-age) but
-# the response headers were unreadable. Letting CF use its built-in
-# default (4 h browser TTL) for any URL not matched above is fine —
-# the explicit rules above cover every path that actually matters.
+# rules above produced ugly duplicate Cache-Control directives.
+#
+# /* RESTORED 2026-05-13 *for security headers only*:
+# Cache-Control deliberately omitted here so per-path rules above
+# are the only contributors to that header. The security headers
+# below have no per-path overrides anywhere in this file, so the
+# merge produces clean single-value headers for CSP/HSTS/etc.
+#
+# Sanity-check after editing this block: `curl -sS -I https://shouldidive.com/`
+# should return ONE Content-Security-Policy line and ONE
+# Strict-Transport-Security line.
+
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: accelerometer=(), camera=(), display-capture=(), fullscreen=(self), geolocation=(self), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), screen-wake-lock=(), serial=(), usb=(), web-share=(self), xr-spatial-tracking=()
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Resource-Policy: same-site
+  X-Permitted-Cross-Domain-Policies: none
