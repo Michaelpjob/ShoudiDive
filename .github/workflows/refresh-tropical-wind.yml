@@ -81,12 +81,18 @@ jobs:
         run: npm run build
 
       - name: Deploy to Cloudflare Pages (tropical-beta preview)
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=shouldidive --branch=tropical-beta --commit-dirty=true
-
+        # Soft-fail (see refresh-pnw-data.yml for context).
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          # Bypass cloudflare/wrangler-action@v3 — moving tag started
+          # rejecting tokens with whitespace 2026-05-13 (Headers.set strict
+          # validation in newer wrangler). Strip whitespace defensively
+          # and call wrangler directly with a pinned version.
+          export CLOUDFLARE_API_TOKEN=$(printf '%s' "$CLOUDFLARE_API_TOKEN" | tr -d '[:space:]')
+          npx wrangler@4.85.0 pages deploy dist --project-name=shouldidive --branch=tropical-beta --commit-dirty=true
       - name: Commit refreshed tropical wind data
         if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         run: |
@@ -100,6 +106,6 @@ jobs:
             for attempt in 1 2 3; do
               if git push; then break; fi
               echo "push failed (attempt $attempt) — rebasing"
-              git pull --rebase origin "$(git rev-parse --abbrev-ref HEAD)"
+              git pull --rebase --autostash origin "$(git rev-parse --abbrev-ref HEAD)"
             done
           fi
