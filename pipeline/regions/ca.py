@@ -19,7 +19,11 @@ from ._region import Region
 REGION = Region(
     name="ca",
     display_name="California",
-    bbox=dict(lat_min=31.8, lat_max=42.0, lng_min=-124.6, lng_max=-116.8),
+    # 2026-05-13: lng_min -124.6 → -127.0 to show ~270 km of Pacific
+    # west of Cape Mendocino. Aspect ratio at mid-lat 36.9 is ~0.80
+    # (still taller than wide, so SoCal at the bottom doesn't get
+    # visually stretched in landscape containers).
+    bbox=dict(lat_min=31.8, lat_max=42.0, lng_min=-127.0, lng_max=-116.8),
     lat_zone_bounds={
         # Insertion order matters — `classify_zone` walks the dict
         # from the highest lower-bound down. Keep this order

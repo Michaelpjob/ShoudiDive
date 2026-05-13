@@ -13,6 +13,12 @@
 //                (NorCal expansion, docs/expansion-norcal.md).
 //   2026-05-10 — bumped CA lngMin -124.0 → -124.6 for Cape Mendocino,
 //                restored lngMax to -116.8 for La Jolla / Coronados.
+//   2026-05-13 — bumped CA lngMin -124.6 → -127.0 to widen the view
+//                west of the coast (Cape Mendocino → ~270 km of
+//                Pacific buffer). GEO_ASPECT now ~0.80 (still
+//                taller-than-wide so SoCal at the bottom doesn't get
+//                stretched). lngMax untouched so SoCal coast + the
+//                Coronados in the south stay in-bbox.
 //
 // The values here must stay in lockstep with pipeline/regions/*.py.
 // If you bump a region's bbox there, mirror it here. (A drift test
@@ -20,7 +26,7 @@
 import { activeRegion } from "./region.js";
 
 const REGION_BBOX = {
-  ca:       { latMin: 31.8, latMax: 42.0, lngMin: -124.6, lngMax: -116.8 },
+  ca:       { latMin: 31.8, latMax: 42.0, lngMin: -127.0, lngMax: -116.8 },
   pnw:      { latMin: 42.0, latMax: 49.0, lngMin: -127.0, lngMax: -122.0 },
   tropical: { latMin: 10.0, latMax: 31.0, lngMin:  -98.0, lngMax:  -60.0 },
 };
