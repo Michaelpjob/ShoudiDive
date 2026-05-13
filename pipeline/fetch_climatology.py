@@ -1,15 +1,19 @@
-"""Fetch a small monthly climatology for SST + chl from ERDDAP.
+"""Fetch monthly climatology baselines for SST + chl.
 
 The visibility model wants a "what's typical for this time of year" baseline
-for both SST and chl-a so it can compute anomalies. A full multi-decade
-climatology would be ideal but is wildly heavy to host. This fetcher
-approximates it cheaply:
+for both SST and chl-a so it can compute anomalies. Sources:
 
-  * sst_climo.png       — mean of N MUR L4 daily slices from this calendar
-                          month last year (and the year before, if available).
-  * chl_climo.png       — same, for the VIIRS gap-filled chl product.
-  * chl_climo_annual.png — mean of one chl slice per quarter from prior year,
-                          giving a year-round baseline for log-anomaly use.
+  * sst_climo.png         — NOAA OISST v2.1 1991-2020 monthly long-term
+                            mean (TRUE 30-year normal). Single ERDDAP call
+                            against NEFSC COMET, ~50KB per region.
+                            Replaced the prior-year-sample hack on
+                            2026-05-13 — see git log fetch_climatology.py.
+  * chl_climo.png         — MODIS Aqua (erdMWchla1day) prior-year same-month
+                            mean. No 30-year-normal product exists for chl,
+                            so the prior-year approximation persists.
+  * chl_climo_annual.png  — Mean of one chl slice per quarter from prior
+                            year, giving a year-round baseline for
+                            log-anomaly use.
 
 The fetcher is idempotent and self-throttling: it stamps a tiny cache file
 and only re-fetches if the stamp's calendar month differs from "now" — so
@@ -42,7 +46,29 @@ except ModuleNotFoundError:
     from regions import active_region
 
 BBOX = active_region().bbox
-ERDDAP_BASE = "https://coastwatch.pfeg.noaa.gov/erddap/griddap"
+
+# 2026-05-13 — `coastwatch.pfeg.noaa.gov` started returning 403 / network-
+# unreachable from GitHub Actions egress IPs. fetch.py already migrated
+# off PFEG onto `coastwatch.noaa.gov` (NCEI's primary CoastWatch ERDDAP)
+# which still works. chl + annual chl on this fetcher still use that
+# host (the W-US MODIS Aqua archive is mirrored there); SST climo now
+# uses the NEFSC COMET ERDDAP for the 1991-2020 OISST normal — see
+# OISST_CLIMO_* below.
+ERDDAP_BASE = "https://coastwatch.noaa.gov/erddap/griddap"
+
+# NOAA OISST v2.1 1991-2020 monthly climatology, hosted on NEFSC
+# COMET ERDDAP. Single precomputed 12-month grid (1/4° global), free,
+# anonymous. Replaces the prior "average 3 prior-year-May days" hack
+# that baked the 2024-2025 marine heatwave into the baseline.
+#
+# Dataset metadata (verified 2026-05-13 against .das):
+#   climo_period:  "1991/01/01 - 2020/12/31"
+#   variable:      sst (Float32 °C, "Long Term Mean Monthly Mean SST")
+#   time:          12 monthly grids, index 0=Jan, 11=Dec
+#   lat:           720 cells, -89.875 .. 89.875 (south→north, 0.25°)
+#   lng:           1440 cells, 0.125 .. 359.875 (0-360 convention!)
+OISST_CLIMO_HOST = "https://comet.nefsc.noaa.gov/erddap/griddap"
+OISST_CLIMO_DATASET = "noaa_psl_55a2_880b_1f29"
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = active_region().data_output_dir(ROOT)
@@ -205,6 +231,60 @@ def kelvin_to_c(arr):
     return arr - 273.15 if np.nanmean(arr) > 100 else arr
 
 
+def fetch_oisst_monthly_climo(month: int):
+    """Fetch the OISST 1991-2020 long-term mean for one month, subset to bbox.
+
+    Returns (sst_2d, lat_1d, lng_1d) — all numpy arrays. SST is °C.
+
+    The dataset stores longitude in 0-360°; our bbox uses -180/180°.
+    For bboxes that don't cross the dateline (CA/PNW/tropical all
+    sit west of 0° meridian) the conversion is a simple ``+ 360``.
+
+    Cache key: month-based. The 30-year mean never changes within
+    a calendar month, so we only re-fetch when the month rolls over.
+    """
+    if not (1 <= month <= 12):
+        raise ValueError(f"month must be 1..12, got {month}")
+    time_idx = month - 1  # 0=Jan, 11=Dec
+
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    nc_path = CACHE_DIR / f"climo_oisst_1991-2020_m{month:02d}.nc"
+
+    # Convert -180/180 → 0/360 for the request. Handles negative-lng
+    # bboxes; dateline-crossing bboxes would need two requests stitched,
+    # which none of our regions need today.
+    lng_min_0360 = (BBOX["lng_min"] + 360.0) % 360.0
+    lng_max_0360 = (BBOX["lng_max"] + 360.0) % 360.0
+    if lng_min_0360 > lng_max_0360:
+        raise NotImplementedError(
+            "OISST climo: dateline-crossing bbox not yet supported "
+            f"(lng_min_0360={lng_min_0360}, lng_max_0360={lng_max_0360})"
+        )
+
+    if not nc_path.exists():
+        url = (
+            f"{OISST_CLIMO_HOST}/{OISST_CLIMO_DATASET}.nc"
+            f"?sst[{time_idx}:1:{time_idx}]"
+            f"[({BBOX['lat_min']}):1:({BBOX['lat_max']})]"
+            f"[({lng_min_0360}):1:({lng_max_0360})]"
+        )
+        print(f"  GET OISST climo month={month:02d}", flush=True)
+        r = SESSION.get(url, timeout=180)
+        r.raise_for_status()
+        nc_path.write_bytes(r.content)
+
+    result = open_first_array(nc_path)
+    if result is None:
+        raise RuntimeError(f"OISST climo netCDF unreadable: {nc_path}")
+    arr, lat, lng = result
+    # `open_first_array` already orients lat as south-down (row 0 = lat_max).
+    # Convert longitude back to -180/180 for downstream consistency. Since
+    # our bbox is fully in 0-360 western hemisphere, this is a simple shift.
+    if lng[0] > 180:
+        lng = lng - 360.0
+    return arr, lat, lng
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--force", action="store_true", help="ignore the cache stamp")
@@ -228,17 +308,23 @@ def main() -> None:
         if d <= last_day_of_month:
             monthly_samples.append(date(sample_year, now.month, d))
 
-    print(f"SST climo for {now.year}-{now.month:02d}: averaging {monthly_samples}")
+    # SST climatology: NOAA OISST v2.1, 1991-2020 30-year normal.
+    # Pre-2026-05-13 this section averaged 3 prior-year same-month
+    # MUR L4 daily slices. That made "climatology" track last year's
+    # anomaly — exactly wrong for an anomaly baseline, and during the
+    # 2024-2025 marine heatwave it spiked the tropical baseline to
+    # 31.9°C in May (vs ~27°C real normal). OISST gives the proper
+    # 30-year normal in a single ERDDAP call.
+    sst_climo_method = "oisst_1991-2020_monthly"
+    print(f"SST climo for month {now.month:02d}: OISST 1991-2020 normal")
     try:
-        sst_mean, sst_lat, sst_lng = mean_stack(
-            monthly_samples,
-            "jplMURSST41", "analysed_sst", stride=2, pre_xy="",
-        )
-        sst_mean = kelvin_to_c(sst_mean)
-        print(f"  SST climo: {np.nanmin(sst_mean):.2f}–{np.nanmax(sst_mean):.2f} °C")
+        sst_mean, sst_lat, sst_lng = fetch_oisst_monthly_climo(now.month)
+        print(f"  SST climo: {np.nanmin(sst_mean):.2f}–{np.nanmax(sst_mean):.2f} °C "
+              f"(shape {sst_mean.shape})")
         encode_linear(sst_mean, *SST_RANGE, OUT_DIR / "sst_climo.png")
     except Exception as e:
-        print(f"  SST climo failed — {e!s}")
+        print(f"  SST climo (OISST) failed — {e!s}")
+        sst_climo_method = "oisst_1991-2020_monthly_FAILED_existing_png_preserved"
 
     # Note: VIIRS NRT (the daily-fetcher dataset) only retains a few weeks of
     # history, so prior-year dates 404 there. For climatology we switch to
@@ -277,9 +363,17 @@ def main() -> None:
         "year_built": now.year,
         "month": now.month,
         "generated_at": now.isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "sst_climo_method": sst_climo_method,
+        "sst_climo_source": "NOAA OISST v2.1 monthly LTM, 1991-2020 baseline",
+        "sst_climo_dataset_id": OISST_CLIMO_DATASET,
+        "chl_monthly_samples": [d.isoformat() for d in monthly_samples],
+        "chl_annual_samples": [d.isoformat() for d in annual_samples],
+        # Legacy keys retained for any tooling that still reads them.
         "monthly_samples": [d.isoformat() for d in monthly_samples],
         "annual_samples": [d.isoformat() for d in annual_samples],
-        "note": "Approximate monthly climo: prior-year same-month mean. Refreshed when calendar month changes.",
+        "note": "SST climo: NOAA OISST 1991-2020 30-year normal (monthly). "
+                "chl climo: prior-year same-month MODIS Aqua mean. "
+                "Refreshed when calendar month changes.",
     }, indent=2))
     print("wrote climo_meta.json")
 
