@@ -20,6 +20,11 @@ on:
         required: false
         default: "dev"
         type: string
+      force_climo:
+        description: "Force-rebuild sst_climo.png even if the cached month matches (use after fixing climo encoding bugs)"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: refresh-pnw-data
@@ -73,7 +78,12 @@ jobs:
 
       - name: Refresh climatology if needed
         continue-on-error: true
-        run: python pipeline/fetch_climatology.py
+        run: |
+          if [ "${{ inputs.force_climo }}" = "true" ]; then
+            python pipeline/fetch_climatology.py --force
+          else
+            python pipeline/fetch_climatology.py
+          fi
 
       - name: Fetch bathymetry (one-shot)
         continue-on-error: true
