@@ -193,13 +193,28 @@ def _open_subset(nc_path: Path):
             f"{list(ds.data_vars.keys())})"
         )
 
-    # Resolve lat/lon coords; RTOFS uses MOM6-style "Latitude" /
-    # "Longitude" sometimes vs "lat" / "lon" — handle both.
-    lat_name = "lat" if "lat" in ds.coords else ("Latitude" if "Latitude" in ds.coords else "latitude")
-    lon_name = "lon" if "lon" in ds.coords else ("Longitude" if "Longitude" in ds.coords else "longitude")
+    # Resolve lat/lon coords. RTOFS Global 2ds files publish a
+    # curvilinear grid: ``Latitude(Y, X)`` and ``Longitude(Y, X)`` are
+    # 2D coordinate variables; the underlying dimensions are ``Y`` and
+    # ``X``. Older NetCDFs in the same pipeline use 1D ``lat`` / ``lon``.
+    # Handle both.
+    lat_name = next(
+        (n for n in ("Latitude", "latitude", "lat") if n in ds.variables),
+        None,
+    )
+    lon_name = next(
+        (n for n in ("Longitude", "longitude", "lon") if n in ds.variables),
+        None,
+    )
+    if lat_name is None or lon_name is None:
+        ds.close()
+        raise RuntimeError(
+            f"RTOFS: no lat/lon coord var found "
+            f"(have: {list(ds.variables.keys())[:30]})"
+        )
 
-    lat = np.asarray(ds[lat_name].values)
-    lon = np.asarray(ds[lon_name].values)
+    lat_array = np.asarray(ds[lat_name].values)
+    lon_array = np.asarray(ds[lon_name].values)
 
     # NOMADS RTOFS uses longitude in 0-360°. Our bbox is in -180/180°
     # (CA/PNW/tropical all sit west of 0°), so shift.
@@ -212,29 +227,56 @@ def _open_subset(nc_path: Path):
             f"(0360 min={lng_min_0360} > max={lng_max_0360})"
         )
 
-    # Build slice masks. RTOFS lat goes south→north (-80 → 90);
-    # lon goes 0 → 360.
-    lat_mask = (lat >= BBOX["lat_min"]) & (lat <= BBOX["lat_max"])
-    lon_mask = (lon >= lng_min_0360) & (lon <= lng_max_0360)
-    if not lat_mask.any() or not lon_mask.any():
-        ds.close()
-        raise RuntimeError(
-            f"RTOFS: bbox falls outside grid "
-            f"(lat range {lat.min()}..{lat.max()}, "
-            f"lon range {lon.min()}..{lon.max()})"
+    # Find the bounding (Y, X) rectangle that covers the bbox.
+    # Curvilinear: walk the 2D coord arrays. Rectilinear: 1D coords
+    # collapse to the same logic.
+    if lat_array.ndim == 2:
+        in_box = (
+            (lat_array >= BBOX["lat_min"]) & (lat_array <= BBOX["lat_max"]) &
+            (lon_array >= lng_min_0360) & (lon_array <= lng_max_0360)
         )
-    lat_idx = np.where(lat_mask)[0]
-    lon_idx = np.where(lon_mask)[0]
-    li0, li1 = lat_idx[0], lat_idx[-1] + 1
-    lo0, lo1 = lon_idx[0], lon_idx[-1] + 1
+        if not in_box.any():
+            ds.close()
+            raise RuntimeError(
+                f"RTOFS: bbox falls outside grid "
+                f"(lat {lat_array.min():.2f}..{lat_array.max():.2f}, "
+                f"lon {lon_array.min():.2f}..{lon_array.max():.2f})"
+            )
+        y_idx, x_idx = np.where(in_box)
+        y0, y1 = int(y_idx.min()), int(y_idx.max()) + 1
+        x0, x1 = int(x_idx.min()), int(x_idx.max()) + 1
+    elif lat_array.ndim == 1:
+        lat_mask = (lat_array >= BBOX["lat_min"]) & (lat_array <= BBOX["lat_max"])
+        lon_mask = (lon_array >= lng_min_0360) & (lon_array <= lng_max_0360)
+        if not lat_mask.any() or not lon_mask.any():
+            ds.close()
+            raise RuntimeError(
+                f"RTOFS: bbox falls outside 1D grid "
+                f"(lat {lat_array.min():.2f}..{lat_array.max():.2f})"
+            )
+        y_idx = np.where(lat_mask)[0]
+        x_idx = np.where(lon_mask)[0]
+        y0, y1 = int(y_idx[0]), int(y_idx[-1]) + 1
+        x0, x1 = int(x_idx[0]), int(x_idx[-1]) + 1
+    else:
+        ds.close()
+        raise RuntimeError(f"RTOFS: unexpected lat ndim={lat_array.ndim}")
+
+    # Resolve the actual *dimension* names on the data variable
+    # (not the coord variable). Last two dims are the spatial pair.
+    var_dims = ds[var_sst].dims
+    if len(var_dims) < 2:
+        ds.close()
+        raise RuntimeError(f"RTOFS: var {var_sst} has < 2 dims: {var_dims}")
+    y_dim = var_dims[-2]
+    x_dim = var_dims[-1]
 
     def _slice(var: str) -> np.ndarray:
         a = ds[var]
-        # Strip leading time axis (single forecast lead) and any
-        # MLev / depth singleton.
+        # Strip leading time / MLev / depth singleton axes.
         while a.ndim > 2:
             a = a.isel({a.dims[0]: 0})
-        sub = a.isel({lat_name: slice(li0, li1), lon_name: slice(lo0, lo1)})
+        sub = a.isel({y_dim: slice(y0, y1), x_dim: slice(x0, x1)})
         return np.asarray(sub.values, dtype=np.float32)
 
     sst = _slice(var_sst)
@@ -246,14 +288,24 @@ def _open_subset(nc_path: Path):
     if np.nanmean(sst) > 100:
         sst = sst - 273.15
 
+    # RTOFS Y goes south→north; PNG row 0 should be lat_max so the
+    # frontend's existing decoder draws it the right way up. For 2D
+    # coords, sample the corner of the subset rectangle to detect
+    # orientation rather than relying on the 1D-only logic.
+    if lat_array.ndim == 2:
+        # Look at the lat value at (y0, x_mid) vs (y1-1, x_mid).
+        x_mid = (x0 + x1 - 1) // 2
+        if lat_array[y0, x_mid] < lat_array[y1 - 1, x_mid]:
+            sst = sst[::-1, :]
+            u   = u[::-1, :]
+            v   = v[::-1, :]
+    else:
+        if lat_array[y_idx[0]] < lat_array[y_idx[-1]]:
+            sst = sst[::-1, :]
+            u   = u[::-1, :]
+            v   = v[::-1, :]
+
     ds.close()
-
-    # Flip if lat is south→north so row 0 = lat_max (PNG convention).
-    if lat[lat_idx[0]] < lat[lat_idx[-1]]:
-        sst = sst[::-1, :]
-        u   = u[::-1, :]
-        v   = v[::-1, :]
-
     return sst, u, v
 
 
