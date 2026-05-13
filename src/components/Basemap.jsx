@@ -275,7 +275,14 @@ export function LandBasemap({ width, height }) {
   }, [features, width, height]);
 
   return (
-    <g className="basemap basemap-land">
+    // pointer-events="none" on the whole basemap group so the browser
+    // does NOT hit-test every <path> on each mousemove. Tropical
+    // land.geojson has ~13k features (every Caribbean islet from OSM
+    // coastline); without this opt-out the cursor lag is severe.
+    // None of the land paths need to capture clicks — they're pure
+    // visual fill. Clicks go to the data overlay / spot pins / MPA
+    // polygons which sit above this group and have their own handlers.
+    <g className="basemap basemap-land" style={{ pointerEvents: "none" }}>
       {paths.map((p) => (
         <path
           key={p.id}

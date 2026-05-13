@@ -42,15 +42,49 @@ BBOX = active_region().bbox
 # come back complete. We re-clip to the exact bbox at write time.
 PAD_DEG = 0.20
 
-# Drop polygons smaller than this. Below that they're sub-pixel rocks that
-# consume vertices without rendering at any zoom we support. Seeded features
-# (named islands like the Coronados) are always kept regardless of size.
-MIN_FEATURE_AREA_DEG2 = 1e-6
+# Drop polygons smaller than this. Below that they're sub-pixel rocks
+# that consume vertices without rendering at any zoom we support.
+# Seeded features (named islands like the Coronados) are always kept
+# regardless of size.
+#
+# Tropical needs a MUCH higher floor — OSM's coastline data for the
+# Bahamas / Antilles includes ~13,000 small islets, every one of which
+# becomes its own SVG <path>. The browser hit-tests every path on each
+# mouse move; 13k paths = visible cursor lag. Bumping the floor to
+# 1e-3 deg² (~12 sq km at tropical latitudes, roughly the size of an
+# island visible to the naked eye on the map at our zoom level) drops
+# the feature count to a few hundred without losing anything the user
+# can actually see.
+def _min_feature_area():
+    try:
+        from pipeline.regions import active_region
+    except ModuleNotFoundError:
+        from regions import active_region
+    if active_region().name == "tropical":
+        return 1e-3
+    return 1e-6
 
-# Douglas-Peucker tolerance, in degrees. ~10 m at 34°N — still well below
-# the pixel size at any zoom level our SVG supports, but slashes vertex
-# counts on the mainland enough to keep the file under ~400 KB.
-SIMPLIFY_TOLERANCE_DEG = 1e-4
+
+MIN_FEATURE_AREA_DEG2 = _min_feature_area()
+
+# Douglas-Peucker tolerance, in degrees. ~10 m at 34°N — still well
+# below the pixel size at any zoom level our SVG supports, but slashes
+# vertex counts on the mainland enough to keep the file under ~400 KB.
+# Tropical uses a 50x looser tolerance because (a) it covers 38° of
+# longitude vs CA's 7° (so each pixel covers far more ground anyway),
+# and (b) the per-island polygon count is so high that even small
+# per-poly vertex savings compound dramatically.
+def _simplify_tolerance():
+    try:
+        from pipeline.regions import active_region
+    except ModuleNotFoundError:
+        from regions import active_region
+    if active_region().name == "tropical":
+        return 5e-3
+    return 1e-4
+
+
+SIMPLIFY_TOLERANCE_DEG = _simplify_tolerance()
 
 # Known land seed points used to label polygonize() outputs as land vs sea.
 # Each (name, lng, lat) lies inside a real CA / Coronados land mass.
