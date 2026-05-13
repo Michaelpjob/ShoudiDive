@@ -70,7 +70,8 @@ test("Current, swell, wind, and mobile overlay features remain wired", () => {
 
 test("CI runs frontend and data feature contracts before publishing", () => {
   const pkg = JSON.parse(read("package.json"));
-  const deployWorkflow = read(".github/workflows/refresh-ca-data.yml");
+  const refreshWorkflow = read(".github/workflows/refresh-ca-data.yml");
+  const deployProdWorkflow = read(".github/workflows/deploy-prod.yml");
   const devChecksWorkflow = read(".github/workflows/dev-checks.yml");
 
   // Relaxed from `assert.equal` to `assert.match` so adding more glob
@@ -88,5 +89,16 @@ test("CI runs frontend and data feature contracts before publishing", () => {
   // covers the same surface plus lint/smoke/visual-paint.
   assert.match(devChecksWorkflow, /name:\s*web-tests[\s\S]*npm test/);
   assert.match(devChecksWorkflow, /name:\s*web-build[\s\S]*npm run build/);
-  assert.match(deployWorkflow, /Run frontend regression tests[\s\S]*npm test[\s\S]*Run data feature contracts[\s\S]*npm run test:data-contracts[\s\S]*Build[\s\S]*npm run build/);
+  // 2026-05-13: build + deploy steps moved out of refresh-ca-data.yml
+  // and into deploy-prod.yml. refresh-ca-data.yml now (a) runs the
+  // frontend + data-contract tests against the refreshed PNGs, (b)
+  // commits the data, (c) explicitly triggers deploy-prod.yml via
+  // `gh workflow run`. deploy-prod.yml owns the build + Cloudflare
+  // publish via the deploy-cloudflare composite action.
+  assert.match(refreshWorkflow,
+    /Run frontend regression tests[\s\S]*npm test[\s\S]*Run data feature contracts[\s\S]*npm run test:data-contracts[\s\S]*Trigger production deploy[\s\S]*gh workflow run deploy-prod\.yml/,
+    "refresh-ca-data.yml must run frontend + data-contract tests, then trigger deploy-prod.yml");
+  assert.match(deployProdWorkflow,
+    /uses:\s*\.\/\.github\/actions\/deploy-cloudflare[\s\S]*branch:\s*main/,
+    "deploy-prod.yml must use the deploy-cloudflare composite action with branch=main");
 });
