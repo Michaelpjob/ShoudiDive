@@ -116,6 +116,11 @@ jobs:
         continue-on-error: true
         run: python pipeline/fetch_visibility.py
 
+      - name: Fetch RTOFS ocean-model forecast
+        continue-on-error: true
+        timeout-minutes: 25
+        run: python pipeline/fetch_rtofs.py
+
       - name: Assert chl freshness sidecar
         continue-on-error: true
         run: python -m pipeline.tests.assert_outputs fetch_chl

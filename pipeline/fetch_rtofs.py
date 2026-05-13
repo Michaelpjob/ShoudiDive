@@ -68,9 +68,18 @@ except ModuleNotFoundError:
 REGION = active_region()
 BBOX = REGION.bbox
 
-# Phase-1: only run on tropical. CA + PNW skip silently (until we
-# decide RTOFS earns its 1 GB/day bandwidth there too).
-ENABLED_REGIONS = {"tropical"}
+# 2026-05-13 Phase-2: expanded to all 3 regions after validating
+# tropical (run 25808254550). RTOFS adds value in different ways
+# per region:
+#   * tropical — fills the HFRNet zero-coverage Caribbean current gap
+#   * ca       — second opinion on persistence-decay, esp. during
+#                upwelling events when SST diverges rapidly from
+#                climatology
+#   * pnw      — same, plus Salish Sea / outer-coast SST drift
+# Cost: ~620 MB / region / day (4 sample leads × ~155 MB each).
+# 3 regions = ~1.9 GB / day total. NCEP NOMADS is uncapped on
+# inbound from GHA but we keep parallelism = 1 to be polite.
+ENABLED_REGIONS = {"tropical", "ca", "pnw"}
 
 # 24-hourly forecast samples. RTOFS 2ds product publishes hourly
 # leads f000..f192; we deliberately skip the dense early hours
