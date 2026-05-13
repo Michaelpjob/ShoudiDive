@@ -1,0 +1,56 @@
+name: Deploy tropical-beta (code-only)
+
+# Code-only deploy to the tropical-beta Cloudflare Pages preview
+# branch (Florida + Gulf + Caribbean). Fires automatically after
+# `dev-checks` passes on `dev`, OR via manual workflow_dispatch
+# (e.g. from refresh-tropical-*.yml workflows after they commit
+# fresh data).
+#
+# See deploy-ca-beta.yml for the broader rationale on splitting
+# code-deploy from data-refresh.
+#
+# Cannot reach prod: wrangler --branch=tropical-beta routes to the
+# Cloudflare Pages preview branch within the same project, never
+# the production custom domain.
+
+on:
+  workflow_run:
+    workflows: ["Dev checks"]
+    types: [completed]
+    branches: [dev]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-tropical-beta
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || 'dev' }}
+
+      - uses: ./.github/actions/deploy-cloudflare
+        with:
+          branch: tropical-beta
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Annotate run with preview URL
+        run: |
+          {
+            echo "## tropical-beta preview deployed"
+            echo
+            echo "Preview URL: https://tropical-beta.shouldidive.pages.dev"
+            echo "Commit:      \`${{ github.event.workflow_run.head_sha || github.sha }}\`"
+            echo
+            echo "_Production at shouldidive.com is unchanged._"
+          } >> "$GITHUB_STEP_SUMMARY"

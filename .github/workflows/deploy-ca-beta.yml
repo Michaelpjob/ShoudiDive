@@ -1,0 +1,67 @@
+name: Deploy ca-beta (code-only)
+
+# Code-only deploy to the ca-beta Cloudflare Pages preview branch.
+# Fires automatically after `dev-checks` passes on `dev`, OR via
+# manual workflow_dispatch (e.g. from the refresh-ca-beta-*.yml
+# workflows after they commit fresh data).
+#
+# Why this exists separately from refresh-ca-beta-data.yml:
+# Before, the only thing that pushed a bundle to ca-beta was the
+# DAILY data refresh. That meant every CSS / JSX tweak you wanted
+# to eyeball on ca-beta.shouldidive.pages.dev had to wait for the
+# next 06:15 UTC cron, or for a manual dispatch that triggered a
+# ~10 min data fetch first. This workflow is the iteration loop:
+# push to dev → dev-checks green → bundle on ca-beta in ~90 s.
+#
+# Cannot reach prod: wrangler --branch=ca-beta routes to the
+# Cloudflare Pages preview branch within the same project, never
+# the production custom domain at shouldidive.com.
+
+on:
+  workflow_run:
+    workflows: ["Dev checks"]
+    types: [completed]
+    branches: [dev]
+  workflow_dispatch:
+
+# A new push that arrives mid-deploy supersedes the in-flight one —
+# we only want the latest commit live. Old run is cancelled.
+concurrency:
+  group: deploy-ca-beta
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    # Only run if the upstream Dev checks succeeded — workflow_run
+    # fires on success AND failure, so gate explicitly.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # workflow_run runs on the default branch's HEAD by default;
+          # explicitly check out the same SHA dev-checks ran against
+          # so the preview matches what was tested.
+          ref: ${{ github.event.workflow_run.head_sha || 'dev' }}
+
+      - uses: ./.github/actions/deploy-cloudflare
+        with:
+          branch: ca-beta
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Annotate run with preview URL
+        run: |
+          {
+            echo "## CA-beta preview deployed"
+            echo
+            echo "Preview URL: https://ca-beta.shouldidive.pages.dev"
+            echo "Commit:      \`${{ github.event.workflow_run.head_sha || github.sha }}\`"
+            echo
+            echo "_Production at shouldidive.com is unchanged. CA-beta carries the NorCal expansion + PR-NC-1 viz calibration._"
+          } >> "$GITHUB_STEP_SUMMARY"
