@@ -30,6 +30,13 @@ function _regionFromHostname() {
     const h = (window.location.hostname || "").toLowerCase();
     if (h.startsWith("pnw-beta.")) return "pnw";
     if (h.startsWith("tropical-beta.")) return "tropical";
+    // ca-beta is a CA staging surface that mirrors dev's bundle (with
+    // NorCal expansion + PR-NC-1 viz calibration) deployed under a
+    // dedicated URL. Region is still "ca" — same /data/ tree as prod —
+    // but the hostname lock hides the RegionSwitcher so beta testers
+    // can't accidentally flip to PNW or tropical and confuse the
+    // feedback loop.
+    if (h.startsWith("ca-beta.")) return "ca";
   } catch {
     // SSR or no-window — fall through.
   }
