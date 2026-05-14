@@ -19,11 +19,22 @@ from ._region import Region
 REGION = Region(
     name="ca",
     display_name="California",
+    # bbox history:
     # 2026-05-13: lng_min -124.6 → -127.0 to show ~270 km of Pacific
-    # west of Cape Mendocino. Aspect ratio at mid-lat 36.9 is ~0.80
-    # (still taller than wide, so SoCal at the bottom doesn't get
-    # visually stretched in landscape containers).
-    bbox=dict(lat_min=31.8, lat_max=42.0, lng_min=-127.0, lng_max=-116.8),
+    #             west of Cape Mendocino.
+    # 2026-05-14: lng_min -127.0 → -128.5 (NorCal pre-launch). The
+    #             previous -127 left the Cape Mendocino / Crescent
+    #             City coastline (~-124.4) crowded against the west
+    #             edge once the aspect-ratio-locked map rendered. An
+    #             extra 1.5° of westward room (~130 km at mid-lat)
+    #             gives NorCal divers visible upwelling-zone water
+    #             between the coast and the bbox edge.
+    #             Aspect ratio at mid-lat 36.9°:
+    #               11.7° wide × cos(36.9°) ≈ 9.36 effective wide
+    #               10.2° tall                = 10.2 effective tall
+    #               → 0.92 (still slightly taller than wide; mobile
+    #               portrait UX unchanged).
+    bbox=dict(lat_min=31.8, lat_max=42.0, lng_min=-128.5, lng_max=-116.8),
     lat_zone_bounds={
         # Insertion order matters — `classify_zone` walks the dict
         # from the highest lower-bound down. Keep this order

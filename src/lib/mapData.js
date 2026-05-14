@@ -15,10 +15,12 @@
 //                restored lngMax to -116.8 for La Jolla / Coronados.
 //   2026-05-13 — bumped CA lngMin -124.6 → -127.0 to widen the view
 //                west of the coast (Cape Mendocino → ~270 km of
-//                Pacific buffer). GEO_ASPECT now ~0.80 (still
-//                taller-than-wide so SoCal at the bottom doesn't get
-//                stretched). lngMax untouched so SoCal coast + the
-//                Coronados in the south stay in-bbox.
+//                Pacific buffer). GEO_ASPECT ~0.80 (taller-than-wide).
+//   2026-05-14 — bumped CA lngMin -127.0 → -128.5 (NorCal pre-launch).
+//                Cape Mendocino was crowded against the west edge in
+//                the locked aspect ratio; +1.5° gives ~130 km more
+//                offshore margin. GEO_ASPECT now ~0.92 (still slight
+//                tall-bias so mobile portrait UX unchanged).
 //
 // The values here must stay in lockstep with pipeline/regions/*.py.
 // If you bump a region's bbox there, mirror it here. (A drift test
@@ -26,7 +28,7 @@
 import { activeRegion } from "./region.js";
 
 const REGION_BBOX = {
-  ca:       { latMin: 31.8, latMax: 42.0, lngMin: -127.0, lngMax: -116.8 },
+  ca:       { latMin: 31.8, latMax: 42.0, lngMin: -128.5, lngMax: -116.8 },
   pnw:      { latMin: 42.0, latMax: 49.0, lngMin: -127.0, lngMax: -122.0 },
   tropical: { latMin: 10.0, latMax: 31.0, lngMin:  -98.0, lngMax:  -60.0 },
 };
