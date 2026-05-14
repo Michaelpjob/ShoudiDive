@@ -289,6 +289,75 @@ def regrid_to_bbox(lat2d, lng2d, u, v, source: str):
     return u_grid, v_grid
 
 
+# ---- Land mask --------------------------------------------------------------
+#
+# HRRR / GFS publish 10 m wind over LAND too — with terrain-friction-reduced
+# magnitudes and orographic distortion. If we encode those land values into
+# wind_uv_*.png, they're indistinguishable from over-water wind in the PNG
+# (alpha=255 either way), so:
+#   1. The frontend's WindParticles bilinear sampler near the coast pulls a
+#      mix of land + ocean cells → particle velocity vectors get smeared
+#      landward.
+#   2. The geojson land mask in WindParticles eventually respawns those
+#      particles, but only AFTER they've drifted a few frames inland —
+#      visible as jittery / wrong-direction streamlines at the shoreline.
+#
+# Fix (2026-05-14): consume the bathy.png alpha channel as a land mask and
+# NaN-out u/v over land cells before encoding. bathy.py guarantees `0 = land`
+# (line 18 of fetch_bathy.py). With u/v NaN over land, encode_uv_png writes
+# alpha=0 there, the frontend bilinear sampler returns NaN, and the
+# "!Number.isFinite(u)" respawn fires on the very first step instead of
+# hunting through the coarser geojson mask.
+#
+# Graceful degradation: if bathy.png is missing (first-run on a region
+# before fetch_bathy.py has fired) the mask returns None and wind encoding
+# falls back to today's behavior. Hourly wind continues to work; the land
+# crispness improves once bathy lands.
+
+def load_land_mask(out_dir: Path, grid_w: int, grid_h: int) -> np.ndarray | None:
+    """Read bathy.png's alpha channel and resample to (grid_h, grid_w).
+
+    Returns a boolean numpy array where True = land, False = ocean.
+    None if bathy.png is missing.
+    """
+    bathy_path = out_dir / "bathy.png"
+    if not bathy_path.exists():
+        return None
+    try:
+        img = Image.open(bathy_path).convert("L")
+    except Exception as e:
+        print(f"  [land-mask] open failed for {bathy_path}: {e!s} — skipping mask",
+              flush=True)
+        return None
+    arr = np.asarray(img)
+    if arr.ndim != 2:
+        return None
+    src_h, src_w = arr.shape
+    # bathy.png encoding: pixel 0 = land (NaN), 1..255 = depth.
+    src_land = arr == 0
+    # Nearest-neighbor resample to the wind grid. Wind cells span coast
+    # cells anyway (140 wide / ~11.7° CA bbox = ~84 km per cell, much
+    # coarser than bathy's source 30 arc-sec ≈ 1 km). NN is appropriate
+    # for a boolean mask — bilinear would smear half-land cells.
+    yi = np.linspace(0, src_h - 1, grid_h).round().astype(int)
+    xi = np.linspace(0, src_w - 1, grid_w).round().astype(int)
+    return src_land[yi[:, None], xi[None, :]]
+
+
+def apply_land_mask(u: np.ndarray, v: np.ndarray,
+                    land_mask: np.ndarray | None) -> tuple[np.ndarray, np.ndarray]:
+    """Return (u, v) with land cells NaN'd out. No-op if mask is None."""
+    if land_mask is None:
+        return u, v
+    if land_mask.shape != u.shape:
+        print(f"  [land-mask] shape mismatch (mask {land_mask.shape} vs "
+              f"u {u.shape}) — skipping mask", flush=True)
+        return u, v
+    u = np.where(land_mask, np.nan, u)
+    v = np.where(land_mask, np.nan, v)
+    return u, v
+
+
 # ---- Encoders ---------------------------------------------------------------
 
 def encode_speed_png(u: np.ndarray, v: np.ndarray, out_path: Path) -> None:
@@ -341,6 +410,17 @@ def main() -> None:
         "windows": {},
     }
 
+    # Load once per run; reused for every slot. None if bathy.png missing.
+    land_mask = load_land_mask(OUT_DIR, GRID_W, GRID_H)
+    if land_mask is not None:
+        land_frac = float(land_mask.mean())
+        print(f"Loaded land mask from bathy.png ({land_frac:.0%} land cells)",
+              flush=True)
+    else:
+        print("No bathy.png yet — wind UV will include over-land HRRR/GFS "
+              "values; streamlines may jitter at the coast until bathy lands",
+              flush=True)
+
     for slot, cfg in SLOTS.items():
         source = cfg["source"]
         fhour = cfg["fhour"]
@@ -357,6 +437,14 @@ def main() -> None:
             # Per the correctness principle: skip the slot rather than fake it.
             print(f"  {slot}: failed — {e!s}", flush=True)
             continue
+
+        # Mask over-land cells BEFORE encoding so the published PNG has
+        # alpha=0 over land. WindParticles' "!Number.isFinite(u)" respawn
+        # then fires on the very first frame a particle samples a land
+        # neighbour, instead of relying on the coarser geojson mask which
+        # only catches it a few frames later. Net effect: streamlines stop
+        # crisply at the coast.
+        u, v = apply_land_mask(u, v, land_mask)
 
         speed_path = OUT_DIR / f"wind_speed_{slot}.png"
         uv_path = OUT_DIR / f"wind_uv_{slot}.png"
@@ -413,6 +501,12 @@ def main() -> None:
         except Exception as e:
             print(f"  {slot}: failed — {e!s}")
             continue
+
+        # Same land mask as the forward-looking slots above. The viz
+        # model only uses these history frames to compute upwelling
+        # anomalies (along-shore wind average), which is fine with
+        # NaN over land — its sampler is over-water-only too.
+        u, v = apply_land_mask(u, v, land_mask)
 
         encode_uv_png(u, v, cached_path)
         valid_at = datetime(run_date.year, run_date.month, run_date.day, run_hour, tzinfo=timezone.utc)

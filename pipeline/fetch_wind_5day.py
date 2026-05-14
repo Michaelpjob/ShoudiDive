@@ -248,6 +248,48 @@ def regrid_to_bbox(lat2d, lng2d, u, v, source: str):
     return u_grid, v_grid
 
 
+# ---- Land mask --------------------------------------------------------------
+#
+# Same rationale as fetch_wind.py — HRRR/GFS publish wind over land too, and
+# without masking them out the frontend's WindParticles streamlines smear
+# landward at the coast. bathy.png alpha=0 marks land; we apply that mask
+# to u/v before encoding.
+
+def load_land_mask(out_root: Path, grid_w: int, grid_h: int) -> np.ndarray | None:
+    """Read bathy.png (region's data dir) and resample to wind grid.
+
+    Returns True=land boolean array, or None if bathy.png isn't there.
+    """
+    # bathy lives at the REGION's data dir root, not under wind/.
+    region_data_dir = active_region().data_output_dir(out_root)
+    bathy_path = region_data_dir / "bathy.png"
+    if not bathy_path.exists():
+        return None
+    try:
+        img = Image.open(bathy_path).convert("L")
+    except Exception as e:
+        print(f"  [land-mask] open failed for {bathy_path}: {e!s} — skipping",
+              flush=True)
+        return None
+    arr = np.asarray(img)
+    if arr.ndim != 2:
+        return None
+    src_h, src_w = arr.shape
+    src_land = arr == 0  # bathy: 0 = land/NaN, 1..255 = depth
+    yi = np.linspace(0, src_h - 1, grid_h).round().astype(int)
+    xi = np.linspace(0, src_w - 1, grid_w).round().astype(int)
+    return src_land[yi[:, None], xi[None, :]]
+
+
+def apply_land_mask(u: np.ndarray, v: np.ndarray,
+                    land_mask: np.ndarray | None) -> tuple[np.ndarray, np.ndarray]:
+    if land_mask is None or land_mask.shape != u.shape:
+        return u, v
+    u = np.where(land_mask, np.nan, u)
+    v = np.where(land_mask, np.nan, v)
+    return u, v
+
+
 # ---- Encoding ---------------------------------------------------------------
 
 def encode_uv_png(u: np.ndarray, v: np.ndarray, out_path: Path) -> None:
@@ -315,6 +357,19 @@ def main() -> None:
     # 3) Fetch + decode every hourly step, indexed by Pacific (day, hour).
     hourly: dict[tuple[int, int], dict] = {}
 
+    # Load the land mask once per run. None if bathy.png isn't present
+    # (first-run on a fresh region). Applied inside store() so every
+    # downstream consumer — per-hour PNG, bucket mean, bucket speed
+    # statistics — sees masked u/v consistently.
+    land_mask = load_land_mask(ROOT, GRID_W, GRID_H)
+    if land_mask is not None:
+        print(f"Loaded land mask from bathy.png "
+              f"({float(land_mask.mean()):.0%} land cells)", flush=True)
+    else:
+        print("No bathy.png yet — wind 5d UV will include over-land HRRR/GFS "
+              "values; streamlines may jitter at the coast until bathy lands",
+              flush=True)
+
     def store(valid_at_utc, u_grid, v_grid, source):
         valid_pt = valid_at_utc.astimezone(PT)
         day_offset = (valid_pt.date() - anchor_pt_date).days
@@ -324,6 +379,9 @@ def main() -> None:
         # Prefer HRRR if both sources cover the same hour.
         if key in hourly and hourly[key]["source"] == "hrrr" and source == "gfs":
             return
+        # Mask land BEFORE storing. Bucket aggregation downstream
+        # nanmean's across the time axis, so land cells stay NaN.
+        u_grid, v_grid = apply_land_mask(u_grid, v_grid, land_mask)
         hourly[key] = {"u": u_grid, "v": v_grid, "source": source, "valid_at": valid_at_utc}
 
     # GFS goes to f168 (7 days) at 1-hour spacing through f120, then 3-hour
