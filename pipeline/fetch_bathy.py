@@ -22,7 +22,9 @@ Encoding:
 from __future__ import annotations
 
 import io
+import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -40,6 +42,14 @@ except ModuleNotFoundError:
 
 BBOX = active_region().bbox
 OUT_PATH = active_region().data_output_dir(REPO_ROOT) / "bathy.png"
+# Sidecar JSON tracks which bbox + grid dimensions the cached
+# bathy.png was generated for. Without this, an idempotent skip
+# can silently leave a stale PNG over an OLD bbox in place after
+# the region's bbox is bumped (e.g. CA's NorCal expansion
+# 2026-05-09 + offshore widenings 2026-05-13 / 14). Downstream
+# consumers that use bathy.png as a land mask (fetch_wind.py,
+# fetch_wind_5day.py) then have geographic mis-registration.
+META_PATH = OUT_PATH.with_suffix(".json")
 
 # Output PNG dimensions. 4× the model's standard 140×110 to preserve
 # shelf-edge detail; consumers bilinear-resample to their own grid.
@@ -225,9 +235,51 @@ def encode_linear_png(arr, lo, hi, out_path):
     Image.fromarray(px, mode="L").save(out_path, optimize=True)
 
 
+def _current_meta() -> dict:
+    """The bbox / dims signature for the CURRENT region+config. Used to
+    decide if a cached bathy is stale."""
+    return {
+        "bbox": [BBOX["lng_min"], BBOX["lat_min"],
+                 BBOX["lng_max"], BBOX["lat_max"]],
+        "out_w": OUT_W,
+        "out_h": OUT_H,
+    }
+
+
+def _is_cache_fresh() -> bool:
+    """True iff bathy.png exists AND its sidecar JSON says it was built
+    for the current bbox+dims."""
+    if not OUT_PATH.exists():
+        return False
+    if not META_PATH.exists():
+        # Legacy cache (no sidecar) — assume stale. The PR that introduced
+        # the sidecar (2026-05-14) explicitly forces a regen on first run
+        # so old bathys built before the recent NorCal bbox bumps get
+        # replaced even though the PNG itself is "present".
+        print(f"  {OUT_PATH.relative_to(REPO_ROOT)} exists but no sidecar — "
+              f"treating as stale (regenerating)")
+        return False
+    try:
+        cached = json.loads(META_PATH.read_text())
+    except Exception as e:
+        print(f"  sidecar read failed ({e!s}) — regenerating")
+        return False
+    current = _current_meta()
+    if cached.get("bbox") != current["bbox"]:
+        print(f"  bbox changed since cache was built — regenerating")
+        print(f"    cached: {cached.get('bbox')}")
+        print(f"    current: {current['bbox']}")
+        return False
+    if cached.get("out_w") != current["out_w"] or cached.get("out_h") != current["out_h"]:
+        print(f"  output dims changed since cache was built — regenerating")
+        return False
+    return True
+
+
 def main():
-    if OUT_PATH.exists():
-        print(f"  {OUT_PATH.relative_to(REPO_ROOT)} already exists, skipping")
+    if _is_cache_fresh():
+        print(f"  {OUT_PATH.relative_to(REPO_ROOT)} already current for this "
+              f"bbox + dims, skipping")
         return 0
 
     print(f"Fetching GMRT bathymetry → {OUT_PATH.relative_to(REPO_ROOT)}")
@@ -252,6 +304,17 @@ def main():
     encode_linear_png(out, DEPTH_MIN_M, DEPTH_MAX_M, OUT_PATH)
     size_kb = OUT_PATH.stat().st_size // 1024
     print(f"  wrote {OUT_PATH.relative_to(REPO_ROOT)} ({size_kb} KB)")
+
+    # Stamp the sidecar so the next run knows the cache is fresh for
+    # this bbox+dims. If anything bumps these, _is_cache_fresh fires
+    # a regen automatically — no manual rm of bathy.png needed.
+    META_PATH.write_text(json.dumps({
+        **_current_meta(),
+        "generated_at": datetime.now(timezone.utc)
+            .isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "source": "GMRT GridServer",
+        "depth_range_m": [DEPTH_MIN_M, DEPTH_MAX_M],
+    }, indent=2))
     return 0
 
 
