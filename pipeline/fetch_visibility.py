@@ -870,6 +870,20 @@ def main():
         "unit": "ft",
         "grid": {"width": GRID_W, "height": GRID_H},
         "source": "viz_predict (PREDICTED)",
+        # Marked beta 2026-05-14. The viz model:
+        #   * has no NorCal ground-truth observations to calibrate against
+        #     (all active dive-report scrapers are SoCal; see
+        #      pipeline/validation/ingest/CANDIDATES.md "Active scrapers")
+        #   * is fed by chl_1d.png which carries DINEOF gap-fill
+        #     synthetic values at the coast — the model's chl-anomaly
+        #     feature reads those as if they were real measurements
+        #   * uses zone coefficients (viz_predict/config.py) calibrated on
+        #     SoCal observations; norcal_* coefficients are physically
+        #     plausible defaults but haven't been validated
+        # Until at least NorCal scrapers are landed (a few weeks of
+        # actual dive reports), users should treat viz as advisory.
+        "beta": True,
+        "beta_reason": "NorCal predictions unvalidated; chl input affected by gap-fill",
         "generated_at": generated_at,
         "windows": {
             "now": {

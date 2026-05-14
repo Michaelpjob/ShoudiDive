@@ -65,6 +65,14 @@ BBOX = active_region().bbox
 # Output grid — kept at the legacy ERDDAP stride-1 dims for backward compat
 # with manifest.json consumers (React MapCanvas, RN MapScreen, viz_predict).
 # Higher-res grid is a separate v2 task that requires updating those readers.
+#
+# NOTE on coastal resolution: at the current 71×87 over the CA bbox
+# (11.7° × 10.2°), each cell is ~18×13 km. Coastal cells span ocean + land,
+# and DINEOF gap-fill can leak synthetic chl values past the coastline. The
+# land mask below (loaded from bathy.png) NaN's land-dominant cells before
+# encoding so the visible heatmap stops at the shoreline. A future v2 grid
+# bump (142×174 or finer) would also sharpen the nearshore signal — that's
+# a separate change requiring frontend / RN / viz_predict updates first.
 OUT_W, OUT_H = 71, 87
 
 # Each canonical cell anchored at the bbox edges; lat descends top→bottom
@@ -542,6 +550,76 @@ def _encode_source_png(src_arr: np.ndarray, out_path: Path) -> None:
     Image.fromarray(src_arr, mode="L").save(out_path, optimize=True)
 
 
+# ---- Land mask ---------------------------------------------------------
+#
+# Same pattern as fetch_wind.py: read bathy.png's alpha channel, downsample
+# to the chl grid (71×87) using a box-averaged land-area fraction, then
+# threshold so a cell is flagged "land" only when >70% of its area is land.
+# Encoded chl gets NaN'd over flagged cells, so the published PNG has
+# alpha=0 there and the frontend's coastline render isn't fighting a chl
+# blob that leaks 9-18 km inland.
+#
+# Why this matters specifically for chl (more than for wind):
+#   1. The chl product is a BLEND of 5 sources, 4 of which honor land
+#      correctly (NaN-over-land L3 satellite products). But priority 4-5
+#      (DINEOF NRT 4km, DINEOF SCI 2km) are GAP-FILLED products: they
+#      spatially extrapolate chl values across cloud-blocked cells, and
+#      their land mask is slightly different from our basemap coastline.
+#      Coastal cells classified as ocean in DINEOF but land in our basemap
+#      end up with valid blended chl.
+#   2. The chl grid is coarse (71×87 → ~18 km wide cells). A coastal cell
+#      that's 60% land but has any DINEOF gap-fill ocean value renders the
+#      entire cell as chl-colored.
+#   3. The visibility model reads chl_1d.png as an input. If that chl is
+#      contaminated, viz predictions degrade (the chl-anomaly signal is
+#      one of the model's biggest "less viz" levers).
+
+def _load_land_mask(out_w: int, out_h: int,
+                    land_threshold: float = 0.7) -> np.ndarray | None:
+    """Read bathy.png and downsample to (out_h, out_w) with box-averaging.
+
+    Returns a boolean array, True = land. None if bathy.png missing
+    (graceful degradation: chl encoding continues without masking).
+    """
+    bathy_path = OUT_DIR / "bathy.png"
+    if not bathy_path.exists():
+        return None
+    try:
+        img = Image.open(bathy_path).convert("L")
+    except Exception as e:
+        print(f"  [chl-land-mask] bathy.png unreadable ({e!s}) — skipping mask",
+              flush=True)
+        return None
+    arr = np.asarray(img)
+    if arr.ndim != 2:
+        return None
+    src_h, src_w = arr.shape
+    src_land = arr == 0  # bathy: pixel 0 = land/NaN, 1..255 = depth
+    if src_h < out_h or src_w < out_w:
+        # Degenerate: bathy lower-res than chl grid. NN fallback.
+        yi = np.linspace(0, src_h - 1, out_h).round().astype(int)
+        xi = np.linspace(0, src_w - 1, out_w).round().astype(int)
+        return src_land[yi[:, None], xi[None, :]]
+    is_land = np.zeros((out_h, out_w), dtype=bool)
+    for i in range(out_h):
+        y0 = i * src_h // out_h
+        y1 = max(y0 + 1, (i + 1) * src_h // out_h)
+        for j in range(out_w):
+            x0 = j * src_w // out_w
+            x1 = max(x0 + 1, (j + 1) * src_w // out_w)
+            cell = src_land[y0:y1, x0:x1]
+            land_frac = cell.mean() if cell.size else 0.0
+            is_land[i, j] = land_frac > land_threshold
+    return is_land
+
+
+def _apply_land_mask(arr: np.ndarray, mask: np.ndarray | None) -> np.ndarray:
+    """NaN out arr where mask is True. No-op if mask is None."""
+    if mask is None or mask.shape != arr.shape:
+        return arr
+    return np.where(mask, np.nan, arr)
+
+
 # ---- Public entry point ------------------------------------------------
 
 def build_blended_chl(end: date) -> dict | None:
@@ -572,11 +650,26 @@ def build_blended_chl(end: date) -> dict | None:
         print("[chl] no source returned data, skipping layer", flush=True)
         return None
 
+    # Land mask loaded once per run; reused across all 3 windows. None when
+    # bathy.png is missing (first-run on a fresh region) — encoding falls
+    # through to today's behavior in that case.
+    land_mask = _load_land_mask(OUT_W, OUT_H)
+    if land_mask is not None:
+        print(f"  loaded land mask from bathy.png "
+              f"({float(land_mask.mean()):.0%} land cells)", flush=True)
+
     # 2) Blend per cell for each window: 1d/2d/3d differ only in how many
     # within-source frames are nanmean'd before the cross-source merge.
     windows = {}
     for win, n_frames in [("1d", 1), ("2d", 2), ("3d", 3)]:
         blended, ages, sources, stats = _blend_freshest(per_source, end, n_frames)
+        # Mask land cells BEFORE coverage/encoding. ages + sources also get
+        # masked so the sidecar PNGs (chl_1d_age_days.png, chl_1d_source.png)
+        # don't show land-pixel provenance either.
+        blended = _apply_land_mask(blended, land_mask)
+        if land_mask is not None:
+            ages = np.where(land_mask, 255, ages)      # 255 = no-data sentinel
+            sources = np.where(land_mask, 0, sources)  # 0 = no-data sentinel
         valid_cells = int(np.isfinite(blended).sum())
         total = OUT_H * OUT_W
         coverage = valid_cells / total

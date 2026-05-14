@@ -423,7 +423,9 @@
   cursor: not-allowed;
 }
 .sst-mode-toggle span,
-.sst-beta-pill {
+.sst-beta-pill,
+.layer-toggle .lt-beta,
+.ms-chip-beta {
   display: inline-flex;
   align-items: center;
   margin-left: 5px;
@@ -434,6 +436,28 @@
   font-size: 9px;
   font-weight: 800;
   text-transform: uppercase;
+}
+
+/* Viz layer chip — beta pill sits next to the value sub-line, not the
+   label, so it doesn't expand the chip's compressed grid layout when
+   the layer-toggle row is in 5- or 6-column mode. */
+.layer-toggle .lt-beta {
+  margin: 1px 0 0;
+  padding: 0 3px;
+  font-size: 8px;
+  letter-spacing: 0.5px;
+  align-self: center;
+}
+.layer-toggle button.active .lt-beta {
+  background: rgba(194, 65, 12, 0.22);
+}
+
+/* Mobile chip — beta pill inline with the label. */
+.ms-chip-beta {
+  margin-left: 4px;
+  padding: 0 3px;
+  font-size: 8px;
+  letter-spacing: 0.5px;
 }
 
 .composite-window {

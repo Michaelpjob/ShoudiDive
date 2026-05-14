@@ -1385,10 +1385,11 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
             <button
               className={layer === "viz" ? "active" : ""}
               onClick={() => setLayer("viz")}
-              title="Predicted dive visibility — model output in feet, not a direct measurement"
+              title="Predicted dive visibility (BETA — model unvalidated for NorCal; use as advisory only). Output is feet, not a direct measurement."
             >
               <span className="lt-label">Vis</span>
               <span className="lt-sub">ft</span>
+              <span className="lt-beta">Beta</span>
             </button>
           </div>
           {layer === "sst" && hasSstTimeline ? (

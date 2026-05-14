@@ -269,7 +269,12 @@ LAYER_SPECS: dict[str, LayerSpec] = {
         unit="ft",
         payload="scalar_png",
         extra_required_keys=("range_ft",),
-        extra_optional_keys=("p10_url", "p90_url", "quality_url"),
+        extra_optional_keys=(
+            "p10_url", "p90_url", "quality_url",
+            # 2026-05-14: viz marked beta until NorCal ground truth lands;
+            # beta_reason is a free-text disclaimer surfaced in the UI.
+            "beta", "beta_reason",
+        ),
     ),
     "wave": LayerSpec(
         # Published as a wave_png with height_range_m + period_range_s,
