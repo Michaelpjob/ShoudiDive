@@ -294,11 +294,31 @@ def main() -> None:
     now = datetime.now(timezone.utc)
 
     meta_path = OUT_DIR / "climo_meta.json"
+    current_bbox = [BBOX["lng_min"], BBOX["lat_min"],
+                    BBOX["lng_max"], BBOX["lat_max"]]
     if not args.force and meta_path.exists():
-        meta = json.loads(meta_path.read_text())
-        if meta.get("month") == now.month and meta.get("year_built") == now.year:
-            print(f"climo already current for {now.year}-{now.month:02d}, nothing to do")
+        try:
+            meta = json.loads(meta_path.read_text())
+        except Exception:
+            meta = {}
+        month_ok = meta.get("month") == now.month
+        year_ok = meta.get("year_built") == now.year
+        # 2026-05-14: also gate on bbox. Without this, a region's
+        # cached climatology stays in place even after the bbox is
+        # bumped (e.g. NorCal expansion), causing the same geographic
+        # misregistration we just fixed in fetch_bathy.py — the
+        # climo PNG covers a smaller area than the current bbox,
+        # downstream consumers (fetch_visibility, fetch_sst_5day)
+        # apply it as if it covered the full new bbox.
+        bbox_ok = meta.get("bbox") == current_bbox
+        if month_ok and year_ok and bbox_ok:
+            print(f"climo already current for {now.year}-{now.month:02d} "
+                  f"at bbox {current_bbox}, nothing to do")
             return
+        if not bbox_ok:
+            print(f"  bbox changed since last climo run — regenerating")
+            print(f"    cached: {meta.get('bbox')}")
+            print(f"    current: {current_bbox}")
 
     # Build the monthly sample set: pull SAMPLE_DAYS from prior year, same month.
     sample_year = now.year - 1
@@ -362,6 +382,12 @@ def main() -> None:
     meta_path.write_text(json.dumps({
         "year_built": now.year,
         "month": now.month,
+        # bbox: forces a regen when the region's bbox changes
+        # mid-month. Downstream consumers (fetch_visibility,
+        # fetch_sst_5day) assume climo covers the same bbox they
+        # render over, so a bbox mismatch silently produces
+        # geographic misregistration.
+        "bbox": current_bbox,
         "generated_at": now.isoformat(timespec="seconds").replace("+00:00", "Z"),
         "sst_climo_method": sst_climo_method,
         "sst_climo_source": "NOAA OISST v2.1 monthly LTM, 1991-2020 baseline",
@@ -373,7 +399,7 @@ def main() -> None:
         "annual_samples": [d.isoformat() for d in annual_samples],
         "note": "SST climo: NOAA OISST 1991-2020 30-year normal (monthly). "
                 "chl climo: prior-year same-month MODIS Aqua mean. "
-                "Refreshed when calendar month changes.",
+                "Refreshed when calendar month OR bbox changes.",
     }, indent=2))
     print("wrote climo_meta.json")
 
