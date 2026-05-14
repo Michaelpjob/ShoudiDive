@@ -314,11 +314,32 @@ def regrid_to_bbox(lat2d, lng2d, u, v, source: str):
 # falls back to today's behavior. Hourly wind continues to work; the land
 # crispness improves once bathy lands.
 
-def load_land_mask(out_dir: Path, grid_w: int, grid_h: int) -> np.ndarray | None:
-    """Read bathy.png's alpha channel and resample to (grid_h, grid_w).
+def load_land_mask(out_dir: Path, grid_w: int, grid_h: int,
+                   land_threshold: float = 0.7) -> np.ndarray | None:
+    """Read bathy.png and downsample to a wind-grid-resolution land mask.
 
     Returns a boolean numpy array where True = land, False = ocean.
     None if bathy.png is missing.
+
+    `land_threshold` controls how aggressively coastal cells get flagged:
+      0.5 = a cell is "land" if more than half its area is land
+      0.7 = a cell is "land" only if >70% of its area is land (default)
+      0.9 = a cell is "land" only if >90% of its area is land (most lenient)
+
+    2026-05-14 — first attempt at this used nearest-neighbor sampling
+    (a single bathy pixel near each wind cell's center decided land vs
+    ocean). With 140-wide × 11.7° CA bbox each wind cell spans ~7 km;
+    every coastal cell straddles the actual coastline. NN would land
+    on whichever side of the coast happened to be at the cell center,
+    randomly flagging mostly-ocean coastal cells as land. The visible
+    effect was a uniform ~10 km gap of "no wind data" tracing the
+    entire coast — user saw wind appearing "pushed out to the left."
+
+    Box-averaging the fraction of land per cell + thresholding gives
+    physically meaningful behavior: cells that are MAJORITY ocean
+    (which is what coastal nearshore cells almost always are) keep
+    valid wind data. Wind streamlines now extend right up to the
+    shoreline before respawning.
     """
     bathy_path = out_dir / "bathy.png"
     if not bathy_path.exists():
@@ -334,14 +355,30 @@ def load_land_mask(out_dir: Path, grid_w: int, grid_h: int) -> np.ndarray | None
         return None
     src_h, src_w = arr.shape
     # bathy.png encoding: pixel 0 = land (NaN), 1..255 = depth.
-    src_land = arr == 0
-    # Nearest-neighbor resample to the wind grid. Wind cells span coast
-    # cells anyway (140 wide / ~11.7° CA bbox = ~84 km per cell, much
-    # coarser than bathy's source 30 arc-sec ≈ 1 km). NN is appropriate
-    # for a boolean mask — bilinear would smear half-land cells.
-    yi = np.linspace(0, src_h - 1, grid_h).round().astype(int)
-    xi = np.linspace(0, src_w - 1, grid_w).round().astype(int)
-    return src_land[yi[:, None], xi[None, :]]
+    src_land_bool = arr == 0
+    # Compute land-area fraction for each (grid_h, grid_w) cell by
+    # box-averaging the source bathy land mask. Each wind cell maps to
+    # a (src_h/grid_h) x (src_w/grid_w) tile of bathy pixels; the
+    # cell's land fraction is the mean of the boolean mask over that
+    # tile. Falls back to NN behavior if the bathy is somehow lower
+    # res than the wind grid (shouldn't happen — bathy is 1 km, wind
+    # grid is 7-10 km).
+    is_land = np.zeros((grid_h, grid_w), dtype=bool)
+    if src_h < grid_h or src_w < grid_w:
+        # Degenerate case: bathy lower-res than wind grid. Just NN.
+        yi = np.linspace(0, src_h - 1, grid_h).round().astype(int)
+        xi = np.linspace(0, src_w - 1, grid_w).round().astype(int)
+        return src_land_bool[yi[:, None], xi[None, :]]
+    for i in range(grid_h):
+        y0 = i * src_h // grid_h
+        y1 = max(y0 + 1, (i + 1) * src_h // grid_h)
+        for j in range(grid_w):
+            x0 = j * src_w // grid_w
+            x1 = max(x0 + 1, (j + 1) * src_w // grid_w)
+            cell = src_land_bool[y0:y1, x0:x1]
+            land_frac = cell.mean() if cell.size else 0.0
+            is_land[i, j] = land_frac > land_threshold
+    return is_land
 
 
 def apply_land_mask(u: np.ndarray, v: np.ndarray,

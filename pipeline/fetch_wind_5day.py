@@ -255,12 +255,17 @@ def regrid_to_bbox(lat2d, lng2d, u, v, source: str):
 # landward at the coast. bathy.png alpha=0 marks land; we apply that mask
 # to u/v before encoding.
 
-def load_land_mask(out_root: Path, grid_w: int, grid_h: int) -> np.ndarray | None:
-    """Read bathy.png (region's data dir) and resample to wind grid.
+def load_land_mask(out_root: Path, grid_w: int, grid_h: int,
+                   land_threshold: float = 0.7) -> np.ndarray | None:
+    """Read bathy.png (region's data dir) and downsample to wind grid.
 
     Returns True=land boolean array, or None if bathy.png isn't there.
+    Uses box-averaged land area fraction with threshold (default 0.7)
+    so coastal cells with majority ocean keep valid wind data. See
+    fetch_wind.py docstring for the long version — same algorithm
+    intentionally duplicated here so each fetcher can run independently
+    without an inter-fetcher import.
     """
-    # bathy lives at the REGION's data dir root, not under wind/.
     region_data_dir = active_region().data_output_dir(out_root)
     bathy_path = region_data_dir / "bathy.png"
     if not bathy_path.exists():
@@ -275,10 +280,22 @@ def load_land_mask(out_root: Path, grid_w: int, grid_h: int) -> np.ndarray | Non
     if arr.ndim != 2:
         return None
     src_h, src_w = arr.shape
-    src_land = arr == 0  # bathy: 0 = land/NaN, 1..255 = depth
-    yi = np.linspace(0, src_h - 1, grid_h).round().astype(int)
-    xi = np.linspace(0, src_w - 1, grid_w).round().astype(int)
-    return src_land[yi[:, None], xi[None, :]]
+    src_land_bool = arr == 0
+    if src_h < grid_h or src_w < grid_w:
+        yi = np.linspace(0, src_h - 1, grid_h).round().astype(int)
+        xi = np.linspace(0, src_w - 1, grid_w).round().astype(int)
+        return src_land_bool[yi[:, None], xi[None, :]]
+    is_land = np.zeros((grid_h, grid_w), dtype=bool)
+    for i in range(grid_h):
+        y0 = i * src_h // grid_h
+        y1 = max(y0 + 1, (i + 1) * src_h // grid_h)
+        for j in range(grid_w):
+            x0 = j * src_w // grid_w
+            x1 = max(x0 + 1, (j + 1) * src_w // grid_w)
+            cell = src_land_bool[y0:y1, x0:x1]
+            land_frac = cell.mean() if cell.size else 0.0
+            is_land[i, j] = land_frac > land_threshold
+    return is_land
 
 
 def apply_land_mask(u: np.ndarray, v: np.ndarray,
