@@ -1,10 +1,10 @@
-# Validation watchdog — 2026-05-13T08:45Z
+# Validation watchdog — 2026-05-14T08:38Z
 
 **2 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
-### 🔴 1. Only 18 observations in the last 24h (floor: 50)
+### 🔴 1. Only 19 observations in the last 24h (floor: 50)
 
 Multiple scrapers may be silently broken.
 
@@ -20,14 +20,14 @@ Red feeds: ingest_eagle4. Fallbacks may keep the model running, but redundancy i
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_nearshore` | 4 | 9.03 | -0.55 | 100% | -0.75 |
+| `bight_nearshore` | 4 | 8.30 | -1.37 | 100% | -0.70 |
 
 ## Per-source bias (informational)
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `dive-shop-diveviz` | 1 | -11.87 ft |
-| `dive-shop-justgetwet` | 3 | +3.23 ft |
+| `dive-shop-diveviz` | 1 | -11.84 ft |
+| `dive-shop-justgetwet` | 3 | +2.12 ft |
 
 ## How to act on this issue
 
