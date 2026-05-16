@@ -36,8 +36,23 @@ from scipy.spatial import cKDTree
 
 from viz_predict import predict as viz_predict
 
-# Match the existing app's bbox.
-BBOX = dict(lat_min=31.8, lat_max=37.6, lng_min=-124.0, lng_max=-116.8)
+# Bbox via pipeline/regions/ (PR-X-1). CA / PNW / tropical switch on
+# SHOULDIDIVE_REGION; default `ca` preserves today's behavior.
+try:
+    from pipeline.regions import active_region
+except ModuleNotFoundError:
+    from regions import active_region
+
+BBOX = active_region().bbox
+
+# Region-aware SST encoding range — must match the encoder used by
+# fetch.py / fetch_climatology.py. Hardcoding (9, 25) was a tropical
+# bug: the SST + climo PNGs are encoded with the region's range
+# (tropical = [20, 32]), so decoding with (9, 25) here read every
+# Caribbean cell as ~7°C colder than it actually was, polluting the
+# visibility model's anomaly features. (CA = (9, 25) unchanged.)
+_sst_overrides = active_region().layer_range_overrides
+SST_RANGE = tuple(_sst_overrides.get("sst", (9.0, 25.0)))
 
 # Output grid (regular lat/lng over bbox). Same shape as wind for visual consistency.
 GRID_W, GRID_H = 140, 110
@@ -57,7 +72,7 @@ QUALITY_CODES = {
 }
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT_DIR = ROOT / "public" / "data"
+OUT_DIR = active_region().data_output_dir(ROOT)
 PIPELINE_DIR = ROOT / "pipeline"
 
 
@@ -475,7 +490,7 @@ def main():
         sys.exit(1)
 
     # Decode source PNGs
-    sst_src = decode_linear_png(sst_path, 9.0, 25.0)             # degC
+    sst_src = decode_linear_png(sst_path, *SST_RANGE)             # degC, region-aware
     chl_src = decode_log10_png(chl_path, 0.05, 20.0)              # mg/m³ (log10-encoded)
     u_src, v_src = decode_uv_png(wind_uv_path, -30.0, 30.0)
 
@@ -506,7 +521,7 @@ def main():
     chl_annual_path = OUT_DIR / "chl_climo_annual.png"
 
     if sst_climo_path.exists():
-        sst_climo_src = decode_linear_png(sst_climo_path, 9.0, 25.0)
+        sst_climo_src = decode_linear_png(sst_climo_path, *SST_RANGE)
         sst_climo_grid = bilinear_sample(sst_climo_src, sst_climo_src.shape[1], sst_climo_src.shape[0], lng_grid, lat_grid)
         print(f"  using SST climo: {np.nanmean(sst_climo_grid):.2f} °C mean "
               f"({np.isnan(sst_climo_grid).mean() * 100:.0f}% NaN cells)")
@@ -855,6 +870,20 @@ def main():
         "unit": "ft",
         "grid": {"width": GRID_W, "height": GRID_H},
         "source": "viz_predict (PREDICTED)",
+        # Marked beta 2026-05-14. The viz model:
+        #   * has no NorCal ground-truth observations to calibrate against
+        #     (all active dive-report scrapers are SoCal; see
+        #      pipeline/validation/ingest/CANDIDATES.md "Active scrapers")
+        #   * is fed by chl_1d.png which carries DINEOF gap-fill
+        #     synthetic values at the coast — the model's chl-anomaly
+        #     feature reads those as if they were real measurements
+        #   * uses zone coefficients (viz_predict/config.py) calibrated on
+        #     SoCal observations; norcal_* coefficients are physically
+        #     plausible defaults but haven't been validated
+        # Until at least NorCal scrapers are landed (a few weeks of
+        # actual dive reports), users should treat viz as advisory.
+        "beta": True,
+        "beta_reason": "NorCal predictions unvalidated; chl input affected by gap-fill",
         "generated_at": generated_at,
         "windows": {
             "now": {

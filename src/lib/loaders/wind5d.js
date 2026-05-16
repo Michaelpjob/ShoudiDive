@@ -6,12 +6,14 @@
 // 2026-05-09 (Tier-1 follow-up).
 
 import { decodeUVPng, computeSpeedKt, bucketKey } from "./decoders.js";
+import { rewriteManifestUrls } from "../region.js";
 
 export async function loadWind5d(info, state) {
   try {
     const sres = await fetch(info.summary_url, { cache: "no-cache" });
     if (!sres.ok) throw new Error(`summary ${info.summary_url} ${sres.status}`);
-    const summary = await sres.json();
+    // Region rewrite: see sst7d.js.
+    const summary = rewriteManifestUrls(await sres.json());
     state.layers.wind5d = {
       summary,
       uvRange:    info.uv_range,

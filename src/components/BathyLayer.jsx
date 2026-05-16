@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { project } from "../lib/mapData.js";
+import { dataPath } from "../lib/region.js";
 
 // Class-driven marker styling. Colours are tuned for the dark map
 // background — every hex below clears WCAG AA contrast against the
@@ -45,7 +46,7 @@ export function loadBathyFeatures() {
   if (bathyPromise) return bathyPromise;
   // Default cache mode so the browser revalidates with the CDN instead of
   // serving a permanently-pinned copy from disk.
-  bathyPromise = fetch("/data/bathy-features.geojson")
+  bathyPromise = fetch(dataPath("/data/bathy-features.geojson"))
     .then((r) => (r.ok ? r.json() : null))
     .catch(() => null);
   return bathyPromise;

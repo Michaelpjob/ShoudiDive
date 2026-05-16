@@ -50,28 +50,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      # --branch=main marks this deploy as production. CF Pages routes
+      # it to shouldidive.com (the production custom domain). The
+      # wrangler-bypass + pinned version live in the composite action.
+      - uses: ./.github/actions/deploy-cloudflare
         with:
-          node-version: "20"
-          cache: npm
-
-      - name: Install
-        # `npm install` rather than `npm ci` until the lockfile is
-        # regenerated locally. Same drift-tolerance every other web
-        # job in the repo currently uses.
-        run: npm install --no-audit --no-fund
-
-      - name: Build
-        run: npm run build
-
-      - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # --branch=main marks this deploy as production. CF Pages
-          # routes it to shouldidive.com (the production custom domain).
-          command: pages deploy dist --project-name=shouldidive --branch=main --commit-dirty=true
+          branch: main
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Annotate run summary
         run: |

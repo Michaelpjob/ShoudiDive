@@ -44,8 +44,14 @@ import xarray as xr
 from PIL import Image
 from scipy.spatial import cKDTree
 
-# Match the existing app's bbox.
-BBOX = dict(lat_min=31.8, lat_max=37.6, lng_min=-124.0, lng_max=-116.8)
+# Bbox via pipeline/regions/ (PR-X-1). CA / PNW / tropical switch on
+# SHOULDIDIVE_REGION; default `ca` preserves today's behavior.
+try:
+    from pipeline.regions import active_region
+except ModuleNotFoundError:
+    from regions import active_region
+
+BBOX = active_region().bbox
 
 NOMADS_HRRR = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/hrrr/prod"
 NOMADS_GFS  = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod"
@@ -72,7 +78,7 @@ CONFIDENCE_BY_DAY = ["high", "high", "medium", "medium", "low", "low", "low"]
 HORIZON_DAYS = len(DAY_LABELS_REL)  # 7
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT_DIR = ROOT / "public" / "data" / "wind"
+OUT_DIR = active_region().data_output_dir(ROOT) / "wind"
 HOURLY_DIR  = OUT_DIR / "hourly"
 BUCKETS_DIR = OUT_DIR / "buckets"
 CACHE_DIR   = ROOT / "pipeline" / ".cache"
@@ -242,6 +248,65 @@ def regrid_to_bbox(lat2d, lng2d, u, v, source: str):
     return u_grid, v_grid
 
 
+# ---- Land mask --------------------------------------------------------------
+#
+# Same rationale as fetch_wind.py — HRRR/GFS publish wind over land too, and
+# without masking them out the frontend's WindParticles streamlines smear
+# landward at the coast. bathy.png alpha=0 marks land; we apply that mask
+# to u/v before encoding.
+
+def load_land_mask(out_root: Path, grid_w: int, grid_h: int,
+                   land_threshold: float = 0.7) -> np.ndarray | None:
+    """Read bathy.png (region's data dir) and downsample to wind grid.
+
+    Returns True=land boolean array, or None if bathy.png isn't there.
+    Uses box-averaged land area fraction with threshold (default 0.7)
+    so coastal cells with majority ocean keep valid wind data. See
+    fetch_wind.py docstring for the long version — same algorithm
+    intentionally duplicated here so each fetcher can run independently
+    without an inter-fetcher import.
+    """
+    region_data_dir = active_region().data_output_dir(out_root)
+    bathy_path = region_data_dir / "bathy.png"
+    if not bathy_path.exists():
+        return None
+    try:
+        img = Image.open(bathy_path).convert("L")
+    except Exception as e:
+        print(f"  [land-mask] open failed for {bathy_path}: {e!s} — skipping",
+              flush=True)
+        return None
+    arr = np.asarray(img)
+    if arr.ndim != 2:
+        return None
+    src_h, src_w = arr.shape
+    src_land_bool = arr == 0
+    if src_h < grid_h or src_w < grid_w:
+        yi = np.linspace(0, src_h - 1, grid_h).round().astype(int)
+        xi = np.linspace(0, src_w - 1, grid_w).round().astype(int)
+        return src_land_bool[yi[:, None], xi[None, :]]
+    is_land = np.zeros((grid_h, grid_w), dtype=bool)
+    for i in range(grid_h):
+        y0 = i * src_h // grid_h
+        y1 = max(y0 + 1, (i + 1) * src_h // grid_h)
+        for j in range(grid_w):
+            x0 = j * src_w // grid_w
+            x1 = max(x0 + 1, (j + 1) * src_w // grid_w)
+            cell = src_land_bool[y0:y1, x0:x1]
+            land_frac = cell.mean() if cell.size else 0.0
+            is_land[i, j] = land_frac > land_threshold
+    return is_land
+
+
+def apply_land_mask(u: np.ndarray, v: np.ndarray,
+                    land_mask: np.ndarray | None) -> tuple[np.ndarray, np.ndarray]:
+    if land_mask is None or land_mask.shape != u.shape:
+        return u, v
+    u = np.where(land_mask, np.nan, u)
+    v = np.where(land_mask, np.nan, v)
+    return u, v
+
+
 # ---- Encoding ---------------------------------------------------------------
 
 def encode_uv_png(u: np.ndarray, v: np.ndarray, out_path: Path) -> None:
@@ -309,6 +374,19 @@ def main() -> None:
     # 3) Fetch + decode every hourly step, indexed by Pacific (day, hour).
     hourly: dict[tuple[int, int], dict] = {}
 
+    # Load the land mask once per run. None if bathy.png isn't present
+    # (first-run on a fresh region). Applied inside store() so every
+    # downstream consumer — per-hour PNG, bucket mean, bucket speed
+    # statistics — sees masked u/v consistently.
+    land_mask = load_land_mask(ROOT, GRID_W, GRID_H)
+    if land_mask is not None:
+        print(f"Loaded land mask from bathy.png "
+              f"({float(land_mask.mean()):.0%} land cells)", flush=True)
+    else:
+        print("No bathy.png yet — wind 5d UV will include over-land HRRR/GFS "
+              "values; streamlines may jitter at the coast until bathy lands",
+              flush=True)
+
     def store(valid_at_utc, u_grid, v_grid, source):
         valid_pt = valid_at_utc.astimezone(PT)
         day_offset = (valid_pt.date() - anchor_pt_date).days
@@ -318,6 +396,9 @@ def main() -> None:
         # Prefer HRRR if both sources cover the same hour.
         if key in hourly and hourly[key]["source"] == "hrrr" and source == "gfs":
             return
+        # Mask land BEFORE storing. Bucket aggregation downstream
+        # nanmean's across the time axis, so land cells stay NaN.
+        u_grid, v_grid = apply_land_mask(u_grid, v_grid, land_mask)
         hourly[key] = {"u": u_grid, "v": v_grid, "source": source, "valid_at": valid_at_utc}
 
     # GFS goes to f168 (7 days) at 1-hour spacing through f120, then 3-hour
@@ -329,9 +410,21 @@ def main() -> None:
     HRRR_END = 49  # exclusive
     GFS_END = GFS_HORIZON_HRS + 1  # exclusive
 
+    # Region-aware: skip HRRR entirely for tropical because HRRR's
+    # CONUS domain ends at ~21°N, leaving the Caribbean half of the
+    # tropical bbox without data. GFS (0.25° global) covers the whole
+    # tropical bbox uniformly. CA + PNW are inside CONUS so they keep
+    # the high-res HRRR mix for f00..f48.
+    region_name = active_region().name
+    use_hrrr = region_name != "tropical"
+    if not use_hrrr:
+        print(f"region={region_name}: skipping HRRR (outside CONUS), using GFS f000..f168")
+
     fetched = 0
     failed  = 0
-    for fhour in range(0, HRRR_END):
+    hrrr_range = range(0, HRRR_END) if use_hrrr else range(0)
+    gfs_start = HRRR_END if use_hrrr else 0
+    for fhour in hrrr_range:
         try:
             grib = fetch_hrrr_slice(hrrr_d, hrrr_h, fhour)
             lat2d, lng2d, u_native, v_native = open_uv(grib)
@@ -341,7 +434,7 @@ def main() -> None:
         except Exception as e:
             print(f"  HRRR f{fhour:02d}: {e!s}")
             failed += 1
-    for fhour in range(HRRR_END, GFS_END):
+    for fhour in range(gfs_start, GFS_END):
         try:
             grib = fetch_gfs_slice(gfs_d, gfs_h, fhour)
             lat2d, lng2d, u_native, v_native = open_uv(grib)
@@ -490,7 +583,7 @@ def main() -> None:
     #    layer payload intact (still consumed by the current 4-slot UI) and
     #    add a new `wind5d` block alongside it. Once the new UI lands the
     #    legacy one can be dropped.
-    manifest_path = ROOT / "public" / "data" / "manifest.json"
+    manifest_path = active_region().data_output_dir(ROOT) / "manifest.json"
     if manifest_path.exists():
         manifest = json.loads(manifest_path.read_text())
     else:

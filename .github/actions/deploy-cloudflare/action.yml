@@ -1,0 +1,70 @@
+name: 'Deploy to Cloudflare Pages'
+description: |
+  Build the React PWA bundle and deploy `dist/` to a Cloudflare Pages
+  branch. Wraps the wrangler-bypass workaround we adopted 2026-05-13
+  after cloudflare/wrangler-action@v3's moving tag started rejecting
+  tokens with whitespace under newer wrangler's strict header
+  validation. Once Cloudflare ships a fix upstream, swap the body of
+  this action back to `uses: cloudflare/wrangler-action@v3` and all
+  callers get the upgrade in one diff.
+
+  Callers MUST set these via the `env:` block on the `uses:` step:
+    CLOUDFLARE_API_TOKEN
+    CLOUDFLARE_ACCOUNT_ID
+
+inputs:
+  branch:
+    description: |
+      Cloudflare Pages branch to deploy to. `main` routes to the
+      production custom domain (shouldidive.com). Any other value
+      lands at `<branch>.shouldidive.pages.dev` as a preview branch.
+    required: true
+  project-name:
+    description: 'Cloudflare Pages project name.'
+    required: false
+    default: 'shouldidive'
+  wrangler-version:
+    description: |
+      Pinned wrangler version. Pinned (not `latest`) so a wrangler
+      release with another regression like the 2026-05-13 Headers.set
+      one can't take production down via a moving-tag deploy.
+    required: false
+    default: '4.85.0'
+  node-version:
+    description: 'Node version for build + wrangler.'
+    required: false
+    default: '20'
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: npm
+
+    - name: Install JS dependencies
+      shell: bash
+      # `npm install` rather than `npm ci` to tolerate lockfile drift.
+      # All deploy callers historically used `npm install` — keeping
+      # behavior identical to avoid surprise lockfile-related failures.
+      run: npm install --no-audit --no-fund
+
+    - name: Build
+      shell: bash
+      run: npm run build
+
+    - name: Deploy to Cloudflare Pages (${{ inputs.branch }})
+      shell: bash
+      run: |
+        # SC2155: declare + export on separate lines so the
+        # substitution's exit status isn't masked by `export`.
+        # Token whitespace strip defends against accidental
+        # newline/space in the GitHub secret (the 2026-05-13
+        # Headers.set: '*** invalid header value' failure mode).
+        CLOUDFLARE_API_TOKEN=$(printf '%s' "${CLOUDFLARE_API_TOKEN:-}" | tr -d '[:space:]')
+        export CLOUDFLARE_API_TOKEN
+        npx wrangler@${{ inputs.wrangler-version }} pages deploy dist \
+          --project-name=${{ inputs.project-name }} \
+          --branch=${{ inputs.branch }} \
+          --commit-dirty=true

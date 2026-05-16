@@ -52,7 +52,10 @@
 //        Vite's content-hash filename is the cache key — they're
 //        safe to keep forever. Pairs with the new public/_headers
 //        which sets matching CDN-edge Cache-Control directives.
-const CACHE_VERSION = "v7";
+//   v8 — region switcher (2026-05-11). Forces eviction so users who
+//        had a cached pre-region bundle don't keep loading old code +
+//        old layer URLs after the multi-region rollout.
+const CACHE_VERSION = "v8";
 const SHELL_CACHE = `shouldidive-shell-${CACHE_VERSION}`;
 const DATA_CACHE  = `shouldidive-data-${CACHE_VERSION}`;
 

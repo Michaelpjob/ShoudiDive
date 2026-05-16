@@ -53,14 +53,28 @@ try:
 except ModuleNotFoundError:
     from lib.layer_spec import LAYER_SPECS
 
-BBOX = dict(lat_min=31.8, lat_max=37.6, lng_min=-124.0, lng_max=-116.8)
+# Bbox sourced from `pipeline/regions/` (PR-X-1 scaffold). The CA
+# region snapshot matches today's hardcoded values bit-for-bit; the
+# `SHOULDIDIVE_REGION` env var (default `ca`) switches to PNW or
+# tropical when the refresh-data CI matrix runs that region. Bumping
+# the CA bbox now happens in one place: `pipeline/regions/ca.py`.
+try:
+    from pipeline.regions import active_region
+except ModuleNotFoundError:
+    from regions import active_region
+
+BBOX = active_region().bbox
 ERDDAP_BASE = "https://coastwatch.pfeg.noaa.gov/erddap/griddap"
 REQUEST_HEADERS = {
     "User-Agent": "shouldidive-data-pipeline/1.0 (+https://shouldidive.com)",
 }
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT_DIR = ROOT / "public" / "data"
+# Region-aware output dir. CA stays at `public/data/` (frontend-visible
+# path the React app expects). PNW + tropical land under
+# `public/data/pnw/` and `public/data/tropical/` respectively, so the
+# matrix CI runs (PR-X-3b) don't overwrite CA's PNGs.
+OUT_DIR = active_region().data_output_dir(ROOT)
 CACHE_DIR = ROOT / "pipeline" / ".cache"
 
 
@@ -83,8 +97,16 @@ def _layer_config(spec_name: str, encoder_extras: dict) -> dict:
         raise ValueError(
             f"fetch.py: LayerSpec for {spec_name!r} has no scale"
         )
+    # Region range override (PR-X-3a follow-up). Tropical SST is 20-32°C
+    # not 9-25; PNW is cooler than CA. The override lives on the Region
+    # dataclass so PNW / tropical encoders span the right band without
+    # touching the shared LAYER_SPECS defaults.
+    layer_range = tuple(spec.range)
+    overrides = getattr(active_region(), "layer_range_overrides", {}) or {}
+    if spec_name in overrides:
+        layer_range = tuple(overrides[spec_name])
     return {
-        "range": tuple(spec.range),
+        "range": layer_range,
         "scale": spec.scale,
         "unit": spec.unit,
         **encoder_extras,
@@ -751,10 +773,18 @@ def main() -> None:
     if manifest_path.exists():
         manifest = json.loads(manifest_path.read_text())
     else:
-        manifest = {
-            "bbox": [BBOX["lng_min"], BBOX["lat_min"], BBOX["lng_max"], BBOX["lat_max"]],
-            "layers": {},
-        }
+        manifest = {"layers": {}}
+    # ALWAYS overwrite the top-level bbox with the current BBOX dict.
+    # Otherwise a bbox change in code (e.g. the 2026-05-09 NorCal
+    # expansion: latMax 37.6 → 42.0) doesn't propagate to the manifest
+    # on the next refresh — fetch.py merges into the existing JSON
+    # which still carries the OLD bbox values, and the frontend reads
+    # those stale values when computing layer-data extents.
+    manifest["bbox"] = [
+        BBOX["lng_min"], BBOX["lat_min"],
+        BBOX["lng_max"], BBOX["lat_max"],
+    ]
+    manifest.setdefault("layers", {})
     generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
     if args.layer == "all":
         manifest["generated_at"] = generated_at

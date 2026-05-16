@@ -26,6 +26,7 @@ jobs:
       SHOULDIDIVE_REGION: pnw
     permissions:
       contents: write
+      actions: write   # for `gh workflow run deploy-pnw-beta.yml` at the end
 
     steps:
       - uses: actions/checkout@v4
@@ -38,11 +39,6 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: pipeline/requirements.txt
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
 
       - name: Install pipeline dependencies
         run: pip install -r pipeline/requirements.txt
@@ -72,18 +68,8 @@ jobs:
         timeout-minutes: 5
         run: python pipeline/fetch_currents.py
 
-      - name: Install JS dependencies
-        run: npm install --no-audit --no-fund
-
-      - name: Build
-        run: npm run build
-
-      - name: Deploy to Cloudflare Pages (pnw-beta preview)
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=shouldidive --branch=pnw-beta --commit-dirty=true
+      # Build + deploy steps were removed 2026-05-13 — data-only flow.
+      # deploy-pnw-beta.yml (triggered below) handles the publish.
 
       - name: Commit refreshed PNW wind data
         if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
@@ -98,6 +84,12 @@ jobs:
             for attempt in 1 2 3; do
               if git push; then break; fi
               echo "push failed (attempt $attempt) — rebasing"
-              git pull --rebase origin "$(git rev-parse --abbrev-ref HEAD)"
+              git pull --rebase --autostash origin "$(git rev-parse --abbrev-ref HEAD)"
             done
           fi
+
+      - name: Trigger pnw-beta deploy
+        if: success() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run deploy-pnw-beta.yml --ref dev

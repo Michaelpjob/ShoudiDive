@@ -1,10 +1,11 @@
 import { BBOX } from "./mapData.js";
+import { dataPath } from "./region.js";
 
 let landPromise = null;
 
 export function loadLandGeoJSON() {
   if (landPromise) return landPromise;
-  landPromise = fetch("/data/land.geojson")
+  landPromise = fetch(dataPath("/data/land.geojson"))
     .then((r) => (r.ok ? r.json() : null))
     .catch(() => null);
   return landPromise;

@@ -15,6 +15,11 @@ on:
         required: false
         default: "dev"
         type: string
+      force_climo:
+        description: "Force-rebuild sst_climo.png even if the cached month matches (use after fixing climo encoding bugs)"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: refresh-tropical-data
@@ -27,6 +32,7 @@ jobs:
       SHOULDIDIVE_REGION: tropical
     permissions:
       contents: write
+      actions: write   # for `gh workflow run deploy-tropical-beta.yml` at the end
 
     steps:
       - uses: actions/checkout@v4
@@ -39,11 +45,6 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: pipeline/requirements.txt
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
 
       - name: Install pipeline dependencies
         run: pip install -r pipeline/requirements.txt
@@ -72,7 +73,12 @@ jobs:
 
       - name: Refresh climatology if needed
         continue-on-error: true
-        run: python pipeline/fetch_climatology.py
+        run: |
+          if [ "${{ inputs.force_climo }}" = "true" ]; then
+            python pipeline/fetch_climatology.py --force
+          else
+            python pipeline/fetch_climatology.py
+          fi
 
       - name: Fetch bathymetry (one-shot)
         continue-on-error: true
@@ -107,18 +113,19 @@ jobs:
         continue-on-error: true
         run: python pipeline/fetch_visibility.py
 
-      - name: Install JS dependencies
-        run: npm install --no-audit --no-fund
+      - name: Fetch RTOFS ocean-model forecast (tropical only)
+        # Pulls NOAA RTOFS Global 2ds prog NetCDFs from NOMADS for
+        # forecast leads +1d / +3d / +5d / +7d. ~620 MB transfer.
+        # Adds parallel SST forecast track + surface currents for
+        # the Caribbean basin (where HFRNet has zero coverage).
+        # 25-minute timeout is generous: NOMADS streams ~155 MB
+        # files in 1-2 min each on a healthy day.
+        continue-on-error: true
+        timeout-minutes: 25
+        run: python pipeline/fetch_rtofs.py
 
-      - name: Build
-        run: npm run build
-
-      - name: Deploy to Cloudflare Pages (tropical-beta preview)
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=shouldidive --branch=tropical-beta --commit-dirty=true
+      # Build + deploy steps were removed 2026-05-13 — data-only flow.
+      # deploy-tropical-beta.yml (triggered below) handles the publish.
 
       - name: Commit refreshed tropical data
         if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
@@ -133,6 +140,12 @@ jobs:
             for attempt in 1 2 3; do
               if git push; then break; fi
               echo "push failed (attempt $attempt) — rebasing"
-              git pull --rebase origin "$(git rev-parse --abbrev-ref HEAD)"
+              git pull --rebase --autostash origin "$(git rev-parse --abbrev-ref HEAD)"
             done
           fi
+
+      - name: Trigger tropical-beta deploy
+        if: success() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run deploy-tropical-beta.yml --ref dev

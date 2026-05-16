@@ -9,6 +9,7 @@
 // new layer = one new file under loaders/, no more giant chain.
 
 import { BBOX } from "./mapData.js";
+import { manifestUrl, rewriteManifestUrls } from "./region.js";
 import {
   LAYER_LOADERS,
   decodeUVPng,
@@ -46,14 +47,16 @@ export { bucketKey, hourKey };
 
 export async function loadManifest() {
   try {
-    const res = await fetch("/data/manifest.json", { cache: "no-cache" });
+    const res = await fetch(manifestUrl(), { cache: "no-cache" });
     if (!res.ok) {
-      // Expected before the pipeline has run — keep silent, fall back to mock.
+      // Expected before the pipeline has run for the active region —
+      // keep silent, fall back to mock. (PNW + tropical commonly hit
+      // this branch in dev until their first refresh-data run lands.)
       state.ready = true;
       notify();
       return;
     }
-    const manifest = await res.json();
+    const manifest = rewriteManifestUrls(await res.json());
     state.manifest = manifest;
 
     // 2026-05-09: dispatch loaders in PARALLEL instead of one-by-one.

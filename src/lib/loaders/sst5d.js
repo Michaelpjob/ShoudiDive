@@ -20,12 +20,14 @@
 //   what fetch_sst_5day.py emits and what fetch.py emits.
 
 import { decodePng } from "./decoders.js";
+import { rewriteManifestUrls } from "../region.js";
 
 export async function loadSst5d(info, state) {
   try {
     const sres = await fetch(info.summary_url, { cache: "no-cache" });
     if (!sres.ok) throw new Error(`sst forecast summary ${info.summary_url} ${sres.status}`);
-    const summary = await sres.json();
+    // Region rewrite: see sst7d.js for the rationale.
+    const summary = rewriteManifestUrls(await sres.json());
     state.layers.sst5d = { summary };
     state.layers.sst = state.layers.sst || {};
     const scale = info.scale || summary.scale || "linear";

@@ -27,6 +27,7 @@ jobs:
       SHOULDIDIVE_REGION: ca
     permissions:
       contents: write
+      actions: write   # for `gh workflow run deploy-ca-beta.yml` at the end
 
     steps:
       - uses: actions/checkout@v4
@@ -39,11 +40,6 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: pipeline/requirements.txt
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
 
       - name: Install pipeline dependencies
         run: pip install -r pipeline/requirements.txt
@@ -77,19 +73,8 @@ jobs:
         continue-on-error: true
         run: python pipeline/check_manifest_freshness.py --layers wind,wind5d,swell5d,current5d --skip-top-level
 
-      - name: Install JS dependencies
-        run: npm install --no-audit --no-fund
-
-      - name: Build
-        run: npm run build
-
-      - name: Deploy to Cloudflare Pages (ca-beta preview)
-        continue-on-error: true
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=shouldidive --branch=ca-beta --commit-dirty=true
+      # Build + deploy steps were removed 2026-05-13 — data-only flow.
+      # deploy-ca-beta.yml (triggered below) handles the publish.
 
       - name: Commit refreshed CA-beta wind data
         if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
@@ -107,3 +92,9 @@ jobs:
               git pull --rebase --autostash origin "$(git rev-parse --abbrev-ref HEAD)"
             done
           fi
+
+      - name: Trigger ca-beta deploy
+        if: success() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run deploy-ca-beta.yml --ref dev

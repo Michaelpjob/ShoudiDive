@@ -44,28 +44,16 @@ jobs:
           # so the preview matches what was tested.
           ref: ${{ github.event.workflow_run.head_sha || 'dev' }}
 
-      - uses: actions/setup-node@v4
+      # --branch=dev tags this deploy as a Cloudflare Pages preview
+      # (not production). CF Pages routes dev preview deploys to
+      # dev.shouldidive.pages.dev automatically; shouldidive.com is
+      # unaffected. Wrangler-bypass logic lives in the composite.
+      - uses: ./.github/actions/deploy-cloudflare
         with:
-          node-version: "20"
-          cache: npm
-
-      - name: Install
-        # `npm install` rather than `npm ci` to tolerate the lockfile
-        # drift introduced 2026-05-07 (new ESLint + puppeteer deps).
-        run: npm install --no-audit --no-fund
-
-      - name: Build
-        run: npm run build
-
-      - name: Deploy to Cloudflare Pages (dev branch)
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # --branch=dev tags this deploy as a preview (not production).
-          # CF Pages routes dev preview deploys to dev.shouldidive.pages.dev
-          # automatically; production at shouldidive.com is unaffected.
-          command: pages deploy dist --project-name=shouldidive --branch=dev --commit-dirty=true
+          branch: dev
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Annotate run with preview URL
         run: |

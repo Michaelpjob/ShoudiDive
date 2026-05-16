@@ -31,6 +31,12 @@ __pycache__/
 # ARE committed (small, durable signal).
 pipeline/validation/data/archive/
 
+# Ingest-side download caches. The RCCA zip (~30 MB) is a historical
+# agency dataset; we cache it on the runner's disk between cron ticks
+# rather than re-downloading every hour. Anything that lives under
+# _cache/ is reproducible from a re-fetch.
+pipeline/validation/ingest/_cache/
+
 # Stale: previously held the Flutter web bundle (retired 2026-05-04).
 # Ignore stays so any leftover local builds don't accidentally land in a
 # commit; safe to delete entirely once everyone's working trees are clean.

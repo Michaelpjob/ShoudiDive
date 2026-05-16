@@ -20,6 +20,7 @@ import { loadSst5d } from "./sst5d.js";
 import { loadSwell5d } from "./swell5d.js";
 import { loadWind5d } from "./wind5d.js";
 import { loadCurrent5d } from "./current5d.js";
+import { loadRtofs5d } from "./rtofs5d.js";
 import { loadWind } from "./wind.js";
 import { loadViz } from "./viz.js";
 import { loadScalarPng } from "./scalarPng.js";
@@ -33,6 +34,11 @@ export const LAYER_LOADERS = {
   swell5d:  (info, state) => loadSwell5d(info, state),
   wind5d:   (info, state) => loadWind5d(info, state),
   current5d:(info, state) => loadCurrent5d(info, state),
+  // rtofs5d is a parallel ocean-model forecast track to sst5d.
+  // Loader plumbs the data into state; UI exposure (toggle / compare
+  // view / difference map) is a deferred product decision — see
+  // src/lib/loaders/rtofs5d.js docstring.
+  rtofs5d:  (info, state) => loadRtofs5d(info, state),
   wind:     (info, state) => loadWind(info, state),
   viz:      (info, state) => loadViz(info, state),
   sst:      (info, state) => loadScalarPng("sst", info, state),

@@ -7,12 +7,16 @@
 // to the original branch.
 
 import { decodePng } from "./decoders.js";
+import { rewriteManifestUrls } from "../region.js";
 
 export async function loadSst7d(info, state) {
   try {
     const sres = await fetch(info.summary_url, { cache: "no-cache" });
     if (!sres.ok) throw new Error(`sst summary ${info.summary_url} ${sres.status}`);
-    const summary = await sres.json();
+    // Region rewrite: summary.json carries bare `/data/sst/history/d0.png`
+    // URLs from the pipeline (CA-relative). For PNW + tropical those
+    // resolve to 404 unless we rewrite them to `/data/<region>/...`.
+    const summary = rewriteManifestUrls(await sres.json());
     state.layers.sst7d = { summary };
     state.layers.sst = state.layers.sst || {};
     const scale = info.scale || summary.scale || "linear";
