@@ -37,9 +37,18 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+# Region config sourced from pipeline/regions/ (PR-X-1). CA / PNW /
+# tropical switch on SHOULDIDIVE_REGION; default `ca` preserves
+# today's behavior. Imported here (above PUBLIC_DATA) because
+# active_region() is also used at module load to set PUBLIC_DATA.
+try:
+    from pipeline.regions import active_region
+except ModuleNotFoundError:
+    from regions import active_region
+
 
 ROOT = Path(__file__).resolve().parents[1]
-PUBLIC_DATA = ROOT / "public" / "data"
+PUBLIC_DATA = active_region().data_output_dir(ROOT)
 SST5D_DIR   = PUBLIC_DATA / "sst5d"
 MANIFEST_PATH = PUBLIC_DATA / "manifest.json"
 
@@ -53,7 +62,7 @@ from sst_predict.config import (   # noqa: E402
     SIGMA_SST_BY_LEAD,
     LAT_LABELS,
     DIST_LABELS,
-    SST_RANGE_C,
+    SST_RANGE_C as _SST_RANGE_DEFAULT,
     SST_SCALE,
     SST_UNIT_C,
 )
@@ -63,8 +72,16 @@ HORIZON_DAYS = 7    # match fetch_wind_5day
 DAY_LABELS_REL = ["Today", "+1", "+2", "+3", "+4", "+5", "+6"]
 CONFIDENCE_BY_DAY = ["high", "high", "medium", "medium", "low", "low", "low"]
 
-# Bbox + grid (matches fetch.py exactly).
-BBOX = dict(lat_min=31.8, lat_max=37.6, lng_min=-124.0, lng_max=-116.8)
+# Bbox + grid — active_region() imported at top of file (above
+# PUBLIC_DATA assignment).
+BBOX = active_region().bbox
+
+# Region-aware SST encoding range. CA uses the legacy (9, 25); tropical
+# overrides to (20, 32) so 25-32°C water doesn't clip to 255 and read
+# back as a flat saturated max. PNW uses (5, 20). See
+# pipeline/regions/{ca,pnw,tropical}.py.layer_range_overrides.
+_overrides = getattr(active_region(), "layer_range_overrides", {}) or {}
+SST_RANGE_C = tuple(_overrides.get("sst5d", _overrides.get("sst", _SST_RANGE_DEFAULT)))
 GRID_H = 291
 GRID_W = 361
 

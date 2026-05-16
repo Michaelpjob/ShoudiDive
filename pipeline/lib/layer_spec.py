@@ -236,6 +236,31 @@ LAYER_SPECS: dict[str, LayerSpec] = {
         extra_required_keys=("uv_range", "speed_range", "summary_url"),
         extra_optional_keys=("beta", "method", "vector_convention"),
     ),
+    "rtofs5d": LayerSpec(
+        # NOAA RTOFS Global ocean-model 7-day forecast. Parallel track
+        # to sst5d (persistence-decay) carrying SST + surface currents
+        # in one manifest entry — the loader (src/lib/loaders/rtofs5d.js)
+        # decodes the per-lead SST PNGs from `sst_d{1,3,5,7}.png` and the
+        # per-lead U/V RGBA PNGs from `uv_d{1,3,5,7}.png` referenced
+        # inside the summary file. Range is region-aware via
+        # active_region().layer_range_overrides["sst5d"]; the manifest
+        # entry mirrors whatever range the SST PNGs were encoded with.
+        # Beta flag matches sst5d's convention.
+        name="rtofs5d",
+        category="temperature",
+        range=(9.0, 25.0),
+        scale="linear",
+        unit="degC",
+        payload="summary_only",
+        extra_required_keys=("summary_url", "uv_range", "uv_unit"),
+        extra_optional_keys=(
+            "beta",
+            "model",
+            "init_cycle",
+            "horizon_days",
+            "leads_day_offsets",
+        ),
+    ),
     "viz": LayerSpec(
         name="viz",
         category="visibility",
@@ -244,7 +269,12 @@ LAYER_SPECS: dict[str, LayerSpec] = {
         unit="ft",
         payload="scalar_png",
         extra_required_keys=("range_ft",),
-        extra_optional_keys=("p10_url", "p90_url", "quality_url"),
+        extra_optional_keys=(
+            "p10_url", "p90_url", "quality_url",
+            # 2026-05-14: viz marked beta until NorCal ground truth lands;
+            # beta_reason is a free-text disclaimer surfaced in the UI.
+            "beta", "beta_reason",
+        ),
     ),
     "wave": LayerSpec(
         # Published as a wave_png with height_range_m + period_range_s,

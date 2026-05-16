@@ -21,7 +21,14 @@ import numpy as np
 import xarray as xr
 from PIL import Image
 
-BBOX = dict(lat_min=31.8, lat_max=37.6, lng_min=-124.0, lng_max=-116.8)
+# Bbox via pipeline/regions/ (PR-X-1). CA / PNW / tropical switch on
+# SHOULDIDIVE_REGION; default `ca` preserves today's behavior.
+try:
+    from pipeline.regions import active_region
+except ModuleNotFoundError:
+    from regions import active_region
+
+BBOX = active_region().bbox
 GRID_W, GRID_H = 140, 110
 
 PRECIP_RANGE_MM = (0.0, 200.0)
@@ -31,7 +38,7 @@ CPC_LON_MIN = (BBOX["lng_min"] + 360.0) % 360.0
 CPC_LON_MAX = (BBOX["lng_max"] + 360.0) % 360.0
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT_DIR = ROOT / "public" / "data"
+OUT_DIR = active_region().data_output_dir(ROOT)
 
 
 def latest_url() -> str:

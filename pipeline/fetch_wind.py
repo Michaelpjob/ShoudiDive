@@ -31,20 +31,50 @@ import xarray as xr
 from PIL import Image
 from scipy.spatial import cKDTree
 
-# Match the existing app's bbox.
-BBOX = dict(lat_min=31.8, lat_max=37.6, lng_min=-124.0, lng_max=-116.8)
+# Bbox via pipeline/regions/ (PR-X-1). CA / PNW / tropical switch on
+# SHOULDIDIVE_REGION; default `ca` preserves today's behavior.
+try:
+    from pipeline.regions import active_region
+except ModuleNotFoundError:
+    from regions import active_region
+
+BBOX = active_region().bbox
 
 NOMADS_HRRR = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/hrrr/prod"
 NOMADS_GFS = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod"
 
 # Per-slot config: (source, fcst_hour). HRRR for short-range; GFS for +72h
 # since HRRR maxes out at f48.
-SLOTS = {
-    "now":  {"source": "hrrr", "fhour": 0},
-    "p6h":  {"source": "hrrr", "fhour": 6},
-    "p24h": {"source": "hrrr", "fhour": 24},
-    "p72h": {"source": "gfs",  "fhour": 72},
-}
+#
+# 2026-05-12 — region-aware fallback. HRRR's CONUS domain ends at
+# ~21°N, so the Caribbean half of the tropical bbox (10-22°N) is
+# outside it. Tropical refreshes that requested HRRR got a CONUS-only
+# wind PNG with the Caribbean cells NaN — visible to the user as
+# "wind only over US waters." For tropical, use GFS (global 0.25°)
+# for every slot instead. Lower resolution than HRRR but covers the
+# full bbox uniformly. CA + PNW keep HRRR for short-range.
+def _slots_for_active_region():
+    try:
+        from pipeline.regions import active_region
+    except ModuleNotFoundError:
+        from regions import active_region
+    if active_region().name == "tropical":
+        return {
+            "now":  {"source": "gfs", "fhour": 0},
+            "p6h":  {"source": "gfs", "fhour": 6},
+            "p24h": {"source": "gfs", "fhour": 24},
+            "p72h": {"source": "gfs", "fhour": 72},
+        }
+    # CA + PNW are inside HRRR's CONUS domain — keep the high-res mix.
+    return {
+        "now":  {"source": "hrrr", "fhour": 0},
+        "p6h":  {"source": "hrrr", "fhour": 6},
+        "p24h": {"source": "hrrr", "fhour": 24},
+        "p72h": {"source": "gfs",  "fhour": 72},
+    }
+
+
+SLOTS = _slots_for_active_region()
 
 # History slots: prior daily GFS f000 analyses, used by the visibility model
 # to compute upwelling anomalies (5-day along-shore wind mean). HRRR isn't
@@ -65,7 +95,7 @@ SPEED_RANGE = (0.0, 50.0)   # knots
 UV_RANGE = (-30.0, 30.0)    # m/s
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT_DIR = ROOT / "public" / "data"
+OUT_DIR = active_region().data_output_dir(ROOT)
 CACHE_DIR = ROOT / "pipeline" / ".cache"
 
 # NOMADS HTTP/2 implementation is broken; force HTTP/1.1.
@@ -259,6 +289,112 @@ def regrid_to_bbox(lat2d, lng2d, u, v, source: str):
     return u_grid, v_grid
 
 
+# ---- Land mask --------------------------------------------------------------
+#
+# HRRR / GFS publish 10 m wind over LAND too — with terrain-friction-reduced
+# magnitudes and orographic distortion. If we encode those land values into
+# wind_uv_*.png, they're indistinguishable from over-water wind in the PNG
+# (alpha=255 either way), so:
+#   1. The frontend's WindParticles bilinear sampler near the coast pulls a
+#      mix of land + ocean cells → particle velocity vectors get smeared
+#      landward.
+#   2. The geojson land mask in WindParticles eventually respawns those
+#      particles, but only AFTER they've drifted a few frames inland —
+#      visible as jittery / wrong-direction streamlines at the shoreline.
+#
+# Fix (2026-05-14): consume the bathy.png alpha channel as a land mask and
+# NaN-out u/v over land cells before encoding. bathy.py guarantees `0 = land`
+# (line 18 of fetch_bathy.py). With u/v NaN over land, encode_uv_png writes
+# alpha=0 there, the frontend bilinear sampler returns NaN, and the
+# "!Number.isFinite(u)" respawn fires on the very first step instead of
+# hunting through the coarser geojson mask.
+#
+# Graceful degradation: if bathy.png is missing (first-run on a region
+# before fetch_bathy.py has fired) the mask returns None and wind encoding
+# falls back to today's behavior. Hourly wind continues to work; the land
+# crispness improves once bathy lands.
+
+def load_land_mask(out_dir: Path, grid_w: int, grid_h: int,
+                   land_threshold: float = 0.7) -> np.ndarray | None:
+    """Read bathy.png and downsample to a wind-grid-resolution land mask.
+
+    Returns a boolean numpy array where True = land, False = ocean.
+    None if bathy.png is missing.
+
+    `land_threshold` controls how aggressively coastal cells get flagged:
+      0.5 = a cell is "land" if more than half its area is land
+      0.7 = a cell is "land" only if >70% of its area is land (default)
+      0.9 = a cell is "land" only if >90% of its area is land (most lenient)
+
+    2026-05-14 — first attempt at this used nearest-neighbor sampling
+    (a single bathy pixel near each wind cell's center decided land vs
+    ocean). With 140-wide × 11.7° CA bbox each wind cell spans ~7 km;
+    every coastal cell straddles the actual coastline. NN would land
+    on whichever side of the coast happened to be at the cell center,
+    randomly flagging mostly-ocean coastal cells as land. The visible
+    effect was a uniform ~10 km gap of "no wind data" tracing the
+    entire coast — user saw wind appearing "pushed out to the left."
+
+    Box-averaging the fraction of land per cell + thresholding gives
+    physically meaningful behavior: cells that are MAJORITY ocean
+    (which is what coastal nearshore cells almost always are) keep
+    valid wind data. Wind streamlines now extend right up to the
+    shoreline before respawning.
+    """
+    bathy_path = out_dir / "bathy.png"
+    if not bathy_path.exists():
+        return None
+    try:
+        img = Image.open(bathy_path).convert("L")
+    except Exception as e:
+        print(f"  [land-mask] open failed for {bathy_path}: {e!s} — skipping mask",
+              flush=True)
+        return None
+    arr = np.asarray(img)
+    if arr.ndim != 2:
+        return None
+    src_h, src_w = arr.shape
+    # bathy.png encoding: pixel 0 = land (NaN), 1..255 = depth.
+    src_land_bool = arr == 0
+    # Compute land-area fraction for each (grid_h, grid_w) cell by
+    # box-averaging the source bathy land mask. Each wind cell maps to
+    # a (src_h/grid_h) x (src_w/grid_w) tile of bathy pixels; the
+    # cell's land fraction is the mean of the boolean mask over that
+    # tile. Falls back to NN behavior if the bathy is somehow lower
+    # res than the wind grid (shouldn't happen — bathy is 1 km, wind
+    # grid is 7-10 km).
+    is_land = np.zeros((grid_h, grid_w), dtype=bool)
+    if src_h < grid_h or src_w < grid_w:
+        # Degenerate case: bathy lower-res than wind grid. Just NN.
+        yi = np.linspace(0, src_h - 1, grid_h).round().astype(int)
+        xi = np.linspace(0, src_w - 1, grid_w).round().astype(int)
+        return src_land_bool[yi[:, None], xi[None, :]]
+    for i in range(grid_h):
+        y0 = i * src_h // grid_h
+        y1 = max(y0 + 1, (i + 1) * src_h // grid_h)
+        for j in range(grid_w):
+            x0 = j * src_w // grid_w
+            x1 = max(x0 + 1, (j + 1) * src_w // grid_w)
+            cell = src_land_bool[y0:y1, x0:x1]
+            land_frac = cell.mean() if cell.size else 0.0
+            is_land[i, j] = land_frac > land_threshold
+    return is_land
+
+
+def apply_land_mask(u: np.ndarray, v: np.ndarray,
+                    land_mask: np.ndarray | None) -> tuple[np.ndarray, np.ndarray]:
+    """Return (u, v) with land cells NaN'd out. No-op if mask is None."""
+    if land_mask is None:
+        return u, v
+    if land_mask.shape != u.shape:
+        print(f"  [land-mask] shape mismatch (mask {land_mask.shape} vs "
+              f"u {u.shape}) — skipping mask", flush=True)
+        return u, v
+    u = np.where(land_mask, np.nan, u)
+    v = np.where(land_mask, np.nan, v)
+    return u, v
+
+
 # ---- Encoders ---------------------------------------------------------------
 
 def encode_speed_png(u: np.ndarray, v: np.ndarray, out_path: Path) -> None:
@@ -311,6 +447,17 @@ def main() -> None:
         "windows": {},
     }
 
+    # Load once per run; reused for every slot. None if bathy.png missing.
+    land_mask = load_land_mask(OUT_DIR, GRID_W, GRID_H)
+    if land_mask is not None:
+        land_frac = float(land_mask.mean())
+        print(f"Loaded land mask from bathy.png ({land_frac:.0%} land cells)",
+              flush=True)
+    else:
+        print("No bathy.png yet — wind UV will include over-land HRRR/GFS "
+              "values; streamlines may jitter at the coast until bathy lands",
+              flush=True)
+
     for slot, cfg in SLOTS.items():
         source = cfg["source"]
         fhour = cfg["fhour"]
@@ -327,6 +474,14 @@ def main() -> None:
             # Per the correctness principle: skip the slot rather than fake it.
             print(f"  {slot}: failed — {e!s}", flush=True)
             continue
+
+        # Mask over-land cells BEFORE encoding so the published PNG has
+        # alpha=0 over land. WindParticles' "!Number.isFinite(u)" respawn
+        # then fires on the very first frame a particle samples a land
+        # neighbour, instead of relying on the coarser geojson mask which
+        # only catches it a few frames later. Net effect: streamlines stop
+        # crisply at the coast.
+        u, v = apply_land_mask(u, v, land_mask)
 
         speed_path = OUT_DIR / f"wind_speed_{slot}.png"
         uv_path = OUT_DIR / f"wind_uv_{slot}.png"
@@ -383,6 +538,12 @@ def main() -> None:
         except Exception as e:
             print(f"  {slot}: failed — {e!s}")
             continue
+
+        # Same land mask as the forward-looking slots above. The viz
+        # model only uses these history frames to compute upwelling
+        # anomalies (along-shore wind average), which is fine with
+        # NaN over land — its sampler is over-water-only too.
+        u, v = apply_land_mask(u, v, land_mask)
 
         encode_uv_png(u, v, cached_path)
         valid_at = datetime(run_date.year, run_date.month, run_date.day, run_hour, tzinfo=timezone.utc)

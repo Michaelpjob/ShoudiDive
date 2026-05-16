@@ -1,0 +1,17 @@
+# Cloudflare Pages `_redirects` — currently a stub.
+#
+# The hard-404 logic for scanner-known paths (/.env, /.git/*, etc.)
+# used to live here but CF Pages `_redirects` only supports status
+# codes 200/301/302/303/307/308 — NOT 404. Cloudflare silently
+# ignored those rules.
+#
+# That logic now lives in `functions/_middleware.js` which DOES support
+# arbitrary status codes. See the middleware file for the full path
+# allowlist + rationale.
+#
+# This file is kept (empty of rules) for:
+#   1. Future legitimate redirects (e.g., trailing-slash canonicalisation,
+#      domain migrations, deprecated routes).
+#   2. So nothing else in the deploy assumes the file is missing.
+
+# (no rules yet — middleware handles all 404 logic)

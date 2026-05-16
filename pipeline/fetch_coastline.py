@@ -29,21 +29,62 @@ from shapely.geometry import (
 )
 from shapely.ops import polygonize, unary_union
 
-BBOX = dict(lat_min=31.8, lat_max=37.6, lng_min=-124.0, lng_max=-116.8)
+# Bbox via pipeline/regions/ (PR-X-1). CA / PNW / tropical switch on
+# SHOULDIDIVE_REGION; default `ca` preserves today's behavior.
+try:
+    from pipeline.regions import active_region
+except ModuleNotFoundError:
+    from regions import active_region
+
+BBOX = active_region().bbox
 
 # Pad the Overpass query a little so coastline ways straddling the corners
 # come back complete. We re-clip to the exact bbox at write time.
 PAD_DEG = 0.20
 
-# Drop polygons smaller than this. Below that they're sub-pixel rocks that
-# consume vertices without rendering at any zoom we support. Seeded features
-# (named islands like the Coronados) are always kept regardless of size.
-MIN_FEATURE_AREA_DEG2 = 1e-6
+# Drop polygons smaller than this. Below that they're sub-pixel rocks
+# that consume vertices without rendering at any zoom we support.
+# Seeded features (named islands like the Coronados) are always kept
+# regardless of size.
+#
+# Tropical needs a MUCH higher floor — OSM's coastline data for the
+# Bahamas / Antilles includes ~13,000 small islets, every one of which
+# becomes its own SVG <path>. The browser hit-tests every path on each
+# mouse move; 13k paths = visible cursor lag. Bumping the floor to
+# 1e-3 deg² (~12 sq km at tropical latitudes, roughly the size of an
+# island visible to the naked eye on the map at our zoom level) drops
+# the feature count to a few hundred without losing anything the user
+# can actually see.
+def _min_feature_area():
+    try:
+        from pipeline.regions import active_region
+    except ModuleNotFoundError:
+        from regions import active_region
+    if active_region().name == "tropical":
+        return 1e-3
+    return 1e-6
 
-# Douglas-Peucker tolerance, in degrees. ~10 m at 34°N — still well below
-# the pixel size at any zoom level our SVG supports, but slashes vertex
-# counts on the mainland enough to keep the file under ~400 KB.
-SIMPLIFY_TOLERANCE_DEG = 1e-4
+
+MIN_FEATURE_AREA_DEG2 = _min_feature_area()
+
+# Douglas-Peucker tolerance, in degrees. ~10 m at 34°N — still well
+# below the pixel size at any zoom level our SVG supports, but slashes
+# vertex counts on the mainland enough to keep the file under ~400 KB.
+# Tropical uses a 50x looser tolerance because (a) it covers 38° of
+# longitude vs CA's 7° (so each pixel covers far more ground anyway),
+# and (b) the per-island polygon count is so high that even small
+# per-poly vertex savings compound dramatically.
+def _simplify_tolerance():
+    try:
+        from pipeline.regions import active_region
+    except ModuleNotFoundError:
+        from regions import active_region
+    if active_region().name == "tropical":
+        return 5e-3
+    return 1e-4
+
+
+SIMPLIFY_TOLERANCE_DEG = _simplify_tolerance()
 
 # Known land seed points used to label polygonize() outputs as land vs sea.
 # Each (name, lng, lat) lies inside a real CA / Coronados land mass.
@@ -67,13 +108,34 @@ LAND_SEEDS = [
     ("baja-mainland",       -116.95, 32.10),
 ]
 
-# Used to exclude the polygonize() face that represents the open Pacific.
-# Each seed sits comfortably offshore; any polygon containing one of them
-# is sea regardless of its size.
+# Used to exclude the polygonize() face that represents the open ocean.
+# Each seed must sit comfortably offshore for SOME region the pipeline
+# runs against. The keep_land_polygons() pass rejects any polygon
+# containing any ocean seed.
+#
+# 2026-05-11 — added PNW + tropical seeds. The previous CA-only list
+# would have classified the open Pacific west of OR/WA, the Caribbean,
+# and the Gulf of Mexico as "land", because no seed landed inside the
+# bbox of those regions. Result: PNW + tropical land.geojson contained
+# the entire ocean as a huge "land" feature, which made the frontend
+# paint cream-colored land on top of the real SST data overlay. Bug
+# caught in dev QA on the multi-region rollout.
 OCEAN_SEEDS = [
+    # CA region
     (-123.50, 36.00),  # central offshore
     (-123.20, 33.50),  # SoCal offshore
     (-122.50, 32.00),  # Mexican offshore
+    # PNW region — well west of the OR/WA coast, inside the (-127..-122,
+    # 42..49) bbox.
+    (-126.00, 45.00),  # OR offshore
+    (-126.00, 47.00),  # WA outer coast offshore
+    # Tropical region — Gulf of Mexico + Caribbean.
+    (-90.00,  25.00),  # central Gulf
+    (-82.00,  26.00),  # FL east, Atlantic side
+    (-78.00,  22.00),  # Bahamas channel
+    (-75.00,  18.00),  # Caribbean Sea, north of Hispaniola
+    (-70.00,  15.00),  # mid-Caribbean
+    (-65.00,  12.00),  # eastern Caribbean
 ]
 
 OVERPASS_ENDPOINTS = [
@@ -83,7 +145,7 @@ OVERPASS_ENDPOINTS = [
 ]
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "public" / "data" / "land.geojson"
+OUT = active_region().data_output_dir(ROOT) / "land.geojson"
 
 
 def overpass_query(buffered_bbox: dict) -> dict:

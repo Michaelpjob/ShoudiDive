@@ -1,8 +1,37 @@
 // Map projection helpers and mocked sea data.
-// Bounding box: lat 31.8°N–37.6°N, lng -124.0° to -116.8° (extended south to
-// include Las Islas Coronado and east to give Tijuana coast breathing room).
+//
+// 2026-05-11 — BBOX is now region-aware (PR-FE-1). The frontend reads
+// `activeRegion()` at module load and selects the matching bbox so the
+// projection math (project/unproject/getFitted/GEO_ASPECT) all align
+// with whichever region's data the manifest carries. Switching
+// regions in the RegionSwitcher triggers a full reload (see
+// region.js → setActiveRegion), so it's safe for BBOX to be a const
+// at module level — it just gets a different value on the next boot.
+//
+// CA history that matters:
+//   2026-05-09 — bumped CA latMax 37.6 → 42.0 (NorCal expansion, dev).
+//   2026-05-10 — bumped CA lngMin -124.0 → -124.6 (Cape Mendocino, dev).
+//   2026-05-13 — bumped CA lngMin -124.6 → -127.0 (Pacific buffer, dev).
+//   2026-05-14 — bumped CA lngMin -127.0 → -128.5 (NorCal margin, dev).
+//   2026-05-15 — SOCAL LAUNCH PIN. NorCal expansion deferred to a later
+//                release once dive-shop scrapers cover Eureka / Fort
+//                Bragg / Mendocino / Bodega Bay (the viz model needs
+//                ground truth to calibrate norcal_* coefficients).
+//                Until then `ca` stays at the production SoCal bbox.
+//                See pipeline/regions/ca.py module docstring for the
+//                full launch-criteria writeup.
+//
+// The values here must stay in lockstep with pipeline/regions/*.py.
+// If you bump a region's bbox there, mirror it here. (A drift test
+// across these two sides is a follow-up TODO.)
+import { activeRegion } from "./region.js";
 
-export const BBOX = { latMin: 31.8, latMax: 37.6, lngMin: -124.0, lngMax: -116.8 };
+const REGION_BBOX = {
+  ca:       { latMin: 31.8, latMax: 37.6, lngMin: -124.0, lngMax: -116.8 },
+  pnw:      { latMin: 42.0, latMax: 49.0, lngMin: -127.0, lngMax: -122.0 },
+  tropical: { latMin: 10.0, latMax: 31.0, lngMin:  -98.0, lngMax:  -60.0 },
+};
+export const BBOX = REGION_BBOX[activeRegion()] || REGION_BBOX.ca;
 
 // Geographic aspect ratio (lng-degrees-as-distance / lat-degrees) at the
 // bbox's mid latitude. Lng degrees shrink by cos(lat); we compute it once
@@ -18,6 +47,14 @@ export const GEO_ASPECT =
 // pixels both represent the same on-the-ground distance regardless of the
 // container's aspect ratio. Returns the rectangle inside (0..w, 0..h) that
 // the geographic content should occupy.
+//
+// Aspect ratio is ALWAYS preserved — `1 km north` and `1 km east` are
+// always the same number of pixels. A previous (2026-05-09 morning)
+// attempt to fall back to aspect-fill when geo-aspect ≠ container-aspect
+// produced visibly stretched land features for the NorCal expansion
+// (CA coast looked ~3x too wide). Pillarbox is the right tradeoff —
+// the desktop layout's aspect should be matched to GEO_ASPECT instead
+// (handled at the .map-stage CSS level, not here).
 export function getFitted(w, h) {
   if (!(w > 0) || !(h > 0)) {
     return { marginX: 0, marginY: 0, innerW: w || 0, innerH: h || 0 };
@@ -139,18 +176,57 @@ export const ISLANDS = [
   { name: "S. Coronado",      lng: -117.25, lat: 32.38, rx: 0.022, ry: 0.035 },
 ];
 
-export const SAVED_SPOTS = [
-  { id: "monterey",  name: "Monterey",       lng: -121.92, lat: 36.62 },
-  { id: "morro",     name: "Morro Bay",      lng: -120.88, lat: 35.36 },
-  { id: "pt-concep", name: "Pt. Conception", lng: -120.47, lat: 34.45 },
-  { id: "santabarb", name: "Santa Barbara",  lng: -119.70, lat: 34.40 },
-  { id: "santacruz", name: "Santa Cruz I.",  lng: -119.75, lat: 34.05 },
-  { id: "malibu",    name: "Malibu",         lng: -118.78, lat: 34.02 },
-  { id: "catalina",  name: "Catalina",       lng: -118.45, lat: 33.39 },
-  { id: "lajolla",   name: "La Jolla",       lng: -117.28, lat: 32.85 },
-  { id: "sandiego",  name: "San Diego",      lng: -117.18, lat: 32.70 },
-  { id: "coronados", name: "Coronados",      lng: -117.27, lat: 32.40 },
-];
+// Region-aware saved spots. CA's list is hand-curated; PNW + tropical
+// get a starter set chosen from the spot pins enumerated in
+// docs/expansion-regions.md (PNW § 2 spot list, tropical § 3 spot
+// list). The full curated rosters live behind PR-PNW-1 and PR-TROP-7;
+// these placeholders exist so the sidebar / mobile sheet has
+// SOMETHING geographically meaningful for non-CA regions instead of
+// leaking CA spots into a Pacific NW or Caribbean map.
+const REGION_SAVED_SPOTS = {
+  ca: [
+    { id: "monterey",  name: "Monterey",       lng: -121.92, lat: 36.62 },
+    { id: "morro",     name: "Morro Bay",      lng: -120.88, lat: 35.36 },
+    { id: "pt-concep", name: "Pt. Conception", lng: -120.47, lat: 34.45 },
+    { id: "santabarb", name: "Santa Barbara",  lng: -119.70, lat: 34.40 },
+    { id: "santacruz", name: "Santa Cruz I.",  lng: -119.75, lat: 34.05 },
+    { id: "malibu",    name: "Malibu",         lng: -118.78, lat: 34.02 },
+    { id: "catalina",  name: "Catalina",       lng: -118.45, lat: 33.39 },
+    { id: "lajolla",   name: "La Jolla",       lng: -117.28, lat: 32.85 },
+    { id: "sandiego",  name: "San Diego",      lng: -117.18, lat: 32.70 },
+    { id: "coronados", name: "Coronados",      lng: -117.27, lat: 32.40 },
+  ],
+  pnw: [
+    { id: "edmonds",     name: "Edmonds UWP",   lng: -122.382, lat: 47.812 },
+    { id: "seacrest",    name: "Seacrest",      lng: -122.378, lat: 47.578 },
+    { id: "three-tree",  name: "Three Tree Pt", lng: -122.391, lat: 47.451 },
+    { id: "limekiln",    name: "Lime Kiln",     lng: -123.151, lat: 48.516 },
+    { id: "pile-pt",     name: "Pile Point",    lng: -123.075, lat: 48.471 },
+    { id: "salt-creek",  name: "Salt Creek",    lng: -123.703, lat: 48.166 },
+    { id: "neah-bay",    name: "Neah Bay",      lng: -124.620, lat: 48.367 },
+    { id: "sund-rock",   name: "Sund Rock",     lng: -123.158, lat: 47.435 },
+    { id: "octopus-hole",name: "Octopus Hole",  lng: -123.149, lat: 47.421 },
+    { id: "yaquina-head",name: "Yaquina Head",  lng: -124.078, lat: 44.674 },
+    { id: "sunset-bay",  name: "Sunset Bay",    lng: -124.378, lat: 43.337 },
+  ],
+  tropical: [
+    { id: "blue-heron",  name: "Blue Heron Br",   lng:  -80.045, lat: 26.783 },
+    { id: "jupiter",     name: "Jupiter Ledge",   lng:  -80.057, lat: 26.943 },
+    { id: "looe-key",    name: "Looe Key",        lng:  -81.408, lat: 24.547 },
+    { id: "molasses",    name: "Molasses Reef",   lng:  -80.402, lat: 25.011 },
+    { id: "vandenberg",  name: "Vandenberg",      lng:  -81.788, lat: 24.488 },
+    { id: "spiegel",     name: "Spiegel Grove",   lng:  -80.298, lat: 25.069 },
+    { id: "flower-gdn",  name: "Flower Garden",   lng:  -93.846, lat: 27.872 },
+    { id: "stuart-cove", name: "Stuart Cove",     lng:  -77.531, lat: 24.991 },
+    { id: "bloody-bay",  name: "Bloody Bay Wall", lng:  -80.097, lat: 19.711 },
+    { id: "palancar",    name: "Palancar",        lng:  -87.027, lat: 20.358 },
+    { id: "bonaire-1k",  name: "1000 Steps",      lng:  -68.397, lat: 12.219 },
+    { id: "blue-hole",   name: "Blue Hole",       lng:  -87.535, lat: 17.316 },
+  ],
+};
+
+export const SAVED_SPOTS =
+  REGION_SAVED_SPOTS[activeRegion()] || REGION_SAVED_SPOTS.ca;
 
 export const SST_STOPS = [
   { t: 0.00, c: [12, 38, 130] },
@@ -160,7 +236,18 @@ export const SST_STOPS = [
   { t: 0.85, c: [230, 110, 60] },
   { t: 1.00, c: [170, 20, 35] },
 ];
-export const SST_RANGE = [9, 25]; // °C
+// Region-aware SST color range. Must match the per-region encoder
+// override in pipeline/regions/{ca,pnw,tropical}.py
+// (layer_range_overrides.sst). If the frontend used a fixed CA range
+// against tropical data, the 25-32°C top end would saturate to flat
+// red — same bug the user caught in QA.
+const REGION_SST_RANGE = {
+  ca:       [9,  25], // °C — legacy CA calibration
+  pnw:      [5,  20], // °C — Olympic + Salish + OR outer coast
+  tropical: [20, 32], // °C — Caribbean / Gulf / Florida year-round
+};
+export const SST_RANGE =
+  REGION_SST_RANGE[activeRegion()] || REGION_SST_RANGE.ca;
 
 // ---- ΔT trend ramp (Phase A) -----------------------------------------
 // Diverging palette for the 3-day SST trend view. Centered at 0 °C

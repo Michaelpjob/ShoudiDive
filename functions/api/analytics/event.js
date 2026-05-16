@@ -29,6 +29,31 @@
 
 const MAX_BODY_BYTES = 16 * 1024;       // 16 KB cap; honest clients send <1 KB
 const MAX_EVENTS_PER_BATCH = 50;        // matches client buffer size + headroom
+
+// Origin allowlist. Same-origin requests from shouldidive.com don't
+// always set Origin/Referer (depends on browser + sendBeacon mode),
+// but when set they must be one of these. Listed verbatim rather than
+// regex to keep the check trivially auditable.
+const TRUSTED_ORIGINS = new Set([
+  "https://shouldidive.com",
+  "https://www.shouldidive.com",
+  "https://dev.shouldidive.pages.dev",
+  "https://ca-beta.shouldidive.pages.dev",
+  "https://pnw-beta.shouldidive.pages.dev",
+  "https://tropical-beta.shouldidive.pages.dev",
+  // shouldidive.pages.dev — root Pages preview that CF auto-generates
+  "https://shouldidive.pages.dev",
+]);
+
+function isTrustedOrigin(probe) {
+  try {
+    const u = new URL(probe);
+    return TRUSTED_ORIGINS.has(`${u.protocol}//${u.host}`);
+  } catch {
+    return false;
+  }
+}
+
 const ALLOWED_NAMES = new Set([
   "pageview",
   "layer_change",
@@ -57,6 +82,45 @@ function jsonResponse(body, init) {
 }
 
 export async function onRequestPost({ request }) {
+  // ---- defense-in-depth guard rails ---------------------------------
+  // Each of these checks is cheap (header read or constant-time string
+  // compare) and short-circuits before we spend any CPU on body parsing.
+  // The intent isn't perfect rejection — it's making this endpoint
+  // unattractive to opportunistic abuse:
+  //   * a flood of bot POSTs adds noise to Cloudflare logs (Phase 1
+  //     storage); harmless today but degrades the signal we built
+  //     analytics for
+  //   * Phase 2 (when ANALYTICS_KV is bound) every successful POST
+  //     writes a KV entry; abuse becomes a real $ cost
+  //   * Rate-limit / WAF rules at the Cloudflare dashboard are the
+  //     primary defense; the checks below are belt-and-suspenders
+  //     so the endpoint still behaves correctly if a config drifts
+
+  // Origin / Referer check. Honest browser clients always send Origin
+  // for `fetch()` POST requests and either Origin OR Referer for
+  // sendBeacon. Reject anything that's missing both (script tools,
+  // curl-from-CLI without --header). Allow same-origin and our beta
+  // surfaces only.
+  const origin = request.headers.get("origin") || "";
+  const referer = request.headers.get("referer") || "";
+  if (origin || referer) {
+    const probe = origin || referer;
+    if (!isTrustedOrigin(probe)) {
+      return jsonResponse({ ok: false, error: "untrusted origin" }, { status: 403 });
+    }
+  }
+  // (Missing-both case allowed — sendBeacon under some privacy modes
+  // strips the headers; we don't want to reject legitimate beacons.)
+
+  // Content-Type must be JSON. Bots that just blindly POST a form
+  // encoded body trip on this immediately.
+  const contentType = (request.headers.get("content-type") || "").toLowerCase();
+  if (contentType && !contentType.startsWith("application/json") && !contentType.startsWith("text/plain")) {
+    // text/plain is what sendBeacon sometimes sets when the body is
+    // a string. We accept it because the body parser doesn't care.
+    return jsonResponse({ ok: false, error: "bad content-type" }, { status: 415 });
+  }
+
   // Defensive size guard. sendBeacon will happily POST a 10 MB blob
   // if the client buffer is broken; we never want to spend a full
   // request CPU budget on a malformed payload.
@@ -85,6 +149,13 @@ export async function onRequestPost({ request }) {
   }
   if (events.length > MAX_EVENTS_PER_BATCH) {
     return jsonResponse({ ok: false, error: "too many events" }, { status: 413 });
+  }
+  // Session ID must be ASCII hex-ish (the client mints it with
+  // crypto.getRandomValues → toString(16)). This catches the
+  // "bot copy-paste of a session ID with `<` or `'` in it" cases
+  // that are otherwise harmless but signal abuse.
+  if (!/^[a-zA-Z0-9_-]+$/.test(sessionId)) {
+    return jsonResponse({ ok: false, error: "bad session id" }, { status: 400 });
   }
 
   // Cloudflare's request object exposes the country code under cf

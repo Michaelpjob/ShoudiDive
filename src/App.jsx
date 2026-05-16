@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { SeaBasemap, LandBasemap, OceanMaskDefs, PLACE_LABELS } from "./components/Basemap.jsx";
+import RegionSwitcher from "./components/RegionSwitcher.jsx";
+import { activeRegion } from "./lib/region.js";
 import DataOverlay from "./components/DataOverlay.jsx";
 import WindParticles from "./components/WindParticles.jsx";
 import MpaLayer, { styleForType } from "./components/MpaLayer.jsx";
@@ -18,6 +20,7 @@ import {
   chlColor,
   getFitted,
   SAVED_SPOTS,
+  BBOX,
 } from "./lib/mapData.js";
 import {
   loadManifest,
@@ -263,7 +266,24 @@ function loadPrefs() {
   }
 }
 
+// Region-aware browser tab title. index.html ships a static
+// "ShouldIDive — CA Coast Conditions" fallback; this overrides it
+// once the React app boots so PNW + tropical visitors don't see
+// "CA Coast" in their tab.
+function useRegionAwareTitle() {
+  useEffect(() => {
+    const r = activeRegion();
+    const subtitle =
+      r === "pnw"      ? "Pacific NW Conditions" :
+      r === "tropical" ? "FL + Caribbean Conditions" :
+      "California Coast Conditions";
+    document.title = `ShouldIDive — ${subtitle}`;
+  }, []);
+}
+
+
 export default function App() {
+  useRegionAwareTitle();
   const [prefs, setPrefs] = useState(loadPrefs);
   const [layer, setLayer] = useState("sst");
   const [composite, setComposite] = useState(2);
@@ -460,10 +480,16 @@ function TopBar({ onSettings, settingsOpen, dataState }) {
           <div className="brand-name">ShouldIDive</div>
         </div>
         <span className="brand-tag">
-          Sea Temp · Water Clarity · Wind · Current · CA Coast 31.8°–37.6°N
+          {(() => {
+            const r = activeRegion();
+            if (r === "pnw") return "Pacific Northwest (beta) · OR + WA + Salish Sea";
+            if (r === "tropical") return "FL + Caribbean (beta) · Gulf + Keys + Bahamas + Antilles";
+            return "Sea Temp · Water Clarity · Wind · Current · California Coast";
+          })()}
         </span>
       </div>
       <div className="topbar-meta">
+        <RegionSwitcher />
         <span>
           <span className="dot"></span>
           <strong>{status}</strong> · Last update{" "}
@@ -1106,15 +1132,22 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
           const f = getFitted(size.w, size.h);
           return (
             <g clipPath="url(#ocean-clip)" mask="url(#ocean-mask)">
-              {/* No-data hatch — only inside the bbox area; outside is just sea. */}
-              <rect
-                x={f.marginX}
-                y={f.marginY}
-                width={f.innerW}
-                height={f.innerH}
-                fill="url(#noDataHatch)"
-                pointerEvents="none"
-              />
+              {/* No-data hatch — only inside the bbox area; outside is just sea.
+                  Suppressed for non-CA regions today because PNW + tropical
+                  have legitimately-sparse coverage (HFRNet has no Caribbean,
+                  rivers/tides are CA-station-only, etc.) and the hatch
+                  dominated the visible map. CA still gets it as a coverage
+                  indicator until the beta regions reach feature parity. */}
+              {activeRegion() === "ca" && (
+                <rect
+                  x={f.marginX}
+                  y={f.marginY}
+                  width={f.innerW}
+                  height={f.innerH}
+                  fill="url(#noDataHatch)"
+                  pointerEvents="none"
+                />
+              )}
 
               {/* Data overlay (positions itself inside the fitted box).
                   renderLayer is `layer` for normal modes and "sst-trend"
@@ -1352,10 +1385,11 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
             <button
               className={layer === "viz" ? "active" : ""}
               onClick={() => setLayer("viz")}
-              title="Predicted dive visibility — model output in feet, not a direct measurement"
+              title="Predicted dive visibility (BETA — model unvalidated for NorCal; use as advisory only). Output is feet, not a direct measurement."
             >
               <span className="lt-label">Vis</span>
               <span className="lt-sub">ft</span>
+              <span className="lt-beta">Beta</span>
             </button>
           </div>
           {layer === "sst" && hasSstTimeline ? (
@@ -1450,25 +1484,50 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
             {layer === "sst" ? (
               <div className="info-section">
                 <h4 className="info-h">Sea Surface Temperature</h4>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(40,130,210)" }}></span>
-                  <strong>Blue</strong> means cold — typical Central Coast (54–57°F) and
-                  upwelling near Pt. Conception.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(120,220,220)" }}></span>
-                  <strong>Cyan</strong> is the transition zone — comfortable for divers in
-                  spring suits.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(240,220,110)" }}></span>
-                  <strong>Yellow</strong> is warm SoCal summer water (66–70°F). Trunks weather.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(170,20,35)" }}></span>
-                  <strong>Red</strong> means anomaly — possible marine heatwave. Watch for
-                  kelp stress and harmful algal blooms.
-                </p>
+                {(() => {
+                  const r = activeRegion();
+                  const sstCopy = {
+                    ca: {
+                      blue:   "cold — typical Central Coast (54–57°F) and upwelling near Pt. Conception.",
+                      cyan:   "the transition zone — comfortable for divers in spring suits.",
+                      yellow: "warm SoCal summer water (66–70°F). Trunks weather.",
+                      red:    "anomaly — possible marine heatwave. Watch for kelp stress and harmful algal blooms.",
+                    },
+                    pnw: {
+                      blue:   "cold — typical Salish Sea / Olympic Coast (45–52°F). Drysuit conditions.",
+                      cyan:   "warmer outer-coast summer water (54–58°F). Thick wetsuit OK on calmer days.",
+                      yellow: "rare warm anomaly (60–65°F). Watch for stratification + bloom triggers.",
+                      red:    "extreme anomaly — marine heatwave territory. Kelp stress, harmful algal blooms.",
+                    },
+                    tropical: {
+                      blue:   "rare cold pocket (~72–76°F), upwelling near the Keys or Yucatan shelf.",
+                      cyan:   "typical winter Caribbean / Bahamas (76–80°F). Light wetsuit on long dives.",
+                      yellow: "typical summer Caribbean (82–86°F). Rash guard + boardies.",
+                      red:    "extreme warm anomaly — coral bleaching threshold (>86°F sustained).",
+                    },
+                  };
+                  const c = sstCopy[r] || sstCopy.ca;
+                  return (
+                    <>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(40,130,210)" }}></span>
+                        <strong>Blue</strong> means {c.blue}
+                      </p>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(120,220,220)" }}></span>
+                        <strong>Cyan</strong> is {c.cyan}
+                      </p>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(240,220,110)" }}></span>
+                        <strong>Yellow</strong> is {c.yellow}
+                      </p>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(170,20,35)" }}></span>
+                        <strong>Red</strong> means {c.red}
+                      </p>
+                    </>
+                  );
+                })()}
               </div>
             ) : layer === "chl" ? (
               <div className="info-section">
@@ -1878,10 +1937,24 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
       </div>
 
       <div className="attribution">
-        zoom 7 · 34.6°N −120.3°W · CA Coast bbox 31.8°→37.6°N · −124.0°→−116.8°W
+        {(() => {
+          const r = activeRegion();
+          const b = BBOX;
+          const tag =
+            r === "pnw"      ? "Pacific NW (beta)" :
+            r === "tropical" ? "FL + Caribbean (beta)" :
+            "CA Coast";
+          return `${tag} bbox ${b.latMin.toFixed(1)}°→${b.latMax.toFixed(1)}°N · ${b.lngMin.toFixed(1)}°→${b.lngMax.toFixed(1)}°W`;
+        })()}
       </div>
 
-      {mpaOn && <CoronadosBanner vb={renderVb} size={size} />}
+      {/* Coronados / CONANP disclaimer is CA-specific (the Coronados sit in
+          Mexican waters at the south end of the CA bbox). For PNW + tropical
+          the MPA layer doesn't even render CA data so the disclaimer is
+          irrelevant. Region-gate it explicitly. */}
+      {mpaOn && activeRegion() === "ca" && (
+        <CoronadosBanner vb={renderVb} size={size} />
+      )}
 
       {selectedMpa && (
         <MpaPopup mpa={selectedMpa} onClose={() => setSelectedMpa(null)} />

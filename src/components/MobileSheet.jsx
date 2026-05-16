@@ -47,7 +47,10 @@ const LAYERS = [
   { id: "wind",  label: "Wind",  unit: "kt" },
   { id: "swell", label: "Swell", unit: "ft" },
   { id: "current", label: "Current", unit: "kt" },
-  { id: "viz",   label: "Vis",   unit: "ft" },
+  // viz is marked beta until NorCal ground truth lands — see
+  // pipeline/fetch_visibility.py manifest-write block for the rationale.
+  // The chip below renders a "Beta" pill on this entry.
+  { id: "viz",   label: "Vis",   unit: "ft", beta: true },
 ];
 
 // Compact value-at-point readout. Returns "—" when the layer has no data
@@ -386,7 +389,10 @@ export default function MobileShell({
                 role="tab"
                 aria-selected={active}
               >
-                <span className="ms-chip-label">{L.label}</span>
+                <span className="ms-chip-label">
+                  {L.label}
+                  {L.beta && <span className="ms-chip-beta">Beta</span>}
+                </span>
                 <span className="ms-chip-sub mono">{sub}</span>
               </button>
             );

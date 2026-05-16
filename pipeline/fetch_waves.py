@@ -33,7 +33,14 @@ import xarray as xr
 from PIL import Image
 from scipy.spatial import cKDTree
 
-BBOX = dict(lat_min=31.8, lat_max=37.6, lng_min=-124.0, lng_max=-116.8)
+# Bbox via pipeline/regions/ (PR-X-1). CA / PNW / tropical switch on
+# SHOULDIDIVE_REGION; default `ca` preserves today's behavior.
+try:
+    from pipeline.regions import active_region
+except ModuleNotFoundError:
+    from regions import active_region
+
+BBOX = active_region().bbox
 NOMADS_GFS = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod"
 
 # Output grid (matches the wind / viz grid for consistency).
@@ -45,7 +52,7 @@ PERIOD_RANGE_S = (0.0, 25.0)
 # Direction stays 0..360 mapped to 0..255 byte (linear).
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT_DIR = ROOT / "public" / "data"
+OUT_DIR = active_region().data_output_dir(ROOT)
 CACHE_DIR = ROOT / "pipeline" / ".cache"
 
 SESSION = requests.Session()
@@ -56,15 +63,31 @@ def _get(url, **kwargs):
     return SESSION.get(url, timeout=180, **kwargs)
 
 
+# Region-aware gfswave subset — mirrors fetch_swell_5day.py. CA + PNW
+# use the wcoast (US West Coast) subset; tropical uses atlocn (Atlantic
+# + Gulf + Caribbean). Without this, the tropical refresh tries to hit
+# the wcoast endpoint which doesn't cover the Atlantic and 404s on
+# every run.
+def _gfswave_subset() -> str:
+    try:
+        from pipeline.regions import active_region
+    except ModuleNotFoundError:
+        from regions import active_region
+    if active_region().name == "tropical":
+        return "atlocn.0p16"
+    return "wcoast.0p16"
+
+
 def _idx_url(run_date: date, run_hour: int) -> str:
     return (
         f"{NOMADS_GFS}/gfs.{run_date.strftime('%Y%m%d')}/{run_hour:02d}/wave/gridded/"
-        f"gfswave.t{run_hour:02d}z.wcoast.0p16.f000.grib2.idx"
+        f"gfswave.t{run_hour:02d}z.{_gfswave_subset()}.f000.grib2.idx"
     )
 
 
 def find_latest_gfswave_run() -> tuple[date, int]:
-    """Latest GFS cycle (00/06/12/18z) whose gfswave wcoast f000 is published."""
+    """Latest GFS cycle (00/06/12/18z) whose gfswave {subset} f000 is published."""
+    subset = _gfswave_subset()
     now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
     cycle = (now.hour // 6) * 6
     candidate = now.replace(hour=cycle)
@@ -72,9 +95,9 @@ def find_latest_gfswave_run() -> tuple[date, int]:
         url = _idx_url(candidate.date(), candidate.hour)
         if SESSION.head(url, timeout=30, allow_redirects=True).status_code == 200:
             return candidate.date(), candidate.hour
-        print(f"  miss: gfswave {candidate.strftime('%Y-%m-%d %H')}z f000 not yet published")
+        print(f"  miss: gfswave {subset} {candidate.strftime('%Y-%m-%d %H')}z f000 not yet published")
         candidate -= timedelta(hours=6)
-    raise RuntimeError("No gfswave wcoast f000 found in last 24 hours")
+    raise RuntimeError(f"No gfswave {subset} f000 found in last 24 hours")
 
 
 def find_history_runs(latest_date: date, latest_hour: int, n_days: int = 4) -> list[tuple[date, int]]:
@@ -107,15 +130,16 @@ def find_history_runs(latest_date: date, latest_hour: int, n_days: int = 4) -> l
 
 def fetch_wave_slice(run_date: date, run_hour: int) -> Path:
     """Byte-range fetch HTSGW + PERPW + DIRPW at surface for f000."""
+    subset = _gfswave_subset()
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    slug = f"gfswave_{run_date.strftime('%Y%m%d')}_t{run_hour:02d}z_f000"
+    slug = f"gfswave_{subset.replace('.', '_')}_{run_date.strftime('%Y%m%d')}_t{run_hour:02d}z_f000"
     grib_path = CACHE_DIR / f"{slug}.grib2"
     if grib_path.exists():
         return grib_path
 
     base = (
         f"{NOMADS_GFS}/gfs.{run_date.strftime('%Y%m%d')}/{run_hour:02d}/wave/gridded/"
-        f"gfswave.t{run_hour:02d}z.wcoast.0p16.f000.grib2"
+        f"gfswave.t{run_hour:02d}z.{subset}.f000.grib2"
     )
     print(f"  GET {base}.idx", flush=True)
     idx = _get(base + ".idx").text

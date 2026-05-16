@@ -448,6 +448,24 @@
      the topbar only needs the brand mark + a settings cog. */
   .topbar-meta > span { display: none; }
   .topbar-meta { gap: 8px; }
+  /* Mobile region switcher: compact the `Region <select>` chip so it
+     doesn't collide with the ShouldIDive brand at 390px. Caught in QA
+     2026-05-11 — at 390px the "Region" label + select would push the
+     brand-name into the dropdown. Hide the uppercase label and tighten
+     the select padding; the select itself stays large enough to tap. */
+  .region-switcher-label { display: none; }
+  .region-switcher select {
+    padding: 4px 18px 4px 6px;
+    background-position: calc(100% - 8px) center, calc(100% - 4px) center;
+    max-width: 130px;
+  }
+
+  /* Hide the lat/lng axis labels on mobile — they collided with the
+     MPAs/Bottom pill row sitting above the peek strip at the same
+     vertical position. Power-users on desktop get the precise readout
+     in the cursor-position attribution; phone users don't. The
+     graticule LINES stay (still useful as distance cues). */
+  .graticule text { display: none; }
   /* The old `Live` chip in the topbar is now redundant — MobileShell's
      own status row shows the same liveness via the green dot next to
      the layer name. Hide it to reclaim vertical space. */

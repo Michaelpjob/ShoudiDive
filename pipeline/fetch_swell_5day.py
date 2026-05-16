@@ -33,7 +33,14 @@ from PIL import Image
 from scipy.ndimage import distance_transform_edt
 from scipy.spatial import cKDTree
 
-BBOX = dict(lat_min=31.8, lat_max=37.6, lng_min=-124.0, lng_max=-116.8)
+# Bbox via pipeline/regions/ (PR-X-1). CA / PNW / tropical switch on
+# SHOULDIDIVE_REGION; default `ca` preserves today's behavior.
+try:
+    from pipeline.regions import active_region
+except ModuleNotFoundError:
+    from regions import active_region
+
+BBOX = active_region().bbox
 
 NOMADS_GFS = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod"
 
@@ -61,7 +68,7 @@ DAY_LABELS_REL = ["Today", "+1", "+2", "+3", "+4"]
 CONFIDENCE_BY_DAY = ["high", "high", "high", "medium", "medium"]
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT_DIR = ROOT / "public" / "data" / "swell"
+OUT_DIR = active_region().data_output_dir(ROOT) / "swell"
 HOURLY_DIR  = OUT_DIR / "hourly"
 BUCKETS_DIR = OUT_DIR / "buckets"
 CACHE_DIR   = ROOT / "pipeline" / ".cache"
@@ -80,12 +87,32 @@ def _head_ok(url: str) -> bool:
         return False
 
 
+# ---- Region-aware gfswave subset selection ---------------------------------
+#
+# NOAA publishes gfswave in geographically-narrow subsets so consumers
+# don't have to download the global grid. CA + PNW use `wcoast.0p16`
+# (US West Coast box). Tropical (Gulf + Caribbean + East FL) needs
+# `atlocn.0p16` (Atlantic + Gulf). Without this branch, fetch_swell_5day
+# silently produced empty bucket arrays for tropical — the user-visible
+# symptom was a grey swell layer with no data.
+def _gfswave_subset() -> str:
+    try:
+        from pipeline.regions import active_region
+    except ModuleNotFoundError:
+        from regions import active_region
+    name = active_region().name
+    if name == "tropical":
+        return "atlocn.0p16"
+    # CA + PNW (and any future West Coast region) use wcoast.
+    return "wcoast.0p16"
+
+
 # ---- Run discovery ----------------------------------------------------------
 
 def _idx_url(run_date: date, run_hour: int, fhour: int) -> str:
     return (
         f"{NOMADS_GFS}/gfs.{run_date.strftime('%Y%m%d')}/{run_hour:02d}/wave/gridded/"
-        f"gfswave.t{run_hour:02d}z.wcoast.0p16.f{fhour:03d}.grib2.idx"
+        f"gfswave.t{run_hour:02d}z.{_gfswave_subset()}.f{fhour:03d}.grib2.idx"
     )
 
 
@@ -106,14 +133,15 @@ def find_latest_gfswave_run_with_horizon(hours: int = 120) -> tuple[date, int]:
 
 def fetch_wave_slice(run_date: date, run_hour: int, fhour: int) -> Path:
     """Pull HTSGW + PERPW + DIRPW (surface level) for a single forecast hour."""
-    slug = f"gfswave_{run_date.strftime('%Y%m%d')}_t{run_hour:02d}z_f{fhour:03d}"
+    subset = _gfswave_subset()
+    slug = f"gfswave_{subset.replace('.', '_')}_{run_date.strftime('%Y%m%d')}_t{run_hour:02d}z_f{fhour:03d}"
     grib_path = CACHE_DIR / f"{slug}.grib2"
     if grib_path.exists():
         return grib_path
 
     base = (
         f"{NOMADS_GFS}/gfs.{run_date.strftime('%Y%m%d')}/{run_hour:02d}/wave/gridded/"
-        f"gfswave.t{run_hour:02d}z.wcoast.0p16.f{fhour:03d}.grib2"
+        f"gfswave.t{run_hour:02d}z.{subset}.f{fhour:03d}.grib2"
     )
     idx = SESSION.get(base + ".idx", timeout=60).text
     lines = idx.strip().split("\n")
@@ -460,7 +488,7 @@ def main() -> None:
     print(f"wrote {OUT_DIR / 'summary.json'}")
 
     # 6) Patch top-level manifest so the frontend can discover the layer.
-    manifest_path = ROOT / "public" / "data" / "manifest.json"
+    manifest_path = active_region().data_output_dir(ROOT) / "manifest.json"
     if manifest_path.exists():
         manifest = json.loads(manifest_path.read_text())
     else:

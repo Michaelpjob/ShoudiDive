@@ -27,7 +27,14 @@ from PIL import Image, ImageDraw
 from scipy.spatial import cKDTree
 
 
-BBOX = dict(lat_min=31.8, lat_max=37.6, lng_min=-124.0, lng_max=-116.8)
+# Bbox via pipeline/regions/ (PR-X-1). CA / PNW / tropical switch on
+# SHOULDIDIVE_REGION; default `ca` preserves today's behavior.
+try:
+    from pipeline.regions import active_region
+except ModuleNotFoundError:
+    from regions import active_region
+
+BBOX = active_region().bbox
 GRID_W, GRID_H = 280, 220
 UV_RANGE = (-1.5, 1.5)  # m/s, roughly 0..3 kt in either component.
 HORIZON_DAYS = 5
@@ -36,7 +43,7 @@ PT = ZoneInfo("America/Los_Angeles")
 HFR_USWC_6KM = "https://dods.ndbc.noaa.gov/thredds/dodsC/hfradar_uswc_6km"
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA_DIR = ROOT / "public" / "data"
+DATA_DIR = active_region().data_output_dir(ROOT)
 OUT_DIR = DATA_DIR / "currents"
 BUCKETS_DIR = OUT_DIR / "buckets"
 LAND_PATH = DATA_DIR / "land.geojson"

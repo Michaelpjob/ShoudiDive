@@ -15,7 +15,14 @@ from pathlib import Path
 
 import requests
 
-BBOX = dict(lat_min=31.8, lat_max=37.6, lng_min=-124.0, lng_max=-116.8)
+# Bbox via pipeline/regions/ (PR-X-1). CA / PNW / tropical switch on
+# SHOULDIDIVE_REGION; default `ca` preserves today's behavior.
+try:
+    from pipeline.regions import active_region
+except ModuleNotFoundError:
+    from regions import active_region
+
+BBOX = active_region().bbox
 
 # CDFW Open Data Portal — California Marine Protected Areas (ds582).
 # Direct GeoJSON download in WGS84.
@@ -25,7 +32,7 @@ URL = (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT_PATH = ROOT / "public" / "data" / "mpa-boundaries.geojson"
+OUT_PATH = active_region().data_output_dir(ROOT) / "mpa-boundaries.geojson"
 
 
 def slugify(name: str) -> str:
