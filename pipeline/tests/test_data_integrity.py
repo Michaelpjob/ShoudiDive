@@ -477,132 +477,50 @@ def test_top_level_manifest_freshness(region):
 # stale SST/chl/kd490 PNGs alongside fresh rivers/tides/RTOFS, and only
 # surfaced 58h later via the live-cp-manifest probe.
 #
-# These three tests close the gap by comparing per-layer freshness
-# *within* a manifest. If the fetch step silently fails for one family
-# of layers, the timestamp skew shows up immediately on the next dev-
-# checks run instead of waiting for the live-probe cron 36h later.
+# Notes about layer cadence — important for designing tests here:
+#   * SST has a daily source cadence (NOAA MUR).
+#   * chl has a daily source cadence (Copernicus).
+#   * kd490 has a ~weekly source cadence — generated_at legitimately
+#     lags by days even when the daily fetcher succeeded.
+#   * wind has an HOURLY independent refresh (refresh-*-wind.yml),
+#     so it can be FRESHER than the daily top-level generated_at.
+#   * rtofs5d updates daily.
+#
+# These tests therefore avoid naive cross-layer skew comparisons —
+# they'd misfire on the layers that have legitimately different
+# cadences. Instead we name SST + chl explicitly (the daily-fetcher
+# pair that silently failed in May 2026) and pin them to a fresh-
+# enough threshold without dragging kd490 into the same bucket.
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("region", REGIONS)
-def test_cross_layer_timestamp_skew(region):
-    """No single layer should be wildly behind the rest of the manifest.
+# Daily-fetcher layers — generated_at should advance every cron run if
+# the fetcher actually succeeded. Excludes kd490 (weekly source),
+# wind (hourly independent refresh), rtofs (own fetcher), viz (computed
+# after the other fetchers).
+DAILY_REFRESH_LAYERS = ("sst", "chl")
 
-    A region's layers all refresh on the same cron schedule. If one layer's
-    generated_at is >48h older than the freshest, the fetcher for that
-    family silently failed (timeout swallowed by continue-on-error). 48h
-    chosen so a single missed daily cron doesn't fire the test while a
-    multi-day silent freeze does.
+
+@pytest.mark.parametrize("region", REGIONS)
+def test_daily_refresh_layers_not_silently_stuck(region):
+    """SST + chl share `pipeline/fetch.py` and refresh daily.
+
+    If either's `generated_at` is >96h old, the daily fetch step has
+    silently failed for multiple cron runs — exactly the 2026-05-15→17
+    bug class. 96h matches `test_top_level_manifest_freshness` to keep
+    the test signal consistent.
+
+    Why not include kd490 here despite the layer being part of the
+    same fetcher: NOAA's kd490 source updates roughly weekly. Its
+    `generated_at` reflects the source-data timestamp, not the
+    fetcher run time, so it can legitimately be 5-7 days old on a
+    healthy day. Including it would produce false positives.
     """
     m = _manifest(region)
     if m is None:
         pytest.skip(f"no data for {region}")
 
-    layers = m.get("layers") or {}
-    timestamps: dict[str, datetime] = {}
-    for layer_id, info in layers.items():
-        if not isinstance(info, dict):
-            continue
-        raw = info.get("generated_at")
-        if not raw:
-            continue
-        try:
-            timestamps[layer_id] = datetime.fromisoformat(
-                str(raw).replace("Z", "+00:00")
-            )
-        except ValueError:
-            continue
-
-    if len(timestamps) < 2:
-        pytest.skip(f"{region}: <2 layers with parseable timestamps")
-
-    newest = max(timestamps.values())
-    oldest_layer, oldest_ts = min(timestamps.items(), key=lambda kv: kv[1])
-    skew_hours = (newest - oldest_ts).total_seconds() / 3600
-
-    assert skew_hours < 48, (
-        f"{region}: layer '{oldest_layer}' is {skew_hours:.1f}h behind the "
-        f"freshest layer. Likely a silent fetcher failure — check the "
-        f"refresh-{region}-data.yml run logs for `##[error]The action ... "
-        f"has timed out` in the fetcher that owns '{oldest_layer}'."
-    )
-
-
-@pytest.mark.parametrize("region", REGIONS)
-def test_top_level_not_behind_layers(region):
-    """manifest.generated_at must be at least as fresh as the newest layer.
-
-    The top-level timestamp represents "last full refresh." If it's
-    behind the newest per-layer generated_at, some fetchers wrote fresh
-    data but the manifest finalization step that bumps top-level didn't
-    run. That's the partial-refresh symptom — same family of bug as
-    the silent-timeout case but caught from a different angle.
-    """
-    m = _manifest(region)
-    if m is None:
-        pytest.skip(f"no data for {region}")
-
-    top_raw = m.get("generated_at")
-    if not top_raw:
-        pytest.skip(f"{region}: no top-level generated_at")
-    try:
-        top = datetime.fromisoformat(str(top_raw).replace("Z", "+00:00"))
-    except ValueError:
-        pytest.fail(f"{region}: top-level generated_at unparseable: {top_raw}")
-
-    layers = m.get("layers") or {}
-    layer_ts: list[datetime] = []
-    for info in layers.values():
-        if not isinstance(info, dict):
-            continue
-        raw = info.get("generated_at")
-        if not raw:
-            continue
-        try:
-            layer_ts.append(datetime.fromisoformat(
-                str(raw).replace("Z", "+00:00")
-            ))
-        except ValueError:
-            continue
-
-    if not layer_ts:
-        pytest.skip(f"{region}: no layer-level timestamps to compare")
-
-    newest = max(layer_ts)
-    # 5-minute grace window: the per-layer finalize and the top-level
-    # bump can land on opposite sides of a second boundary.
-    grace = timedelta(minutes=5)
-    if top + grace < newest:
-        skew_h = (newest - top).total_seconds() / 3600
-        pytest.fail(
-            f"{region}: top-level manifest.generated_at is {skew_h:.1f}h "
-            f"behind the newest layer. Partial refresh — a layer fetcher "
-            f"wrote fresh data but the manifest finalization step that "
-            f"bumps top-level didn't run. Check refresh-{region}-data.yml "
-            f"for the manifest-build step landing after all fetchers."
-        )
-
-
-@pytest.mark.parametrize("region", REGIONS)
-def test_ocean_layers_not_silently_stuck(region):
-    """SST / chl / kd490 specifically — the layers that froze in the
-    2026-05-15→17 incident.
-
-    These three layers share a single fetcher (`pipeline/fetch.py`) and
-    so silently fail together when the fetch step hits timeout. A
-    dedicated test that names the exact culprit makes the failure
-    obvious in the test output — "test_ocean_layers_not_silently_stuck"
-    is a louder signal than "test_top_level_manifest_freshness."
-
-    Threshold matches the 96h on test_top_level_manifest_freshness so
-    we don't generate split-brain test failures.
-    """
-    m = _manifest(region)
-    if m is None:
-        pytest.skip(f"no data for {region}")
-
-    ocean = ("sst", "chl", "kd490")
     stuck: list[str] = []
-    for layer_id in ocean:
+    for layer_id in DAILY_REFRESH_LAYERS:
         info = (m.get("layers") or {}).get(layer_id)
         if not isinstance(info, dict):
             continue  # Not every region carries every layer; skip silently.
@@ -620,9 +538,73 @@ def test_ocean_layers_not_silently_stuck(region):
             stuck.append(f"{layer_id} ({age_h:.0f}h old)")
 
     assert not stuck, (
-        f"{region}: ocean-fetcher (pipeline/fetch.py) appears silently stuck. "
-        f"Layers: {', '.join(stuck)}. "
-        f"This is the same bug class as 2026-05-15→17 — check whether the "
-        f"`Fetch latest ocean data` step in refresh-{region}-data.yml is "
-        f"hitting `timeout-minutes` and being swallowed by `continue-on-error`."
+        f"{region}: daily ocean-fetcher (pipeline/fetch.py) appears "
+        f"silently stuck. Layers: {', '.join(stuck)}. Same bug class "
+        f"as the 2026-05-15→17 incident — check whether the `Fetch "
+        f"latest ocean data` step in refresh-{region}-data.yml is "
+        f"hitting `timeout-minutes` and being swallowed by "
+        f"`continue-on-error: true`."
     )
+
+
+@pytest.mark.parametrize("region", REGIONS)
+def test_top_level_at_least_as_fresh_as_daily_layers(region):
+    """manifest.generated_at must be ≥ as fresh as the daily-fetcher layers.
+
+    The top-level timestamp represents "last full refresh." Daily-fetch
+    layers (SST + chl) advance ONLY when the daily refresh actually
+    succeeds end-to-end. If those layers are fresher than the top-level
+    by more than the 5-minute grace, the daily refresh ran but its
+    finalize-manifest step didn't — partial-refresh symptom.
+
+    We anchor on daily layers (not e.g. wind) because wind has its own
+    HOURLY refresh that can legitimately be more recent than top-level.
+    """
+    m = _manifest(region)
+    if m is None:
+        pytest.skip(f"no data for {region}")
+
+    top_raw = m.get("generated_at")
+    if not top_raw:
+        pytest.skip(f"{region}: no top-level generated_at")
+    try:
+        top = datetime.fromisoformat(str(top_raw).replace("Z", "+00:00"))
+    except ValueError:
+        pytest.fail(f"{region}: top-level generated_at unparseable: {top_raw}")
+
+    daily_ts: list[tuple[str, datetime]] = []
+    for layer_id in DAILY_REFRESH_LAYERS:
+        info = (m.get("layers") or {}).get(layer_id)
+        if not isinstance(info, dict):
+            continue
+        raw = info.get("generated_at")
+        if not raw:
+            continue
+        try:
+            daily_ts.append((layer_id, datetime.fromisoformat(
+                str(raw).replace("Z", "+00:00")
+            )))
+        except ValueError:
+            continue
+
+    if not daily_ts:
+        pytest.skip(f"{region}: no daily-layer timestamps to compare")
+
+    # 5-minute grace window: the per-layer finalize and the top-level
+    # bump can land on opposite sides of a second boundary.
+    grace = timedelta(minutes=5)
+    behind = [
+        (layer_id, ts) for layer_id, ts in daily_ts if top + grace < ts
+    ]
+    if behind:
+        msgs = ", ".join(
+            f"{layer_id} fresher by {(ts - top).total_seconds() / 60:.1f} min"
+            for layer_id, ts in behind
+        )
+        pytest.fail(
+            f"{region}: top-level manifest.generated_at ({top.isoformat()}) "
+            f"is behind daily-fetcher layers: {msgs}. The daily refresh's "
+            f"fetchers wrote fresh data but the manifest finalization step "
+            f"that bumps top-level didn't run. Check refresh-{region}-data.yml "
+            f"for the manifest-build step landing after all fetchers."
+        )
