@@ -1,28 +1,22 @@
-# Validation watchdog — 2026-05-17T08:36Z
+# Validation watchdog — 2026-05-17T21:10Z
 
-**4 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
+**3 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
-### 🔴 1. Only 26 observations in the last 24h (floor: 50)
+### 🔴 1. Only 22 observations in the last 24h (floor: 50)
 
 Multiple scrapers may be silently broken.
 
 **Suggested action:** Open the latest hourly ingest workflow run; look for `FAILED` lines per scraper.
 
-### ⚠️ 2. 4 non-critical external feed(s) are red
+### ⚠️ 2. 1 non-critical external feed(s) are red
 
-Red feeds: chl_dineof_nrt_4km, chl_dineof_sci_2km, kd490_dineof_2km, ingest_eagle4. Fallbacks may keep the model running, but redundancy is degraded.
+Red feeds: ingest_eagle4. Fallbacks may keep the model running, but redundancy is degraded.
 
 **Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
 
-### 🔴 3. Published-data freshness gate found 3 issue(s)
-
-Freshness/completeness failures: manifest:manifest_generated_at_stale, sst:layer_date_stale, sst:sst_source_lag.
-
-**Suggested action:** Open `pipeline/validation/data/freshness_health.json`; fix the failing fetcher or rerun the matching workflow before trusting the deploy.
-
-### 🔴 4. 1 ingest scraper(s) failed in the latest run
+### 🔴 3. 1 ingest scraper(s) failed in the latest run
 
 Failed scrapers: rcca-mpa-baseline. Silent scraper failures can starve validation before the daily volume floor catches up.
 
@@ -32,16 +26,16 @@ Failed scrapers: rcca-mpa-baseline. Silent scraper failures can starve validatio
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_nearshore` | 4 | 9.22 | +3.42 | 50% | -0.81 |
-| `central_nearshore` | 1 | 4.06 | +4.06 | 100% | — |
+| `bight_nearshore` | 6 | 9.52 | +2.89 | 100% | -0.65 |
+| `central_nearshore` | 1 | 4.04 | +4.04 | 100% | — |
 
 ## Per-source bias (informational)
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `cencoos` | 1 | +4.06 ft |
-| `dive-shop-diveviz` | 1 | -10.68 ft |
-| `dive-shop-justgetwet` | 3 | +8.12 ft |
+| `cencoos` | 1 | +4.04 ft |
+| `dive-shop-diveviz` | 1 | -14.16 ft |
+| `dive-shop-justgetwet` | 5 | +6.31 ft |
 
 ## How to act on this issue
 
