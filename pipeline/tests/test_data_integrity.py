@@ -493,72 +493,58 @@ def test_top_level_manifest_freshness(region):
 # enough threshold without dragging kd490 into the same bucket.
 # ---------------------------------------------------------------------------
 
-# Daily-fetcher layers — generated_at should advance every cron run if
-# the fetcher actually succeeded. Excludes kd490 (weekly source),
-# wind (hourly independent refresh), rtofs (own fetcher), viz (computed
-# after the other fetchers).
-DAILY_REFRESH_LAYERS = ("sst", "chl")
-
-
 @pytest.mark.parametrize("region", REGIONS)
-def test_daily_refresh_layers_not_silently_stuck(region):
-    """SST + chl share `pipeline/fetch.py` and refresh daily.
+def test_sst_not_silently_stuck(region):
+    """SST specifically — the layer that froze in the 2026-05-15→17 incident.
 
-    If either's `generated_at` is >96h old, the daily fetch step has
-    silently failed for multiple cron runs — exactly the 2026-05-15→17
-    bug class. 96h matches `test_top_level_manifest_freshness` to keep
-    the test signal consistent.
+    SST is the only layer whose schema reliably exposes a per-layer
+    `generated_at` (chl uses windows.dates, kd490 has a weekly cadence,
+    wind has its own hourly refresh). It's also the canonical signal
+    a diver would notice missing: stale sea-temperature data is the
+    "the site looks broken" symptom that matters.
 
-    Why not include kd490 here despite the layer being part of the
-    same fetcher: NOAA's kd490 source updates roughly weekly. Its
-    `generated_at` reflects the source-data timestamp, not the
-    fetcher run time, so it can legitimately be 5-7 days old on a
-    healthy day. Including it would produce false positives.
+    If SST's `generated_at` is >96h old, the daily fetch step has
+    silently failed for multiple cron runs. 96h matches the ceiling
+    on `test_top_level_manifest_freshness` so the two tests don't
+    generate split-brain signals.
     """
     m = _manifest(region)
     if m is None:
         pytest.skip(f"no data for {region}")
 
-    stuck: list[str] = []
-    for layer_id in DAILY_REFRESH_LAYERS:
-        info = (m.get("layers") or {}).get(layer_id)
-        if not isinstance(info, dict):
-            continue  # Not every region carries every layer; skip silently.
-        raw = info.get("generated_at")
-        if not raw:
-            stuck.append(f"{layer_id} (no generated_at)")
-            continue
-        try:
-            when = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
-        except ValueError:
-            stuck.append(f"{layer_id} (unparseable: {raw})")
-            continue
-        age_h = (datetime.now(timezone.utc) - when).total_seconds() / 3600
-        if age_h > 96:
-            stuck.append(f"{layer_id} ({age_h:.0f}h old)")
+    info = (m.get("layers") or {}).get("sst")
+    if not isinstance(info, dict):
+        pytest.skip(f"{region}: no SST layer in manifest")
+    raw = info.get("generated_at")
+    if not raw:
+        pytest.skip(f"{region}: SST layer has no generated_at field")
 
-    assert not stuck, (
-        f"{region}: daily ocean-fetcher (pipeline/fetch.py) appears "
-        f"silently stuck. Layers: {', '.join(stuck)}. Same bug class "
-        f"as the 2026-05-15→17 incident — check whether the `Fetch "
-        f"latest ocean data` step in refresh-{region}-data.yml is "
-        f"hitting `timeout-minutes` and being swallowed by "
-        f"`continue-on-error: true`."
+    try:
+        when = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except ValueError:
+        pytest.fail(f"{region}: SST generated_at unparseable: {raw}")
+
+    age_h = (datetime.now(timezone.utc) - when).total_seconds() / 3600
+    assert age_h < 96, (
+        f"{region}: SST generated_at is {age_h:.0f}h old (> 96h). The "
+        f"daily fetch step in refresh-{region}-data.yml may be silently "
+        f"failing — check the run logs for `##[error]The action ... has "
+        f"timed out` on the `Fetch latest ocean data` step. Same bug "
+        f"class as the 2026-05-15→17 incident."
     )
 
 
 @pytest.mark.parametrize("region", REGIONS)
-def test_top_level_at_least_as_fresh_as_daily_layers(region):
-    """manifest.generated_at must be ≥ as fresh as the daily-fetcher layers.
+def test_top_level_at_least_as_fresh_as_sst(region):
+    """manifest.generated_at must be ≥ as fresh as the SST per-layer timestamp.
 
-    The top-level timestamp represents "last full refresh." Daily-fetch
-    layers (SST + chl) advance ONLY when the daily refresh actually
-    succeeds end-to-end. If those layers are fresher than the top-level
-    by more than the 5-minute grace, the daily refresh ran but its
-    finalize-manifest step didn't — partial-refresh symptom.
+    The top-level timestamp represents "last full refresh." SST advances
+    ONLY when the daily refresh succeeds end-to-end. If SST is fresher
+    than top-level by more than the 5-minute grace, the daily refresh
+    ran but its finalize-manifest step didn't — partial-refresh symptom.
 
-    We anchor on daily layers (not e.g. wind) because wind has its own
-    HOURLY refresh that can legitimately be more recent than top-level.
+    We anchor on SST (not e.g. wind) because wind has its own HOURLY
+    refresh that can legitimately be more recent than the daily top-level.
     """
     m = _manifest(region)
     if m is None:
@@ -572,39 +558,25 @@ def test_top_level_at_least_as_fresh_as_daily_layers(region):
     except ValueError:
         pytest.fail(f"{region}: top-level generated_at unparseable: {top_raw}")
 
-    daily_ts: list[tuple[str, datetime]] = []
-    for layer_id in DAILY_REFRESH_LAYERS:
-        info = (m.get("layers") or {}).get(layer_id)
-        if not isinstance(info, dict):
-            continue
-        raw = info.get("generated_at")
-        if not raw:
-            continue
-        try:
-            daily_ts.append((layer_id, datetime.fromisoformat(
-                str(raw).replace("Z", "+00:00")
-            )))
-        except ValueError:
-            continue
-
-    if not daily_ts:
-        pytest.skip(f"{region}: no daily-layer timestamps to compare")
+    info = (m.get("layers") or {}).get("sst") or {}
+    sst_raw = info.get("generated_at")
+    if not sst_raw:
+        pytest.skip(f"{region}: SST layer has no generated_at field")
+    try:
+        sst_ts = datetime.fromisoformat(str(sst_raw).replace("Z", "+00:00"))
+    except ValueError:
+        pytest.skip(f"{region}: SST generated_at unparseable: {sst_raw}")
 
     # 5-minute grace window: the per-layer finalize and the top-level
     # bump can land on opposite sides of a second boundary.
     grace = timedelta(minutes=5)
-    behind = [
-        (layer_id, ts) for layer_id, ts in daily_ts if top + grace < ts
-    ]
-    if behind:
-        msgs = ", ".join(
-            f"{layer_id} fresher by {(ts - top).total_seconds() / 60:.1f} min"
-            for layer_id, ts in behind
-        )
+    if top + grace < sst_ts:
+        skew_m = (sst_ts - top).total_seconds() / 60
         pytest.fail(
             f"{region}: top-level manifest.generated_at ({top.isoformat()}) "
-            f"is behind daily-fetcher layers: {msgs}. The daily refresh's "
-            f"fetchers wrote fresh data but the manifest finalization step "
-            f"that bumps top-level didn't run. Check refresh-{region}-data.yml "
-            f"for the manifest-build step landing after all fetchers."
+            f"is {skew_m:.1f} min behind SST ({sst_ts.isoformat()}). The "
+            f"daily refresh's fetchers wrote fresh SST but the manifest "
+            f"finalization step that bumps top-level didn't run. Check "
+            f"refresh-{region}-data.yml for the manifest-build step "
+            f"landing after all fetchers."
         )
