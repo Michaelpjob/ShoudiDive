@@ -72,6 +72,17 @@ jobs:
           EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
         run: python pipeline/fetch.py
 
+      - name: Sentinel — fail loudly if ocean fetch produced no fresh output
+        # The previous step has `continue-on-error: true` so a timeout
+        # there is silent. This sentinel checks the canonical SST PNG's
+        # mtime to detect that case and fails the workflow loudly. Without
+        # this guard, the workflow happily commits stale data and only
+        # the post-deploy live-cp probe (~36h later) catches the freeze.
+        # See 2026-05-15→17 incident. Threshold 30 min is comfortably
+        # larger than the fetch step's healthy runtime (~3-4 min) and
+        # smaller than the new 35-min timeout cap.
+        run: python pipeline/check_fetch_freshness.py --layer sst
+
       - name: Fetch 7-day precipitation (NOAA CPC)
         continue-on-error: true
         timeout-minutes: 5

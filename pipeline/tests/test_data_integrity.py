@@ -466,3 +466,163 @@ def test_top_level_manifest_freshness(region):
         f"{region}: manifest is {age_hours:.0f}h old (> 96h ceiling). "
         f"refresh-{region}-data.yml cron may be broken."
     )
+
+
+# ---------------------------------------------------------------------------
+# Category 5: SILENT FAILURES — partial-refresh detection
+#
+# Added 2026-05-17 after the SST/chl/kd490 silent-timeout incident. The
+# fetch step had `continue-on-error: true`, so when it hit the 15-min
+# wall (post-NorCal bbox expansion) the workflow kept going, committed
+# stale SST/chl/kd490 PNGs alongside fresh rivers/tides/RTOFS, and only
+# surfaced 58h later via the live-cp-manifest probe.
+#
+# These three tests close the gap by comparing per-layer freshness
+# *within* a manifest. If the fetch step silently fails for one family
+# of layers, the timestamp skew shows up immediately on the next dev-
+# checks run instead of waiting for the live-probe cron 36h later.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("region", REGIONS)
+def test_cross_layer_timestamp_skew(region):
+    """No single layer should be wildly behind the rest of the manifest.
+
+    A region's layers all refresh on the same cron schedule. If one layer's
+    generated_at is >48h older than the freshest, the fetcher for that
+    family silently failed (timeout swallowed by continue-on-error). 48h
+    chosen so a single missed daily cron doesn't fire the test while a
+    multi-day silent freeze does.
+    """
+    m = _manifest(region)
+    if m is None:
+        pytest.skip(f"no data for {region}")
+
+    layers = m.get("layers") or {}
+    timestamps: dict[str, datetime] = {}
+    for layer_id, info in layers.items():
+        if not isinstance(info, dict):
+            continue
+        raw = info.get("generated_at")
+        if not raw:
+            continue
+        try:
+            timestamps[layer_id] = datetime.fromisoformat(
+                str(raw).replace("Z", "+00:00")
+            )
+        except ValueError:
+            continue
+
+    if len(timestamps) < 2:
+        pytest.skip(f"{region}: <2 layers with parseable timestamps")
+
+    newest = max(timestamps.values())
+    oldest_layer, oldest_ts = min(timestamps.items(), key=lambda kv: kv[1])
+    skew_hours = (newest - oldest_ts).total_seconds() / 3600
+
+    assert skew_hours < 48, (
+        f"{region}: layer '{oldest_layer}' is {skew_hours:.1f}h behind the "
+        f"freshest layer. Likely a silent fetcher failure — check the "
+        f"refresh-{region}-data.yml run logs for `##[error]The action ... "
+        f"has timed out` in the fetcher that owns '{oldest_layer}'."
+    )
+
+
+@pytest.mark.parametrize("region", REGIONS)
+def test_top_level_not_behind_layers(region):
+    """manifest.generated_at must be at least as fresh as the newest layer.
+
+    The top-level timestamp represents "last full refresh." If it's
+    behind the newest per-layer generated_at, some fetchers wrote fresh
+    data but the manifest finalization step that bumps top-level didn't
+    run. That's the partial-refresh symptom — same family of bug as
+    the silent-timeout case but caught from a different angle.
+    """
+    m = _manifest(region)
+    if m is None:
+        pytest.skip(f"no data for {region}")
+
+    top_raw = m.get("generated_at")
+    if not top_raw:
+        pytest.skip(f"{region}: no top-level generated_at")
+    try:
+        top = datetime.fromisoformat(str(top_raw).replace("Z", "+00:00"))
+    except ValueError:
+        pytest.fail(f"{region}: top-level generated_at unparseable: {top_raw}")
+
+    layers = m.get("layers") or {}
+    layer_ts: list[datetime] = []
+    for info in layers.values():
+        if not isinstance(info, dict):
+            continue
+        raw = info.get("generated_at")
+        if not raw:
+            continue
+        try:
+            layer_ts.append(datetime.fromisoformat(
+                str(raw).replace("Z", "+00:00")
+            ))
+        except ValueError:
+            continue
+
+    if not layer_ts:
+        pytest.skip(f"{region}: no layer-level timestamps to compare")
+
+    newest = max(layer_ts)
+    # 5-minute grace window: the per-layer finalize and the top-level
+    # bump can land on opposite sides of a second boundary.
+    grace = timedelta(minutes=5)
+    if top + grace < newest:
+        skew_h = (newest - top).total_seconds() / 3600
+        pytest.fail(
+            f"{region}: top-level manifest.generated_at is {skew_h:.1f}h "
+            f"behind the newest layer. Partial refresh — a layer fetcher "
+            f"wrote fresh data but the manifest finalization step that "
+            f"bumps top-level didn't run. Check refresh-{region}-data.yml "
+            f"for the manifest-build step landing after all fetchers."
+        )
+
+
+@pytest.mark.parametrize("region", REGIONS)
+def test_ocean_layers_not_silently_stuck(region):
+    """SST / chl / kd490 specifically — the layers that froze in the
+    2026-05-15→17 incident.
+
+    These three layers share a single fetcher (`pipeline/fetch.py`) and
+    so silently fail together when the fetch step hits timeout. A
+    dedicated test that names the exact culprit makes the failure
+    obvious in the test output — "test_ocean_layers_not_silently_stuck"
+    is a louder signal than "test_top_level_manifest_freshness."
+
+    Threshold matches the 96h on test_top_level_manifest_freshness so
+    we don't generate split-brain test failures.
+    """
+    m = _manifest(region)
+    if m is None:
+        pytest.skip(f"no data for {region}")
+
+    ocean = ("sst", "chl", "kd490")
+    stuck: list[str] = []
+    for layer_id in ocean:
+        info = (m.get("layers") or {}).get(layer_id)
+        if not isinstance(info, dict):
+            continue  # Not every region carries every layer; skip silently.
+        raw = info.get("generated_at")
+        if not raw:
+            stuck.append(f"{layer_id} (no generated_at)")
+            continue
+        try:
+            when = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        except ValueError:
+            stuck.append(f"{layer_id} (unparseable: {raw})")
+            continue
+        age_h = (datetime.now(timezone.utc) - when).total_seconds() / 3600
+        if age_h > 96:
+            stuck.append(f"{layer_id} ({age_h:.0f}h old)")
+
+    assert not stuck, (
+        f"{region}: ocean-fetcher (pipeline/fetch.py) appears silently stuck. "
+        f"Layers: {', '.join(stuck)}. "
+        f"This is the same bug class as 2026-05-15→17 — check whether the "
+        f"`Fetch latest ocean data` step in refresh-{region}-data.yml is "
+        f"hitting `timeout-minutes` and being swallowed by `continue-on-error`."
+    )
