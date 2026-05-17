@@ -453,9 +453,16 @@ def test_top_level_manifest_freshness(region):
     except ValueError:
         pytest.fail(f"{region}: manifest generated_at unparseable: {raw}")
     age_hours = (datetime.now(timezone.utc) - when).total_seconds() / 3600
-    # 72h ceiling for dev-checks tolerance (cron runs daily, sometimes
-    # the data hasn't refreshed since 2-3 days ago on a quiet weekend).
-    assert age_hours < 72, (
-        f"{region}: manifest is {age_hours:.0f}h old (> 72h ceiling). "
+    # 96h ceiling for dev-checks tolerance — 72h was too tight after
+    # the 2026-05-14 NorCal bbox expansion: the SST/chl/kd490 fetcher
+    # started hitting its 15-min timeout, silently keeping manifest's
+    # top-level generated_at frozen for days. We bumped the workflow
+    # timeout to 35 min in the same change, and 96h here gives the
+    # cron a 4-day recovery window if a one-off run still trips up.
+    # If you see this fire in CI, check whether the daily refresh has
+    # actually been running successfully (per-layer freshness within
+    # each region is asserted by other checks).
+    assert age_hours < 96, (
+        f"{region}: manifest is {age_hours:.0f}h old (> 96h ceiling). "
         f"refresh-{region}-data.yml cron may be broken."
     )

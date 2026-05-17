@@ -50,8 +50,11 @@ jobs:
         run: pip install -r pipeline/requirements.txt
 
       - name: Fetch latest ocean data (SST, chl, kd490)
+        # 2026-05-17: bumped 15 → 35 min, mirrors refresh-ca-data.yml.
+        # Tropical has a very wide bbox (-98 to -60 lng) — needs the
+        # bigger budget more than CA does.
         continue-on-error: true
-        timeout-minutes: 15
+        timeout-minutes: 35
         env:
           EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
         run: python pipeline/fetch.py
