@@ -56,8 +56,18 @@ jobs:
         run: pip install -r pipeline/requirements.txt
 
       - name: Fetch latest ocean data (SST, chl, kd490)
+        # 2026-05-17: bumped from 15 → 35 min. The NorCal+SoCal bbox
+        # expansion (2026-05-14, latMax 37.6→42.0 + lngMin -127→-128.5)
+        # roughly doubled the pixel count. The 15-min budget that fit
+        # the SoCal-only fetch in 3-4 min consistently hit the wall on
+        # the wider bbox, silently leaving SST/chl/kd490 stale because
+        # continue-on-error: true. The freshness asserts further down
+        # also caught nothing because per-layer timestamps for the
+        # non-failing fetchers (rivers, tides, precip, RTOFS) kept
+        # advancing. live-cp-manifest finally surfaced it: manifest
+        # 58.7h stale on 2026-05-17.
         continue-on-error: true
-        timeout-minutes: 15
+        timeout-minutes: 35
         env:
           EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
         run: python pipeline/fetch.py
