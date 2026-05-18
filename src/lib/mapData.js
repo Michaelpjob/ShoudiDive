@@ -264,7 +264,18 @@ const REGION_SST_RANGE = {
   ca:       [9,  25], // °C — legacy CA calibration
   pnw:      [5,  20], // °C — Olympic + Salish + OR outer coast
   tropical: [20, 32], // °C — Caribbean / Gulf / Florida year-round
-  baja:     [14, 32], // °C — Pacific upwelling north + Cortez summer south
+  // Baja: PNG ENCODER is [14, 32] (matches baja.py layer_range_overrides;
+  // covers Pacific upwelling floor + Cortez summer max). DISPLAY range
+  // tightened to [18, 28] because Baja's typical 18–25 °C water against
+  // the full [14, 32] window mapped to t≈0.22–0.61 — squeezing all the
+  // SST colors into a narrow cyan/yellow band that was nearly invisible
+  // against the basemap. [18, 28] spreads the same values across the
+  // full deep-blue → orange-red ramp; cells below 18 saturate to blue
+  // (cold upwelling at Cedros/Tortugas) and cells above 28 saturate to
+  // red (peak Cortez summer at Bahía de los Ángeles). Decoder is
+  // independent (reads range from manifest) so this purely controls
+  // color rendering, not pixel value accuracy.
+  baja:     [18, 28],
 };
 export const SST_RANGE =
   REGION_SST_RANGE[activeRegion()] || REGION_SST_RANGE.ca;
