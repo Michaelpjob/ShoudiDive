@@ -49,6 +49,16 @@ const IGNORED_CONSOLE_PATTERNS = [
   /\b(wind5d|swell5d|current5d) summary\b/i,
   // Cloudflare insights fetch, sometimes 503s on edge nodes.
   /static\.cloudflareinsights\.com/i,
+  // 2026-05-18: Cloudflare auto-injects an inline <script> tag (for
+  // Email Obfuscation / Rocket Loader / similar features that are
+  // toggled on at the zone level). Our CSP `script-src 'self'`
+  // forbids inline, so the browser logs a console.error noting the
+  // CSP violation. The page still works because CF's script
+  // gracefully degrades on a CSP block. Long-term fix: either turn
+  // off the CF feature in the dashboard OR pin its inline hash in
+  // `_headers`' CSP. For now this is noise we can't control without
+  // a dashboard change.
+  /Executing inline script violates the following Content Security Policy/i,
 ];
 
 
