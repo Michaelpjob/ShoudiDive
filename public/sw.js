@@ -55,7 +55,11 @@
 //   v8 — region switcher (2026-05-11). Forces eviction so users who
 //        had a cached pre-region bundle don't keep loading old code +
 //        old layer URLs after the multi-region rollout.
-const CACHE_VERSION = "v8";
+//   v9 — production lockdown (2026-05-18): shouldidive.com hides all
+//        non-CA chips + force-pins region to ca regardless of URL or
+//        localStorage. Bump evicts any cached bundle so users with a
+//        stale shell stop seeing beta chips on prod.
+const CACHE_VERSION = "v9";
 const SHELL_CACHE = `shouldidive-shell-${CACHE_VERSION}`;
 const DATA_CACHE  = `shouldidive-data-${CACHE_VERSION}`;
 
