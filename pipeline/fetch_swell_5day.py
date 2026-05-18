@@ -364,30 +364,67 @@ def decode_wind_uv_png(path: Path):
 
 
 def fill_with_wind_chop(h_grid, p_grid, d_grid, day_offset: int, hour_pt: int):
-    """For cells where gfswave returned NaN, substitute SMB wind-chop
-    estimates from the matching hourly wind PNG. Period is short
-    (wind-sea ~3-5 s) and direction is the wind direction itself.
-    Cells with no matching wind data stay NaN.
+    """Combine WW3 swell + SMB wind-sea using the standard root-sum-square
+    Hs combination (what SWAN/WAM use internally for partitioned wave
+    spectra). Gives a SMOOTH continuous Hs field instead of the binary
+    sharp boundary the previous "fill NaN only" version produced.
 
-    Modifies and returns the (h, p, d) tuple.
+    Algorithm:
+      1. Decode wind UV from the matching hourly wind PNG.
+      2. Compute SMB fetch-limited wind-sea Hs everywhere wind is valid.
+      3. Compute swell falloff weight: 1.0 in WW3-valid cells, decaying
+         exponentially with distance from the nearest valid cell
+         (decay scale ~50 km). This smooths the gfswave model edge
+         instead of letting it terminate as a hard line.
+      4. Hs_combined = sqrt( (swell * weight)^2 + windsea^2 )
+      5. Period: keep WW3 Tp where it dominates, else wind-sea Tp.
+      6. Direction: keep WW3 dir where it dominates, else wind dir.
+
+    All three return arrays are valid (finite) wherever EITHER source
+    has data — no more islands of NaN at the WW3 edge.
     """
-    nan_mask = ~np.isfinite(h_grid)
-    if not nan_mask.any():
-        return h_grid, p_grid, d_grid
     wind_path = WIND_HOURLY_DIR / f"d{day_offset}_h{hour_pt:02d}_uv.png"
     u, v = decode_wind_uv_png(wind_path)
     if u is None:
         return h_grid, p_grid, d_grid
+
     speed = np.sqrt(u * u + v * v)
     chop_hs, chop_tp = smb_fetch_limited(speed)
-    # Wind direction (where it's COMING FROM) for the substituted cells.
-    # atan2(-V, -U) — flip so it's "from" not "to".
     chop_dir = (np.degrees(np.arctan2(-u, -v)) + 360.0) % 360.0
-    fill = nan_mask & np.isfinite(chop_hs)
-    h_grid = np.where(fill, chop_hs, h_grid).astype(np.float32)
-    p_grid = np.where(fill, chop_tp, p_grid).astype(np.float32)
-    d_grid = np.where(fill, chop_dir, d_grid).astype(np.float32)
-    return h_grid, p_grid, d_grid
+
+    # Swell decay weight: exp(-d / cells_decay) where d is grid-cell
+    # distance from the nearest WW3-valid cell. cells_decay=6 → at 6
+    # cells out (~55 km on our 0.082°/cell grid) the swell contribution
+    # drops to e^-1 ≈ 0.37; at 18 cells (~165 km) it's e^-3 ≈ 0.05.
+    swell_valid = np.isfinite(h_grid)
+    distances = distance_transform_edt(~swell_valid)
+    decay_cells = 6.0
+    swell_weight = np.exp(-distances / decay_cells).astype(np.float32)
+    # Inside valid cells the weight is exp(0) = 1, exactly preserving
+    # WW3's value when combined as a pure swell with no wind-sea.
+
+    # Replace NaN swell with 0 (no wave from that source); the weight
+    # already encodes "this cell didn't have WW3 data".
+    h_swell  = np.where(swell_valid, h_grid, 0.0).astype(np.float32)
+    h_wind   = np.where(np.isfinite(chop_hs), chop_hs, 0.0).astype(np.float32)
+    h_total  = np.sqrt(
+        (h_swell * swell_weight) ** 2 + h_wind ** 2,
+    ).astype(np.float32)
+
+    # Anywhere both sources are empty → leave NaN (open-land buffer
+    # outside the bbox letterbox, or genuinely missing wind too).
+    has_any = swell_valid | np.isfinite(chop_hs)
+    h_out = np.where(has_any, h_total, np.nan).astype(np.float32)
+
+    # Period/direction: WW3 where the weighted swell dominates
+    # (weight > 0.5 = within ~4 cells of valid WW3), else wind-sea.
+    swell_dom = swell_weight > 0.5
+    p_out = np.where(swell_dom & np.isfinite(p_grid), p_grid, chop_tp).astype(np.float32)
+    d_out = np.where(swell_dom & np.isfinite(d_grid), d_grid, chop_dir).astype(np.float32)
+    # Carry NaN forward where there's truly no data.
+    p_out = np.where(has_any, p_out, np.nan).astype(np.float32)
+    d_out = np.where(has_any, d_out, np.nan).astype(np.float32)
+    return h_out, p_out, d_out
 
 
 # ---- Encoding ---------------------------------------------------------------

@@ -393,12 +393,41 @@ def main() -> None:
         if day_offset < 0 or day_offset >= HORIZON_DAYS:
             return
         key = (day_offset, valid_pt.hour)
-        # Prefer HRRR if both sources cover the same hour.
-        if key in hourly and hourly[key]["source"] == "hrrr" and source == "gfs":
-            return
         # Mask land BEFORE storing. Bucket aggregation downstream
         # nanmean's across the time axis, so land cells stay NaN.
         u_grid, v_grid = apply_land_mask(u_grid, v_grid, land_mask)
+        # Source merging:
+        #   * If HRRR already covered this hour and GFS is arriving, fill
+        #     the HRRR NaN cells (south of HRRR's CONUS domain — e.g.
+        #     Cabo San Lucas sits at the southern edge of HRRR, so the
+        #     open Pacific south of the peninsula tip is HRRR-NaN) with
+        #     GFS values. Keeps HRRR's 3-km detail where it exists.
+        #   * Symmetrically: if GFS arrives first (rare path) and HRRR
+        #     arrives later, HRRR wins where valid.
+        if key in hourly:
+            existing = hourly[key]
+            hrrr_grid = existing if existing["source"].startswith("hrrr") else None
+            gfs_grid  = existing if existing["source"] == "gfs"          else None
+            new_is_hrrr = (source == "hrrr")
+            new_grid = {"u": u_grid, "v": v_grid, "source": source}
+            if new_is_hrrr and gfs_grid is not None:
+                # New HRRR over existing GFS: HRRR wins where valid.
+                nan_mask = ~np.isfinite(u_grid)
+                merged_u = np.where(nan_mask, gfs_grid["u"], u_grid)
+                merged_v = np.where(nan_mask, gfs_grid["v"], v_grid)
+                hourly[key] = {"u": merged_u, "v": merged_v,
+                               "source": "hrrr+gfs",
+                               "valid_at": valid_at_utc}
+                return
+            if not new_is_hrrr and hrrr_grid is not None:
+                # New GFS over existing HRRR: fill HRRR NaN with GFS.
+                nan_mask = ~np.isfinite(hrrr_grid["u"])
+                merged_u = np.where(nan_mask, u_grid, hrrr_grid["u"])
+                merged_v = np.where(nan_mask, v_grid, hrrr_grid["v"])
+                hourly[key] = {"u": merged_u, "v": merged_v,
+                               "source": "hrrr+gfs",
+                               "valid_at": valid_at_utc}
+                return
         hourly[key] = {"u": u_grid, "v": v_grid, "source": source, "valid_at": valid_at_utc}
 
     # GFS goes to f168 (7 days) at 1-hour spacing through f120, then 3-hour
@@ -423,7 +452,15 @@ def main() -> None:
     fetched = 0
     failed  = 0
     hrrr_range = range(0, HRRR_END) if use_hrrr else range(0)
-    gfs_start = HRRR_END if use_hrrr else 0
+    # When HRRR is in use, ALSO fetch GFS for the same near-term hours
+    # so the south-of-HRRR-domain cells (open Pacific SW of Cabo for
+    # baja, southern Caribbean for any region that straddles 21°N) get
+    # backfilled by GFS where HRRR's regrid produced NaN. The store()
+    # merge keeps HRRR's 3-km detail where valid and only substitutes
+    # GFS into HRRR-NaN cells. Slight bandwidth cost (~240 MB of extra
+    # GFS UV slices) but it's the only way to get continuous wind data
+    # across a region that crosses HRRR's southern domain edge.
+    gfs_start = 0 if use_hrrr else 0
     for fhour in hrrr_range:
         try:
             grib = fetch_hrrr_slice(hrrr_d, hrrr_h, fhour)
