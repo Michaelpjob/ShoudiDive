@@ -55,11 +55,20 @@ concurrency:
 
 jobs:
   sync:
-    # Only react to bot-driven main pushes (cron data refreshes, PR
-    # merge commits authored by the bot). A direct human push to main
-    # is an emergency / branch-protection-bypass scenario; let those
-    # surface normally rather than silently fan out to dev.
-    if: github.actor == 'github-actions[bot]'
+    # Only react to bot-driven main pushes (cron data/wind refreshes).
+    #
+    # Caveat about `github.actor`: the cron workflows push using
+    # BOT_PUSH_TOKEN (a user PAT, to bypass branch protection), which
+    # makes `github.actor` resolve to the PAT owner — NOT the bot —
+    # even though the COMMIT was authored by github-actions[bot].
+    # That's why we check `head_commit.author.email` here: it reflects
+    # who AUTHORED the commit, independent of who pushed it.
+    #
+    # PR merge commits land with the user's email and skip the sync
+    # (correct: dev was just consumed by the merge). Direct human
+    # pushes to main are emergency scenarios — let those surface
+    # normally rather than silently fan out to dev.
+    if: contains(github.event.head_commit.author.email, '[bot]')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
