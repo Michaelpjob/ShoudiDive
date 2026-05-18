@@ -58,7 +58,17 @@ async function run() {
   try {
     browser = await puppeteer.launch({
       headless: true,
-      args: ["--no-sandbox", "--disable-dev-shm-usage"],
+      // 2026-05-18: added --disable-blink-features=AutomationControlled
+      // and a real-Chrome user-agent because Cloudflare's bot detection
+      // was returning 403 to the default Puppeteer fingerprint from GHA
+      // runner IPs. Setting these three things (UA + automation flag +
+      // navigator.webdriver override below) makes the probe look like
+      // ordinary headless Chrome that a real user might be running.
+      args: [
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-blink-features=AutomationControlled",
+      ],
     });
   } catch (e) {
     console.error(`[live-runtime] FATAL: puppeteer launch: ${e.message}`);
@@ -73,6 +83,24 @@ async function run() {
 
   try {
     const page = await browser.newPage();
+
+    // Mask the most obvious "I am a bot" signal that JS-based bot
+    // detection looks for. Default Puppeteer exposes
+    // `navigator.webdriver === true`; real Chrome (when not driven
+    // by automation) leaves it `undefined`. This must run BEFORE any
+    // page navigation so the override is in place for the first JS
+    // executed by the page.
+    await page.evaluateOnNewDocument(() => {
+      Object.defineProperty(navigator, "webdriver", { get: () => undefined });
+    });
+
+    // Use a real-looking Chrome UA rather than Puppeteer's default
+    // "HeadlessChrome/..." string. The HeadlessChrome substring is the
+    // single biggest tell for cheap bot filters.
+    await page.setUserAgent(
+      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 " +
+      "(KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36"
+    );
 
     // Capture pageerror (uncaught exceptions). ALWAYS a fail.
     page.on("pageerror", (err) => {
