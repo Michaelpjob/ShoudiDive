@@ -147,6 +147,58 @@ async function measureOverlay(page) {
   });
 }
 
+// Decode the <image>'s data URL into a temp canvas and report color
+// statistics. If the PNG itself is mostly transparent / one color,
+// that explains "no data visible" independent of clip-path / mask.
+async function inspectImagePixels(page) {
+  return page.evaluate(async () => {
+    const imgs = Array.from(document.querySelectorAll("svg image, image[href]"));
+    let target = null;
+    for (const img of imgs) {
+      const href = img.getAttribute("href") || img.getAttribute("xlink:href") || "";
+      if (href.startsWith("data:image/png")) { target = img; break; }
+    }
+    if (!target) return { error: "no data:image/png <image> found" };
+    const href = target.getAttribute("href") || target.getAttribute("xlink:href");
+    const dataUrl = href;
+    const img = new Image();
+    img.src = dataUrl;
+    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
+    const cv = document.createElement("canvas");
+    cv.width = img.naturalWidth;
+    cv.height = img.naturalHeight;
+    const ctx = cv.getContext("2d");
+    ctx.drawImage(img, 0, 0);
+    const px = ctx.getImageData(0, 0, cv.width, cv.height).data;
+    let transparent = 0, opaque = 0;
+    const colorBuckets = new Map();
+    for (let i = 0; i < px.length; i += 4) {
+      const a = px[i + 3];
+      if (a < 16) { transparent++; continue; }
+      opaque++;
+      const r = Math.round(px[i] / 32) * 32;
+      const g = Math.round(px[i+1] / 32) * 32;
+      const b = Math.round(px[i+2] / 32) * 32;
+      const key = `${r},${g},${b}`;
+      colorBuckets.set(key, (colorBuckets.get(key) || 0) + 1);
+    }
+    const total = transparent + opaque;
+    const topColors = [...colorBuckets.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([k, n]) => ({ rgb: k, frac: +(n / opaque).toFixed(3) }));
+    return {
+      pngWidth: cv.width,
+      pngHeight: cv.height,
+      totalCells: total,
+      transparent,
+      opaque,
+      transparentFrac: +(transparent / total).toFixed(3),
+      topColors,
+    };
+  });
+}
+
 async function inspectRegionState(page) {
   return page.evaluate(() => ({
     region:         window.localStorage?.getItem("region") || "(unset)",
@@ -265,6 +317,8 @@ async function run() {
       console.log(`  parentGAttrs=${JSON.stringify(m.parentGAttrs)}`);
       console.log(`  clipMaskAncestors=${JSON.stringify(m.clipMaskAncestors)}`);
       console.log(`  svgInfo=${JSON.stringify(m.svgInfo)}`);
+      const pixels = await inspectImagePixels(page);
+      console.log(`  pixels=${JSON.stringify(pixels)}`);
       await page.screenshot({
         path: resolve(ARTIFACTS, `${label.toLowerCase()}_full.png`),
         fullPage: false,
