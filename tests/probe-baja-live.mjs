@@ -179,6 +179,57 @@ async function run() {
         path: resolve(ARTIFACTS, `${label.toLowerCase()}_full.png`),
         fullPage: false,
       });
+      // Now strip the ocean-clip / ocean-mask from any ancestor <g>
+      // wrapping the DataOverlay, AND hide the LandBasemap, AND bump
+      // opacity to 1. Take another screenshot — if data is suddenly
+      // visible, we've isolated the cause.
+      const stripResult = await page.evaluate(() => {
+        const imgs = Array.from(document.querySelectorAll("svg image, image[href]"));
+        let modified = [];
+        for (const img of imgs) {
+          const href = img.getAttribute("href") || img.getAttribute("xlink:href") || "";
+          if (!href.startsWith("data:image/png")) continue;
+          // Walk ancestors, strip clip-path/mask attrs
+          let el = img.parentElement;
+          while (el && el.tagName !== "BODY") {
+            if (el.getAttribute && (el.getAttribute("clip-path") || el.getAttribute("mask"))) {
+              modified.push({
+                tag: el.tagName,
+                clipPath: el.getAttribute("clip-path"),
+                mask: el.getAttribute("mask"),
+              });
+              el.removeAttribute("clip-path");
+              el.removeAttribute("mask");
+            }
+            // Also bump opacity to 1 on the data-overlay group
+            if (el.getAttribute && el.getAttribute("class") === "data-overlay") {
+              el.setAttribute("opacity", "1");
+              modified.push({ tag: el.tagName + ".data-overlay", opacityBumpedTo: 1 });
+            }
+            el = el.parentElement;
+          }
+          break; // first img only
+        }
+        // Hide LandBasemap so we can see all data over land (peninsula)
+        const land = document.querySelector(".basemap.basemap-land");
+        if (land) {
+          land.style.display = "none";
+          modified.push({ tag: "basemap-land", action: "display:none" });
+        }
+        return modified;
+      });
+      console.log(`  strip result: ${JSON.stringify(stripResult)}`);
+      // Force a small re-render delay
+      await new Promise((r) => setTimeout(r, 800));
+      await page.screenshot({
+        path: resolve(ARTIFACTS, `${label.toLowerCase()}_NOMASK.png`),
+        fullPage: false,
+      });
+      // Re-instate the clip-path/mask for the next layer iteration by
+      // forcing a React re-render via clicking around. Simpler: just
+      // reload the page before the next layer.
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await new Promise((r) => setTimeout(r, 6000));
     }
 
     const allOk = layerResults.every((r) => r.ok);
