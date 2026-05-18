@@ -343,12 +343,42 @@ export function LandBasemap({ width, height }) {
     };
   }, [width, height]);
 
+  // Each path entry now carries a `isMega` flag — for the bbox-spanning
+  // hull polygon emitted by fetch_coastline.py we draw it as a
+  // STROKE-ONLY outline so the coastline shows but the fill doesn't
+  // cover the data overlay underneath. Legit polygons (peninsula,
+  // mainland coast, islands) stay normally filled.
   const paths = useMemo(() => {
     if (!features) return [];
-    return filterMegaPolygons(features, width, height).map((f, i) => ({
-      id: `land-${i}`,
-      d: geomToPath(f.geometry, width, height),
-    }));
+    const { innerW, innerH } = getFitted(width, height);
+    const cap = (innerW || width) * (innerH || height) * DEGENERATE_MEGAPATH_FRAC;
+    const out = [];
+    let i = 0;
+    for (const f of features) {
+      const g = f.geometry;
+      if (!g) continue;
+      if (g.type === "Polygon") {
+        const a = polygonBoundsArea(g.coordinates, width, height);
+        out.push({
+          id: `land-${i++}`,
+          d: geomToPath(g, width, height),
+          isMega: a >= cap,
+        });
+      } else if (g.type === "MultiPolygon") {
+        // Split each sub-polygon so the mega-hull renders stroke-only
+        // and the legit sub-polygons stay filled. (They share a Feature
+        // but their on-screen treatment differs.)
+        for (const rings of g.coordinates) {
+          const a = polygonBoundsArea(rings, width, height);
+          out.push({
+            id: `land-${i++}`,
+            d: rings.map((r) => ringToPath(r, width, height)).join(" "),
+            isMega: a >= cap,
+          });
+        }
+      }
+    }
+    return out;
   }, [features, width, height]);
 
   return (
@@ -364,7 +394,7 @@ export function LandBasemap({ width, height }) {
         <path
           key={p.id}
           d={p.d}
-          fill="var(--land)"
+          fill={p.isMega ? "none" : "var(--land)"}
           stroke="var(--land-edge)"
           strokeWidth="1"
         />
