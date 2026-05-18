@@ -224,6 +224,19 @@ RIVER_MOUTHS = [
     ("tijuana",      32.555, -117.130),  # Tijuana River
     ("carmel",       36.539, -121.929),  # Carmel River
     ("santa-ynez",   34.701, -120.597),  # Santa Ynez River, Lompoc
+    # Baja Mexico arroyos + mainland rivers (2026-05-18). Baja
+    # peninsula is mostly arid; the truly impactful rivers for Cortez
+    # clarity are the mainland-Mexico ones flowing into the eastern
+    # gulf during summer monsoon (Aug-Sep). Río Colorado delta is
+    # impactful for north Cortez whenever upstream releases happen
+    # (rare these days but the geography still concentrates settled
+    # silt at the river mouth).
+    ("colorado",        31.850, -114.740),  # Río Colorado delta, N Cortez
+    ("yaqui",           27.620, -110.550),  # Río Yaqui, Sonora mainland
+    ("mayo",            26.860, -109.650),  # Río Mayo, Sonora mainland
+    ("fuerte",          25.910, -109.040),  # Río Fuerte, Sinaloa mainland
+    ("sinaloa",         25.050, -108.070),  # Río Sinaloa, mainland
+    ("magdalena-baja",  24.830, -112.000),  # Río Santo Domingo / Magdalena, Pac
 ]
 
 
@@ -844,6 +857,44 @@ def main():
     viz_p10_ft = result["viz_p10_ft"].reshape(shape2d)  # turbid end
     viz_p90_ft = result["viz_p90_ft"].reshape(shape2d)  # clear end
     quality   = result["quality"].reshape(shape2d)
+
+    # Northern Sea of Cortez stale-water penalty (Baja only).
+    # North of the Midriff Islands (Tiburón / Ángel de la Guarda, lat
+    # ~28.5°N), the gulf has restricted deep-water exchange. In
+    # practice, the resulting summer stagnation + plankton bloom +
+    # tidal-mud stirring drops visibility consistently below what the
+    # chl-only model predicts. Apply a flat penalty for cells inside
+    # the bbox approximation of the zone:
+    #   lat in [28.5, 32.0]  AND  lng in [-115.0, -113.0]
+    # which captures Bahía de los Ángeles N → Puerto Peñasco / San
+    # Felipe (the actual stagnation area). The penalty is applied to
+    # p10/p50/p90 uniformly; bigger physical effect at p90 (clear-end)
+    # is captured because the post-floor minimum keeps poor-end values
+    # near zero.
+    #
+    # Followups (not in this commit):
+    #   * Scale by month: summer worse than winter (~1.5× penalty Jun-Sep).
+    #   * Scale by SST anomaly: warmer = more bloom = more turbid.
+    #   * Replace bbox with proper polygon (currently catches a few
+    #     Pacific-Baja cells in the corner, but they're north of bbox's
+    #     -115 lng cutoff so it's fine).
+    if active_region().name == "baja":
+        in_north_cortez = (
+            (lat_grid >= 28.5) & (lat_grid <= 32.0) &
+            (lng_grid >= -115.0) & (lng_grid <= -113.0)
+        )
+        NORTH_CORTEZ_PENALTY_FT = 16.0  # ≈ 5 m
+        viz_p50_ft = np.where(in_north_cortez,
+                              np.maximum(viz_p50_ft - NORTH_CORTEZ_PENALTY_FT, 0),
+                              viz_p50_ft)
+        viz_p10_ft = np.where(in_north_cortez,
+                              np.maximum(viz_p10_ft - NORTH_CORTEZ_PENALTY_FT, 0),
+                              viz_p10_ft)
+        viz_p90_ft = np.where(in_north_cortez,
+                              np.maximum(viz_p90_ft - NORTH_CORTEZ_PENALTY_FT, 0),
+                              viz_p90_ft)
+        n_stale = int(np.sum(in_north_cortez & np.isfinite(viz_p50_ft)))
+        print(f"  applied N Cortez stale-water penalty ({NORTH_CORTEZ_PENALTY_FT:.0f}ft) to {n_stale} cells")
 
     print(f"  viz_p50_ft range: {np.nanmin(viz_p50_ft):.1f} – {np.nanmax(viz_p50_ft):.1f} ft, "
           f"mean {np.nanmean(viz_p50_ft):.1f}")
