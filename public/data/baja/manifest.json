@@ -1,0 +1,167 @@
+{
+  "bbox": [
+    -118.0,
+    22.0,
+    -106.5,
+    32.6
+  ],
+  "layers": {
+    "wind": {
+      "speed_range": [
+        0.0,
+        50.0
+      ],
+      "uv_range": [
+        -30.0,
+        30.0
+      ],
+      "unit": "kt",
+      "grid": {
+        "width": 140,
+        "height": 110
+      },
+      "source": "NOAA HRRR + GFS",
+      "windows": {
+        "now": {
+          "speed_url": "/data/wind_speed_now.png",
+          "uv_url": "/data/wind_uv_now.png",
+          "valid_at": "2026-05-18T00:00:00Z",
+          "fcst_hour": 0,
+          "source": "HRRR"
+        },
+        "p6h": {
+          "speed_url": "/data/wind_speed_p6h.png",
+          "uv_url": "/data/wind_uv_p6h.png",
+          "valid_at": "2026-05-18T06:00:00Z",
+          "fcst_hour": 6,
+          "source": "HRRR"
+        },
+        "p24h": {
+          "speed_url": "/data/wind_speed_p24h.png",
+          "uv_url": "/data/wind_uv_p24h.png",
+          "valid_at": "2026-05-19T00:00:00Z",
+          "fcst_hour": 24,
+          "source": "HRRR"
+        },
+        "p72h": {
+          "speed_url": "/data/wind_speed_p72h.png",
+          "uv_url": "/data/wind_uv_p72h.png",
+          "valid_at": "2026-05-21T00:00:00Z",
+          "fcst_hour": 72,
+          "source": "GFS"
+        }
+      },
+      "history": {
+        "d-1": {
+          "uv_url": "/data/wind_uv_d-1.png",
+          "valid_at": "2026-05-17T12:00:00Z",
+          "source": "GFS"
+        },
+        "d-2": {
+          "uv_url": "/data/wind_uv_d-2.png",
+          "valid_at": "2026-05-16T12:00:00Z",
+          "source": "GFS"
+        },
+        "d-3": {
+          "uv_url": "/data/wind_uv_d-3.png",
+          "valid_at": "2026-05-15T12:00:00Z",
+          "source": "GFS"
+        },
+        "d-4": {
+          "uv_url": "/data/wind_uv_d-4.png",
+          "valid_at": "2026-05-14T12:00:00Z",
+          "source": "GFS"
+        }
+      },
+      "generated_at": "2026-05-18T04:48:36Z"
+    },
+    "wind5d": {
+      "summary_url": "/data/wind/summary.json",
+      "grid": {
+        "width": 140,
+        "height": 110
+      },
+      "speed_range": [
+        0.0,
+        50.0
+      ],
+      "uv_range": [
+        -30.0,
+        30.0
+      ],
+      "tz": "America/Los_Angeles",
+      "generated_at": "2026-05-18T04:49:07Z",
+      "best_window": {
+        "day": 3,
+        "bucket": "morning",
+        "mean_kt": 5.2
+      }
+    },
+    "swell5d": {
+      "summary_url": "/data/swell/summary.json",
+      "grid": {
+        "width": 140,
+        "height": 110
+      },
+      "height_range_m": [
+        0.0,
+        12.0
+      ],
+      "period_range_s": [
+        0.0,
+        25.0
+      ],
+      "tz": "America/Los_Angeles",
+      "generated_at": "2026-05-18T04:49:52Z"
+    },
+    "wave": {
+      "height_range_m": [
+        0.0,
+        12.0
+      ],
+      "period_range_s": [
+        0.0,
+        25.0
+      ],
+      "grid": {
+        "width": 140,
+        "height": 110
+      },
+      "source": "NOAA gfswave (WaveWatch III)",
+      "generated_at": "2026-05-18T04:49:54Z",
+      "windows": {
+        "now": {
+          "url": "/data/wave_now.png",
+          "valid_at": "2026-05-18T00:00:00Z"
+        },
+        "max_3d": {
+          "url": "/data/wave_max_3d.png",
+          "valid_at": "2026-05-18T00:00:00Z"
+        }
+      }
+    },
+    "current5d": {
+      "summary_url": "/data/currents/summary.json",
+      "grid": {
+        "width": 280,
+        "height": 220
+      },
+      "uv_range": [
+        -1.5,
+        1.5
+      ],
+      "speed_range": [
+        0.0,
+        3.0
+      ],
+      "unit": "kt",
+      "vector_convention": "direction_to",
+      "generated_at": "2026-05-18T04:49:55Z",
+      "best_window": {
+        "day": 0,
+        "bucket": "predawn",
+        "mean_kt": 0.12
+      }
+    }
+  }
+}
