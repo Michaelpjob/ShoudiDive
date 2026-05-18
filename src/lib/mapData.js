@@ -31,6 +31,7 @@ const REGION_BBOX = {
   ca:       { latMin: 31.8, latMax: 42.0, lngMin: -128.5, lngMax: -116.8 },
   pnw:      { latMin: 42.0, latMax: 49.0, lngMin: -127.0, lngMax: -122.0 },
   tropical: { latMin: 10.0, latMax: 31.0, lngMin:  -98.0, lngMax:  -60.0 },
+  baja:     { latMin: 22.0, latMax: 32.6, lngMin: -118.0, lngMax: -106.5 },
 };
 export const BBOX = REGION_BBOX[activeRegion()] || REGION_BBOX.ca;
 
@@ -223,6 +224,23 @@ const REGION_SAVED_SPOTS = {
     { id: "palancar",    name: "Palancar",        lng:  -87.027, lat: 20.358 },
     { id: "bonaire-1k",  name: "1000 Steps",      lng:  -68.397, lat: 12.219 },
     { id: "blue-hole",   name: "Blue Hole",       lng:  -87.535, lat: 17.316 },
+  ],
+  baja: [
+    // Pacific side
+    { id: "cedros",       name: "Isla Cedros",     lng: -115.20, lat: 28.20 },
+    { id: "bahia-tort",   name: "Bahía Tortugas",  lng: -114.88, lat: 27.69 },
+    // Cabo corridor
+    { id: "cabo",         name: "Cabo San Lucas",  lng: -109.92, lat: 22.89 },
+    { id: "gordo-banks",  name: "Gordo Banks",     lng: -109.34, lat: 22.95 },
+    // Sea of Cortez — south
+    { id: "cabo-pulmo",   name: "Cabo Pulmo",      lng: -109.43, lat: 23.43 },
+    { id: "espiritu-stm", name: "Espíritu Santo",  lng: -110.37, lat: 24.50 },
+    { id: "el-bajo",      name: "El Bajo",         lng: -109.96, lat: 24.59 },
+    { id: "cerralvo",     name: "Cerralvo",        lng: -109.86, lat: 24.27 },
+    // Sea of Cortez — central + north
+    { id: "loreto",       name: "Loreto",          lng: -111.34, lat: 26.01 },
+    { id: "bahia-angel",  name: "Bahía Ángeles",   lng: -113.55, lat: 28.95 },
+    { id: "san-felipe",   name: "San Felipe",      lng: -114.83, lat: 31.03 },
   ],
 };
 

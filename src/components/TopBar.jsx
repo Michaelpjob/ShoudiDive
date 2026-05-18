@@ -10,6 +10,7 @@ const REGION_TAGLINES = {
   ca:       "Sea Temp · Water Clarity · Wind · Current · California Coast",
   pnw:      "Pacific Northwest (beta) · Oregon + Washington + Salish Sea",
   tropical: "FL + Caribbean (beta) · Gulf + Keys + Bahamas + Greater & Lesser Antilles",
+  baja:     "Baja Mexico (beta) · Pacific + Sea of Cortez · Ensenada to Cabo + La Paz",
 };
 
 // Dive flag — the universal "diver below" maritime symbol. Red square,

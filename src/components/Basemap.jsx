@@ -102,6 +102,28 @@ export const PLACE_LABELS = [
   { key: "lbl-mendocino-ridge",   text: "MENDOCINO RIDGE",    lng: -125.00, lat: 40.20, fontSize: 10, italic: true, color: "var(--ink-3)", priority: 3 },
   // Pacific moves north-ish to recenter once the bbox is taller.
   { key: "lbl-pacific",           text: "PACIFIC OCEAN",      lng: -123.50, lat: 38.50, fontSize: 13, italic: true, color: "var(--ink-3)", letterSpacing: "0.2em", priority: 2 },
+
+  // ---- Baja Mexico (PR-BAJA-1 scaffold; labels filter by viewBox so
+  //      these only render when active region is "baja") ----
+  // Pacific side
+  { key: "lbl-ensenada",          text: "ENSENADA",           lng: -116.60, lat: 31.87, fontSize: 11, weight: 500, priority: 6 },
+  { key: "lbl-san-quintin",       text: "SAN QUINTÍN",        lng: -115.95, lat: 30.48, fontSize: 11, priority: 5 },
+  { key: "lbl-cedros",            text: "ISLA CEDROS",        lng: -115.20, lat: 28.20, fontSize: 10, italic: true, color: "var(--ink-3)", priority: 4 },
+  { key: "lbl-bahia-tortugas",    text: "BAHÍA TORTUGAS",     lng: -114.88, lat: 27.69, fontSize: 11, priority: 5 },
+  { key: "lbl-magdalena-bay",     text: "MAGDALENA BAY",      lng: -112.20, lat: 24.62, fontSize: 11, priority: 5 },
+  { key: "lbl-cabo-san-lucas",    text: "CABO SAN LUCAS",     lng: -109.92, lat: 22.89, fontSize: 12, weight: 500, priority: 7 },
+  // Sea of Cortez side (peninsula east coast)
+  { key: "lbl-cabo-pulmo",        text: "CABO PULMO",         lng: -109.43, lat: 23.43, fontSize: 10, italic: true, color: "var(--ink-3)", priority: 4 },
+  { key: "lbl-la-paz",            text: "LA PAZ",             lng: -110.31, lat: 24.16, fontSize: 12, weight: 500, priority: 7 },
+  { key: "lbl-espiritu-santo",    text: "ESPÍRITU SANTO",     lng: -110.37, lat: 24.50, fontSize: 10, italic: true, color: "var(--ink-3)", priority: 4 },
+  { key: "lbl-loreto",            text: "LORETO",             lng: -111.34, lat: 26.01, fontSize: 11, weight: 500, priority: 6 },
+  { key: "lbl-mulege",            text: "MULEGÉ",             lng: -111.99, lat: 26.89, fontSize: 11, priority: 5 },
+  { key: "lbl-bahia-de-los-angeles", text: "BAHÍA DE LOS ÁNGELES", lng: -113.55, lat: 28.95, fontSize: 11, priority: 5 },
+  { key: "lbl-san-felipe",        text: "SAN FELIPE",         lng: -114.83, lat: 31.03, fontSize: 11, priority: 5 },
+  { key: "lbl-puerto-penasco",    text: "PUERTO PEÑASCO",     lng: -113.54, lat: 31.31, fontSize: 11, priority: 5 },
+  // Water-body labels
+  { key: "lbl-sea-of-cortez",     text: "SEA OF CORTEZ",      lng: -112.20, lat: 27.50, fontSize: 13, italic: true, color: "var(--ink-3)", letterSpacing: "0.2em", priority: 2 },
+  { key: "lbl-baja-pacific",      text: "PACIFIC OCEAN",      lng: -115.50, lat: 25.50, fontSize: 13, italic: true, color: "var(--ink-3)", letterSpacing: "0.2em", priority: 2 },
 ];
 
 // ---- Sea (drawn UNDER the data overlay) ------------------------------------
