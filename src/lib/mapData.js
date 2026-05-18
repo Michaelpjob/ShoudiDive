@@ -264,6 +264,7 @@ const REGION_SST_RANGE = {
   ca:       [9,  25], // °C — legacy CA calibration
   pnw:      [5,  20], // °C — Olympic + Salish + OR outer coast
   tropical: [20, 32], // °C — Caribbean / Gulf / Florida year-round
+  baja:     [14, 32], // °C — Pacific upwelling north + Cortez summer south
 };
 export const SST_RANGE =
   REGION_SST_RANGE[activeRegion()] || REGION_SST_RANGE.ca;

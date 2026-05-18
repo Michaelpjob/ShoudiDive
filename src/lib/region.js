@@ -28,6 +28,11 @@ let _cached = null;
 function _regionFromHostname() {
   try {
     const h = (window.location.hostname || "").toLowerCase();
+    // Production hostname is CA-ONLY. PNW / tropical / baja are dev-
+    // only betas; surfacing them on shouldidive.com would imply a
+    // level of polish + data validation they don't yet have. Pin to
+    // CA on prod so a URL hack like `?region=pnw` is a no-op there.
+    if (h === "shouldidive.com" || h === "www.shouldidive.com") return "ca";
     if (h.startsWith("pnw-beta.")) return "pnw";
     if (h.startsWith("tropical-beta.")) return "tropical";
     if (h.startsWith("baja-beta.")) return "baja";
@@ -42,6 +47,26 @@ function _regionFromHostname() {
     // SSR or no-window — fall through.
   }
   return null;
+}
+
+/**
+ * True when the current hostname is the production custom domain.
+ * Used by RegionSwitcher to hide beta chips entirely on shouldidive.com
+ * (the hostname pin via `_regionFromHostname` already forces region=ca
+ * there, but we also want the chip list to read "California only" so
+ * visitors don't see beta options they can't switch to).
+ */
+function _isProductionHost() {
+  try {
+    const h = (window.location.hostname || "").toLowerCase();
+    return h === "shouldidive.com" || h === "www.shouldidive.com";
+  } catch {
+    return false;
+  }
+}
+
+export function isProductionHost() {
+  return _isProductionHost();
 }
 
 /**

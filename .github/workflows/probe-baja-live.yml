@@ -1,0 +1,71 @@
+name: Probe baja-live
+
+# Diagnostic probe — boots headless Chrome against the LIVE dev
+# preview at dev.shouldidive.pages.dev with ?region=baja, walks
+# every layer chip, captures screenshots + DataOverlay data-URL
+# lengths + console errors. Uploads test-output/probe-baja-live/
+# as an artifact for inspection.
+#
+# Runs on push to dev when the probe script itself changes, OR via
+# workflow_dispatch (once landed on main).
+#
+# Time-bound: deletable once the Baja rendering investigation closes.
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - "tests/probe-baja-live.mjs"
+      - ".github/workflows/probe-baja-live.yml"
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Base URL to probe (default: https://dev.shouldidive.pages.dev)"
+        required: false
+        default: "https://dev.shouldidive.pages.dev"
+        type: string
+      region:
+        description: "Region to probe (default: baja)"
+        required: false
+        default: "baja"
+        type: string
+
+concurrency:
+  group: probe-baja-live
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install puppeteer (just enough to probe)
+        run: npm install --no-audit --no-fund
+
+      - name: Run probe
+        env:
+          PROBE_BASE_URL: ${{ inputs.base_url || 'https://dev.shouldidive.pages.dev' }}
+          PROBE_REGION:   ${{ inputs.region || 'baja' }}
+        # Don't fail the workflow on probe non-zero — we want the
+        # artifact regardless so the diagnosis isn't blocked by
+        # "the probe failed".
+        continue-on-error: true
+        run: node tests/probe-baja-live.mjs
+
+      - name: Upload probe artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-baja-live-${{ github.sha }}
+          path: test-output/probe-baja-live/
+          retention-days: 7
