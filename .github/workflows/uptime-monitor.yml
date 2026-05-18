@@ -95,8 +95,15 @@ jobs:
             # $1 = name, $2 = url, $3 = optional content predicate
             local name="$1" url="$2" predicate="${3:-}"
             local code
+            # Use a real-Chrome UA — Cloudflare's bot detection on
+            # GHA runner IPs returns 403 to obviously-bot user agents
+            # (see PR #48 for the same fix applied to live-runtime).
+            # The custom X-Source header preserves our ability to
+            # identify uptime-monitor traffic in CF logs / our own
+            # analytics endpoint if/when we want to.
             code=$(curl -sS -L \
-              -A 'shouldidive-uptime-monitor/1.0 (+https://github.com/Michaelpjob/ShoudiDive)' \
+              -A 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36' \
+              -H 'X-Source: shouldidive-uptime-monitor/1.0' \
               -o /tmp/probe_body \
               -w '%{http_code}' \
               --max-time 30 \
