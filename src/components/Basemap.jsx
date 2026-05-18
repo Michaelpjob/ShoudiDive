@@ -1,6 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
-import { project, BBOX } from "../lib/mapData.js";
+import { project, BBOX, getFitted } from "../lib/mapData.js";
 import { dataPath } from "../lib/region.js";
+
+// Drop features whose projected bbox dominates the fitted map area —
+// fetch_coastline.py emits a degenerate "outer hull" mega-polygon for
+// regions where the land mass spans most of the bbox (Baja peninsula +
+// mainland Mexico collapsed into one MultiPolygon, ~1.9M-char path
+// covering 100% of the inner letterbox). Painted as land it hides the
+// data overlay; used as a mask path it clips out the data. Heuristic:
+// any single polygon whose bbox exceeds 70% of the fitted area is the
+// degenerate one. Legitimate land features (peninsula coast, islands,
+// mainland coast) are all well under that threshold.
+const DEGENERATE_MEGAPATH_FRAC = 0.7;
+function filterMegaPolygons(features, w, h) {
+  const { innerW, innerH } = getFitted(w, h);
+  const cap = (innerW || w) * (innerH || h) * DEGENERATE_MEGAPATH_FRAC;
+  return features.filter((f) => geomBoundsArea(f.geometry, w, h) < cap);
+}
 
 // ---- Coastline + island GeoJSON (clipped Natural Earth 10 m) ---------------
 
@@ -234,7 +250,7 @@ export function OceanMaskDefs({ width, height }) {
 
   const paths = useMemo(() => {
     if (!features) return [];
-    return features.map((f, i) => ({
+    return filterMegaPolygons(features, width, height).map((f, i) => ({
       id: `ocean-mask-land-${i}`,
       d: geomToPath(f.geometry, width, height),
     }));
@@ -290,7 +306,7 @@ export function LandBasemap({ width, height }) {
 
   const paths = useMemo(() => {
     if (!features) return [];
-    return features.map((f, i) => ({
+    return filterMegaPolygons(features, width, height).map((f, i) => ({
       id: `land-${i}`,
       d: geomToPath(f.geometry, width, height),
     }));
