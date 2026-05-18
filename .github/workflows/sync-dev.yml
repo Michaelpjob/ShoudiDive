@@ -1,0 +1,122 @@
+name: Sync dev with main
+
+# When main moves (cron data commits, PR merges, etc.), automatically
+# fast-forward / merge `dev` so any open dev → main PR doesn't go DIRTY.
+#
+# Problem this solves:
+# ---------------------
+# Two pipelines write to `main`:
+#   * Code pipeline:   agent → dev → PR → main      (slow, gated)
+#   * Data pipeline:   cron  →            main      (every ~hour)
+#
+# Both touch overlapping paths (`public/data/*`). Every cron push to
+# main creates a guaranteed merge conflict against any open dev → main
+# PR, blocking the GitHub merge button until dev is rebased. Before
+# this workflow, that meant a manual "merge main into dev, take main's
+# data, push" dance after every cron push — making it nearly impossible
+# to land code PRs during business hours.
+#
+# How this works:
+# ---------------
+# 1. Trigger: any push to main.
+# 2. Skip if the push WAS this workflow's own merge commit (no loop).
+# 3. Skip if dev is already at or ahead of main (nothing to sync).
+# 4. Otherwise: merge main into dev with `-X theirs` so any conflicts
+#    on `public/data/*` resolve to main's (newer) version automatically.
+# 5. Push back to dev.
+#
+# Why `-X theirs` is safe here:
+# -----------------------------
+# Conflicts in our setup are essentially always on data files. Per
+# CLAUDE.md, nothing pushes code-changes directly to main — they all
+# come via dev → main PRs, so by the time main's commit reaches this
+# workflow, dev's version of any code file is either identical or
+# already merged in. The only commits hitting main that this workflow
+# reacts to are the cron data commits, which by construction touch
+# only data files. `-X theirs` resolves those to main's bot output;
+# code conflicts would be a sign something has gone wrong upstream
+# and should fail loudly anyway.
+#
+# Long-term: data files shouldn't live in git at all (move to R2).
+# This workflow is the pragmatic bridge until that refactor lands.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-dev
+  # If a new main push arrives mid-sync, cancel the in-flight run and
+  # restart against the newer main HEAD. We only care about the latest.
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    # Only react to bot-driven main pushes (cron data refreshes, PR
+    # merge commits authored by the bot). A direct human push to main
+    # is an emergency / branch-protection-bypass scenario; let those
+    # surface normally rather than silently fan out to dev.
+    if: github.actor == 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout dev
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+          # GITHUB_TOKEN can push to dev — dev isn't branch-protected.
+          # Note: pushes via GITHUB_TOKEN don't trigger downstream
+          # workflows (a GH safety feature), which is fine here — we
+          # don't need dev-checks to re-run on a pure data-file
+          # sync commit.
+
+      - name: Configure git identity
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+      - name: Check whether dev needs sync
+        id: check
+        run: |
+          git fetch origin main
+          ahead=$(git rev-list dev..origin/main --count)
+          echo "ahead=$ahead" >> "$GITHUB_OUTPUT"
+          if [ "$ahead" = "0" ]; then
+            echo "dev already up to date with main — nothing to do"
+          else
+            echo "dev is $ahead commit(s) behind main — will sync"
+          fi
+
+      - name: Merge main into dev (prefer main's data files)
+        if: steps.check.outputs.ahead != '0'
+        run: |
+          # -X theirs: when conflicts arise on file content, prefer the
+          # incoming side (main). For data files (the only realistic
+          # conflict surface), main is always newer + correct.
+          git merge origin/main \
+            --no-edit \
+            -X theirs \
+            -m "sync(auto): bring dev up to main HEAD"
+
+      - name: Push synced dev
+        if: steps.check.outputs.ahead != '0'
+        run: |
+          git push origin dev
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Sync dev result"
+            echo
+            if [ "${{ steps.check.outputs.ahead }}" = "0" ]; then
+              echo "Dev was already up to date with main. No-op."
+            else
+              echo "Merged ${{ steps.check.outputs.ahead }} main commit(s) into dev."
+              echo "Open dev → main PRs should flip back to MERGEABLE within seconds."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

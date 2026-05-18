@@ -466,3 +466,117 @@ def test_top_level_manifest_freshness(region):
         f"{region}: manifest is {age_hours:.0f}h old (> 96h ceiling). "
         f"refresh-{region}-data.yml cron may be broken."
     )
+
+
+# ---------------------------------------------------------------------------
+# Category 5: SILENT FAILURES — partial-refresh detection
+#
+# Added 2026-05-17 after the SST/chl/kd490 silent-timeout incident. The
+# fetch step had `continue-on-error: true`, so when it hit the 15-min
+# wall (post-NorCal bbox expansion) the workflow kept going, committed
+# stale SST/chl/kd490 PNGs alongside fresh rivers/tides/RTOFS, and only
+# surfaced 58h later via the live-cp-manifest probe.
+#
+# Notes about layer cadence — important for designing tests here:
+#   * SST has a daily source cadence (NOAA MUR).
+#   * chl has a daily source cadence (Copernicus).
+#   * kd490 has a ~weekly source cadence — generated_at legitimately
+#     lags by days even when the daily fetcher succeeded.
+#   * wind has an HOURLY independent refresh (refresh-*-wind.yml),
+#     so it can be FRESHER than the daily top-level generated_at.
+#   * rtofs5d updates daily.
+#
+# These tests therefore avoid naive cross-layer skew comparisons —
+# they'd misfire on the layers that have legitimately different
+# cadences. Instead we name SST + chl explicitly (the daily-fetcher
+# pair that silently failed in May 2026) and pin them to a fresh-
+# enough threshold without dragging kd490 into the same bucket.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("region", REGIONS)
+def test_sst_not_silently_stuck(region):
+    """SST specifically — the layer that froze in the 2026-05-15→17 incident.
+
+    SST is the only layer whose schema reliably exposes a per-layer
+    `generated_at` (chl uses windows.dates, kd490 has a weekly cadence,
+    wind has its own hourly refresh). It's also the canonical signal
+    a diver would notice missing: stale sea-temperature data is the
+    "the site looks broken" symptom that matters.
+
+    If SST's `generated_at` is >96h old, the daily fetch step has
+    silently failed for multiple cron runs. 96h matches the ceiling
+    on `test_top_level_manifest_freshness` so the two tests don't
+    generate split-brain signals.
+    """
+    m = _manifest(region)
+    if m is None:
+        pytest.skip(f"no data for {region}")
+
+    info = (m.get("layers") or {}).get("sst")
+    if not isinstance(info, dict):
+        pytest.skip(f"{region}: no SST layer in manifest")
+    raw = info.get("generated_at")
+    if not raw:
+        pytest.skip(f"{region}: SST layer has no generated_at field")
+
+    try:
+        when = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except ValueError:
+        pytest.fail(f"{region}: SST generated_at unparseable: {raw}")
+
+    age_h = (datetime.now(timezone.utc) - when).total_seconds() / 3600
+    assert age_h < 96, (
+        f"{region}: SST generated_at is {age_h:.0f}h old (> 96h). The "
+        f"daily fetch step in refresh-{region}-data.yml may be silently "
+        f"failing — check the run logs for `##[error]The action ... has "
+        f"timed out` on the `Fetch latest ocean data` step. Same bug "
+        f"class as the 2026-05-15→17 incident."
+    )
+
+
+@pytest.mark.parametrize("region", REGIONS)
+def test_top_level_at_least_as_fresh_as_sst(region):
+    """manifest.generated_at must be ≥ as fresh as the SST per-layer timestamp.
+
+    The top-level timestamp represents "last full refresh." SST advances
+    ONLY when the daily refresh succeeds end-to-end. If SST is fresher
+    than top-level by more than the 5-minute grace, the daily refresh
+    ran but its finalize-manifest step didn't — partial-refresh symptom.
+
+    We anchor on SST (not e.g. wind) because wind has its own HOURLY
+    refresh that can legitimately be more recent than the daily top-level.
+    """
+    m = _manifest(region)
+    if m is None:
+        pytest.skip(f"no data for {region}")
+
+    top_raw = m.get("generated_at")
+    if not top_raw:
+        pytest.skip(f"{region}: no top-level generated_at")
+    try:
+        top = datetime.fromisoformat(str(top_raw).replace("Z", "+00:00"))
+    except ValueError:
+        pytest.fail(f"{region}: top-level generated_at unparseable: {top_raw}")
+
+    info = (m.get("layers") or {}).get("sst") or {}
+    sst_raw = info.get("generated_at")
+    if not sst_raw:
+        pytest.skip(f"{region}: SST layer has no generated_at field")
+    try:
+        sst_ts = datetime.fromisoformat(str(sst_raw).replace("Z", "+00:00"))
+    except ValueError:
+        pytest.skip(f"{region}: SST generated_at unparseable: {sst_raw}")
+
+    # 5-minute grace window: the per-layer finalize and the top-level
+    # bump can land on opposite sides of a second boundary.
+    grace = timedelta(minutes=5)
+    if top + grace < sst_ts:
+        skew_m = (sst_ts - top).total_seconds() / 60
+        pytest.fail(
+            f"{region}: top-level manifest.generated_at ({top.isoformat()}) "
+            f"is {skew_m:.1f} min behind SST ({sst_ts.isoformat()}). The "
+            f"daily refresh's fetchers wrote fresh SST but the manifest "
+            f"finalization step that bumps top-level didn't run. Check "
+            f"refresh-{region}-data.yml for the manifest-build step "
+            f"landing after all fetchers."
+        )

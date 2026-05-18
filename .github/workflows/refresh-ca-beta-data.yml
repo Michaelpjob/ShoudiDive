@@ -64,6 +64,12 @@ jobs:
           EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
         run: python pipeline/fetch.py
 
+      - name: Sentinel — fail loudly if ocean fetch produced no fresh output
+        # See refresh-ca-data.yml for the full rationale. Same guard:
+        # without this, a silent timeout on the previous step leaves
+        # SST/chl/kd490 stale and the workflow commits stale data.
+        run: python pipeline/check_fetch_freshness.py --layer sst
+
       - name: Fetch 7-day precipitation
         continue-on-error: true
         timeout-minutes: 5

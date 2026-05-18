@@ -64,6 +64,12 @@ jobs:
           EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
         run: python pipeline/fetch.py
 
+      - name: Sentinel — fail loudly if ocean fetch produced no fresh output
+        # See refresh-ca-data.yml for the full rationale. SHOULDIDIVE_REGION
+        # is inherited from the job env, so the sentinel looks at
+        # public/data/pnw/ automatically.
+        run: python pipeline/check_fetch_freshness.py --layer sst
+
       - name: Fetch 7-day precipitation
         continue-on-error: true
         timeout-minutes: 5
