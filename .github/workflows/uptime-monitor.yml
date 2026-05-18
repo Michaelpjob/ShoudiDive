@@ -70,18 +70,29 @@ jobs:
     steps:
       - name: Probe homepage + manifest
         id: check
-        # set +e: don't abort the workflow on a non-zero curl — we
-        # need to capture the result and emit it as a structured
-        # step output for the issue-management jobs that follow.
-        # set -u and -o pipefail kept on for safety.
+        # set +e: don't abort the step on a non-zero curl — we want
+        # to handle the result structurally and emit it as the
+        # `failed` output for the downstream issue-management jobs.
+        #
+        # Probe output goes to STDOUT (not a captured variable) so the
+        # GH Actions run log shows exactly what happened. The DETAILS
+        # output is also written, but only for templating the issue
+        # body — stdout is the authoritative debug surface.
+        #
+        # We ALWAYS exit 0 from this step. Status of the probe is
+        # carried by the `failed` output. The downstream jobs use
+        # `if: always() && needs.probe.outputs.failed != '0'` (or
+        # `== '0'`) to decide whether to open / close the issue.
+        # Why not exit 1 on failure: a failed step causes
+        # `needs:`-dependent jobs to be SKIPPED by default, which
+        # would mean the alert never fires.
         shell: bash
         run: |
           set +e
-          set -u
           set -o pipefail
 
           probe() {
-            # $1 = name, $2 = url, $3 = optional content predicate (sub-shell command, exit 0 = pass)
+            # $1 = name, $2 = url, $3 = optional content predicate
             local name="$1" url="$2" predicate="${3:-}"
             local code
             code=$(curl -sS -L \
@@ -89,14 +100,19 @@ jobs:
               -o /tmp/probe_body \
               -w '%{http_code}' \
               --max-time 30 \
-              "$url" || echo "000")
+              "$url")
+            local curl_rc=$?
+            if [ "$curl_rc" != "0" ]; then
+              echo "::warning::$name FAIL: curl exit $curl_rc (network / TLS / timeout)"
+              return 1
+            fi
             if [ "$code" != "200" ]; then
-              echo "$name FAIL: HTTP $code"
+              echo "::warning::$name FAIL: HTTP $code"
               return 1
             fi
             if [ -n "$predicate" ]; then
               if ! eval "$predicate" </tmp/probe_body >/dev/null 2>&1; then
-                echo "$name FAIL: 200 but content predicate failed"
+                echo "::warning::$name FAIL: HTTP 200 but content predicate failed"
                 return 1
               fi
             fi
@@ -106,35 +122,43 @@ jobs:
 
           probe_with_retry() {
             local name="$1" url="$2" predicate="${3:-}"
-            # First attempt
             if probe "$name" "$url" "$predicate"; then
               return 0
             fi
-            echo "$name first attempt failed; retrying in 30 s to absorb CF/edge flutter..."
+            echo "$name first attempt failed; sleeping 30 s before retry..."
             sleep 30
-            # Second attempt — only this one counts toward escalation.
             probe "$name" "$url" "$predicate"
           }
 
           failed=0
-          details=""
+          details_lines=()
 
-          if ! out=$(probe_with_retry homepage "https://shouldidive.com/" ""); then
-            failed=$((failed + 1))
-            details+="$out"$'\n'
+          # ---- Homepage probe ------------------------------------------
+          echo "::group::homepage"
+          if probe_with_retry homepage "https://shouldidive.com/" ""; then
+            details_lines+=("homepage: OK")
           else
-            details+="$out"$'\n'
+            failed=$((failed + 1))
+            details_lines+=("homepage: FAIL (see ::warning:: above)")
           fi
+          echo "::endgroup::"
 
-          # For manifest, verify it's valid JSON and has a `bbox` field.
-          # Catches the "200 OK but body is an HTML error page" case
-          # that some CDN misconfigs produce.
-          if ! out=$(probe_with_retry manifest "https://shouldidive.com/data/manifest.json" "jq -e '.bbox | length == 4'"); then
-            failed=$((failed + 1))
-            details+="$out"$'\n'
+          # ---- Manifest probe ------------------------------------------
+          # 200 OK with a valid JSON body and a 4-element bbox. Catches
+          # the "CDN returned an HTML error page with status 200" case.
+          echo "::group::manifest"
+          if probe_with_retry manifest \
+            "https://shouldidive.com/data/manifest.json" \
+            "jq -e '.bbox | length == 4'"; then
+            details_lines+=("manifest: OK")
           else
-            details+="$out"$'\n'
+            failed=$((failed + 1))
+            details_lines+=("manifest: FAIL (see ::warning:: above)")
           fi
+          echo "::endgroup::"
+
+          # ---- Emit outputs --------------------------------------------
+          details=$(printf '%s\n' "${details_lines[@]}")
 
           {
             echo "failed=$failed"
@@ -143,23 +167,29 @@ jobs:
             echo "EOF"
           } >>"$GITHUB_OUTPUT"
 
-          # Echo to the run summary for easy debugging from the UI.
           {
             echo "## Uptime probe"
+            echo
+            echo "Failures this tick: $failed"
             echo
             echo '```'
             echo "$details"
             echo '```'
           } >>"$GITHUB_STEP_SUMMARY"
 
-          # Exit code: 0 if all good, 1 if any probe failed.
-          # The down-issue step keys off failed > 0; the up-issue step
-          # keys off failed == 0.
-          [ "$failed" = "0" ]
+          if [ "$failed" -gt 0 ]; then
+            echo "::error::$failed probe(s) failed. See warnings above. The alerting job will open / update the rolling site-down issue."
+          fi
+
+          # Always exit 0 — see header comment.
+          exit 0
 
   open-or-update-issue:
     needs: probe
-    if: needs.probe.outputs.failed != '0'
+    # always() needed because `needs.probe` may have failed, and
+    # default `needs:` behavior is to skip downstream jobs on failure.
+    # We control success/failure via the `failed` output, not exit code.
+    if: ${{ always() && needs.probe.outputs.failed != '0' && needs.probe.outputs.failed != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions:
@@ -223,7 +253,7 @@ jobs:
 
   close-issue-on-recovery:
     needs: probe
-    if: needs.probe.outputs.failed == '0'
+    if: ${{ always() && needs.probe.outputs.failed == '0' }}
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions:
