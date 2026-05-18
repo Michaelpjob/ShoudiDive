@@ -264,7 +264,27 @@ const REGION_SST_RANGE = {
   ca:       [9,  25], // °C — legacy CA calibration
   pnw:      [5,  20], // °C — Olympic + Salish + OR outer coast
   tropical: [20, 32], // °C — Caribbean / Gulf / Florida year-round
-  baja:     [14, 32], // °C — Pacific upwelling north + Cortez summer south
+  // Baja: PNG ENCODER is [14, 32] (matches baja.py layer_range_overrides;
+  // covers Pacific upwelling floor + Cortez summer max). DISPLAY range
+  // tightened to [20, 24] — a 4°C window centered on May's mean SST
+  // (21.75°C from history summary). Pixel histogram on the live bundle
+  // confirmed that with looser ranges (>50% of opaque cells render
+  // deep navy / dark blue) the overlay was invisible against the
+  // basemap blue at the default 62% opacity.
+  //
+  //   <20 °C  → saturates deep navy (Pacific upwelling, NorCal-current
+  //             tongue at Cedros / Bahía Tortugas / Ensenada winter)
+  //   20–22°C → blue → cyan (typical Pacific Baja + N Cortez spring)
+  //   22–23°C → cyan → yellow (transition, mid-Cortez)
+  //   23–24°C → yellow → orange (Cabo / La Paz summer)
+  //   >24 °C  → saturates red (peak Cortez summer, Bahía Ángeles +
+  //             San Felipe August surface)
+  //
+  // Trade-off: we lose nuance for cells outside [20,24]. Dive UX cares
+  // about discriminating swim-comfortable bands (suit choice) more
+  // than absolute extremes. Cursor pill still shows real °C/°F from
+  // the manifest range (decode is independent of display range).
+  baja:     [20, 24],
 };
 export const SST_RANGE =
   REGION_SST_RANGE[activeRegion()] || REGION_SST_RANGE.ca;
