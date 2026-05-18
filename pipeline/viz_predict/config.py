@@ -2,26 +2,29 @@
 from dataclasses import dataclass
 from typing import Dict
 
-
-# Latitude zone boundaries (deg N). Each entry is (lower, upper) where
-# the upper bound is exclusive at the next zone's lower bound (a cell
-# at lat==lower goes into THIS zone, never the one below).
+# Latitude zone boundaries (deg N). Region-aware as of 2026-05-18:
+# pulls from active_region().lat_zone_bounds so Baja gets its own
+# north/mid/south_baja zones instead of falling through to CA's
+# `bight` catch-all (which has bight-specific coefficients calibrated
+# for SoCal nearshore productivity, NOT for the clearer subtropical
+# water further south).
 #
-# v3.5 (2026-05-10) — added `norcal` band per PR-NC-1 / docs/expansion-
-# norcal.md. The previous `central` zone (34.45..90) lumped Cambria,
-# Big Sur, Monterey Bay, the Farallons, and Pioneer/Davidson seamounts
-# under one set of coefficients. They're structurally different water:
-# north of Pt. Sur the shelf narrows, swell exposure jumps, and the
-# upwelling regime becomes persistent rather than pulsed. Splitting at
-# 36.00°N (Pt. Sur) puts Monterey Bay / Año Nuevo / Farallons / Pioneer
-# / Davidson into `norcal`; Cambria / Morro Bay / Avila stay in
-# `central`. See norcal-formula-review.md § 2 for the rationale.
-LAT_ZONE_BOUNDS = {
+# Falls back to the CA snapshot when running outside the pipeline
+# context (test fixtures that don't set SHOULDIDIVE_REGION).
+_CA_LAT_ZONE_BOUNDS = {
     "norcal":     (36.00, 90.0),
     "central":    (34.45, 36.00),
     "transition": (33.70, 34.45),
     "bight":      (-90.0, 33.70),
 }
+try:
+    try:
+        from pipeline.regions import active_region as _active_region
+    except ModuleNotFoundError:
+        from regions import active_region as _active_region
+    LAT_ZONE_BOUNDS = dict(_active_region().lat_zone_bounds)
+except Exception:
+    LAT_ZONE_BOUNDS = dict(_CA_LAT_ZONE_BOUNDS)
 
 NEARSHORE_DIST_KM = 5.0
 NEARSHORE_MAX_DEPTH_M = 30
@@ -76,6 +79,16 @@ PERSISTENCE_TAU_DAYS: Dict[str, float] = {
     "central_nearshore": 1.5, "central_islands": 2.5, "central_offshore": 4.5,
     "transition_nearshore": 2.0, "transition_islands": 3.0, "transition_offshore": 5.0,
     "bight_nearshore": 2.5, "bight_islands": 3.5, "bight_offshore": 6.0,
+    # Baja zones (2026-05-18). Longer persistence than CA because:
+    #   * cloud cover over the eastern Pacific + Cortez is less frequent
+    #     than NorCal marine-layer days, so fresh observations arrive
+    #     more reliably (shorter taus could work in principle);
+    #   * BUT chl regime changes more slowly in subtropical / oligotrophic
+    #     water — south Baja water structure is stable for 2-3 weeks at
+    #     a stretch, so long persistence is the right physical model.
+    "north_baja_nearshore": 3.0, "north_baja_islands": 4.0, "north_baja_offshore": 6.0,
+    "mid_baja_nearshore":   4.0, "mid_baja_islands":   5.0, "mid_baja_offshore":   7.0,
+    "south_baja_nearshore": 5.0, "south_baja_islands": 6.0, "south_baja_offshore": 8.0,
 }
 
 
@@ -139,6 +152,14 @@ SIGMA_LOG_CHL: Dict[str, float] = {
     "central_nearshore": 0.55, "central_islands": 0.45, "central_offshore": 0.35,
     "transition_nearshore": 0.50, "transition_islands": 0.40, "transition_offshore": 0.32,
     "bight_nearshore": 0.45, "bight_islands": 0.38, "bight_offshore": 0.30,
+    # Baja zones (2026-05-18). Open Pacific Baja + Cortez vary far less
+    # day-to-day than CA's bloom-prone nearshore — lower sigma reflects
+    # that. North Baja Pacific is the variability outlier (cold-water
+    # upwelling + summer chl blooms off Cedros) so keep it close to CA
+    # bight values.
+    "north_baja_nearshore": 0.55, "north_baja_islands": 0.45, "north_baja_offshore": 0.35,
+    "mid_baja_nearshore":   0.45, "mid_baja_islands":   0.38, "mid_baja_offshore":   0.30,
+    "south_baja_nearshore": 0.40, "south_baja_islands": 0.32, "south_baja_offshore": 0.28,
 }
 
 
@@ -213,6 +234,33 @@ SECCHI_COEFFS: Dict[str, SecchiCoefficients] = {
     # accumulate at the proper zone.
     "bight_islands":        SecchiCoefficients(a=8.5, b=0.30),
     "bight_offshore":       SecchiCoefficients(a=9.0, b=0.32),
+    # Baja zones (2026-05-18). Without these, Baja cells fall through to
+    # CA's `bight` fallback in LAT_ZONE_BOUNDS and use bight coefficients
+    # — tuned for SoCal nearshore productivity, NOT for the much clearer
+    # subtropical water of mid + south Baja. User QA report: prediction
+    # was "under reporting" — Cabo Pulmo / Espíritu Santo regularly hit
+    # 60–100 ft in reality and the bight_islands coefficient (a=8.5) was
+    # capping the prediction at ~50 ft even on calm chl-0.1 days.
+    #
+    # Calibration logic (a · chl^-b; b held at the literature value):
+    #   North Baja Pacific (Cedros / San Quintín / Ensenada) — cold
+    #     California-Current water with summer plankton; similar to CA
+    #     bight upper end. a≈5/7/8.
+    #   Mid Baja (Vizcaíno / Magdalena) — transitional, kelp gives way
+    #     to clearer water moving south. a≈7/10/11.
+    #   South Baja (Cabo / La Paz / Cortez south) — subtropical clear
+    #     water year-round; Cabo Pulmo + Espíritu Santo + Los Islotes
+    #     are famous for 80–100 ft viz on calm days. a≈9/13/14 puts
+    #     chl=0.1 in the 85–95 ft band, matching reality.
+    "north_baja_nearshore": SecchiCoefficients(a=5.0,  b=0.28),
+    "north_baja_islands":   SecchiCoefficients(a=8.0,  b=0.30),
+    "north_baja_offshore":  SecchiCoefficients(a=9.0,  b=0.32),
+    "mid_baja_nearshore":   SecchiCoefficients(a=7.0,  b=0.28),
+    "mid_baja_islands":     SecchiCoefficients(a=10.0, b=0.30),
+    "mid_baja_offshore":    SecchiCoefficients(a=11.0, b=0.32),
+    "south_baja_nearshore": SecchiCoefficients(a=9.0,  b=0.28),
+    "south_baja_islands":   SecchiCoefficients(a=13.0, b=0.30),
+    "south_baja_offshore":  SecchiCoefficients(a=14.0, b=0.32),
 }
 
 
@@ -252,6 +300,22 @@ TURBIDITY_CORRECTIONS: Dict[str, TurbidityCorrections] = {
     "bight_nearshore":      TurbidityCorrections(swell=5.0, runoff=3.5, river=4.0, kelp=2.0, substrate=2.5, tide=1.5),
     "bight_islands":        TurbidityCorrections(swell=1.0, runoff=0.3, river=0.3, kelp=1.5, substrate=0.4, tide=0.2),
     "bight_offshore":       TurbidityCorrections(swell=0.0, runoff=0.0, river=0.0, kelp=0.0, substrate=0.0, tide=0.0),
+    # Baja zones (2026-05-18). Lighter penalties than CA across the board:
+    # the Baja peninsula is arid (no Russian/Eel/Klamath equivalents —
+    # only a few small wadi-style runoff events per year), and the Sea
+    # of Cortez is sheltered from the open-Pacific groundswell that
+    # drives most CA nearshore turbidity. North Baja Pacific is the
+    # one place real swell + kelp + cold-water particulate loads
+    # matter — keep similar to bight there.
+    "north_baja_nearshore": TurbidityCorrections(swell=5.0, runoff=2.0, river=1.5, kelp=2.0, substrate=2.5, tide=1.0),
+    "north_baja_islands":   TurbidityCorrections(swell=1.5, runoff=0.3, river=0.2, kelp=1.5, substrate=0.4, tide=0.2),
+    "north_baja_offshore":  TurbidityCorrections(swell=0.0, runoff=0.0, river=0.0, kelp=0.0, substrate=0.0, tide=0.0),
+    "mid_baja_nearshore":   TurbidityCorrections(swell=3.5, runoff=1.0, river=1.0, kelp=1.5, substrate=2.0, tide=0.8),
+    "mid_baja_islands":     TurbidityCorrections(swell=1.0, runoff=0.2, river=0.1, kelp=1.0, substrate=0.3, tide=0.2),
+    "mid_baja_offshore":    TurbidityCorrections(swell=0.0, runoff=0.0, river=0.0, kelp=0.0, substrate=0.0, tide=0.0),
+    "south_baja_nearshore": TurbidityCorrections(swell=2.5, runoff=0.5, river=0.5, kelp=0.0, substrate=1.5, tide=0.6),
+    "south_baja_islands":   TurbidityCorrections(swell=0.5, runoff=0.1, river=0.0, kelp=0.0, substrate=0.2, tide=0.1),
+    "south_baja_offshore":  TurbidityCorrections(swell=0.0, runoff=0.0, river=0.0, kelp=0.0, substrate=0.0, tide=0.0),
 }
 
 
