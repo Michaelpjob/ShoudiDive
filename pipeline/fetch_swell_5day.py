@@ -299,6 +299,97 @@ def regrid_to_bbox(lat2d, lng2d, *fields, threshold_deg=0.4):
     return tuple(out)
 
 
+# ---- Wind-chop fallback for cells WW3 doesn't model ------------------------
+#
+# gfswave (WW3) masks shallow + enclosed bodies of water (Sea of Cortez,
+# Salish Sea, harbours, …). For those cells the answer "no swell data"
+# is technically right — there isn't ocean swell propagating through
+# them — but operationally users still want to know "what's the local
+# wind chop?". We compute a fetch-limited wave height from the HRRR/GFS
+# wind already fetched by fetch_wind_5day.py earlier in the same
+# workflow, using the standard SMB (Sverdrup-Munk-Bretschneider)
+# fetch-limited formula:
+#
+#   gHs/U² = 0.283 · tanh(0.0125 · (gF/U²)^0.42)
+#   gTp/U  = 7.54  · tanh(0.077  · (gF/U²)^0.25)
+#
+# Where U = wind speed at 10 m, F = fetch in metres, g = 9.81 m/s².
+# Fetch is fixed at 50 km — Sea of Cortez is ~100 km wide so this is a
+# reasonable middle-ground for inner-gulf cells. The result is a
+# "wind sea" estimate (not swell), but it's what's physically there.
+
+WIND_HOURLY_DIR = active_region().data_output_dir(ROOT) / "wind" / "hourly"
+SMB_FETCH_M = 50_000.0
+WIND_UV_RANGE = (-30.0, 30.0)  # must match fetch_wind_5day.py's UV_RANGE
+
+
+def smb_fetch_limited(u_speed_ms: np.ndarray, fetch_m: float = SMB_FETCH_M):
+    """Return (Hs in m, Tp in s) for a 2D wind-speed grid using SMB.
+
+    Cells with very low wind (<1 m/s) return Hs=0 to avoid divide-by-zero
+    and the unrealistic >0 wave height the formula would otherwise give.
+    """
+    g = 9.81
+    u = np.maximum(u_speed_ms, 1.0)  # guard against /U² blowup
+    gf_over_u2 = g * fetch_m / (u * u)
+    hs = (u * u / g) * 0.283 * np.tanh(0.0125 * np.power(gf_over_u2, 0.42))
+    tp = (u / g) * 7.54 * np.tanh(0.077 * np.power(gf_over_u2, 0.25))
+    # Drop wind chop where the source wind is itself NaN or below the
+    # noise floor — keeps land/no-data cells transparent.
+    mask = (u_speed_ms < 1.0) | ~np.isfinite(u_speed_ms)
+    hs = np.where(mask, np.nan, hs)
+    tp = np.where(mask, np.nan, tp)
+    return hs, tp
+
+
+def decode_wind_uv_png(path: Path):
+    """Inverse of fetch_wind_5day.encode_uv_png. Returns (U, V) in m/s
+    with NaN where the source PNG marked alpha=0.
+
+    Returns (None, None) if the wind PNG isn't on disk — caller should
+    skip the wind-chop fallback in that case (gfswave-only cells stay
+    NaN, same as today's behaviour).
+    """
+    if not path.exists():
+        return None, None
+    img = np.asarray(Image.open(path).convert("RGBA"), dtype=np.float32)
+    a = img[..., 3]
+    valid = a > 0
+    lo, hi = WIND_UV_RANGE
+    u = lo + (img[..., 0] / 255.0) * (hi - lo)
+    v = lo + (img[..., 1] / 255.0) * (hi - lo)
+    u = np.where(valid, u, np.nan)
+    v = np.where(valid, v, np.nan)
+    return u, v
+
+
+def fill_with_wind_chop(h_grid, p_grid, d_grid, day_offset: int, hour_pt: int):
+    """For cells where gfswave returned NaN, substitute SMB wind-chop
+    estimates from the matching hourly wind PNG. Period is short
+    (wind-sea ~3-5 s) and direction is the wind direction itself.
+    Cells with no matching wind data stay NaN.
+
+    Modifies and returns the (h, p, d) tuple.
+    """
+    nan_mask = ~np.isfinite(h_grid)
+    if not nan_mask.any():
+        return h_grid, p_grid, d_grid
+    wind_path = WIND_HOURLY_DIR / f"d{day_offset}_h{hour_pt:02d}_uv.png"
+    u, v = decode_wind_uv_png(wind_path)
+    if u is None:
+        return h_grid, p_grid, d_grid
+    speed = np.sqrt(u * u + v * v)
+    chop_hs, chop_tp = smb_fetch_limited(speed)
+    # Wind direction (where it's COMING FROM) for the substituted cells.
+    # atan2(-V, -U) — flip so it's "from" not "to".
+    chop_dir = (np.degrees(np.arctan2(-u, -v)) + 360.0) % 360.0
+    fill = nan_mask & np.isfinite(chop_hs)
+    h_grid = np.where(fill, chop_hs, h_grid).astype(np.float32)
+    p_grid = np.where(fill, chop_tp, p_grid).astype(np.float32)
+    d_grid = np.where(fill, chop_dir, d_grid).astype(np.float32)
+    return h_grid, p_grid, d_grid
+
+
 # ---- Encoding ---------------------------------------------------------------
 
 def encode_wave_png(height_m, period_s, direction_deg, out_path: Path) -> None:
@@ -383,6 +474,14 @@ def main() -> None:
             h_grid = fill_nearest(h_grid)
             p_grid = fill_nearest(p_grid)
             d_grid = fill_nearest(d_grid)
+            # WW3 masks enclosed/shallow water (Sea of Cortez, Salish Sea).
+            # Fill those cells with SMB wind-chop computed from the HRRR/GFS
+            # wind PNG fetched by fetch_wind_5day.py earlier in the same
+            # workflow. Better than "no data" for users actually planning a
+            # day in the Cortez — what's there IS local wind chop, not swell.
+            h_grid, p_grid, d_grid = fill_with_wind_chop(
+                h_grid, p_grid, d_grid, day_offset, valid_pt.hour,
+            )
             hourly[(day_offset, valid_pt.hour)] = {
                 "h": h_grid, "p": p_grid, "d": d_grid,
                 "valid_at": valid_at_utc,
