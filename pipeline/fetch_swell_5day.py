@@ -219,7 +219,31 @@ def open_wave(grib_path: Path):
     return lat2d, lng2d, height, period, direction
 
 
-def fill_nearest(arr, max_cells: int = 40):
+def _fill_max_cells_for_region():
+    """Per-region cap on how far fill_nearest propagates.
+
+    CA needs the default ~40 cells (~310 km on its grid) to bridge the
+    broader gfswave masked zones around Pt Conception + Channel Islands
+    lee + SB/SD bays. For regions with enclosed-sea geography (Baja's
+    Sea of Cortez, surrounded by a peninsula on one side + mainland on
+    the other), the wide fill is actively wrong: WW3 masks the Cortez
+    interior because shallow + enclosed, and a 40-cell fill bridges
+    ACROSS the peninsula and paints Pacific swell values onto Cortez
+    cells. User reported "swell data looks off in Cortez" — that's
+    why. Drop to 5 cells (~45 km) for baja so inner-shelf gaps still
+    fill but the peninsula blocks the bleed.
+    """
+    try:
+        from pipeline.regions import active_region
+    except ModuleNotFoundError:
+        from regions import active_region
+    name = active_region().name
+    if name == "baja":
+        return 5
+    return 40
+
+
+def fill_nearest(arr, max_cells: int | None = None):
     """Fill NaN cells with their nearest valid neighbour's value.
 
     gfswave wcoast 0.16° masks shallow / nearshore cells where bathymetry
@@ -229,12 +253,11 @@ def fill_nearest(arr, max_cells: int = 40):
     a few km offshore have perfectly good values.
 
     `max_cells` caps how far the fill can propagate (in grid cells, ~5 km
-    each). 40 cells ≈ 200 km — wide enough to bridge gfswave's broader
-    masked zones around Pt Conception, the Channel Islands lee shore, and
-    inside SB / SD bays, but still narrow enough that far-inland cells
-    (Arizona desert, etc.) stay NaN rather than getting painted with
-    offshore Pacific Hs.
+    each). Defaults to _fill_max_cells_for_region() — see that function
+    for region rationale.
     """
+    if max_cells is None:
+        max_cells = _fill_max_cells_for_region()
     valid = np.isfinite(arr)
     if not valid.any():
         return arr
