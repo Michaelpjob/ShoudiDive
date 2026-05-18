@@ -1,0 +1,258 @@
+name: Uptime monitor
+
+# Continuous "is the site up RIGHT NOW" check, every 5 minutes.
+#
+# On failure, opens (or comments on the existing) rolling GitHub Issue
+# tagged `site-down`. GitHub then emails the repo owner per their
+# notification settings — that's the down-alert delivery mechanism.
+# On success after failure, closes the issue automatically.
+#
+# Distinct from deploy-verify.yml:
+#   * deploy-verify runs every 4h + after every refresh-data deploy.
+#     Its mandate: "did the latest data refresh actually land?" — a
+#     post-deploy correctness check, not a liveness probe.
+#   * THIS workflow runs every 5 minutes regardless of deploy activity.
+#     Its mandate: "is the site responding to ordinary GETs RIGHT NOW?"
+#
+# Both write to GitHub Issues so the alerting channel is the same; the
+# tags (`live-deploy-broken` vs `site-down`) keep them disambiguated.
+#
+# Flake protection:
+#   Single curl that 503s for 5 s would otherwise email you on every
+#   minor blip. Each probe URL is retried once (30 s wait) inside the
+#   same run; only paired-failure escalates to an issue. Most CF edge
+#   flutters fall inside the 30-s window and stay silent.
+#
+# Cost:
+#   ~12 runs/hour × ~15 s = ~3 minutes of Actions runtime per hour.
+#   GitHub Free is unlimited Actions minutes for public repos, so $0.
+#
+# To silence temporarily (planned maintenance, known outage):
+#   Add label `monitoring-paused` to the open `site-down` issue and
+#   the workflow will short-circuit reopens until the label is removed.
+#   (Alternatively: disable the workflow from the Actions UI.)
+#
+# Where the email actually goes:
+#   GitHub sends issue-activity notifications to whatever email is
+#   configured in the repo owner's https://github.com/settings/notifications.
+#   To route alerts to a different address, edit that page — no change
+#   needed here.
+
+on:
+  schedule:
+    # Every 5 minutes. GitHub may delay scheduled runs by up to ~15
+    # minutes during high load, but the cadence is still ~12/hour
+    # on average.
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+# A 5-min tick can occasionally overlap a slow probe. We DO NOT cancel
+# the in-flight run — that would lose its up/down signal and leave
+# the rolling issue in an inaccurate state. Let each run complete
+# fully; concurrency just prevents the queue from piling up beyond 1.
+concurrency:
+  group: uptime-monitor
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write   # required to open/comment/close the rolling issue
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    # Hard cap. Two URLs × (curl 30 s timeout + 30 s wait + curl 30 s
+    # retry) = ~2 min worst case; the 3-min cap leaves head-room.
+    timeout-minutes: 3
+    outputs:
+      failed: ${{ steps.check.outputs.failed }}
+      details: ${{ steps.check.outputs.details }}
+    steps:
+      - name: Probe homepage + manifest
+        id: check
+        # set +e: don't abort the workflow on a non-zero curl — we
+        # need to capture the result and emit it as a structured
+        # step output for the issue-management jobs that follow.
+        # set -u and -o pipefail kept on for safety.
+        shell: bash
+        run: |
+          set +e
+          set -u
+          set -o pipefail
+
+          probe() {
+            # $1 = name, $2 = url, $3 = optional content predicate (sub-shell command, exit 0 = pass)
+            local name="$1" url="$2" predicate="${3:-}"
+            local code
+            code=$(curl -sS -L \
+              -A 'shouldidive-uptime-monitor/1.0 (+https://github.com/Michaelpjob/ShoudiDive)' \
+              -o /tmp/probe_body \
+              -w '%{http_code}' \
+              --max-time 30 \
+              "$url" || echo "000")
+            if [ "$code" != "200" ]; then
+              echo "$name FAIL: HTTP $code"
+              return 1
+            fi
+            if [ -n "$predicate" ]; then
+              if ! eval "$predicate" </tmp/probe_body >/dev/null 2>&1; then
+                echo "$name FAIL: 200 but content predicate failed"
+                return 1
+              fi
+            fi
+            echo "$name OK: HTTP 200"
+            return 0
+          }
+
+          probe_with_retry() {
+            local name="$1" url="$2" predicate="${3:-}"
+            # First attempt
+            if probe "$name" "$url" "$predicate"; then
+              return 0
+            fi
+            echo "$name first attempt failed; retrying in 30 s to absorb CF/edge flutter..."
+            sleep 30
+            # Second attempt — only this one counts toward escalation.
+            probe "$name" "$url" "$predicate"
+          }
+
+          failed=0
+          details=""
+
+          if ! out=$(probe_with_retry homepage "https://shouldidive.com/" ""); then
+            failed=$((failed + 1))
+            details+="$out"$'\n'
+          else
+            details+="$out"$'\n'
+          fi
+
+          # For manifest, verify it's valid JSON and has a `bbox` field.
+          # Catches the "200 OK but body is an HTML error page" case
+          # that some CDN misconfigs produce.
+          if ! out=$(probe_with_retry manifest "https://shouldidive.com/data/manifest.json" "jq -e '.bbox | length == 4'"); then
+            failed=$((failed + 1))
+            details+="$out"$'\n'
+          else
+            details+="$out"$'\n'
+          fi
+
+          {
+            echo "failed=$failed"
+            echo "details<<EOF"
+            echo "$details"
+            echo "EOF"
+          } >>"$GITHUB_OUTPUT"
+
+          # Echo to the run summary for easy debugging from the UI.
+          {
+            echo "## Uptime probe"
+            echo
+            echo '```'
+            echo "$details"
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+
+          # Exit code: 0 if all good, 1 if any probe failed.
+          # The down-issue step keys off failed > 0; the up-issue step
+          # keys off failed == 0.
+          [ "$failed" = "0" ]
+
+  open-or-update-issue:
+    needs: probe
+    if: needs.probe.outputs.failed != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      issues: write
+    steps:
+      - name: Open or comment on `site-down` issue
+        uses: actions/github-script@v7
+        env:
+          DETAILS: ${{ needs.probe.outputs.details }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          script: |
+            const TAG = "site-down";
+            const PAUSED = "monitoring-paused";
+            const details = process.env.DETAILS || "(no probe details)";
+            const runUrl = process.env.RUN_URL;
+            const now = new Date().toISOString();
+
+            // List open issues with the site-down label.
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: TAG,
+              state: "open",
+              per_page: 5,
+            });
+
+            // Short-circuit if any open site-down issue carries the
+            // `monitoring-paused` label — e.g. planned maintenance.
+            const paused = issues.find(i => i.labels.some(l => (typeof l === "string" ? l : l.name) === PAUSED));
+            if (paused) {
+              core.info(`Issue #${paused.number} carries '${PAUSED}' — suppressing alert.`);
+              return;
+            }
+
+            const body =
+              `**Uptime probe failed at ${now}.**\n\n` +
+              `\`\`\`\n${details}\n\`\`\`\n\n` +
+              `Run: ${runUrl}\n\n` +
+              `_This issue auto-closes when the next 5-min probe sees the site healthy again._`;
+
+            if (issues.length === 0) {
+              const { data: created } = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: "[Auto] shouldidive.com uptime probe failing",
+                body,
+                labels: [TAG],
+              });
+              core.info(`Opened issue #${created.number}`);
+            } else {
+              const existing = issues[0];
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body,
+              });
+              core.info(`Appended comment to issue #${existing.number}`);
+            }
+
+  close-issue-on-recovery:
+    needs: probe
+    if: needs.probe.outputs.failed == '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      issues: write
+    steps:
+      - name: Close `site-down` issue if open
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const TAG = "site-down";
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: TAG,
+              state: "open",
+              per_page: 5,
+            });
+            for (const issue of issues) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `Site recovered — uptime probe healthy at ${new Date().toISOString()}. Closing automatically.`,
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: "closed",
+              });
+              core.info(`Closed issue #${issue.number}`);
+            }
