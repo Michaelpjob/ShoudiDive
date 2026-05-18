@@ -55,147 +55,16 @@ async function measureOverlay(page) {
     let dataUrlLen = 0;
     let foundDataUrl = false;
     let firstHref = "";
-    let imageRect = null;
-    let imageAttrs = null;
-    let parentGAttrs = null;
-    let dataOverlayG = null;
     for (const img of imgs) {
       const href = img.getAttribute("href") || img.getAttribute("xlink:href") || "";
       if (!firstHref && href) firstHref = href.slice(0, 60);
       if (href.startsWith("data:image/png")) {
         dataUrlLen = href.length;
         foundDataUrl = true;
-        const r = img.getBoundingClientRect();
-        imageRect = { x: r.x, y: r.y, w: r.width, h: r.height };
-        imageAttrs = {
-          x: img.getAttribute("x"),
-          y: img.getAttribute("y"),
-          width: img.getAttribute("width"),
-          height: img.getAttribute("height"),
-          preserveAspectRatio: img.getAttribute("preserveAspectRatio"),
-        };
-        const parent = img.parentElement;
-        if (parent) {
-          const cs = window.getComputedStyle(parent);
-          parentGAttrs = {
-            tagName: parent.tagName,
-            className: parent.getAttribute("class") || "",
-            opacity: parent.getAttribute("opacity") || cs.opacity,
-            display: cs.display,
-            visibility: cs.visibility,
-            clipPath: parent.getAttribute("clip-path") || cs.clipPath,
-            mask: parent.getAttribute("mask") || cs.mask,
-          };
-          // Walk one more level up to find the wrapping ocean-clip <g>
-          const grandparent = parent.parentElement;
-          if (grandparent) {
-            dataOverlayG = {
-              tagName: grandparent.tagName,
-              className: grandparent.getAttribute("class") || "",
-              clipPath: grandparent.getAttribute("clip-path") || "",
-              mask: grandparent.getAttribute("mask") || "",
-            };
-          }
-        }
         break;
       }
     }
-    // Also sample colors at known ocean coordinates by drawing the SVG
-    // to a canvas and reading pixel values at fixed offsets.
-    const svg = document.querySelector("svg.map-svg");
-    let svgInfo = null;
-    if (svg) {
-      const r = svg.getBoundingClientRect();
-      svgInfo = {
-        viewBox: svg.getAttribute("viewBox"),
-        bboxClient: { x: r.x, y: r.y, w: r.width, h: r.height },
-        preserveAspectRatio: svg.getAttribute("preserveAspectRatio"),
-      };
-    }
-    // Sample a pixel color from the map area using getComputedStyle
-    // on the <image>'s parent — also walk up the SVG tree counting
-    // ancestors with clip-path / mask attributes that might be hiding
-    // the data overlay.
-    let clipMaskAncestors = [];
-    if (foundDataUrl) {
-      let el = imgs[0].parentElement;
-      while (el && el.tagName !== "BODY") {
-        const cp = el.getAttribute && el.getAttribute("clip-path");
-        const mk = el.getAttribute && el.getAttribute("mask");
-        if (cp || mk) {
-          clipMaskAncestors.push({
-            tagName: el.tagName,
-            className: (el.getAttribute("class") || ""),
-            clipPath: cp || "",
-            mask: mk || "",
-          });
-        }
-        el = el.parentElement;
-      }
-    }
-    return {
-      foundDataUrl,
-      dataUrlLen,
-      firstHref,
-      imageRect,
-      imageAttrs,
-      parentGAttrs,
-      dataOverlayG,
-      svgInfo,
-      clipMaskAncestors,
-    };
-  });
-}
-
-// Decode the <image>'s data URL into a temp canvas and report color
-// statistics. If the PNG itself is mostly transparent / one color,
-// that explains "no data visible" independent of clip-path / mask.
-async function inspectImagePixels(page) {
-  return page.evaluate(async () => {
-    const imgs = Array.from(document.querySelectorAll("svg image, image[href]"));
-    let target = null;
-    for (const img of imgs) {
-      const href = img.getAttribute("href") || img.getAttribute("xlink:href") || "";
-      if (href.startsWith("data:image/png")) { target = img; break; }
-    }
-    if (!target) return { error: "no data:image/png <image> found" };
-    const href = target.getAttribute("href") || target.getAttribute("xlink:href");
-    const dataUrl = href;
-    const img = new Image();
-    img.src = dataUrl;
-    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
-    const cv = document.createElement("canvas");
-    cv.width = img.naturalWidth;
-    cv.height = img.naturalHeight;
-    const ctx = cv.getContext("2d");
-    ctx.drawImage(img, 0, 0);
-    const px = ctx.getImageData(0, 0, cv.width, cv.height).data;
-    let transparent = 0, opaque = 0;
-    const colorBuckets = new Map();
-    for (let i = 0; i < px.length; i += 4) {
-      const a = px[i + 3];
-      if (a < 16) { transparent++; continue; }
-      opaque++;
-      const r = Math.round(px[i] / 32) * 32;
-      const g = Math.round(px[i+1] / 32) * 32;
-      const b = Math.round(px[i+2] / 32) * 32;
-      const key = `${r},${g},${b}`;
-      colorBuckets.set(key, (colorBuckets.get(key) || 0) + 1);
-    }
-    const total = transparent + opaque;
-    const topColors = [...colorBuckets.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([k, n]) => ({ rgb: k, frac: +(n / opaque).toFixed(3) }));
-    return {
-      pngWidth: cv.width,
-      pngHeight: cv.height,
-      totalCells: total,
-      transparent,
-      opaque,
-      transparentFrac: +(transparent / total).toFixed(3),
-      topColors,
-    };
+    return { foundDataUrl, dataUrlLen, firstHref };
   });
 }
 
@@ -305,20 +174,7 @@ async function run() {
         reason:      ok ? null : (m.foundDataUrl ? `data URL only ${m.dataUrlLen} chars` : `no data: URL (firstHref=${m.firstHref || "none"})`),
         dataUrlLen:  m.dataUrlLen,
         foundDataUrl: m.foundDataUrl,
-        imageRect:        m.imageRect,
-        imageAttrs:       m.imageAttrs,
-        parentGAttrs:     m.parentGAttrs,
-        dataOverlayG:     m.dataOverlayG,
-        svgInfo:          m.svgInfo,
-        clipMaskAncestors: m.clipMaskAncestors,
       });
-      console.log(`  imageRect=${JSON.stringify(m.imageRect)}`);
-      console.log(`  imageAttrs=${JSON.stringify(m.imageAttrs)}`);
-      console.log(`  parentGAttrs=${JSON.stringify(m.parentGAttrs)}`);
-      console.log(`  clipMaskAncestors=${JSON.stringify(m.clipMaskAncestors)}`);
-      console.log(`  svgInfo=${JSON.stringify(m.svgInfo)}`);
-      const pixels = await inspectImagePixels(page);
-      console.log(`  pixels=${JSON.stringify(pixels)}`);
       await page.screenshot({
         path: resolve(ARTIFACTS, `${label.toLowerCase()}_full.png`),
         fullPage: false,
