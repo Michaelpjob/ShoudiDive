@@ -1,61 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { project, BBOX, getFitted } from "../lib/mapData.js";
+import { project, BBOX } from "../lib/mapData.js";
 import { dataPath } from "../lib/region.js";
-
-// Drop sub-polygons whose projected bbox dominates the fitted map area.
-// fetch_coastline.py emits a degenerate "outer hull" polygon for
-// regions where land spans most of the bbox: Baja peninsula + mainland
-// Mexico + clipped-USA all wind up in ONE MultiPolygon. The DEGENERATE
-// sub-polygon (closed along bbox edges) has ~100% inner-letterbox bbox.
-// The LEGITIMATE sub-polygons (peninsula coast, mainland coast, islands)
-// are each well under 70% of the area.
-//
-// Earlier version dropped at FEATURE level — that killed the peninsula
-// too, because peninsula + mainland are bundled into one Feature's
-// MultiPolygon. We now split inside MultiPolygons and filter polygon-
-// by-polygon so the peninsula coast survives and only the bbox-edge
-// hull polygon gets dropped.
-const DEGENERATE_MEGAPATH_FRAC = 0.7;
-function polygonBoundsArea(rings, w, h) {
-  if (!rings || !rings.length) return 0;
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-  for (const ring of rings) {
-    for (const pt of ring) {
-      const [x, y] = project(pt[0], pt[1], w, h);
-      if (x < minX) minX = x;
-      if (x > maxX) maxX = x;
-      if (y < minY) minY = y;
-      if (y > maxY) maxY = y;
-    }
-  }
-  if (!Number.isFinite(minX)) return 0;
-  return Math.abs(maxX - minX) * Math.abs(maxY - minY);
-}
-function filterMegaPolygons(features, w, h) {
-  const { innerW, innerH } = getFitted(w, h);
-  const cap = (innerW || w) * (innerH || h) * DEGENERATE_MEGAPATH_FRAC;
-  const out = [];
-  for (const f of features) {
-    const g = f.geometry;
-    if (!g) continue;
-    if (g.type === "Polygon") {
-      if (polygonBoundsArea(g.coordinates, w, h) < cap) out.push(f);
-      continue;
-    }
-    if (g.type === "MultiPolygon") {
-      const kept = g.coordinates.filter((rings) =>
-        polygonBoundsArea(rings, w, h) < cap
-      );
-      if (kept.length > 0) {
-        out.push({ ...f, geometry: { type: "MultiPolygon", coordinates: kept } });
-      }
-      continue;
-    }
-    // Other geometry types pass through unchanged.
-    out.push(f);
-  }
-  return out;
-}
 
 // ---- Coastline + island GeoJSON (clipped Natural Earth 10 m) ---------------
 
@@ -289,7 +234,7 @@ export function OceanMaskDefs({ width, height }) {
 
   const paths = useMemo(() => {
     if (!features) return [];
-    return filterMegaPolygons(features, width, height).map((f, i) => ({
+    return features.map((f, i) => ({
       id: `ocean-mask-land-${i}`,
       d: geomToPath(f.geometry, width, height),
     }));
@@ -343,42 +288,12 @@ export function LandBasemap({ width, height }) {
     };
   }, [width, height]);
 
-  // Each path entry now carries a `isMega` flag — for the bbox-spanning
-  // hull polygon emitted by fetch_coastline.py we draw it as a
-  // STROKE-ONLY outline so the coastline shows but the fill doesn't
-  // cover the data overlay underneath. Legit polygons (peninsula,
-  // mainland coast, islands) stay normally filled.
   const paths = useMemo(() => {
     if (!features) return [];
-    const { innerW, innerH } = getFitted(width, height);
-    const cap = (innerW || width) * (innerH || height) * DEGENERATE_MEGAPATH_FRAC;
-    const out = [];
-    let i = 0;
-    for (const f of features) {
-      const g = f.geometry;
-      if (!g) continue;
-      if (g.type === "Polygon") {
-        const a = polygonBoundsArea(g.coordinates, width, height);
-        out.push({
-          id: `land-${i++}`,
-          d: geomToPath(g, width, height),
-          isMega: a >= cap,
-        });
-      } else if (g.type === "MultiPolygon") {
-        // Split each sub-polygon so the mega-hull renders stroke-only
-        // and the legit sub-polygons stay filled. (They share a Feature
-        // but their on-screen treatment differs.)
-        for (const rings of g.coordinates) {
-          const a = polygonBoundsArea(rings, width, height);
-          out.push({
-            id: `land-${i++}`,
-            d: rings.map((r) => ringToPath(r, width, height)).join(" "),
-            isMega: a >= cap,
-          });
-        }
-      }
-    }
-    return out;
+    return features.map((f, i) => ({
+      id: `land-${i}`,
+      d: geomToPath(f.geometry, width, height),
+    }));
   }, [features, width, height]);
 
   return (
@@ -394,9 +309,9 @@ export function LandBasemap({ width, height }) {
         <path
           key={p.id}
           d={p.d}
-          fill={p.isMega ? "none" : "var(--land)"}
-          stroke={p.isMega ? "var(--ink-2)" : "var(--land-edge)"}
-          strokeWidth={p.isMega ? 1.5 : 1}
+          fill="var(--land)"
+          stroke="var(--land-edge)"
+          strokeWidth="1"
         />
       ))}
     </g>

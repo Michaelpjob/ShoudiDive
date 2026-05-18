@@ -1130,22 +1130,8 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
           // particles all live in this fitted rect; coastlines + spot pins
           // come from project() which already uses it.
           const f = getFitted(size.w, size.h);
-          // The ocean-clip / ocean-mask wrapper exists specifically to keep
-          // the no-data hatch confined to ocean cells (CA-only). For non-CA
-          // regions the hatch is suppressed and the mask becomes actively
-          // harmful: Baja's land.geojson collapses peninsula + mainland +
-          // bbox-clipped USA into a single mega-polygon (~1.9 M chars,
-          // bbox = full inner letterbox) which, when painted black in
-          // ocean-mask, hides the entire data overlay. LandBasemap drawn
-          // AFTER this group already covers land areas with the land fill
-          // color, so the mask is redundant for occlusion. Skip the
-          // wrapper for non-CA regions and let LandBasemap do the work.
-          const useOceanMask = activeRegion() === "ca";
-          const wrapperProps = useOceanMask
-            ? { clipPath: "url(#ocean-clip)", mask: "url(#ocean-mask)" }
-            : {};
           return (
-            <g {...wrapperProps}>
+            <g clipPath="url(#ocean-clip)" mask="url(#ocean-mask)">
               {/* No-data hatch — only inside the bbox area; outside is just sea.
                   Suppressed for non-CA regions today because PNW + tropical
                   have legitimately-sparse coverage (HFRNet has no Caribbean,

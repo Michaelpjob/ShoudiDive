@@ -106,6 +106,21 @@ LAND_SEEDS = [
     ("pilar-de-la-virgen",  -117.265, 32.395),
     ("coronado-sur",        -117.247, 32.378),
     ("baja-mainland",       -116.95, 32.10),
+    # Baja region — peninsula at multiple latitudes + key islands +
+    # mainland Mexico coast. Each seed sits comfortably inside its
+    # landmass so polygonize() can't accidentally tag the surrounding
+    # water as land.
+    ("baja-north-pacific",  -116.20, 31.30),  # Ensenada hinterland
+    ("baja-vizcaino",       -113.80, 28.00),  # central peninsula (Vizcaíno)
+    ("baja-magdalena",      -111.80, 24.80),  # south peninsula
+    ("baja-south-cape",     -110.10, 23.20),  # Cabo / La Paz peninsula
+    ("isla-cedros",         -115.20, 28.20),
+    ("isla-angel-guarda",   -113.10, 29.20),
+    ("isla-tiburon",        -112.40, 29.00),
+    ("isla-espiritu-santo", -110.37, 24.50),
+    ("isla-cerralvo",       -109.86, 24.27),
+    ("sonora-mainland",     -110.00, 28.50),  # mainland Mexico east of Cortez
+    ("sinaloa-mainland",    -108.00, 25.00),  # mainland Mexico south of Sonora
 ]
 
 # Used to exclude the polygonize() face that represents the open ocean.
@@ -136,6 +151,18 @@ OCEAN_SEEDS = [
     (-75.00,  18.00),  # Caribbean Sea, north of Hispaniola
     (-70.00,  15.00),  # mid-Caribbean
     (-65.00,  12.00),  # eastern Caribbean
+    # Baja region — Pacific west of peninsula + Sea of Cortez between
+    # peninsula and mainland Mexico. Without these the polygonize face
+    # that IS the ocean has no seed inside it and gets classified as
+    # land, emerging as a single bbox-spanning mega-polygon that covers
+    # all the data underneath. Same bug class as the 2026-05-11 PNW +
+    # tropical fix; this is the Baja entry.
+    (-117.50, 27.50),  # Pacific Baja offshore (west of Vizcaíno)
+    (-115.00, 25.00),  # Pacific south Baja offshore
+    (-112.00, 28.00),  # northern Sea of Cortez (between Tiburón + peninsula)
+    (-110.50, 26.00),  # central Sea of Cortez (off Loreto/Mulegé)
+    (-109.50, 24.50),  # southern Sea of Cortez (off La Paz)
+    (-107.50, 23.50),  # mainland Mexico side, off Mazatlán entrance
 ]
 
 OVERPASS_ENDPOINTS = [
