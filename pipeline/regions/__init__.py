@@ -51,6 +51,7 @@ from __future__ import annotations
 import os
 
 from ._region import Region
+from .baja import REGION as _BAJA
 from .ca import REGION as _CA
 from .pnw import REGION as _PNW
 from .tropical import REGION as _TROPICAL
@@ -60,6 +61,7 @@ _REGISTRY: dict[str, Region] = {
     _CA.name:       _CA,
     _PNW.name:      _PNW,
     _TROPICAL.name: _TROPICAL,
+    _BAJA.name:     _BAJA,
 }
 
 DEFAULT_REGION = "ca"

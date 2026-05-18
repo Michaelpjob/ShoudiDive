@@ -1,0 +1,163 @@
+name: Refresh baja — data (daily)
+
+# Baja Mexico (Pacific + Sea of Cortez) — DAILY data refresh at 07:30 UTC.
+# Writes to public/data/baja/ and deploys to
+# baja-beta.shouldidive.pages.dev (Cloudflare preview branch —
+# wrangler --branch=baja-beta cannot reach shouldidive.com).
+#
+# Time slot rationale:
+#   06:00 CA data, 06:15 CA-beta data, 06:30 PNW data,
+#   07:00 tropical data, 07:30 baja data → 30-min spacing across
+#   the daily morning refresh window so the runners don't queue.
+
+on:
+  schedule:
+    - cron: "30 7 * * *"
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Git ref to refresh against (default: dev)"
+        required: false
+        default: "dev"
+        type: string
+      force_climo:
+        description: "Force-rebuild sst_climo.png even if the cached month matches (use after fixing climo encoding bugs)"
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: refresh-baja-data
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    env:
+      SHOULDIDIVE_REGION: baja
+    permissions:
+      contents: write
+      actions: write   # for `gh workflow run deploy-baja-beta.yml` at the end
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || (github.event_name == 'schedule' && 'dev' || github.ref) }}
+          token: ${{ secrets.BOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+
+      - name: Install pipeline dependencies
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Fetch latest ocean data (SST, chl, kd490)
+        # Baja hull spans -118 to -106.5 lng × 22 to 32.6 lat. Smaller
+        # than tropical (~12° × 10.6° vs tropical's 38° × 21°) so the
+        # tropical 35-min budget is overkill — use 25 min, same as the
+        # CA budget which has a comparable bbox size.
+        continue-on-error: true
+        timeout-minutes: 25
+        env:
+          EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
+        run: python pipeline/fetch.py
+
+      - name: Sentinel — fail loudly if ocean fetch produced no fresh output
+        # See refresh-ca-data.yml for the full rationale. SHOULDIDIVE_REGION
+        # is inherited from the job env, so the sentinel looks at
+        # public/data/baja/ automatically.
+        run: python pipeline/check_fetch_freshness.py --layer sst
+
+      - name: Fetch 7-day precipitation
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_precip.py
+
+      - name: Fetch river discharge (no-op for baja — CA USGS stations only)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_rivers.py
+
+      - name: Fetch tide range (no-op for baja — NOAA CO-OPS stops at the US border)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_tides.py
+
+      - name: Refresh climatology if needed
+        continue-on-error: true
+        run: |
+          if [ "${{ inputs.force_climo }}" = "true" ]; then
+            python pipeline/fetch_climatology.py --force
+          else
+            python pipeline/fetch_climatology.py
+          fi
+
+      - name: Fetch bathymetry (one-shot)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_bathy.py
+
+      - name: Fetch coastline (one-shot)
+        continue-on-error: true
+        timeout-minutes: 8
+        run: python pipeline/fetch_coastline.py
+
+      - name: Fetch MPA boundaries (empty for baja until PR-BAJA-3 wires CONANP)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_mpa.py
+
+      - name: Probe all external feeds
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
+        run: python pipeline/check_feeds.py
+
+      - name: Run 5-day SST forecast
+        continue-on-error: true
+        run: python pipeline/fetch_sst_5day.py
+
+      - name: Run visibility prediction
+        # baja declares subtractive_tropical viz variant, but the
+        # formula doesn't exist yet (same forward-declaration state
+        # as tropical). Falls back to chl-based CA model and predicts
+        # ~100ft viz everywhere south of 28°N. Known wrong; PR-TROP-5
+        # fixes both tropical AND baja simultaneously.
+        continue-on-error: true
+        run: python pipeline/fetch_visibility.py
+
+      - name: Fetch RTOFS ocean-model forecast
+        # Pulls NOAA RTOFS Global 2ds prog NetCDFs from NOMADS for
+        # forecast leads +1d / +3d / +5d / +7d. Adds parallel SST
+        # forecast track + surface currents for the Sea of Cortez
+        # (where HFRNet has zero coverage south of San Diego).
+        continue-on-error: true
+        timeout-minutes: 25
+        run: python pipeline/fetch_rtofs.py
+
+      - name: Commit refreshed baja data
+        if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/data/baja/
+          if git diff --staged --quiet; then
+            echo "No baja data changes to commit."
+          else
+            git commit -m "data: refresh baja $(date -u +%Y-%m-%d)"
+            for attempt in 1 2 3; do
+              if git push; then break; fi
+              echo "push failed (attempt $attempt) — rebasing"
+              git pull --rebase --autostash origin "$(git rev-parse --abbrev-ref HEAD)"
+            done
+          fi
+
+      - name: Trigger baja-beta deploy
+        if: success() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run deploy-baja-beta.yml --ref dev

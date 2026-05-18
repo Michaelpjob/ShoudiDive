@@ -9,6 +9,7 @@ const REGIONS = [
   { id: "ca",       label: "California" },
   { id: "pnw",      label: "Pacific NW (beta)" },
   { id: "tropical", label: "FL + Caribbean (beta)" },
+  { id: "baja",     label: "Baja Mexico (beta)" },
 ];
 
 export default function RegionSwitcher() {
