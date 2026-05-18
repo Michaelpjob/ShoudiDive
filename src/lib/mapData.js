@@ -227,19 +227,35 @@ const REGION_SAVED_SPOTS = {
   ],
   baja: [
     // Pacific side
+    { id: "san-benito",   name: "Isla San Benito", lng: -115.55, lat: 28.31 },
     { id: "cedros",       name: "Isla Cedros",     lng: -115.20, lat: 28.20 },
     { id: "bahia-tort",   name: "Bahía Tortugas",  lng: -114.88, lat: 27.69 },
+    { id: "sacramento",   name: "Sacramento Reef", lng: -116.04, lat: 30.55 },
     // Cabo corridor
+    { id: "cabo-falso",   name: "Cabo Falso",      lng: -110.00, lat: 22.87 },
     { id: "cabo",         name: "Cabo San Lucas",  lng: -109.92, lat: 22.89 },
     { id: "gordo-banks",  name: "Gordo Banks",     lng: -109.34, lat: 22.95 },
     // Sea of Cortez — south
     { id: "cabo-pulmo",   name: "Cabo Pulmo",      lng: -109.43, lat: 23.43 },
+    { id: "los-islotes",  name: "Los Islotes",     lng: -110.39, lat: 24.59 },
     { id: "espiritu-stm", name: "Espíritu Santo",  lng: -110.37, lat: 24.50 },
     { id: "el-bajo",      name: "El Bajo",         lng: -109.96, lat: 24.59 },
+    { id: "marisla",      name: "Marisla Smt",     lng: -110.40, lat: 24.45 },
     { id: "cerralvo",     name: "Cerralvo",        lng: -109.86, lat: 24.27 },
-    // Sea of Cortez — central + north
+    // Sea of Cortez — central (Loreto NP)
+    { id: "isla-carmen",  name: "Isla Carmen",     lng: -111.18, lat: 26.02 },
+    { id: "isla-danzante",name: "Isla Danzante",   lng: -111.27, lat: 25.78 },
     { id: "loreto",       name: "Loreto",          lng: -111.34, lat: 26.01 },
+    // Mulegé / Santa Rosalía area
+    { id: "isla-tortuga", name: "Isla Tortuga",    lng: -111.88, lat: 27.43 },
+    { id: "isla-san-mar", name: "Isla San Marcos", lng: -112.10, lat: 27.21 },
+    // Midriff Islands
+    { id: "isla-tiburon", name: "Isla Tiburón",    lng: -112.40, lat: 29.00 },
+    { id: "isla-ag",      name: "Ángel de la G.",  lng: -113.30, lat: 29.30 },
+    { id: "isla-rasa",    name: "Isla Rasa",       lng: -112.97, lat: 28.83 },
     { id: "bahia-angel",  name: "Bahía Ángeles",   lng: -113.55, lat: 28.95 },
+    // North Cortez
+    { id: "roca-consag",  name: "Roca Consag",     lng: -114.48, lat: 31.10 },
     { id: "san-felipe",   name: "San Felipe",      lng: -114.83, lat: 31.03 },
   ],
 };
