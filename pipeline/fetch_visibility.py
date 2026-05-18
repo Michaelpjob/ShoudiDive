@@ -860,41 +860,53 @@ def main():
 
     # Northern Sea of Cortez stale-water penalty (Baja only).
     # North of the Midriff Islands (Tiburón / Ángel de la Guarda, lat
-    # ~28.5°N), the gulf has restricted deep-water exchange. In
-    # practice, the resulting summer stagnation + plankton bloom +
-    # tidal-mud stirring drops visibility consistently below what the
-    # chl-only model predicts. Apply a flat penalty for cells inside
-    # the bbox approximation of the zone:
-    #   lat in [28.5, 32.0]  AND  lng in [-115.0, -113.0]
-    # which captures Bahía de los Ángeles N → Puerto Peñasco / San
-    # Felipe (the actual stagnation area). The penalty is applied to
-    # p10/p50/p90 uniformly; bigger physical effect at p90 (clear-end)
-    # is captured because the post-floor minimum keeps poor-end values
-    # near zero.
+    # ~28.5°N), the gulf has restricted deep-water exchange. Summer
+    # stagnation + plankton bloom + tidal-mud stirring drops viz
+    # consistently below what the chl-only model predicts.
     #
-    # Followups (not in this commit):
-    #   * Scale by month: summer worse than winter (~1.5× penalty Jun-Sep).
-    #   * Scale by SST anomaly: warmer = more bloom = more turbid.
-    #   * Replace bbox with proper polygon (currently catches a few
-    #     Pacific-Baja cells in the corner, but they're north of bbox's
-    #     -115 lng cutoff so it's fine).
+    # v2 (2026-05-18): instead of a flat 16-ft penalty, modulate by
+    # local chl so clean-water days in Bahía Ángeles aren't penalised
+    # the same as a peak bloom near Isla Rasa:
+    #
+    #   penalty_ft = BASE + EXTRA * tanh(chl / 0.6)
+    #
+    #   chl=0.10 → 5 + 22·0.16 =  8.5 ft  (a clean day, modest hit)
+    #   chl=0.30 → 5 + 22·0.46 = 15.2 ft
+    #   chl=0.60 → 5 + 22·0.76 = 21.7 ft
+    #   chl=1.00 → 5 + 22·0.93 = 25.5 ft
+    #   chl=2.00+→ 5 + 22·1.00 = 27.0 ft  (bloom-grade, drops Excellent
+    #                                       to Good/Fair as observed)
+    #
+    # Base term reflects the chronic stagnation that exists even when
+    # the satellite chl returns clean (subsurface mud, low DO, etc.);
+    # the chl-coupled term captures the visible bloom signal. Followups:
+    # scale by month + SST anomaly, replace bbox with proper polygon.
     if active_region().name == "baja":
         in_north_cortez = (
             (lat_grid >= 28.5) & (lat_grid <= 32.0) &
             (lng_grid >= -115.0) & (lng_grid <= -113.0)
         )
-        NORTH_CORTEZ_PENALTY_FT = 16.0  # ≈ 5 m
-        viz_p50_ft = np.where(in_north_cortez,
-                              np.maximum(viz_p50_ft - NORTH_CORTEZ_PENALTY_FT, 0),
-                              viz_p50_ft)
-        viz_p10_ft = np.where(in_north_cortez,
-                              np.maximum(viz_p10_ft - NORTH_CORTEZ_PENALTY_FT, 0),
-                              viz_p10_ft)
-        viz_p90_ft = np.where(in_north_cortez,
-                              np.maximum(viz_p90_ft - NORTH_CORTEZ_PENALTY_FT, 0),
-                              viz_p90_ft)
+        chl_2d = chl_obs_today.reshape(shape2d)
+        # Use lastvalid where today is NaN so cloudy-day cells still
+        # get the right penalty.
+        chl_for_penalty = np.where(
+            np.isfinite(chl_2d), chl_2d,
+            chl_lastvalid.reshape(shape2d),
+        )
+        chl_for_penalty = np.where(
+            np.isfinite(chl_for_penalty), chl_for_penalty, 0.3,
+        )  # mid value when both missing
+        BASE_FT = 5.0
+        EXTRA_FT = 22.0
+        penalty_per_cell = BASE_FT + EXTRA_FT * np.tanh(chl_for_penalty / 0.6)
+        penalty_per_cell = np.where(in_north_cortez, penalty_per_cell, 0.0)
+        viz_p50_ft = np.maximum(viz_p50_ft - penalty_per_cell, 0)
+        viz_p10_ft = np.maximum(viz_p10_ft - penalty_per_cell, 0)
+        viz_p90_ft = np.maximum(viz_p90_ft - penalty_per_cell, 0)
         n_stale = int(np.sum(in_north_cortez & np.isfinite(viz_p50_ft)))
-        print(f"  applied N Cortez stale-water penalty ({NORTH_CORTEZ_PENALTY_FT:.0f}ft) to {n_stale} cells")
+        mean_pen = float(np.mean(penalty_per_cell[in_north_cortez]))
+        print(f"  applied N Cortez chl-modulated penalty: {n_stale} cells, "
+              f"mean {mean_pen:.1f}ft")
 
     print(f"  viz_p50_ft range: {np.nanmin(viz_p50_ft):.1f} – {np.nanmax(viz_p50_ft):.1f} ft, "
           f"mean {np.nanmean(viz_p50_ft):.1f}")

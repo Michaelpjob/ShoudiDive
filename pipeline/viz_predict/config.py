@@ -322,7 +322,15 @@ TURBIDITY_CORRECTIONS: Dict[str, TurbidityCorrections] = {
 CHL_MIN_MGPM3 = 0.03
 CHL_MAX_MGPM3 = 50.0
 SECCHI_MIN_M  = 1.0
-SECCHI_MAX_M  = 25.0
+# Raised 25.0 → 35.0 (2026-05-18). 25 m = 82 ft was clipping at the
+# top of the Excellent band, hiding the genuine 90-100 ft conditions
+# you get on calm days at Cabo Pulmo, Espíritu Santo / Los Islotes,
+# Isla Catalina / Carmen offshore, and (occasionally) the Channel
+# Islands backsides at SCI. 35 m = 115 ft puts the ceiling where it
+# physically belongs. Score curve (_BAND_KNOTS_M in visibility.py)
+# stays anchored at 24.4 m = 100; values above that all score 100
+# but display the real Secchi number for cursor + spot panel.
+SECCHI_MAX_M  = 35.0
 
 
 # ---- Kd_490 → Secchi blend (Phase 2) -----------------------------------
