@@ -9,7 +9,7 @@
 // region = (a) drop a new entry in `pipeline/regions/`, (b) add it
 // to VALID below, (c) add it to the RegionSwitcher REGIONS list.
 
-const VALID = ["ca", "pnw", "tropical"];
+const VALID = ["ca", "pnw", "tropical", "baja"];
 const DEFAULT_REGION = "ca";
 
 let _cached = null;
@@ -30,6 +30,7 @@ function _regionFromHostname() {
     const h = (window.location.hostname || "").toLowerCase();
     if (h.startsWith("pnw-beta.")) return "pnw";
     if (h.startsWith("tropical-beta.")) return "tropical";
+    if (h.startsWith("baja-beta.")) return "baja";
     // ca-beta is a CA staging surface that mirrors dev's bundle (with
     // NorCal expansion + PR-NC-1 viz calibration) deployed under a
     // dedicated URL. Region is still "ca" — same /data/ tree as prod —

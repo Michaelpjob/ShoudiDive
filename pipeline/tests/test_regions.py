@@ -54,6 +54,7 @@ def test_all_regions_load():
     assert "ca" in names
     assert "pnw" in names
     assert "tropical" in names
+    assert "baja" in names
     for n in names:
         r = get_region(n)
         assert isinstance(r, Region)
@@ -79,7 +80,7 @@ def test_active_region_respects_env(monkeypatch):
 # Per-region invariants — every region must have a sane bbox
 # ---------------------------------------------------------------------
 
-@pytest.mark.parametrize("name", ["ca", "pnw", "tropical"])
+@pytest.mark.parametrize("name", ["ca", "pnw", "tropical", "baja"])
 def test_bbox_is_geographically_sane(name):
     r = get_region(name)
     b = r.bbox
@@ -91,7 +92,7 @@ def test_bbox_is_geographically_sane(name):
     assert -180 < b["lng_max"] < 180, f"{name}: lng_max out of range"
 
 
-@pytest.mark.parametrize("name", ["ca", "pnw", "tropical"])
+@pytest.mark.parametrize("name", ["ca", "pnw", "tropical", "baja"])
 def test_bbox_array_matches_dict(name):
     r = get_region(name)
     arr = r.bbox_array
@@ -99,19 +100,19 @@ def test_bbox_array_matches_dict(name):
                    r.bbox["lng_max"], r.bbox["lat_max"]]
 
 
-@pytest.mark.parametrize("name", ["ca", "pnw", "tropical"])
+@pytest.mark.parametrize("name", ["ca", "pnw", "tropical", "baja"])
 def test_lat_zone_bounds_non_empty(name):
     r = get_region(name)
     assert r.lat_zone_bounds, f"{name}: must define at least one lat zone"
 
 
-@pytest.mark.parametrize("name", ["ca", "pnw", "tropical"])
+@pytest.mark.parametrize("name", ["ca", "pnw", "tropical", "baja"])
 def test_dist_labels_non_empty(name):
     r = get_region(name)
     assert r.dist_labels, f"{name}: must define dist_labels"
 
 
-@pytest.mark.parametrize("name", ["ca", "pnw", "tropical"])
+@pytest.mark.parametrize("name", ["ca", "pnw", "tropical", "baja"])
 def test_data_dir_slug_safe(name):
     r = get_region(name)
     assert r.data_dir_slug

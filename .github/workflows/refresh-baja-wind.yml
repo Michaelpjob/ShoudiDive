@@ -1,0 +1,97 @@
+name: Refresh baja — wind (hourly)
+
+# Baja Mexico (Pacific + Sea of Cortez) — HOURLY wind/swell/currents at :00.
+# Time slot rationale: CA :15, PNW :30, tropical :45, CA-beta :50 →
+# pick :00 (top of hour) for baja. HRRR covers down to ~22°N over
+# Mexico (the full Baja peninsula and the Sea of Cortez), so HRRR
+# is the primary wind source for the whole region; GFS fallback
+# remains in fetch_wind.py for any sub-hour HRRR outages.
+# Currents are model-inferred (HFRNet has zero coverage south of
+# San Diego at ~32.5°N).
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Git ref to refresh against (default: dev)"
+        required: false
+        default: "dev"
+        type: string
+
+concurrency:
+  group: refresh-baja-wind
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    env:
+      SHOULDIDIVE_REGION: baja
+    permissions:
+      contents: write
+      actions: write   # for `gh workflow run deploy-baja-beta.yml` at the end
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || (github.event_name == 'schedule' && 'dev' || github.ref) }}
+          token: ${{ secrets.BOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+
+      - name: Install pipeline dependencies
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Fetch wind (HRRR over Baja + GFS fallback)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_wind.py
+
+      - name: Fetch 5-day hourly wind
+        continue-on-error: true
+        timeout-minutes: 15
+        run: python pipeline/fetch_wind_5day.py
+
+      - name: Fetch 5-day hourly swell
+        continue-on-error: true
+        timeout-minutes: 10
+        run: python pipeline/fetch_swell_5day.py
+
+      - name: Fetch WaveWatch III nowcast
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_waves.py
+
+      - name: Fetch surface currents (model-inferred — zero HFR coverage south of US border)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_currents.py
+
+      - name: Commit refreshed baja wind data
+        if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/data/baja/
+          if git diff --staged --quiet; then
+            echo "No baja wind data changes to commit."
+          else
+            git commit -m "wind: refresh baja $(date -u +%Y-%m-%dT%H:%MZ)"
+            for attempt in 1 2 3; do
+              if git push; then break; fi
+              echo "push failed (attempt $attempt) — rebasing"
+              git pull --rebase --autostash origin "$(git rev-parse --abbrev-ref HEAD)"
+            done
+          fi
+
+      - name: Trigger baja-beta deploy
+        if: success() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run deploy-baja-beta.yml --ref dev
