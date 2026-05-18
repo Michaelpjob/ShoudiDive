@@ -155,6 +155,33 @@ async function run() {
       fullPage: false,
     });
 
+    // Dump the FULL chain of <g> ancestors from the DataOverlay <image>
+    // up to the SVG root, with each ancestor's clip-path/mask attrs.
+    // This tells us definitively whether the mask wrapper is still
+    // applied (despite my conditional fix being in the bundle).
+    const ancestry = await page.evaluate(() => {
+      const imgs = Array.from(document.querySelectorAll("svg image, image[href]"));
+      let target = null;
+      for (const img of imgs) {
+        const href = img.getAttribute("href") || img.getAttribute("xlink:href") || "";
+        if (href.startsWith("data:image/png")) { target = img; break; }
+      }
+      if (!target) return { error: "no data:image/png <image>" };
+      const chain = [];
+      let el = target;
+      while (el && el !== document.body) {
+        chain.push({
+          tag: el.tagName,
+          cls: el.getAttribute("class") || "",
+          clipPath: el.getAttribute("clip-path") || "",
+          mask: el.getAttribute("mask") || "",
+        });
+        el = el.parentElement;
+      }
+      return { chainLength: chain.length, chain };
+    });
+    console.log(`[probe-baja] ancestry of DataOverlay <image>: ${JSON.stringify(ancestry, null, 2)}`);
+
     // One-time mask geometry inspection: pull the ocean-mask paths
     // and report their bounding boxes to determine if any land path
     // exceeds the inner bbox and is over-clipping the data overlay.
