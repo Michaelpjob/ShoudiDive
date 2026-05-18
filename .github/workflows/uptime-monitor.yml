@@ -68,128 +68,25 @@ jobs:
       failed: ${{ steps.check.outputs.failed }}
       details: ${{ steps.check.outputs.details }}
     steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Probe homepage + manifest
         id: check
-        # set +e: don't abort the step on a non-zero curl — we want
-        # to handle the result structurally and emit it as the
-        # `failed` output for the downstream issue-management jobs.
+        # The probe uses Node's built-in fetch (undici), not curl.
+        # Cloudflare fingerprints curl's TLS handshake separately from
+        # its UA, so even with a Chrome UA, curl-from-GHA gets 403'd.
+        # Node fetch passes through CF reliably (verified by the
+        # long-running live-cp-manifest probe that uses the same stack).
         #
-        # Probe output goes to STDOUT (not a captured variable) so the
-        # GH Actions run log shows exactly what happened. The DETAILS
-        # output is also written, but only for templating the issue
-        # body — stdout is the authoritative debug surface.
-        #
-        # We ALWAYS exit 0 from this step. Status of the probe is
-        # carried by the `failed` output. The downstream jobs use
-        # `if: always() && needs.probe.outputs.failed != '0'` (or
-        # `== '0'`) to decide whether to open / close the issue.
-        # Why not exit 1 on failure: a failed step causes
-        # `needs:`-dependent jobs to be SKIPPED by default, which
-        # would mean the alert never fires.
-        shell: bash
-        run: |
-          set +e
-          set -o pipefail
-
-          probe() {
-            # $1 = name, $2 = url, $3 = optional content predicate
-            local name="$1" url="$2" predicate="${3:-}"
-            local code
-            # Use a real-Chrome UA — Cloudflare's bot detection on
-            # GHA runner IPs returns 403 to obviously-bot user agents
-            # (see PR #48 for the same fix applied to live-runtime).
-            # The custom X-Source header preserves our ability to
-            # identify uptime-monitor traffic in CF logs / our own
-            # analytics endpoint if/when we want to.
-            code=$(curl -sS -L \
-              -A 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36' \
-              -H 'X-Source: shouldidive-uptime-monitor/1.0' \
-              -o /tmp/probe_body \
-              -w '%{http_code}' \
-              --max-time 30 \
-              "$url")
-            local curl_rc=$?
-            if [ "$curl_rc" != "0" ]; then
-              echo "::warning::$name FAIL: curl exit $curl_rc (network / TLS / timeout)"
-              return 1
-            fi
-            if [ "$code" != "200" ]; then
-              echo "::warning::$name FAIL: HTTP $code"
-              return 1
-            fi
-            if [ -n "$predicate" ]; then
-              if ! eval "$predicate" </tmp/probe_body >/dev/null 2>&1; then
-                echo "::warning::$name FAIL: HTTP 200 but content predicate failed"
-                return 1
-              fi
-            fi
-            echo "$name OK: HTTP 200"
-            return 0
-          }
-
-          probe_with_retry() {
-            local name="$1" url="$2" predicate="${3:-}"
-            if probe "$name" "$url" "$predicate"; then
-              return 0
-            fi
-            echo "$name first attempt failed; sleeping 30 s before retry..."
-            sleep 30
-            probe "$name" "$url" "$predicate"
-          }
-
-          failed=0
-          details_lines=()
-
-          # ---- Homepage probe ------------------------------------------
-          echo "::group::homepage"
-          if probe_with_retry homepage "https://shouldidive.com/" ""; then
-            details_lines+=("homepage: OK")
-          else
-            failed=$((failed + 1))
-            details_lines+=("homepage: FAIL (see ::warning:: above)")
-          fi
-          echo "::endgroup::"
-
-          # ---- Manifest probe ------------------------------------------
-          # 200 OK with a valid JSON body and a 4-element bbox. Catches
-          # the "CDN returned an HTML error page with status 200" case.
-          echo "::group::manifest"
-          if probe_with_retry manifest \
-            "https://shouldidive.com/data/manifest.json" \
-            "jq -e '.bbox | length == 4'"; then
-            details_lines+=("manifest: OK")
-          else
-            failed=$((failed + 1))
-            details_lines+=("manifest: FAIL (see ::warning:: above)")
-          fi
-          echo "::endgroup::"
-
-          # ---- Emit outputs --------------------------------------------
-          details=$(printf '%s\n' "${details_lines[@]}")
-
-          {
-            echo "failed=$failed"
-            echo "details<<EOF"
-            echo "$details"
-            echo "EOF"
-          } >>"$GITHUB_OUTPUT"
-
-          {
-            echo "## Uptime probe"
-            echo
-            echo "Failures this tick: $failed"
-            echo
-            echo '```'
-            echo "$details"
-            echo '```'
-          } >>"$GITHUB_STEP_SUMMARY"
-
-          if [ "$failed" -gt 0 ]; then
-            echo "::error::$failed probe(s) failed. See warnings above. The alerting job will open / update the rolling site-down issue."
-          fi
-
-          # Always exit 0 — see header comment.
-          exit 0
+        # The script writes outputs to $GITHUB_OUTPUT and ALWAYS exits 0.
+        # Status flows through the `failed` output, not the exit code,
+        # so the downstream issue-management jobs aren't skipped on
+        # probe failure (see workflow header for full rationale).
+        run: node tests/uptime-monitor.mjs
 
   open-or-update-issue:
     needs: probe
