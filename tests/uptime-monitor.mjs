@@ -59,16 +59,20 @@ async function probeOnce({ name, url, contentPredicate }) {
   const controller = new AbortController();
   const timer = globalThis.setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const resp = await fetch(url, {
-      headers: {
-        // Real-Chrome UA + X-Source for our own audit logs.
-        "User-Agent":
-          "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 " +
-          "(KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
-        "X-Source": "shouldidive-uptime-monitor/1.0",
-        // Disable HTTP caching at the edge for this probe.
-        "Cache-Control": "no-cache",
-      },
+    // Mirror live-cp-manifest's exact fetch pattern. It uses a
+    // clearly bot-like UA and still gets 200 reliably, so a Chrome UA
+    // here would be cargo-culting. KEEP this in lockstep with
+    // tests/live-checkpoints/live-manifest.mjs — if their probe starts
+    // 403'ing too, the fix probably needs to land in CF dashboard.
+    //
+    // Also: the URL includes a per-request cache-buster query string,
+    // which avoids CF edge caching of a previous response (some CF
+    // configs cache responses based on path and serve them back
+    // including their status code — a cached 403 is a real failure
+    // mode).
+    const probeUrl = `${url}${url.includes("?") ? "&" : "?"}cb=upm-${Date.now()}`;
+    const resp = await fetch(probeUrl, {
+      headers: { "User-Agent": "ShoudiDive-UptimeMonitor/1.0" },
       signal: controller.signal,
       redirect: "follow",
     });
