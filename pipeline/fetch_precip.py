@@ -59,11 +59,23 @@ GPM_FILENAME = (
 UA = "shouldidive/0.1 (+github.com/Michaelpjob/ShoudiDive)"
 
 
+class _AuthPreservingSession(requests.Session):
+    """requests.Session that keeps Authorization across cross-host
+    redirects. NASA GES DISC redirects through urs.earthdata.nasa.gov
+    for the OAuth handoff, and the default urllib3 behaviour strips
+    Authorization on cross-host hops as a credential-leak defense —
+    which kills bearer-token auth in that exact flow. Overriding
+    rebuild_auth() to no-op preserves the header end-to-end. Safe
+    here because we ONLY ever send the EDL token to NASA hosts."""
+    def rebuild_auth(self, prepared_request, response):
+        return None
+
+
 def _earthdata_session() -> requests.Session | None:
     token = os.environ.get("EARTHDATA_TOKEN")
     if not token:
         return None
-    s = requests.Session()
+    s = _AuthPreservingSession()
     s.headers.update({
         "User-Agent": UA,
         "Authorization": f"Bearer {token}",
