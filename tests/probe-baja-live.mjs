@@ -244,6 +244,41 @@ async function run() {
         path: resolve(ARTIFACTS, `${label.toLowerCase()}_full.png`),
         fullPage: false,
       });
+      // Targeted isolation: take screenshots with each suspect
+      // disabled separately.
+      // 1) Hide ONLY LandBasemap.
+      await page.evaluate(() => {
+        const land = document.querySelector(".basemap.basemap-land");
+        if (land) land.style.display = "none";
+      });
+      await new Promise((r) => setTimeout(r, 500));
+      await page.screenshot({
+        path: resolve(ARTIFACTS, `${label.toLowerCase()}_no-land.png`),
+        fullPage: false,
+      });
+      // Restore land
+      await page.evaluate(() => {
+        const land = document.querySelector(".basemap.basemap-land");
+        if (land) land.style.display = "";
+      });
+      // 2) Inspect what LandBasemap paths look like
+      const landInfo = await page.evaluate(() => {
+        const land = document.querySelector(".basemap.basemap-land");
+        if (!land) return null;
+        const paths = Array.from(land.querySelectorAll("path"));
+        return {
+          pathCount: paths.length,
+          firstPathLen: paths[0]?.getAttribute("d")?.length || 0,
+          firstPathBBox: (() => {
+            try {
+              const b = paths[0]?.getBBox();
+              return b ? { x: b.x.toFixed(1), y: b.y.toFixed(1), w: b.width.toFixed(1), h: b.height.toFixed(1) } : null;
+            } catch { return null; }
+          })(),
+          firstPathFill: paths[0]?.getAttribute("fill"),
+        };
+      });
+      console.log(`  LandBasemap info: ${JSON.stringify(landInfo)}`);
       // Now strip the ocean-clip / ocean-mask from any ancestor <g>
       // wrapping the DataOverlay, AND hide the LandBasemap, AND bump
       // opacity to 1. Take another screenshot — if data is suddenly
