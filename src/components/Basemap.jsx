@@ -2,20 +2,59 @@ import { useEffect, useMemo, useState } from "react";
 import { project, BBOX, getFitted } from "../lib/mapData.js";
 import { dataPath } from "../lib/region.js";
 
-// Drop features whose projected bbox dominates the fitted map area —
-// fetch_coastline.py emits a degenerate "outer hull" mega-polygon for
-// regions where the land mass spans most of the bbox (Baja peninsula +
-// mainland Mexico collapsed into one MultiPolygon, ~1.9M-char path
-// covering 100% of the inner letterbox). Painted as land it hides the
-// data overlay; used as a mask path it clips out the data. Heuristic:
-// any single polygon whose bbox exceeds 70% of the fitted area is the
-// degenerate one. Legitimate land features (peninsula coast, islands,
-// mainland coast) are all well under that threshold.
+// Drop sub-polygons whose projected bbox dominates the fitted map area.
+// fetch_coastline.py emits a degenerate "outer hull" polygon for
+// regions where land spans most of the bbox: Baja peninsula + mainland
+// Mexico + clipped-USA all wind up in ONE MultiPolygon. The DEGENERATE
+// sub-polygon (closed along bbox edges) has ~100% inner-letterbox bbox.
+// The LEGITIMATE sub-polygons (peninsula coast, mainland coast, islands)
+// are each well under 70% of the area.
+//
+// Earlier version dropped at FEATURE level — that killed the peninsula
+// too, because peninsula + mainland are bundled into one Feature's
+// MultiPolygon. We now split inside MultiPolygons and filter polygon-
+// by-polygon so the peninsula coast survives and only the bbox-edge
+// hull polygon gets dropped.
 const DEGENERATE_MEGAPATH_FRAC = 0.7;
+function polygonBoundsArea(rings, w, h) {
+  if (!rings || !rings.length) return 0;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const ring of rings) {
+    for (const pt of ring) {
+      const [x, y] = project(pt[0], pt[1], w, h);
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (!Number.isFinite(minX)) return 0;
+  return Math.abs(maxX - minX) * Math.abs(maxY - minY);
+}
 function filterMegaPolygons(features, w, h) {
   const { innerW, innerH } = getFitted(w, h);
   const cap = (innerW || w) * (innerH || h) * DEGENERATE_MEGAPATH_FRAC;
-  return features.filter((f) => geomBoundsArea(f.geometry, w, h) < cap);
+  const out = [];
+  for (const f of features) {
+    const g = f.geometry;
+    if (!g) continue;
+    if (g.type === "Polygon") {
+      if (polygonBoundsArea(g.coordinates, w, h) < cap) out.push(f);
+      continue;
+    }
+    if (g.type === "MultiPolygon") {
+      const kept = g.coordinates.filter((rings) =>
+        polygonBoundsArea(rings, w, h) < cap
+      );
+      if (kept.length > 0) {
+        out.push({ ...f, geometry: { type: "MultiPolygon", coordinates: kept } });
+      }
+      continue;
+    }
+    // Other geometry types pass through unchanged.
+    out.push(f);
+  }
+  return out;
 }
 
 // ---- Coastline + island GeoJSON (clipped Natural Earth 10 m) ---------------
