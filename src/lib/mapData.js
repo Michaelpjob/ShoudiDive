@@ -282,7 +282,24 @@ const REGION_SST_RANGE = {
   tropical: [20, 32], // °C — Caribbean / Gulf / Florida year-round
   // Baja: PNG ENCODER is [14, 32] (matches baja.py layer_range_overrides;
   // covers Pacific upwelling floor + Cortez summer max). DISPLAY range
-  // tightened to [20, 24] — a 4°C window centered on May's mean SST
+  // history:
+  //   [14, 32] — original; produced barely-visible mid-cyan because the
+  //              ramp center was at 23°C and most spring water sits
+  //              17-22°C → t≈0.16-0.5, no saturation, low contrast.
+  //   [20, 24] — overcorrected; only a 4°C window meant every cell
+  //              <20 saturated deep navy ("too blue") and every cell
+  //              >24 saturated red ("too red"). User QA flagged it.
+  //   [14, 30] — current; same 16°C span as CA's [9, 25] but shifted
+  //              into the subtropical range Baja water actually
+  //              occupies. Cold upwelling at Cedros (15°C) maps to
+  //              deep blue ~t=0.06; Pacific Baja typical 18-21°C
+  //              maps to mid-blue/cyan ~t=0.25-0.44; Cabo summer
+  //              26-28°C maps to orange ~t=0.75-0.88; only the
+  //              extreme north-Cortez August surface (>30°C) hits
+  //              saturated red. The result: real warm water looks
+  //              warm, real cold water looks cold, none of it
+  //              looks "extreme" unless it actually is.
+  //   [20, 24] — a 4°C window centered on May's mean SST
   // (21.75°C from history summary). Pixel histogram on the live bundle
   // confirmed that with looser ranges (>50% of opaque cells render
   // deep navy / dark blue) the overlay was invisible against the
@@ -300,7 +317,7 @@ const REGION_SST_RANGE = {
   // about discriminating swim-comfortable bands (suit choice) more
   // than absolute extremes. Cursor pill still shows real °C/°F from
   // the manifest range (decode is independent of display range).
-  baja:     [20, 24],
+  baja:     [14, 30],
 };
 export const SST_RANGE =
   REGION_SST_RANGE[activeRegion()] || REGION_SST_RANGE.ca;
