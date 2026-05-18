@@ -155,6 +155,44 @@ async function run() {
       fullPage: false,
     });
 
+    // One-time mask geometry inspection: pull the ocean-mask paths
+    // and report their bounding boxes to determine if any land path
+    // exceeds the inner bbox and is over-clipping the data overlay.
+    const maskInfo = await page.evaluate(() => {
+      const mask = document.getElementById("ocean-mask");
+      const clip = document.getElementById("ocean-clip");
+      if (!mask || !clip) return { error: "ocean-mask or ocean-clip not found" };
+      const maskRect = mask.querySelector("rect");
+      const maskPaths = Array.from(mask.querySelectorAll("path"));
+      const clipPaths = Array.from(clip.querySelectorAll("path"));
+      function describePath(p) {
+        try {
+          const bbox = p.getBBox ? p.getBBox() : null;
+          const d = (p.getAttribute("d") || "");
+          return {
+            len: d.length,
+            firstChars: d.slice(0, 80),
+            bbox: bbox ? { x: bbox.x.toFixed(1), y: bbox.y.toFixed(1), w: bbox.width.toFixed(1), h: bbox.height.toFixed(1) } : null,
+            fill: p.getAttribute("fill"),
+            fillRule: p.getAttribute("fill-rule") || p.getAttribute("clip-rule"),
+          };
+        } catch (e) { return { error: e.message }; }
+      }
+      return {
+        maskRect: maskRect ? {
+          x: maskRect.getAttribute("x"),
+          y: maskRect.getAttribute("y"),
+          w: maskRect.getAttribute("width"),
+          h: maskRect.getAttribute("height"),
+          fill: maskRect.getAttribute("fill"),
+        } : null,
+        maskPathCount: maskPaths.length,
+        maskPaths: maskPaths.slice(0, 5).map(describePath),
+        clipPaths: clipPaths.map(describePath),
+      };
+    });
+    console.log(`[probe-baja] mask geometry: ${JSON.stringify(maskInfo, null, 2)}`);
+
     for (const label of LAYERS) {
       console.log(`[probe-baja] layer=${label}`);
       const switched = await selectLayer(page, label);
