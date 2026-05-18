@@ -395,8 +395,8 @@ export function LandBasemap({ width, height }) {
           key={p.id}
           d={p.d}
           fill={p.isMega ? "none" : "var(--land)"}
-          stroke="var(--land-edge)"
-          strokeWidth="1"
+          stroke={p.isMega ? "var(--ink-2)" : "var(--land-edge)"}
+          strokeWidth={p.isMega ? 1.5 : 1}
         />
       ))}
     </g>
