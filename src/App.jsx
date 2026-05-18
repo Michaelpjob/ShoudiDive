@@ -1505,6 +1505,12 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
                       yellow: "typical summer Caribbean (82–86°F). Rash guard + boardies.",
                       red:    "extreme warm anomaly — coral bleaching threshold (>86°F sustained).",
                     },
+                    baja: {
+                      blue:   "cold California-Current upwelling (~57–63°F). Cedros / Bahía Tortugas / Ensenada in winter — drysuit or 7mm.",
+                      cyan:   "mid-Baja transition water (~65–72°F). Magdalena Bay year-round; northern Sea of Cortez winter.",
+                      yellow: "warm Sea of Cortez summer (~75–82°F). Cabo corridor, La Paz, Loreto — 3mm or trunks.",
+                      red:    "hot northern Cortez (>85°F). Bahía de los Ángeles / San Felipe peak summer — Cabo Pulmo coral stress watch.",
+                    },
                   };
                   const c = sstCopy[r] || sstCopy.ca;
                   return (
