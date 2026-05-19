@@ -226,12 +226,20 @@ const REGION_SAVED_SPOTS = {
     { id: "blue-hole",   name: "Blue Hole",       lng:  -87.535, lat: 17.316 },
   ],
   baja: [
-    // Pacific side
+    // Pacific side — surf + dive points (N to S)
+    { id: "k38",          name: "K-38",            lng: -117.05, lat: 32.36 },
+    { id: "salsipuedes",  name: "Salsipuedes",     lng: -116.78, lat: 31.66 },
+    { id: "sacramento",   name: "Sacramento Reef", lng: -116.04, lat: 30.55 },
+    { id: "quatro-casas", name: "Quatro Casas",    lng: -116.05, lat: 30.75 },
+    { id: "santa-ros",    name: "Santa Rosalillita",lng: -114.27, lat: 28.65 },
     { id: "san-benito",   name: "Isla San Benito", lng: -115.55, lat: 28.31 },
     { id: "cedros",       name: "Isla Cedros",     lng: -115.20, lat: 28.20 },
     { id: "bahia-tort",   name: "Bahía Tortugas",  lng: -114.88, lat: 27.69 },
-    { id: "sacramento",   name: "Sacramento Reef", lng: -116.04, lat: 30.55 },
-    // Cabo corridor
+    { id: "abreojos",     name: "Punta Abreojos",  lng: -113.60, lat: 26.71 },
+    { id: "scorpion",     name: "Scorpion Bay",    lng: -112.50, lat: 26.25 },
+    { id: "punta-conejo", name: "Punta Conejo",    lng: -111.30, lat: 23.80 },
+    // Cabo corridor — surf (Costa Azul) + dive points
+    { id: "costa-azul",   name: "Costa Azul",      lng: -109.69, lat: 23.05 },
     { id: "cabo-falso",   name: "Cabo Falso",      lng: -110.00, lat: 22.87 },
     { id: "cabo",         name: "Cabo San Lucas",  lng: -109.92, lat: 22.89 },
     { id: "gordo-banks",  name: "Gordo Banks",     lng: -109.34, lat: 22.95 },
