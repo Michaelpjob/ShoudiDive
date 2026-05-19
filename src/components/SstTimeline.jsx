@@ -6,6 +6,7 @@ import {
   getSstHistoryStats,
   getSstHistorySummary,
 } from "../lib/dataSource.js";
+import { findTodayDay } from "../lib/today.js";
 import { useTimelineDrag } from "./useTimelineDrag.js";
 
 function fmtDay(iso) {
@@ -258,12 +259,19 @@ function effectiveSlot(d, idx) {
 
 export function defaultSstSelection(summary) {
   const days = summary?.days || [];
+  // Server-pinned default wins (typically "f0" today on sst5d).
   const explicit = summary?.default_slot || summary?.latest_slot;
   if (explicit) return { slot: explicit };
   if (days.length === 0) return { slot: "d0" };
-  // Last day is the most-recent observation for history (sst7d) and
-  // furthest-out forecast for sst5d. defaultSstSelection used to
-  // pick the LAST day for both; matches the existing behaviour.
+  // Prefer "today" (date match in summary tz) so sst5d forecasts
+  // open on today, not on the +5 day far-edge.
+  const today = findTodayDay(summary);
+  if (today) {
+    const idx = days.indexOf(today);
+    return { slot: effectiveSlot(today, idx) };
+  }
+  // Last-resort: most-recent observation for history, furthest-out
+  // forecast for sst5d. Same as previous behaviour.
   const last = days[days.length - 1];
   return { slot: effectiveSlot(last, days.length - 1) };
 }
