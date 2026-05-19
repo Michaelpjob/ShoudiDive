@@ -112,9 +112,38 @@ export default function WindParticles({ width, height, composite, dataReady, act
       return landMask[iy * pixelWidth + ix] === 1;
     };
 
-    // Initialize particle pool. Skip-land at spawn so we never start
-    // a streamline halfway through Big Sur.
-    const spawn = (p) => {
+    // Spawn a particle. If an `anchor` {x, y} is given AND we're not
+    // at initial setup, ~70% of the time we respawn near the anchor
+    // (where the previous particle died). This builds up streamline
+    // density along coastlines + island leeward edges, where particles
+    // die quickly. The other ~30% spawn fully random to keep open-ocean
+    // coverage even.
+    //
+    // Without this locality bias, particles flowing onshore (typical
+    // CA wind) all die within a few frames of approaching the coast,
+    // and their replacements spawn uniformly across the whole map —
+    // most of which is open ocean. The coastline ends up with
+    // dramatically fewer drawn streamlines than open water, which
+    // manifests as a visible black halo. See 2026-05-18 screenshot
+    // of Channel Islands for the visual.
+    const SPAWN_LOCAL_RADIUS_PX = Math.max(20, Math.min(60, pixelWidth * 0.04));
+    const spawn = (p, anchor) => {
+      // Try a local respawn first when we have an anchor.
+      if (anchor && Math.random() < 0.7) {
+        for (let i = 0; i < 6; i++) {
+          const ang = Math.random() * Math.PI * 2;
+          const r = Math.random() * SPAWN_LOCAL_RADIUS_PX;
+          const nx = anchor.x + Math.cos(ang) * r;
+          const ny = anchor.y + Math.sin(ang) * r;
+          if (nx < 0 || nx >= pixelWidth || ny < 0 || ny >= pixelHeight) continue;
+          if (isLand(nx, ny)) continue;
+          p.x = nx;
+          p.y = ny;
+          p.age = 0;
+          return;
+        }
+        // Fell through — anchor area is land-locked. Fall through to random.
+      }
       let tries = 0;
       do {
         p.x = Math.random() * pixelWidth;
@@ -156,11 +185,18 @@ export default function WindParticles({ width, height, composite, dataReady, act
         // the particle wandered onto land. The land check defeats the
         // bilinear-smear that otherwise pulls finite UV from ocean
         // neighbours and lets streamlines flow across coast lines.
-        if (
-          !Number.isFinite(u) || !Number.isFinite(v) ||
-          p.age >= maxAge ||
-          isLand(p.x, p.y)
-        ) {
+        //
+        // Pass `p` as the anchor — the new particle spawns near where
+        // this one died (with 70% probability). Sustains streamline
+        // density along coastlines + island leeward edges where
+        // particles die quickly. Don't pass anchor when the death
+        // reason is "out of life" (maxAge); that's a normal cycle
+        // event that should respawn anywhere to keep coverage even.
+        if (!Number.isFinite(u) || !Number.isFinite(v) || isLand(p.x, p.y)) {
+          spawn(p, { x: p.x, y: p.y });
+          continue;
+        }
+        if (p.age >= maxAge) {
           spawn(p);
           continue;
         }
@@ -168,7 +204,7 @@ export default function WindParticles({ width, height, composite, dataReady, act
         // Screen y grows downward; v is positive northward = on-screen upward.
         const ny = p.y - v * speedScale;
         if (nx < 0 || nx >= pixelWidth || ny < 0 || ny >= pixelHeight || isLand(nx, ny)) {
-          spawn(p);
+          spawn(p, { x: p.x, y: p.y });
           continue;
         }
         const kt = Math.sqrt(u * u + v * v) * 1.94384;

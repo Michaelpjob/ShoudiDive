@@ -256,15 +256,22 @@ def regrid_to_bbox(lat2d, lng2d, u, v, source: str):
 # to u/v before encoding.
 
 def load_land_mask(out_root: Path, grid_w: int, grid_h: int,
-                   land_threshold: float = 0.7) -> np.ndarray | None:
+                   land_threshold: float = 0.5) -> np.ndarray | None:
     """Read bathy.png (region's data dir) and downsample to wind grid.
 
     Returns True=land boolean array, or None if bathy.png isn't there.
-    Uses box-averaged land area fraction with threshold (default 0.7)
+    Uses box-averaged land area fraction with threshold (default 0.5)
     so coastal cells with majority ocean keep valid wind data. See
     fetch_wind.py docstring for the long version — same algorithm
     intentionally duplicated here so each fetcher can run independently
     without an inter-fetcher import.
+
+    2026-05-18: threshold tightened 0.7 → 0.5. The previous default
+    left a visible streamline-density halo around Channel Islands +
+    coastline (cells right at the boundary kept wind data but particles
+    died inside them too fast). 0.5 still flags pure-land cells,
+    keeps majority-ocean coastal cells, AND aligns with the frontend
+    pixel-mask boundary so the visible coast is sharper.
     """
     region_data_dir = active_region().data_output_dir(out_root)
     bathy_path = region_data_dir / "bathy.png"
