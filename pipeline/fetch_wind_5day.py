@@ -256,22 +256,26 @@ def regrid_to_bbox(lat2d, lng2d, u, v, source: str):
 # to u/v before encoding.
 
 def load_land_mask(out_root: Path, grid_w: int, grid_h: int,
-                   land_threshold: float = 0.5) -> np.ndarray | None:
+                   land_threshold: float = 0.9) -> np.ndarray | None:
     """Read bathy.png (region's data dir) and downsample to wind grid.
 
     Returns True=land boolean array, or None if bathy.png isn't there.
-    Uses box-averaged land area fraction with threshold (default 0.5)
-    so coastal cells with majority ocean keep valid wind data. See
-    fetch_wind.py docstring for the long version — same algorithm
-    intentionally duplicated here so each fetcher can run independently
-    without an inter-fetcher import.
+    Uses box-averaged land area fraction with threshold (default 0.9)
+    so the mask only fires on cells fully on land. See fetch_wind.py
+    docstring for the long version — same algorithm intentionally
+    duplicated here so each fetcher can run independently without an
+    inter-fetcher import.
 
-    2026-05-18: threshold tightened 0.7 → 0.5. The previous default
-    left a visible streamline-density halo around Channel Islands +
-    coastline (cells right at the boundary kept wind data but particles
-    died inside them too fast). 0.5 still flags pure-land cells,
-    keeps majority-ocean coastal cells, AND aligns with the frontend
-    pixel-mask boundary so the visible coast is sharper.
+    2026-05-19: threshold loosened 0.7 → 0.9 (was briefly 0.5 in a
+    misdirected attempt). User reported a visible black halo around
+    Channel Islands + coast. Root cause: cells that were ~70%+ land
+    were NaN'd, which made their colorfill transparent and left a
+    visible gap between offshore wind colorfill and the SVG land
+    basemap. The frontend pixel-resolution geojson mask occludes
+    wind streamlines over actual land anyway, so the pipeline mask
+    only needs to zero out cells that are FULLY on land (e.g. a
+    cell over Sierra Nevada — terrain-friction values that don't
+    mean anything for diving conditions).
     """
     region_data_dir = active_region().data_output_dir(out_root)
     bathy_path = region_data_dir / "bathy.png"
