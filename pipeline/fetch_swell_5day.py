@@ -494,17 +494,24 @@ def _blend_swell_chop(h_grid, p_grid, d_grid, u, v, is_land=None):
     has_any = swell_valid | np.isfinite(chop_hs)
     h_out = np.where(has_any, h_total, np.nan).astype(np.float32)
 
-    # v5: final spatial smooth (sigma=1 cell ≈ 9 km) over the valid Hs
-    # field. Softens 1-cell-wide colormap-band crossings that read as
-    # "hard lines" in the rendered heatmap, without changing the
-    # large-scale gradient. NaN-aware via mask renormalisation —
-    # gaussian_filter would otherwise spread NaN over the whole field.
+    # v5/v6: final spatial smooth over the valid Hs field. Softens
+    # 1-cell-wide colormap-band crossings that read as "hard lines"
+    # in the rendered heatmap, without changing the large-scale
+    # gradient. NaN-aware via mask renormalisation — gaussian_filter
+    # would otherwise spread NaN over the whole field.
+    #
+    # v6 (2026-05-18): bumped sigma 1.0 → 2.0 (~9 km → ~18 km blur)
+    # after forecast-day d1/d2 buckets still showed a 2.7 ft cliff at
+    # the cell just east of Cedros where the path-land-fraction
+    # flipped between adjacent cells. sigma=2 smears Voronoi-boundary
+    # discontinuities across enough cells that the colormap reads as
+    # a continuous gradient.
     finite_mask = np.isfinite(h_out)
     if finite_mask.any():
         h_filled = np.where(finite_mask, h_out, 0.0).astype(np.float32)
         weight = finite_mask.astype(np.float32)
-        h_smoothed = gaussian_filter(h_filled, sigma=1.0)
-        w_smoothed = gaussian_filter(weight,  sigma=1.0)
+        h_smoothed = gaussian_filter(h_filled, sigma=2.0)
+        w_smoothed = gaussian_filter(weight,  sigma=2.0)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
             h_renorm = np.where(w_smoothed > 0, h_smoothed / w_smoothed, np.nan)
