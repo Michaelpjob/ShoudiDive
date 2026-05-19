@@ -76,9 +76,33 @@ PERSISTENCE_TAU_DAYS: Dict[str, float] = {
     # Trust the most recent observation longer; the prediction
     # converges anyway once a fresh observation arrives.
     "norcal_nearshore": 7.0, "norcal_islands": 5.0, "norcal_offshore": 5.5,
-    "central_nearshore": 1.5, "central_islands": 2.5, "central_offshore": 4.5,
-    "transition_nearshore": 2.0, "transition_islands": 3.0, "transition_offshore": 5.0,
-    "bight_nearshore": 2.5, "bight_islands": 3.5, "bight_offshore": 6.0,
+    # v3.5.2 (2026-05-19) — central/transition/bight tau bumps.
+    # NorCal got the tau bump in v3.5.1 because marine-layer fog
+    # blocked satellite for 10-30 days and the original 1d tau
+    # collapsed blooms to climatology. Central / transition / bight
+    # have the SAME data-availability constraint (Big Sur fog, Pt
+    # Conception, Channel-Islands marine layer) but were left at
+    # the original taus. User flagged a "21 ft Good" prediction
+    # over a clearly bloomed central-offshore cell (35.47°N
+    # 122.09°W on 2026-05-19). With central_nearshore tau=1.5
+    # a 3-day-old bloom drops to 14% weight, so the model walks
+    # to climatology while the chl LAYER (which renders the raw
+    # chl_1d.png blend, not the model's prior) still paints the
+    # bloom — the visible inconsistency the user reported.
+    # Doubled-or-tripled taus across the southern bands now keep
+    # observations alive across realistic 5-day satellite gaps:
+    #   central_nearshore     1.5 → 5.0   (3d obs → 55% weight)
+    #   central_islands       2.5 → 4.0   (3d obs → 47% weight)
+    #   central_offshore      4.5 → 6.0
+    #   transition_nearshore  2.0 → 4.5
+    #   transition_islands    3.0 → 4.0
+    #   transition_offshore   5.0 → 6.0
+    #   bight_nearshore       2.5 → 4.0
+    #   bight_islands         3.5 → 4.5
+    #   bight_offshore        6.0 → 7.0
+    "central_nearshore": 5.0, "central_islands": 4.0, "central_offshore": 6.0,
+    "transition_nearshore": 4.5, "transition_islands": 4.0, "transition_offshore": 6.0,
+    "bight_nearshore": 4.0, "bight_islands": 4.5, "bight_offshore": 7.0,
     # Baja zones (2026-05-18). Longer persistence than CA because:
     #   * cloud cover over the eastern Pacific + Cortez is less frequent
     #     than NorCal marine-layer days, so fresh observations arrive
