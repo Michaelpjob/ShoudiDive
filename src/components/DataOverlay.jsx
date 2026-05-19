@@ -182,6 +182,48 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
       img.data[i * 4 + 2] = rgb[2];
       img.data[i * 4 + 3] = 255;
     }
+
+    // Coastal halo elimination. NaN cells leave alpha=0 but their RGB
+    // stays at (0,0,0) from createImageData's default fill. When the
+    // browser bilinearly scales this small grid (140×110) up to the
+    // viewport (~1000×800), it blends adjacent water-color pixels with
+    // those black-RGB cells at every coastline, producing a half-strength
+    // brown halo against the dark `--land` basemap. The user saw this
+    // as a wide dark glow around the entire Baja peninsula on 2026-05-19.
+    //
+    // Fix: at each NaN cell, copy RGB from the nearest finite neighbour
+    // (alpha stays 0). The browser still alpha-blends to land at the
+    // coast, but the colour going INTO the blend is now the local water
+    // colour instead of black — clean soft fade, no dark halo.
+    //
+    // Three 4-connected propagation passes cover any cell within 3 of a
+    // finite neighbour. Cells deeper inland stay at RGB=(0,0,0) but
+    // they're invisible anyway — LandBasemap paints opaquely over them.
+    const W = grid.width, H = grid.height;
+    const a = img.data;
+    const filled = new Uint8Array(W * H);
+    for (let i = 0; i < W * H; i++) filled[i] = a[i * 4 + 3] > 0 ? 1 : 0;
+    for (let pass = 0; pass < 3; pass++) {
+      let progress = false;
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const c = y * W + x;
+          if (filled[c]) continue;
+          const nbr = (x > 0 && filled[c - 1])      ? c - 1 :
+                      (x < W - 1 && filled[c + 1])  ? c + 1 :
+                      (y > 0 && filled[c - W])      ? c - W :
+                      (y < H - 1 && filled[c + W])  ? c + W : -1;
+          if (nbr < 0) continue;
+          const i = c * 4, j = nbr * 4;
+          a[i] = a[j]; a[i + 1] = a[j + 1]; a[i + 2] = a[j + 2];
+          // alpha stays 0 — we're borrowing colour only.
+          filled[c] = 1;
+          progress = true;
+        }
+      }
+      if (!progress) break;
+    }
+
     ctx.putImageData(img, 0, 0);
 
     // toDataURL is synchronous; encoding ~200x200 native cells is

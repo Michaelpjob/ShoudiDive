@@ -31,8 +31,13 @@ def persistence_with_decay(chl_lastvalid, chl_lastvalid_age_days, chl_climo, zon
 
 
 def driver_adjustment(zone, upwell, swell, precip, river, sst, seasonal,
-                      exposure, tide, substrate, cloud):
+                      exposure, tide, substrate, cloud, trend=None):
     log_adj = np.zeros_like(upwell, dtype=np.float64)
+    # 2026-05-19: `trend` is a derivative companion to `sst` (3-day
+    # cooling rate). Default None so existing callers / test fixtures
+    # that don't pass it stay valid — zero contribution to log_adj.
+    if trend is None:
+        trend = np.zeros_like(upwell, dtype=np.float64)
     for z in np.unique(zone):
         z_str = str(z)
         if z_str not in DRIVER_COEFFS:
@@ -45,6 +50,7 @@ def driver_adjustment(zone, upwell, swell, precip, river, sst, seasonal,
             + c.precip    * precip[m]
             + c.river     * river[m]
             + c.sst       * sst[m]
+            + c.trend     * trend[m]
             + c.seasonal  * seasonal[m]
             + c.exposure  * exposure[m]
             + c.tide      * tide[m]
@@ -98,6 +104,11 @@ def predict_chl(*, chl_obs_today, chl_lastvalid, chl_lastvalid_age_days,
         sst=drivers["sst"], seasonal=drivers["seasonal"],
         exposure=drivers["exposure"], tide=drivers["tide"],
         substrate=drivers["substrate"], cloud=drivers["cloud"],
+        # `trend` may be absent on pre-2026-05-19 dict shapes; .get()
+        # defaults to None which driver_adjustment treats as zero
+        # contribution. Keeps test fixtures that build drivers
+        # manually working without modification.
+        trend=drivers.get("trend"),
     )
     log_chl_pred = np.log(chl_pers) + log_adj
 

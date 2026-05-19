@@ -577,6 +577,46 @@ def main():
     if nan_sst_pct > 1:
         print(f"  sst_today: filled {nan_sst_pct:.0f}% NaN cells with climo")
 
+    # 2026-05-19: load SST from 3 days ago for the `trend` driver
+    # (3-day cooling rate, "deepening cold pool" detector). Lives in
+    # public/data/sst/history/d-3.png alongside the other history
+    # frames the SST timeline carries. Graceful degradation:
+    #   * file missing            → sst_3d_ago_flat = None
+    #   * file present, cells NaN → those cells fall through to
+    #                               sst_today_filled (delta = 0 → no
+    #                               trend contribution for that cell)
+    # The downstream feature function (sst_cooling_trend) treats
+    # None as "no signal anywhere" and returns zeros.
+    sst_3d_path = OUT_DIR / "sst" / "history" / "d-3.png"
+    if sst_3d_path.exists():
+        try:
+            sst_3d_src = decode_linear_png(sst_3d_path, *SST_RANGE)
+            sst_3d_grid = bilinear_sample(
+                sst_3d_src, sst_3d_src.shape[1], sst_3d_src.shape[0],
+                lng_grid, lat_grid,
+            )
+            sst_3d_filled = np.where(
+                np.isfinite(sst_3d_grid), sst_3d_grid, sst_today_filled,
+            )
+            sst_3d_ago_flat = flat(sst_3d_filled)
+            nan_3d_pct = np.isnan(sst_3d_grid).mean() * 100
+            print(
+                f"  sst (3d ago): loaded from sst/history/d-3.png, "
+                f"{nan_3d_pct:.0f}% NaN cells (filled with today)"
+            )
+        except Exception as e:
+            print(
+                f"  sst (3d ago): failed to decode {sst_3d_path.name}: {e!s} — "
+                f"trend feature disabled this run"
+            )
+            sst_3d_ago_flat = None
+    else:
+        print(
+            "  sst (3d ago): sst/history/d-3.png missing — trend feature "
+            "disabled this run (returns zeros, no-op on the model)"
+        )
+        sst_3d_ago_flat = None
+
     # Today's wind feeds upwelling + exposure. NaN cells fall back to 0 (calm).
     u_today_filled = np.where(np.isfinite(u_today), u_today, 0.0)
     v_today_filled = np.where(np.isfinite(v_today), v_today, 0.0)
@@ -839,6 +879,7 @@ def main():
         chl_climo_annual=chl_climo_annual_flat,
         sst_today=sst_today_flat,
         sst_climo=sst_climo_flat,
+        sst_3d_ago=sst_3d_ago_flat,
         u_wind_5d=u_5d, v_wind_5d=v_5d, along_climo_5d=along_climo_5d,
         u_wind_today=flat(u_today_filled), v_wind_today=flat(v_today_filled),
         sig_wave_height_3d_max=sig_wave_height_3d_max,

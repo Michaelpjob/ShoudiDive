@@ -123,6 +123,15 @@ class DriverCoefficients:
     precip:    float = 0.0
     river:     float = 0.0
     sst:       float = 0.0
+    # 2026-05-19: `trend` is the 3-day SST cooling-rate driver.
+    # `sst` (snapshot today-vs-climo anomaly) and `trend` (derivative)
+    # together let the model distinguish "sustained cold, still
+    # deepening — bloom about to peak" from "cold but relaxing —
+    # bloom fading." Coefficients calibrated against upwelling-prone
+    # zones first; the bight + south-baja entries use small/zero
+    # values because cooling trends there usually reflect cold-front
+    # advection rather than productive upwelling.
+    trend:     float = 0.0
     seasonal:  float = 0.0
     exposure:  float = 0.0
     tide:      float = 0.0
@@ -138,9 +147,9 @@ DRIVER_COEFFS: Dict[str, DriverCoefficients] = {
     # ocean swell unlike Monterey's lee-protected pockets. Sst sign
     # flipped slightly more negative because cold-anomaly here often
     # comes WITH a clearer-water relaxation rather than a green bloom.
-    "norcal_nearshore":   DriverCoefficients(upwell=0.25, swell=0.35, precip=0.25, river=0.35, sst=-0.10, seasonal=0.45, exposure=0.30, tide=0.10, substrate=0.18, cloud=-0.06),
-    "norcal_islands":     DriverCoefficients(upwell=0.16, swell=0.12, precip=0.06, river=0.06, sst=-0.07, seasonal=0.40, exposure=0.35, tide=0.02, substrate=0.05, cloud=-0.05),
-    "norcal_offshore":    DriverCoefficients(upwell=0.14, swell=0.02, precip=0.00, river=0.00, sst=-0.05, seasonal=0.35, exposure=0.05, tide=0.00, substrate=0.00, cloud=-0.03),
+    "norcal_nearshore":   DriverCoefficients(upwell=0.25, swell=0.35, precip=0.25, river=0.35, sst=-0.10, trend=0.10, seasonal=0.45, exposure=0.30, tide=0.10, substrate=0.18, cloud=-0.06),
+    "norcal_islands":     DriverCoefficients(upwell=0.16, swell=0.12, precip=0.06, river=0.06, sst=-0.07, trend=0.07, seasonal=0.40, exposure=0.35, tide=0.02, substrate=0.05, cloud=-0.05),
+    "norcal_offshore":    DriverCoefficients(upwell=0.14, swell=0.02, precip=0.00, river=0.00, sst=-0.05, trend=0.05, seasonal=0.35, exposure=0.05, tide=0.00, substrate=0.00, cloud=-0.03),
 
     # Central CA (Monterey area, 34.45–36.00°N as of v3.5) is an
     # upwelling-dominated zone: cold water, persistent spring/summer
@@ -152,17 +161,17 @@ DRIVER_COEFFS: Dict[str, DriverCoefficients] = {
     # real, not a bug).
     # v3.5: lat boundary moved from 34.45..90 to 34.45..36.00 — Big Sur,
     # Monterey, Farallons, etc. now classify as `norcal_*` instead.
-    "central_nearshore":  DriverCoefficients(upwell=0.18, swell=0.30, precip=0.20, river=0.30, sst=-0.06, seasonal=0.40, exposure=0.20, tide=0.10, substrate=0.15, cloud=-0.08),
-    "central_islands":    DriverCoefficients(upwell=0.12, swell=0.10, precip=0.05, river=0.05, sst=-0.05, seasonal=0.35, exposure=0.30, tide=0.02, substrate=0.05, cloud=-0.06),
-    "central_offshore":   DriverCoefficients(upwell=0.10, swell=0.02, precip=0.00, river=0.00, sst=-0.04, seasonal=0.30, exposure=0.05, tide=0.00, substrate=0.00, cloud=-0.04),
+    "central_nearshore":  DriverCoefficients(upwell=0.18, swell=0.30, precip=0.20, river=0.30, sst=-0.06, trend=0.08, seasonal=0.40, exposure=0.20, tide=0.10, substrate=0.15, cloud=-0.08),
+    "central_islands":    DriverCoefficients(upwell=0.12, swell=0.10, precip=0.05, river=0.05, sst=-0.05, trend=0.06, seasonal=0.35, exposure=0.30, tide=0.02, substrate=0.05, cloud=-0.06),
+    "central_offshore":   DriverCoefficients(upwell=0.10, swell=0.02, precip=0.00, river=0.00, sst=-0.04, trend=0.04, seasonal=0.30, exposure=0.05, tide=0.00, substrate=0.00, cloud=-0.04),
 
-    "transition_nearshore": DriverCoefficients(upwell=0.08, swell=0.25, precip=0.18, river=0.28, sst=-0.04, seasonal=0.22, exposure=0.13, tide=0.08, substrate=0.12, cloud=-0.06),
-    "transition_islands":   DriverCoefficients(upwell=0.06, swell=0.08, precip=0.04, river=0.04, sst=-0.03, seasonal=0.16, exposure=0.22, tide=0.02, substrate=0.05, cloud=-0.05),
-    "transition_offshore":  DriverCoefficients(upwell=0.04, swell=0.02, precip=0.00, river=0.00, sst=-0.02, seasonal=0.12, exposure=0.03, tide=0.00, substrate=0.00, cloud=-0.03),
+    "transition_nearshore": DriverCoefficients(upwell=0.08, swell=0.25, precip=0.18, river=0.28, sst=-0.04, trend=0.04, seasonal=0.22, exposure=0.13, tide=0.08, substrate=0.12, cloud=-0.06),
+    "transition_islands":   DriverCoefficients(upwell=0.06, swell=0.08, precip=0.04, river=0.04, sst=-0.03, trend=0.03, seasonal=0.16, exposure=0.22, tide=0.02, substrate=0.05, cloud=-0.05),
+    "transition_offshore":  DriverCoefficients(upwell=0.04, swell=0.02, precip=0.00, river=0.00, sst=-0.02, trend=0.02, seasonal=0.12, exposure=0.03, tide=0.00, substrate=0.00, cloud=-0.03),
 
-    "bight_nearshore":  DriverCoefficients(upwell=0.04, swell=0.20, precip=0.16, river=0.25, sst=-0.02, seasonal=0.15, exposure=0.10, tide=0.10, substrate=0.18, cloud=-0.04),
-    "bight_islands":    DriverCoefficients(upwell=0.03, swell=0.06, precip=0.03, river=0.03, sst=-0.02, seasonal=0.12, exposure=0.20, tide=0.02, substrate=0.05, cloud=-0.03),
-    "bight_offshore":   DriverCoefficients(upwell=0.02, swell=0.01, precip=0.00, river=0.00, sst=-0.01, seasonal=0.08, exposure=0.02, tide=0.00, substrate=0.00, cloud=-0.02),
+    "bight_nearshore":  DriverCoefficients(upwell=0.04, swell=0.20, precip=0.16, river=0.25, sst=-0.02, trend=0.03, seasonal=0.15, exposure=0.10, tide=0.10, substrate=0.18, cloud=-0.04),
+    "bight_islands":    DriverCoefficients(upwell=0.03, swell=0.06, precip=0.03, river=0.03, sst=-0.02, trend=0.02, seasonal=0.12, exposure=0.20, tide=0.02, substrate=0.05, cloud=-0.03),
+    "bight_offshore":   DriverCoefficients(upwell=0.02, swell=0.01, precip=0.00, river=0.00, sst=-0.01, trend=0.01, seasonal=0.08, exposure=0.02, tide=0.00, substrate=0.00, cloud=-0.02),
 
     # Baja entries (2026-05-19). The original Baja integration added
     # north/mid/south_baja_* to SECCHI_COEFFS / TURBIDITY_CORRECTIONS /
@@ -182,15 +191,15 @@ DRIVER_COEFFS: Dict[str, DriverCoefficients] = {
     # (less upwelling but still some Pacific exposure), south_baja
     # ~ bight (subtropical clear water, swell wraps from north but
     # locally small).
-    "north_baja_nearshore": DriverCoefficients(upwell=0.25, swell=0.35, precip=0.25, river=0.35, sst=-0.10, seasonal=0.45, exposure=0.30, tide=0.10, substrate=0.18, cloud=-0.06),
-    "north_baja_islands":   DriverCoefficients(upwell=0.16, swell=0.12, precip=0.06, river=0.06, sst=-0.07, seasonal=0.40, exposure=0.35, tide=0.02, substrate=0.05, cloud=-0.05),
-    "north_baja_offshore":  DriverCoefficients(upwell=0.14, swell=0.02, precip=0.00, river=0.00, sst=-0.05, seasonal=0.35, exposure=0.05, tide=0.00, substrate=0.00, cloud=-0.03),
-    "mid_baja_nearshore":   DriverCoefficients(upwell=0.08, swell=0.25, precip=0.18, river=0.28, sst=-0.04, seasonal=0.22, exposure=0.13, tide=0.08, substrate=0.12, cloud=-0.06),
-    "mid_baja_islands":     DriverCoefficients(upwell=0.06, swell=0.08, precip=0.04, river=0.04, sst=-0.03, seasonal=0.16, exposure=0.22, tide=0.02, substrate=0.05, cloud=-0.05),
-    "mid_baja_offshore":    DriverCoefficients(upwell=0.04, swell=0.02, precip=0.00, river=0.00, sst=-0.02, seasonal=0.12, exposure=0.03, tide=0.00, substrate=0.00, cloud=-0.03),
-    "south_baja_nearshore": DriverCoefficients(upwell=0.04, swell=0.20, precip=0.16, river=0.25, sst=-0.02, seasonal=0.15, exposure=0.10, tide=0.10, substrate=0.18, cloud=-0.04),
-    "south_baja_islands":   DriverCoefficients(upwell=0.03, swell=0.06, precip=0.03, river=0.03, sst=-0.02, seasonal=0.12, exposure=0.20, tide=0.02, substrate=0.05, cloud=-0.03),
-    "south_baja_offshore":  DriverCoefficients(upwell=0.02, swell=0.01, precip=0.00, river=0.00, sst=-0.01, seasonal=0.08, exposure=0.02, tide=0.00, substrate=0.00, cloud=-0.02),
+    "north_baja_nearshore": DriverCoefficients(upwell=0.25, swell=0.35, precip=0.25, river=0.35, sst=-0.10, trend=0.10, seasonal=0.45, exposure=0.30, tide=0.10, substrate=0.18, cloud=-0.06),
+    "north_baja_islands":   DriverCoefficients(upwell=0.16, swell=0.12, precip=0.06, river=0.06, sst=-0.07, trend=0.07, seasonal=0.40, exposure=0.35, tide=0.02, substrate=0.05, cloud=-0.05),
+    "north_baja_offshore":  DriverCoefficients(upwell=0.14, swell=0.02, precip=0.00, river=0.00, sst=-0.05, trend=0.05, seasonal=0.35, exposure=0.05, tide=0.00, substrate=0.00, cloud=-0.03),
+    "mid_baja_nearshore":   DriverCoefficients(upwell=0.08, swell=0.25, precip=0.18, river=0.28, sst=-0.04, trend=0.04, seasonal=0.22, exposure=0.13, tide=0.08, substrate=0.12, cloud=-0.06),
+    "mid_baja_islands":     DriverCoefficients(upwell=0.06, swell=0.08, precip=0.04, river=0.04, sst=-0.03, trend=0.03, seasonal=0.16, exposure=0.22, tide=0.02, substrate=0.05, cloud=-0.05),
+    "mid_baja_offshore":    DriverCoefficients(upwell=0.04, swell=0.02, precip=0.00, river=0.00, sst=-0.02, trend=0.02, seasonal=0.12, exposure=0.03, tide=0.00, substrate=0.00, cloud=-0.03),
+    "south_baja_nearshore": DriverCoefficients(upwell=0.04, swell=0.20, precip=0.16, river=0.25, sst=-0.02, trend=0.01, seasonal=0.15, exposure=0.10, tide=0.10, substrate=0.18, cloud=-0.04),
+    "south_baja_islands":   DriverCoefficients(upwell=0.03, swell=0.06, precip=0.03, river=0.03, sst=-0.02, trend=0.01, seasonal=0.12, exposure=0.20, tide=0.02, substrate=0.05, cloud=-0.03),
+    "south_baja_offshore":  DriverCoefficients(upwell=0.02, swell=0.01, precip=0.00, river=0.00, sst=-0.01, trend=0.00, seasonal=0.08, exposure=0.02, tide=0.00, substrate=0.00, cloud=-0.02),
 }
 
 
