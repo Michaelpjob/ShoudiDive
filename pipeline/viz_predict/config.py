@@ -150,13 +150,17 @@ DRIVER_COEFFS: Dict[str, DriverCoefficients] = {
     # California-Current upwelling) was reading 70 ft+ when actual viz
     # is ~25–40 ft in summer.
     #
-    # Mapped against CA tiers: north_baja ~ central CA (real upwelling +
-    # Pacific groundswell), mid_baja ~ transition (less upwelling but
-    # still some Pacific exposure), south_baja ~ bight (subtropical
-    # clear water, swell wraps from north but locally small).
-    "north_baja_nearshore": DriverCoefficients(upwell=0.18, swell=0.30, precip=0.20, river=0.30, sst=-0.06, seasonal=0.40, exposure=0.20, tide=0.10, substrate=0.15, cloud=-0.08),
-    "north_baja_islands":   DriverCoefficients(upwell=0.12, swell=0.10, precip=0.05, river=0.05, sst=-0.05, seasonal=0.35, exposure=0.30, tide=0.02, substrate=0.05, cloud=-0.06),
-    "north_baja_offshore":  DriverCoefficients(upwell=0.10, swell=0.02, precip=0.00, river=0.00, sst=-0.04, seasonal=0.30, exposure=0.05, tide=0.00, substrate=0.00, cloud=-0.04),
+    # Mapped against CA tiers: north_baja ~ NORCAL (Mendocino-tier
+    # upwelling — Vizcaíno/Punta Eugenia is one of the most intense
+    # seasonal upwelling tongues on the eastern Pacific, arguably
+    # stronger than Monterey; California Current hits hard there
+    # year-round and especially in summer), mid_baja ~ transition
+    # (less upwelling but still some Pacific exposure), south_baja
+    # ~ bight (subtropical clear water, swell wraps from north but
+    # locally small).
+    "north_baja_nearshore": DriverCoefficients(upwell=0.25, swell=0.35, precip=0.25, river=0.35, sst=-0.10, seasonal=0.45, exposure=0.30, tide=0.10, substrate=0.18, cloud=-0.06),
+    "north_baja_islands":   DriverCoefficients(upwell=0.16, swell=0.12, precip=0.06, river=0.06, sst=-0.07, seasonal=0.40, exposure=0.35, tide=0.02, substrate=0.05, cloud=-0.05),
+    "north_baja_offshore":  DriverCoefficients(upwell=0.14, swell=0.02, precip=0.00, river=0.00, sst=-0.05, seasonal=0.35, exposure=0.05, tide=0.00, substrate=0.00, cloud=-0.03),
     "mid_baja_nearshore":   DriverCoefficients(upwell=0.08, swell=0.25, precip=0.18, river=0.28, sst=-0.04, seasonal=0.22, exposure=0.13, tide=0.08, substrate=0.12, cloud=-0.06),
     "mid_baja_islands":     DriverCoefficients(upwell=0.06, swell=0.08, precip=0.04, river=0.04, sst=-0.03, seasonal=0.16, exposure=0.22, tide=0.02, substrate=0.05, cloud=-0.05),
     "mid_baja_offshore":    DriverCoefficients(upwell=0.04, swell=0.02, precip=0.00, river=0.00, sst=-0.02, seasonal=0.12, exposure=0.03, tide=0.00, substrate=0.00, cloud=-0.03),
