@@ -315,7 +315,7 @@ def regrid_to_bbox(lat2d, lng2d, u, v, source: str):
 # crispness improves once bathy lands.
 
 def load_land_mask(out_dir: Path, grid_w: int, grid_h: int,
-                   land_threshold: float = 0.5) -> np.ndarray | None:
+                   land_threshold: float = 0.9) -> np.ndarray | None:
     """Read bathy.png and downsample to a wind-grid-resolution land mask.
 
     Returns a boolean numpy array where True = land, False = ocean.
@@ -323,16 +323,23 @@ def load_land_mask(out_dir: Path, grid_w: int, grid_h: int,
 
     `land_threshold` controls how aggressively coastal cells get flagged:
       0.3 = a cell is "land" if >30% of its area is land (most aggressive)
-      0.5 = a cell is "land" if more than half its area is land (default)
-      0.7 = a cell is "land" only if >70% of its area is land (most lenient
-            — previous default; produced visible halos near Channel Islands
-            because cells that were ~60% land kept wind data but had
-            particles dying quickly inside them, so the rendering looked
-            patchy. 0.5 is a better balance: still keeps wind data over
-            cells that are majority ocean, which covers the actual
-            nearshore.)
-      0.9 = essentially no mask at the wind-grid level — defers all land
-            handling to the frontend's pixel-resolution geojson mask.
+      0.5 = a cell is "land" if >50% of its area is land
+      0.7 = a cell is "land" only if >70% of its area is land
+      0.9 = a cell is "land" only if >90% of its area is land (default —
+            essentially the pipeline mask only fires for cells fully on
+            land. Coastal cells with ANY meaningful ocean fraction keep
+            wind data. The visible "halo" the user saw at 0.7 was the
+            colorfill going transparent for cells that were ~70%+ land
+            (e.g. tight against a small island). The frontend pixel-
+            resolution geojson mask + the SVG LandBasemap occlude wind
+            over actual land anyway — the pipeline mask only needs to
+            zero out cells that are FULLY on land so the encoded PNG
+            doesn't carry meaningless HRRR-over-Sierra-Nevada values.
+
+    The bathy.png it reads classifies pixels as land (==0) vs ocean
+    (depth 1..255). Box-averaging that boolean over the (src_h/grid_h)
+    × (src_w/grid_w) tile that each wind cell covers gives us the
+    fraction of land per wind cell.
 
     2026-05-14 — first attempt at this used nearest-neighbor sampling
     (a single bathy pixel near each wind cell's center decided land vs
