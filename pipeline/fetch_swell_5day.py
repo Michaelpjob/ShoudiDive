@@ -355,17 +355,21 @@ WIND_UV_RANGE = (-30.0, 30.0)  # must match fetch_wind_5day.py's UV_RANGE
 def smb_fetch_limited(u_speed_ms: np.ndarray, fetch_m: float = SMB_FETCH_M):
     """Return (Hs in m, Tp in s) for a 2D wind-speed grid using SMB.
 
-    Cells with very low wind (<1 m/s) return Hs=0 to avoid divide-by-zero
-    and the unrealistic >0 wave height the formula would otherwise give.
+    Calm-wind cells (<1 m/s) keep the floor value SMB gives at u=1 m/s
+    (~0.12 m Hs) instead of going NaN. The previous code masked these
+    to NaN to "keep land/no-data cells transparent" — but cells with
+    NaN wind get NaN from `u = max(NaN, 1.0) = NaN` propagation anyway,
+    so the explicit `<1.0` mask was only dropping legitimately glassy
+    cells. That left Cortez dawn cells (~0.5 m/s) entirely transparent
+    when WW3 had no swell coverage there, producing the dark "holes"
+    the user reported on 2026-05-18.
     """
     g = 9.81
     u = np.maximum(u_speed_ms, 1.0)  # guard against /U² blowup
     gf_over_u2 = g * fetch_m / (u * u)
     hs = (u * u / g) * 0.283 * np.tanh(0.0125 * np.power(gf_over_u2, 0.42))
     tp = (u / g) * 7.54 * np.tanh(0.077 * np.power(gf_over_u2, 0.25))
-    # Drop wind chop where the source wind is itself NaN or below the
-    # noise floor — keeps land/no-data cells transparent.
-    mask = (u_speed_ms < 1.0) | ~np.isfinite(u_speed_ms)
+    mask = ~np.isfinite(u_speed_ms)
     hs = np.where(mask, np.nan, hs)
     tp = np.where(mask, np.nan, tp)
     return hs, tp

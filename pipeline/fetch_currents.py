@@ -355,8 +355,16 @@ def build_slot(valid_at: datetime, day: int, bucket: str, hfr: dict | None, tide
     inferred_v = np.full((GRID_H, GRID_W), tide_v, dtype=np.float32)
     # A small wind-drift term captures surface set without pretending to be
     # a hydrodynamic model.
-    inferred_u = inferred_u + np.nan_to_num(wind_u, nan=0.0) * 0.012
-    inferred_v = inferred_v + np.nan_to_num(wind_v, nan=0.0) * 0.012
+    #
+    # v2 (2026-05-19): bumped 0.012 → 0.025. The previous 1.2% Ekman-drift
+    # coefficient was too tame for regions without HFR coverage (Baja, all
+    # tropical) — user feedback was "current barely changes over the
+    # forecast" because tide signal repeats every ~12h and the wind term
+    # was producing <0.1 kt swings that were invisible on the heatmap.
+    # 2.5% matches the classic surface Ekman estimate (3% of wind speed)
+    # and gives visible day-to-day variation when wind changes.
+    inferred_u = inferred_u + np.nan_to_num(wind_u, nan=0.0) * 0.025
+    inferred_v = inferred_v + np.nan_to_num(wind_v, nan=0.0) * 0.025
 
     lead_h = max(0.0, (valid_at - now).total_seconds() / 3600.0)
     if hfr is None:

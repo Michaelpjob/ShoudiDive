@@ -139,6 +139,30 @@ DRIVER_COEFFS: Dict[str, DriverCoefficients] = {
     "bight_nearshore":  DriverCoefficients(upwell=0.04, swell=0.20, precip=0.16, river=0.25, sst=-0.02, seasonal=0.15, exposure=0.10, tide=0.10, substrate=0.18, cloud=-0.04),
     "bight_islands":    DriverCoefficients(upwell=0.03, swell=0.06, precip=0.03, river=0.03, sst=-0.02, seasonal=0.12, exposure=0.20, tide=0.02, substrate=0.05, cloud=-0.03),
     "bight_offshore":   DriverCoefficients(upwell=0.02, swell=0.01, precip=0.00, river=0.00, sst=-0.01, seasonal=0.08, exposure=0.02, tide=0.00, substrate=0.00, cloud=-0.02),
+
+    # Baja entries (2026-05-19). The original Baja integration added
+    # north/mid/south_baja_* to SECCHI_COEFFS / TURBIDITY_CORRECTIONS /
+    # PERSISTENCE_TAU_DAYS / SIGMA_LOG_CHL but FORGOT this dict. With
+    # no DRIVER_COEFFS entry, model.driver_adjustment() silently skipped
+    # those zones (`if z_str not in DRIVER_COEFFS: continue`) — viz was
+    # pure chl→Secchi with no upwelling, swell, seasonal, or SST term.
+    # User report: Vizcaíno tongue (28-30°N, -116..-114°W, classic
+    # California-Current upwelling) was reading 70 ft+ when actual viz
+    # is ~25–40 ft in summer.
+    #
+    # Mapped against CA tiers: north_baja ~ central CA (real upwelling +
+    # Pacific groundswell), mid_baja ~ transition (less upwelling but
+    # still some Pacific exposure), south_baja ~ bight (subtropical
+    # clear water, swell wraps from north but locally small).
+    "north_baja_nearshore": DriverCoefficients(upwell=0.18, swell=0.30, precip=0.20, river=0.30, sst=-0.06, seasonal=0.40, exposure=0.20, tide=0.10, substrate=0.15, cloud=-0.08),
+    "north_baja_islands":   DriverCoefficients(upwell=0.12, swell=0.10, precip=0.05, river=0.05, sst=-0.05, seasonal=0.35, exposure=0.30, tide=0.02, substrate=0.05, cloud=-0.06),
+    "north_baja_offshore":  DriverCoefficients(upwell=0.10, swell=0.02, precip=0.00, river=0.00, sst=-0.04, seasonal=0.30, exposure=0.05, tide=0.00, substrate=0.00, cloud=-0.04),
+    "mid_baja_nearshore":   DriverCoefficients(upwell=0.08, swell=0.25, precip=0.18, river=0.28, sst=-0.04, seasonal=0.22, exposure=0.13, tide=0.08, substrate=0.12, cloud=-0.06),
+    "mid_baja_islands":     DriverCoefficients(upwell=0.06, swell=0.08, precip=0.04, river=0.04, sst=-0.03, seasonal=0.16, exposure=0.22, tide=0.02, substrate=0.05, cloud=-0.05),
+    "mid_baja_offshore":    DriverCoefficients(upwell=0.04, swell=0.02, precip=0.00, river=0.00, sst=-0.02, seasonal=0.12, exposure=0.03, tide=0.00, substrate=0.00, cloud=-0.03),
+    "south_baja_nearshore": DriverCoefficients(upwell=0.04, swell=0.20, precip=0.16, river=0.25, sst=-0.02, seasonal=0.15, exposure=0.10, tide=0.10, substrate=0.18, cloud=-0.04),
+    "south_baja_islands":   DriverCoefficients(upwell=0.03, swell=0.06, precip=0.03, river=0.03, sst=-0.02, seasonal=0.12, exposure=0.20, tide=0.02, substrate=0.05, cloud=-0.03),
+    "south_baja_offshore":  DriverCoefficients(upwell=0.02, swell=0.01, precip=0.00, river=0.00, sst=-0.01, seasonal=0.08, exposure=0.02, tide=0.00, substrate=0.00, cloud=-0.02),
 }
 
 
@@ -264,9 +288,15 @@ SECCHI_COEFFS: Dict[str, SecchiCoefficients] = {
     #   mid_baja_offshore    11.0 → 13.0
     # North Baja Pacific stays modest — that water is upwelling-cold
     # and rarely hits 100+ ft regardless of chl.
+    # v3 (2026-05-19): bumped north_baja_offshore down 9.0 → 7.0 to
+    # match the design intent on lines 246–248 ("a≈5/7/8") and to
+    # stop reporting 70 ft+ over the Vizcaíno upwelling tongue. The
+    # bigger fix is in DRIVER_COEFFS (was missing entirely for Baja);
+    # this just lines the offshore coefficient up with its sibling
+    # offshore values for north_baja_islands and the bight tier.
     "north_baja_nearshore": SecchiCoefficients(a=5.0,  b=0.28),
-    "north_baja_islands":   SecchiCoefficients(a=8.0,  b=0.30),
-    "north_baja_offshore":  SecchiCoefficients(a=9.0,  b=0.32),
+    "north_baja_islands":   SecchiCoefficients(a=7.0,  b=0.30),
+    "north_baja_offshore":  SecchiCoefficients(a=7.0,  b=0.32),
     "mid_baja_nearshore":   SecchiCoefficients(a=7.0,  b=0.28),
     "mid_baja_islands":     SecchiCoefficients(a=12.0, b=0.30),
     "mid_baja_offshore":    SecchiCoefficients(a=13.0, b=0.32),
