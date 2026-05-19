@@ -81,10 +81,30 @@ SESSION.headers.update({
 
 
 def _head_ok(url: str) -> bool:
-    try:
-        return SESSION.head(url, timeout=30, allow_redirects=True).status_code == 200
-    except requests.RequestException:
-        return False
+    """True if `url` returns 200. Tries HEAD then falls back to a
+    range-limited GET so we recover from NOMADS' HEAD-throttling on
+    busy days (GitHub runners get rate-limited from time to time
+    even when straight curl works fine)."""
+    for attempt in range(3):
+        try:
+            r = SESSION.head(url, timeout=30, allow_redirects=True)
+            if r.status_code == 200:
+                return True
+            if r.status_code == 404:
+                return False
+        except requests.RequestException:
+            pass
+        # HEAD didn't decisively succeed/fail — try a 1-byte range GET.
+        try:
+            r = SESSION.get(url, headers={"Range": "bytes=0-0"},
+                            timeout=30, allow_redirects=True)
+            if r.status_code in (200, 206):
+                return True
+            if r.status_code == 404:
+                return False
+        except requests.RequestException:
+            pass
+    return False
 
 
 # ---- Region-aware gfswave subset selection ---------------------------------
