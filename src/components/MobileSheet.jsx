@@ -46,7 +46,10 @@ const LAYERS = [
   { id: "chl",   label: "Chl",   unit: "mg/m³" },
   { id: "wind",  label: "Wind",  unit: "kt" },
   { id: "swell", label: "Swell", unit: "ft" },
-  { id: "current", label: "Current", unit: "kt" },
+  // current is beta — HFR coverage is sparse on the CA coast and the
+  // inference blend (HFR + tide + wind) underestimates submesoscale
+  // features like upwelling jets. The chip renders a "Beta" pill.
+  { id: "current", label: "Current", unit: "kt", beta: true },
   // viz is marked beta until NorCal ground truth lands — see
   // pipeline/fetch_visibility.py manifest-write block for the rationale.
   // The chip below renders a "Beta" pill on this entry.
