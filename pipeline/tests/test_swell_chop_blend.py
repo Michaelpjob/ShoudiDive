@@ -118,28 +118,30 @@ def test_blend_blocks_swell_across_land_barrier():
     prevent Pacific swell on the west from bleeding through to wind-
     chop-only Cortez on the east. With is_land set, the east side
     should be wind-sea magnitude only."""
-    h, w = 30, 90
+    h, w = 30, 40
     h_grid = np.full((h, w), np.nan, dtype=np.float32)
-    h_grid[:, : w // 3] = 4.0  # WW3 valid on west third only
+    # WW3 valid on west third only (cols 0..12).
+    h_grid[:, : 13] = 4.0
     p_grid = np.full((h, w), np.nan, dtype=np.float32)
-    p_grid[:, : w // 3] = 12.0
+    p_grid[:, : 13] = 12.0
     d_grid = np.full((h, w), np.nan, dtype=np.float32)
-    d_grid[:, : w // 3] = 270.0
+    d_grid[:, : 13] = 270.0
     u = np.full((h, w), 5.0, dtype=np.float32)
     v = np.full((h, w), 0.0, dtype=np.float32)
-    # Land barrier: middle third, columns w/3 .. 2w/3 (but not at the
-    # very north or south edges, so swell could in theory wrap around).
+    # Land barrier: cols 14..23 (10-cell-wide peninsula) running full
+    # height. Cortez side: cols 24..39.
     is_land = np.zeros((h, w), dtype=bool)
-    is_land[2:-2, w // 3 + 2 : 2 * w // 3] = True
+    is_land[:, 14:24] = True
 
+    # Probe at col 26 (just past land barrier) — distance from west
+    # WW3 boundary = 13 cells, weight without blocking = exp(-13/20)
+    # = 0.52, so 4.0 * 0.52 = 2.08 m swell + 0.42 m chop ≈ 2.12 m.
+    # With blocking (path crosses 10 land cells), weight = 0 → chop only.
+    PROBE_COL = 26
     h_out, _, _ = _blend_swell_chop(h_grid, p_grid, d_grid, u, v, is_land=is_land)
-
-    # Cell deep on the Cortez side (right third, middle latitude) must
-    # be wind-chop only — Pacific is 30 cells away straight through
-    # land, weight should zero out.
-    cortez_middle = float(h_out[h // 2, w - 5])
-    assert cortez_middle < 1.0, (
-        f"cortez cell Hs={cortez_middle:.3f} m — should be wind-chop only "
+    cortez_blocked = float(h_out[h // 2, PROBE_COL])
+    assert cortez_blocked < 1.0, (
+        f"Cortez cell Hs={cortez_blocked:.3f} m — should be wind-chop only "
         "(~0.4 m); Pacific swell bled across the land barrier"
     )
 
@@ -150,10 +152,10 @@ def test_blend_blocks_swell_across_land_barrier():
     # Same setup but WITHOUT is_land: Cortez side gets the over-bleed
     # (this is the v3-only regression we're guarding against).
     h_out_no_block, _, _ = _blend_swell_chop(h_grid, p_grid, d_grid, u, v)
-    cortez_unblocked = float(h_out_no_block[h // 2, w - 5])
-    assert cortez_unblocked > 1.0, (
+    cortez_unblocked = float(h_out_no_block[h // 2, PROBE_COL])
+    assert cortez_unblocked > 1.5, (
         f"sanity check: without land mask, cortez Hs={cortez_unblocked:.3f} m "
-        "should be > 1 m (proving the v3 over-bleed)"
+        "should be > 1.5 m (proving the v3 over-bleed)"
     )
 
 
