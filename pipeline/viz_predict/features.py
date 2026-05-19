@@ -16,9 +16,77 @@ def alongshore_wind_component(u, v, coast_normal_deg=295.0):
 
 
 def upwelling_anomaly_5d(u_wind_5d, v_wind_5d, along_climo_5d, coast_normal_deg=295.0):
+    """Pure-wind upwelling proxy: 5-day mean alongshore wind minus climo.
+
+    Kept as a separate function (no longer the `upwell` driver itself —
+    see `upwelling_activity` below) because it's still useful as a
+    diagnostic and lets us A/B against the older coupled version if
+    the new feature ever produces a regression.
+    """
     along = alongshore_wind_component(u_wind_5d, v_wind_5d, coast_normal_deg)
     along_mean = along.mean(axis=-1)
     return along_mean - along_climo_5d
+
+
+def upwelling_activity(
+    u_wind_5d, v_wind_5d, along_climo_5d,
+    sst_today, sst_climo,
+    coast_normal_deg=295.0,
+    wind_scale_mps: float = 5.0,
+    sst_scale_degc: float = 2.0,
+    out_scale_mps: float = 5.0,
+):
+    """Coupled wind+SST upwelling-activity signal.
+
+    Pure wind-anomaly upwelling can mis-fire — favorable wind can blow
+    onto a coast where offshore advection brings warm surface water in
+    and the visible cold/nutrient signature never materialises. Pure
+    cold-SST can mis-fire too — an advected cold tongue arrives without
+    any local mixing. The signature we actually want (cold deep water
+    at the surface, nutrient-loaded, primed to bloom in a day or two)
+    requires BOTH:
+
+      * a 5-day mean alongshore wind that is more equatorward than
+        climatology (Ekman transport offshore over a sustained window),
+      * a today-vs-climo SST cold anomaly (the cold deep water has
+        actually reached the surface).
+
+    Returns the geometric mean of two normalised signals
+    (wind_anom / wind_scale and -sst_anom / sst_scale, each clipped to
+    [0, 1.5]) scaled by `out_scale_mps` to preserve numerical
+    comparability with the old `upwelling_anomaly_5d` output. That
+    way the per-zone DRIVER_COEFFS.upwell coefficients calibrated
+    against the old feature still produce sensible log-chl
+    adjustments without a full re-tune — the only behavioural change
+    is that the signal now fires only when BOTH inputs are positive,
+    not on wind alone or cold-alone.
+
+    Worked examples:
+      wind_anom = 5 m/s, sst_anom = -2°C  →  norm 1.0 × 1.0 = 1.0  →  5.0
+      wind_anom = 5 m/s, sst_anom =  +1°C →  norm 1.0 × 0.0 = 0.0  →  0.0
+      wind_anom = 10, sst_anom = -4°C     →  norm 1.5 × 1.5 = 2.25 →  sqrt → 1.5 → 7.5
+      wind_anom = 0,  sst_anom = -4°C     →  norm 0 × 1.5 = 0      →  0.0
+      (cold-only and wind-only both score zero — that's intentional.)
+
+    Lag note: this feature only flags that upwelling is ACTIVE. It
+    does not predict the chl response timing directly — that's
+    handled at the model level by the chl observation blend in
+    `predict_chl`. When the chl observation today is fresh and still
+    low (day 0 of upwelling, before phyto has multiplied), the obs
+    blend pegs the prediction to that fresh observation regardless
+    of how high the upwelling_activity signal is. As soon as the next
+    daily satellite pass shows the bloom, the obs blend snaps to the
+    new (high) chl reading. This matches the physical reality the
+    user described: "doesn't green up the first day."
+    """
+    wind_anom = upwelling_anomaly_5d(
+        u_wind_5d, v_wind_5d, along_climo_5d, coast_normal_deg
+    )
+    wind_norm = np.clip(wind_anom / float(wind_scale_mps), 0.0, 1.5)
+    sst_anom = sst_today - sst_climo
+    sst_norm = np.clip(-sst_anom / float(sst_scale_degc), 0.0, 1.5)
+    combined = np.sqrt(np.maximum(wind_norm * sst_norm, 0.0))
+    return combined * float(out_scale_mps)
 
 
 def exposure_index(u_wind, v_wind, swell_dir_deg, swell_height_m, coast_normal_deg):
@@ -100,10 +168,28 @@ def assemble_features(
 ):
     bottom_stir = bottom_stir_index(sig_wave_height_3d_max, peak_period_3d_max, depth_m)
     return {
-        "upwell":    upwelling_anomaly_5d(u_wind_5d, v_wind_5d, along_climo_5d, coast_normal_deg_for_upwell),
+        # 2026-05-19: `upwell` switched from `upwelling_anomaly_5d` (wind
+        # only) to `upwelling_activity` (wind ∧ cold-SST coupled). The
+        # output magnitude is rescaled to preserve calibration of the
+        # existing DRIVER_COEFFS.upwell values, so no per-zone retune
+        # was needed — only the SEMANTICS changed (signal fires only
+        # when both wind anomaly and SST cold anomaly are positive).
+        # See upwelling_activity docstring for the worked examples.
+        "upwell":    upwelling_activity(
+            u_wind_5d, v_wind_5d, along_climo_5d,
+            sst_today, sst_climo,
+            coast_normal_deg_for_upwell,
+        ),
         "swell":     bottom_stir,
         "precip":    runoff_index(precip_7d_mm, dist_to_river_mouth_km),
         "river":     river_discharge_index(river_discharge_cfs, river_climo_cfs, dist_to_river_mouth_km),
+        # `sst` driver stays in place as a separate signal: it catches
+        # cold-water situations from causes OTHER than active upwelling
+        # (e.g. cold advection from offshore, deep mixed-layer days
+        # after a cold-front passage). The `upwell` driver now captures
+        # the SPECIFIC compound event of wind-driven upwelling. The
+        # two add in log(chl) — confirmed upwelling produces a bigger
+        # bump than either signal alone, which is the right physics.
         "sst":       sst_anomaly(sst_today, sst_climo),
         "seasonal":  seasonal_residual(chl_climo_doy, chl_climo_annual_mean),
         "exposure":  exposure_index(u_wind_today, v_wind_today, swell_dir_today_deg, swell_height_today_m, coast_normal_deg_field),

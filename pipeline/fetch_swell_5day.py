@@ -664,6 +664,8 @@ def vector_mean_direction(dirs_deg: np.ndarray, axis=None) -> np.ndarray:
 # ---- Orchestrator -----------------------------------------------------------
 
 def main() -> None:
+    import time
+    run_start_ts = time.time()  # used by §4.5 to skip resmoothing fresh PNGs
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     HOURLY_DIR.mkdir(parents=True, exist_ok=True)
     BUCKETS_DIR.mkdir(parents=True, exist_ok=True)
@@ -819,24 +821,32 @@ def main() -> None:
                 else f"  d{day_offset} {bucket_name:>9}: no data"
             )
 
-    # 4.5) Post-process: re-apply the v6 Gaussian smooth to every
-    #      existing bucket PNG on disk. Catches the case where the
-    #      current refresh cycle doesn't cover an early-PT bucket
-    #      (e.g. 00z cycle has no hours before 17:00 PT yesterday,
-    #      so today's morning bucket stays at whatever the previous
-    #      refresh wrote). Without this, those stale buckets render
-    #      with the old un-smoothed data and the user still sees a
-    #      "hard line" even though the current code would smooth it.
-    print("post-process: smoothing existing bucket PNGs to v6 spec")
+    # 4.5) Post-process: re-apply the v6 Gaussian smooth to STALE bucket
+    #      PNGs only. Catches the case where the current refresh cycle
+    #      doesn't cover an early-PT bucket (e.g. 00z cycle has no hours
+    #      before 17:00 PT yesterday, so today's morning bucket stays at
+    #      whatever the previous refresh wrote).
+    #
+    #      v2 (2026-05-19): skip files written by this run. Previous
+    #      version re-smoothed everything, which compounded sigma on
+    #      fresh PNGs (σ_eff = √(2² + 2²) ≈ 2.83 per refresh, growing
+    #      with each idempotent run). Caught by external architecture
+    #      review.
+    print("post-process: smoothing STALE bucket PNGs to v6 spec")
+    resmoothed = 0
     for day_offset in range(5):
         for bucket_name, _h0, _h1 in BUCKETS:
             png_path = BUCKETS_DIR / f"d{day_offset}_{bucket_name}_wave.png"
             if not png_path.exists():
                 continue
             try:
+                if png_path.stat().st_mtime >= run_start_ts:
+                    continue  # written this run — already smoothed inside _blend_swell_chop
                 _resmooth_bucket_png(png_path)
+                resmoothed += 1
             except Exception as e:
                 print(f"  could not re-smooth {png_path.name}: {e!s}")
+    print(f"  re-smoothed {resmoothed} stale bucket PNG(s)")
 
     # 5) Per-day shells with confidence + Pacific date label.
     days = []
