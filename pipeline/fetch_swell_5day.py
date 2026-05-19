@@ -84,7 +84,12 @@ def _head_ok(url: str) -> bool:
     """True if `url` returns 200. Tries HEAD then falls back to a
     range-limited GET so we recover from NOMADS' HEAD-throttling on
     busy days (GitHub runners get rate-limited from time to time
-    even when straight curl works fine)."""
+    even when straight curl works fine).
+
+    First non-decisive response is printed so CI logs surface why we
+    bailed (403/429/5xx) instead of always reporting "not yet
+    published"."""
+    last_diag = None
     for attempt in range(3):
         try:
             r = SESSION.head(url, timeout=30, allow_redirects=True)
@@ -92,8 +97,9 @@ def _head_ok(url: str) -> bool:
                 return True
             if r.status_code == 404:
                 return False
-        except requests.RequestException:
-            pass
+            last_diag = f"HEAD attempt {attempt}: {r.status_code}"
+        except requests.RequestException as e:
+            last_diag = f"HEAD attempt {attempt}: {type(e).__name__}"
         # HEAD didn't decisively succeed/fail — try a 1-byte range GET.
         try:
             r = SESSION.get(url, headers={"Range": "bytes=0-0"},
@@ -102,8 +108,11 @@ def _head_ok(url: str) -> bool:
                 return True
             if r.status_code == 404:
                 return False
-        except requests.RequestException:
-            pass
+            last_diag = f"GET attempt {attempt}: {r.status_code}"
+        except requests.RequestException as e:
+            last_diag = f"GET attempt {attempt}: {type(e).__name__}"
+    if last_diag:
+        print(f"    head_ok({url.split('/')[-1]}): {last_diag}")
     return False
 
 
