@@ -363,78 +363,96 @@ def decode_wind_uv_png(path: Path):
     return u, v
 
 
-def fill_with_wind_chop(h_grid, p_grid, d_grid, day_offset: int, hour_pt: int):
-    """Combine WW3 swell + SMB wind-sea using the standard root-sum-square
-    Hs combination (what SWAN/WAM use internally for partitioned wave
-    spectra). Gives a SMOOTH continuous Hs field instead of the binary
-    sharp boundary the previous "fill NaN only" version produced.
+def _blend_swell_chop(h_grid, p_grid, d_grid, u, v):
+    """Pure-function blend of WW3 swell + SMB wind-sea on a 2D grid.
+
+    Separated from `fill_with_wind_chop` (which handles the wind PNG
+    I/O) so it's unit-testable on synthetic inputs. See
+    pipeline/tests/test_swell_chop_blend.py.
 
     Algorithm:
-      1. Decode wind UV from the matching hourly wind PNG.
-      2. Compute SMB fetch-limited wind-sea Hs everywhere wind is valid.
-      3. Compute swell falloff weight: 1.0 in WW3-valid cells, decaying
-         exponentially with distance from the nearest valid cell
-         (decay scale ~50 km). This smooths the gfswave model edge
-         instead of letting it terminate as a hard line.
-      4. Hs_combined = sqrt( (swell * weight)^2 + windsea^2 )
-      5. Period: keep WW3 Tp where it dominates, else wind-sea Tp.
-      6. Direction: keep WW3 dir where it dominates, else wind dir.
+      1. Compute SMB fetch-limited wind-sea Hs/Tp from wind UV.
+      2. Compute swell-decay weight = exp(-d/decay_cells), where d is
+         the grid-cell distance to the nearest WW3-valid cell.
+      3. Backfill h/p/d at WW3-invalid cells from the nearest valid
+         neighbour (via the indices distance_transform_edt already
+         returns) — so the decay actually has something to decay,
+         instead of multiplying weight×0 and producing a cliff.
+      4. Hs_combined = sqrt( (backfilled_swell * weight)^2 + windsea^2 )
+      5. Period/direction: backfilled swell where weight > 0.3 (swell
+         still meaningful), else wind-sea.
 
     All three return arrays are valid (finite) wherever EITHER source
-    has data — no more islands of NaN at the WW3 edge.
+    has data — no NaN islands at the WW3 edge.
+    """
+    speed = np.sqrt(u * u + v * v)
+    chop_hs, chop_tp = smb_fetch_limited(speed)
+    chop_dir = (np.degrees(np.arctan2(-u, -v)) + 360.0) % 360.0
+
+    # v3 (2026-05-18): keep decay_cells = 20 (~180 km on Baja's
+    # 0.082°/cell grid) AND backfill h_swell from the nearest valid
+    # WW3 cell instead of zeroing it. The previous v2 had the decay
+    # comment right but the implementation wrong: `h_swell` was
+    # `where(valid, h_grid, 0.0)` so beyond the boundary it was 0,
+    # and `0 * weight = 0` produced a single-cell cliff regardless of
+    # `decay_cells`. The user saw it as "hard line where swell goes
+    # from 9 ft to 1 ft over one cell" on Vizcaíno.
+    swell_valid = np.isfinite(h_grid)
+    if not swell_valid.any():
+        # gfswave failed everywhere — fall back to pure wind chop.
+        chop_only_mask = np.isfinite(chop_hs)
+        h_out = np.where(chop_only_mask, chop_hs, np.nan).astype(np.float32)
+        p_out = np.where(chop_only_mask, chop_tp, np.nan).astype(np.float32)
+        d_out = np.where(chop_only_mask, chop_dir, np.nan).astype(np.float32)
+        return h_out, p_out, d_out
+
+    distances, indices = distance_transform_edt(
+        ~swell_valid, return_distances=True, return_indices=True,
+    )
+    decay_cells = 20.0
+    swell_weight = np.exp(-distances / decay_cells).astype(np.float32)
+
+    # Backfill: at each cell, use the value at the nearest WW3-valid
+    # cell. Inside valid cells that's a self-map (h[indices] = h[self]).
+    h_swell_nn = h_grid[tuple(indices)].astype(np.float32)
+    h_swell_nn = np.where(np.isfinite(h_swell_nn), h_swell_nn, 0.0)
+    p_swell_nn = p_grid[tuple(indices)].astype(np.float32)
+    p_swell_nn = np.where(np.isfinite(p_swell_nn), p_swell_nn, 0.0)
+    d_swell_nn = d_grid[tuple(indices)].astype(np.float32)
+    d_swell_nn = np.where(np.isfinite(d_swell_nn), d_swell_nn, 0.0)
+
+    h_wind = np.where(np.isfinite(chop_hs), chop_hs, 0.0).astype(np.float32)
+    h_total = np.sqrt(
+        (h_swell_nn * swell_weight) ** 2 + h_wind ** 2,
+    ).astype(np.float32)
+
+    has_any = swell_valid | np.isfinite(chop_hs)
+    h_out = np.where(has_any, h_total, np.nan).astype(np.float32)
+
+    # Period/direction: backfilled swell where weight > 0.3 (swell
+    # still meaningful at ~24 cells out), else wind-sea. Old threshold
+    # was 0.5 which paired with the cliff bug — at 0.5 the swell zone
+    # was only ~4 cells wide, making the cliff worse.
+    swell_dom = swell_weight > 0.3
+    p_out = np.where(swell_dom, p_swell_nn, chop_tp).astype(np.float32)
+    d_out = np.where(swell_dom, d_swell_nn, chop_dir).astype(np.float32)
+    p_out = np.where(has_any, p_out, np.nan).astype(np.float32)
+    d_out = np.where(has_any, d_out, np.nan).astype(np.float32)
+    return h_out, p_out, d_out
+
+
+def fill_with_wind_chop(h_grid, p_grid, d_grid, day_offset: int, hour_pt: int):
+    """Loads the matching hourly wind PNG and delegates to _blend_swell_chop.
+
+    If the wind PNG isn't on disk yet (refresh-wind hasn't run), return
+    the input grids unchanged so the heatmap still shows native WW3 with
+    no fallback — same behaviour as before the wind-chop fallback.
     """
     wind_path = WIND_HOURLY_DIR / f"d{day_offset}_h{hour_pt:02d}_uv.png"
     u, v = decode_wind_uv_png(wind_path)
     if u is None:
         return h_grid, p_grid, d_grid
-
-    speed = np.sqrt(u * u + v * v)
-    chop_hs, chop_tp = smb_fetch_limited(speed)
-    chop_dir = (np.degrees(np.arctan2(-u, -v)) + 360.0) % 360.0
-
-    # Swell decay weight: exp(-d / cells_decay) where d is grid-cell
-    # distance from the nearest WW3-valid cell.
-    #
-    # v2 (2026-05-18): bumped decay_cells 6 → 20 after the user reported
-    # a visible diagonal line in the swell layer where WW3-valid cells
-    # met the wind-sea fill area (still went from ~10 ft swell to ~2 ft
-    # chop over only 6 cells). At 20 cells decay (~180 km on Baja's
-    # 0.082°/cell grid), swell drops to e^-1 ≈ 0.37 at 20 cells out
-    # and e^-3 ≈ 0.05 at 60 cells — much smoother and physically more
-    # realistic: open-ocean swell DOES propagate hundreds of km before
-    # decay matters, the only place it shouldn't bleed is across land.
-    # The peninsula already blocks land-side bleed because WW3 returns
-    # NaN over the peninsula and the distance_transform_edt counts
-    # land cells as obstacles too (we never seed valid swell over land).
-    swell_valid = np.isfinite(h_grid)
-    distances = distance_transform_edt(~swell_valid)
-    decay_cells = 20.0
-    swell_weight = np.exp(-distances / decay_cells).astype(np.float32)
-    # Inside valid cells the weight is exp(0) = 1, exactly preserving
-    # WW3's value when combined as a pure swell with no wind-sea.
-
-    # Replace NaN swell with 0 (no wave from that source); the weight
-    # already encodes "this cell didn't have WW3 data".
-    h_swell  = np.where(swell_valid, h_grid, 0.0).astype(np.float32)
-    h_wind   = np.where(np.isfinite(chop_hs), chop_hs, 0.0).astype(np.float32)
-    h_total  = np.sqrt(
-        (h_swell * swell_weight) ** 2 + h_wind ** 2,
-    ).astype(np.float32)
-
-    # Anywhere both sources are empty → leave NaN (open-land buffer
-    # outside the bbox letterbox, or genuinely missing wind too).
-    has_any = swell_valid | np.isfinite(chop_hs)
-    h_out = np.where(has_any, h_total, np.nan).astype(np.float32)
-
-    # Period/direction: WW3 where the weighted swell dominates
-    # (weight > 0.5 = within ~4 cells of valid WW3), else wind-sea.
-    swell_dom = swell_weight > 0.5
-    p_out = np.where(swell_dom & np.isfinite(p_grid), p_grid, chop_tp).astype(np.float32)
-    d_out = np.where(swell_dom & np.isfinite(d_grid), d_grid, chop_dir).astype(np.float32)
-    # Carry NaN forward where there's truly no data.
-    p_out = np.where(has_any, p_out, np.nan).astype(np.float32)
-    d_out = np.where(has_any, d_out, np.nan).astype(np.float32)
-    return h_out, p_out, d_out
+    return _blend_swell_chop(h_grid, p_grid, d_grid, u, v)
 
 
 # ---- Encoding ---------------------------------------------------------------
