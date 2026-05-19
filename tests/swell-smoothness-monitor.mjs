@@ -170,10 +170,12 @@ async function main() {
   let exit = 0;
   try {
     const page = await browser.newPage();
-    // Need to navigate to a same-origin context so fetch + canvas work
-    // without CORS issues. The dev URL serves the PNG with permissive
-    // headers, so loading about:blank + then fetching is fine.
-    await page.goto(BASE_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
+    // Navigate to a STATIC asset (the manifest JSON) so we're in the
+    // dev URL's origin without the SPA's client-side router destroying
+    // the execution context mid-evaluate. From this page, fetching the
+    // swell PNG is same-origin and createImageBitmap can decode it.
+    const stagingUrl = `${BASE_URL}/data/${REGION}/manifest.json`;
+    await page.goto(stagingUrl, { waitUntil: "networkidle0", timeout: 60_000 });
     const out = await probe(page, url);
     if (!out.ok) {
       console.error(`FAIL: ${out.error}`);
