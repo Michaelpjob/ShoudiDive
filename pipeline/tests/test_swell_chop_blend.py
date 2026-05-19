@@ -175,7 +175,8 @@ def test_blend_handles_no_wind_chop_anywhere():
     h_out, _, _ = _blend_swell_chop(h_grid, p_grid, d_grid, u, v)
     # West half valid (swell only, no chop), east half NaN.
     assert np.isfinite(h_out[:, : w // 2]).all()
-    assert np.isnan(h_out[:, w // 2 :]).any(), (
-        "without wind chop, cells beyond WW3 + decay should remain NaN "
-        "in the far field"
+    assert np.isnan(h_out[:, w // 2 :]).all(), (
+        "without wind chop, every cell east of the WW3-valid mask must "
+        "remain NaN — the Gaussian smooth is masked to not bleed into "
+        "originally-NaN cells, and chop_hs is NaN when wind UV is NaN."
     )

@@ -276,6 +276,7 @@ function useRegionAwareTitle() {
     const subtitle =
       r === "pnw"      ? "Pacific NW Conditions" :
       r === "tropical" ? "FL + Caribbean Conditions" :
+      r === "baja"     ? "Baja Mexico Conditions" :
       "California Coast Conditions";
     document.title = `ShouldIDive — ${subtitle}`;
   }, []);

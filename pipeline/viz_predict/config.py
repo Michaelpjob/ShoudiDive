@@ -458,3 +458,29 @@ PRED_AGE_LOW_CONF_DAYS  = 10
 
 CDOM_CONTAMINATION_DIST_KM = 3.0
 ISLAND_EXPOSURE_RADIUS_KM = 8.0
+
+
+# ---- Import-time consistency check -----------------------------------------
+#
+# SECCHI_COEFFS is the canonical zone list. Every other per-zone dict must
+# carry the same keys; otherwise driver_adjustment() / persistence math /
+# sigma calculation silently drop zones via `if z not in D: continue`,
+# producing physically wrong predictions over the region with no error.
+# This trap is what caused the 2026-05-19 Baja viz over-report
+# (DRIVER_COEFFS missed every Baja zone for ~36 hours; the other four
+# parallel dicts had them).
+_ZONE_KEYS = set(SECCHI_COEFFS)
+for _name, _d in [
+    ("TURBIDITY_CORRECTIONS", TURBIDITY_CORRECTIONS),
+    ("DRIVER_COEFFS",         DRIVER_COEFFS),
+    ("PERSISTENCE_TAU_DAYS",  PERSISTENCE_TAU_DAYS),
+    ("SIGMA_LOG_CHL",         SIGMA_LOG_CHL),
+]:
+    _missing = _ZONE_KEYS - set(_d)
+    if _missing:
+        raise RuntimeError(
+            f"viz_predict/config.py: {_name} is missing zones "
+            f"{sorted(_missing)}. Every per-zone dict must list every "
+            f"zone in SECCHI_COEFFS; otherwise predictions silently break."
+        )
+del _ZONE_KEYS, _name, _d, _missing

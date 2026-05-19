@@ -142,6 +142,41 @@ function bilinear(layer, lng, lat) {
   return findNearestFinite(data, width, height, fx, fy, 6);
 }
 
+// Shared NaN-safe bilinear UV lookup. Used by wind nowcast, wind5d, and
+// current5d — all three of which carry parallel `uvU`/`uvV` Float32Arrays
+// over the same bbox grid. Returns {u, v} sampled at (lng, lat); NaN out
+// of bounds or all-NaN 4-corner. Previously this 25-line block was
+// copy-pasted into three call sites; that drift was caught by an external
+// architecture review on 2026-05-19.
+function bilinearUV(grid, lng, lat) {
+  if (!grid) return { u: NaN, v: NaN };
+  const { uvU, uvV, width, height } = grid;
+  const fx = ((lng - BBOX.lngMin) / (BBOX.lngMax - BBOX.lngMin)) * (width - 1);
+  const fy = ((BBOX.latMax - lat) / (BBOX.latMax - BBOX.latMin)) * (height - 1);
+  if (fx < 0 || fx > width - 1 || fy < 0 || fy > height - 1) {
+    return { u: NaN, v: NaN };
+  }
+  const x0 = Math.floor(fx), x1 = Math.min(x0 + 1, width - 1);
+  const y0 = Math.floor(fy), y1 = Math.min(y0 + 1, height - 1);
+  const tx = fx - x0, ty = fy - y0;
+  const lookup = (arr) => {
+    const v00 = arr[y0 * width + x0];
+    const v10 = arr[y0 * width + x1];
+    const v01 = arr[y1 * width + x0];
+    const v11 = arr[y1 * width + x1];
+    let sum = 0, n = 0;
+    if (Number.isFinite(v00)) { sum += v00; n++; }
+    if (Number.isFinite(v10)) { sum += v10; n++; }
+    if (Number.isFinite(v01)) { sum += v01; n++; }
+    if (Number.isFinite(v11)) { sum += v11; n++; }
+    if (n === 0) return NaN;
+    if (n < 4) return sum / n;
+    return v00 * (1 - tx) * (1 - ty) + v10 * tx * (1 - ty)
+         + v01 * (1 - tx) * ty       + v11 * tx * ty;
+  };
+  return { u: lookup(uvU), v: lookup(uvV) };
+}
+
 function findNearestFinite(data, width, height, fx, fy, maxRadius) {
   const cx = Math.round(fx);
   const cy = Math.round(fy);
@@ -373,32 +408,7 @@ export function getWind5dSpeed(lng, lat, slotKeyStr) {
 }
 
 export function getWind5dUV(lng, lat, slotKeyStr) {
-  const w = wind5dEntry(slotKeyStr);
-  if (!w) return { u: NaN, v: NaN };
-  const fx = ((lng - BBOX.lngMin) / (BBOX.lngMax - BBOX.lngMin)) * (w.width - 1);
-  const fy = ((BBOX.latMax - lat) / (BBOX.latMax - BBOX.latMin)) * (w.height - 1);
-  if (fx < 0 || fx > w.width - 1 || fy < 0 || fy > w.height - 1) {
-    return { u: NaN, v: NaN };
-  }
-  const x0 = Math.floor(fx), x1 = Math.min(x0 + 1, w.width - 1);
-  const y0 = Math.floor(fy), y1 = Math.min(y0 + 1, w.height - 1);
-  const tx = fx - x0, ty = fy - y0;
-  const lookup = (arr) => {
-    const v00 = arr[y0 * w.width + x0];
-    const v10 = arr[y0 * w.width + x1];
-    const v01 = arr[y1 * w.width + x0];
-    const v11 = arr[y1 * w.width + x1];
-    let sum = 0, n = 0;
-    if (Number.isFinite(v00)) { sum += v00; n++; }
-    if (Number.isFinite(v10)) { sum += v10; n++; }
-    if (Number.isFinite(v01)) { sum += v01; n++; }
-    if (Number.isFinite(v11)) { sum += v11; n++; }
-    if (n === 0) return NaN;
-    if (n < 4) return sum / n;
-    return v00 * (1 - tx) * (1 - ty) + v10 * tx * (1 - ty)
-         + v01 * (1 - tx) * ty       + v11 * tx * ty;
-  };
-  return { u: lookup(w.uvU), v: lookup(w.uvV) };
+  return bilinearUV(wind5dEntry(slotKeyStr), lng, lat);
 }
 
 // ---- current5d accessors ----------------------------------------------------
@@ -428,32 +438,7 @@ export function getCurrentSpeed(lng, lat, slotKeyStr) {
 }
 
 export function getCurrentUV(lng, lat, slotKeyStr) {
-  const w = current5dEntry(slotKeyStr);
-  if (!w) return { u: NaN, v: NaN };
-  const fx = ((lng - BBOX.lngMin) / (BBOX.lngMax - BBOX.lngMin)) * (w.width - 1);
-  const fy = ((BBOX.latMax - lat) / (BBOX.latMax - BBOX.latMin)) * (w.height - 1);
-  if (fx < 0 || fx > w.width - 1 || fy < 0 || fy > w.height - 1) {
-    return { u: NaN, v: NaN };
-  }
-  const x0 = Math.floor(fx), x1 = Math.min(x0 + 1, w.width - 1);
-  const y0 = Math.floor(fy), y1 = Math.min(y0 + 1, w.height - 1);
-  const tx = fx - x0, ty = fy - y0;
-  const lookup = (arr) => {
-    const v00 = arr[y0 * w.width + x0];
-    const v10 = arr[y0 * w.width + x1];
-    const v01 = arr[y1 * w.width + x0];
-    const v11 = arr[y1 * w.width + x1];
-    let sum = 0, n = 0;
-    if (Number.isFinite(v00)) { sum += v00; n++; }
-    if (Number.isFinite(v10)) { sum += v10; n++; }
-    if (Number.isFinite(v01)) { sum += v01; n++; }
-    if (Number.isFinite(v11)) { sum += v11; n++; }
-    if (n === 0) return NaN;
-    if (n < 4) return sum / n;
-    return v00 * (1 - tx) * (1 - ty) + v10 * tx * (1 - ty)
-         + v01 * (1 - tx) * ty       + v11 * tx * ty;
-  };
-  return { u: lookup(w.uvU), v: lookup(w.uvV) };
+  return bilinearUV(current5dEntry(slotKeyStr), lng, lat);
 }
 
 // ---- swell5d helpers -------------------------------------------------------
@@ -723,41 +708,9 @@ export function currentSource(composite) {
   return bk.source;
 }
 
-// Bilinear lookup against U or V grid (NaN-safe).
-function bilinearComponent(grid, lng, lat) {
-  if (!grid) return NaN;
-  const { uvU, uvV, width, height } = grid;
-  // unused param intentionally; this just probes shape.
-  return NaN;
-}
-
 export function getWindUV(lng, lat, composite = 1) {
   if (typeof composite === "string") return getWind5dUV(lng, lat, composite);
-  const w = state.layers.wind?.[slotKey("wind", composite)];
-  if (!w) return { u: NaN, v: NaN };
-  const fx = ((lng - BBOX.lngMin) / (BBOX.lngMax - BBOX.lngMin)) * (w.width - 1);
-  const fy = ((BBOX.latMax - lat) / (BBOX.latMax - BBOX.latMin)) * (w.height - 1);
-  if (fx < 0 || fx > w.width - 1 || fy < 0 || fy > w.height - 1) {
-    return { u: NaN, v: NaN };
-  }
-  const x0 = Math.floor(fx), x1 = Math.min(x0 + 1, w.width - 1);
-  const y0 = Math.floor(fy), y1 = Math.min(y0 + 1, w.height - 1);
-  const tx = fx - x0, ty = fy - y0;
-  const lookup = (arr) => {
-    const v00 = arr[y0 * w.width + x0];
-    const v10 = arr[y0 * w.width + x1];
-    const v01 = arr[y1 * w.width + x0];
-    const v11 = arr[y1 * w.width + x1];
-    let sum = 0, n = 0;
-    if (Number.isFinite(v00)) { sum += v00; n++; }
-    if (Number.isFinite(v10)) { sum += v10; n++; }
-    if (Number.isFinite(v01)) { sum += v01; n++; }
-    if (Number.isFinite(v11)) { sum += v11; n++; }
-    if (n === 0) return NaN;
-    if (n < 4) return sum / n;
-    return v00 * (1 - tx) * (1 - ty) + v10 * tx * (1 - ty) + v01 * (1 - tx) * ty + v11 * tx * ty;
-  };
-  return { u: lookup(w.uvU), v: lookup(w.uvV) };
+  return bilinearUV(state.layers.wind?.[slotKey("wind", composite)], lng, lat);
 }
 
 // Compass degrees ("from" direction), meteorological convention.
