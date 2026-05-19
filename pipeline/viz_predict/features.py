@@ -138,6 +138,46 @@ def sst_anomaly(sst_today, sst_climo):
     return sst_today - sst_climo
 
 
+def sst_cooling_trend(sst_today, sst_3d_ago, scale_degc: float = 2.0):
+    """Multi-day SST trend signal — "deepening cold pool" detector.
+
+    Returns a non-negative number when surface water has been COOLING
+    over the past ~3 days (positive value = sustained cold-deepening,
+    consistent with an upwelling event entering or in its sustained
+    phase). Zero when warming or stable.
+
+    Why this complements the today-vs-climo `sst_anomaly` driver:
+      * `sst_anomaly` is a snapshot — "is the water cold right now?"
+      * `sst_cooling_trend` is a derivative — "is the cold getting
+        deeper, or is the event relaxing?"
+
+    A cell can be in any of four trend states:
+      1. Cold and cooling      → active upwelling, bloom about to peak
+      2. Cold and stable/warming → upwelling relaxing, bloom fading
+      3. Warm and cooling      → fresh cold front, no bloom yet
+      4. Warm and stable       → no upwelling-related signal
+
+    The chl-response physics differs across these — state 1 is the
+    one we most want to amplify in viz predictions. Combining this
+    with the snapshot anomaly (kept as `sst` driver) lets the model
+    distinguish 1 from 2 without a heuristic.
+
+    `scale_degc` chosen so a 2 °C cool-down over 3 days (typical
+    Bakun-style spring upwelling pulse along the CA coast) saturates
+    near 1.0. Clamped negative side to 0 — warming trends don't
+    contribute to bloom risk; they get caught by the existing
+    `sst_anomaly` driver going positive instead.
+
+    Returns 0 anywhere `sst_3d_ago` is NaN (missing history file or
+    out-of-bbox cell) so a missing sidecar gracefully degrades to
+    the pre-trend model rather than crashing.
+    """
+    if sst_3d_ago is None:
+        return np.zeros_like(sst_today, dtype=np.float64)
+    delta = sst_3d_ago - sst_today  # positive = cooling
+    return np.clip(delta / float(scale_degc), 0.0, 1.5)
+
+
 def seasonal_residual(chl_climo_doy, chl_climo_annual_mean):
     return np.log(np.maximum(chl_climo_doy, 1e-3)) - np.log(np.maximum(chl_climo_annual_mean, 1e-3))
 
@@ -165,6 +205,7 @@ def assemble_features(
     is_sandy,
     cloud_fraction_7d,
     coast_normal_deg_for_upwell=295.0,
+    sst_3d_ago=None,
 ):
     bottom_stir = bottom_stir_index(sig_wave_height_3d_max, peak_period_3d_max, depth_m)
     return {
@@ -191,6 +232,16 @@ def assemble_features(
         # two add in log(chl) — confirmed upwelling produces a bigger
         # bump than either signal alone, which is the right physics.
         "sst":       sst_anomaly(sst_today, sst_climo),
+        # 2026-05-19: `trend` is a derivative companion to `sst`.
+        # `sst` is the snapshot today-vs-climo anomaly; `trend` is
+        # the rate of cooling over the last 3 days. Together they let
+        # the model tell apart:
+        #   * sustained cold + still cooling   → bloom about to peak
+        #   * sustained cold + stable/warming  → bloom fading
+        # Falls back to zeros if sst_3d_ago is None (sidecar missing
+        # or fetcher hasn't supplied it yet) — model stays at the
+        # pre-trend behaviour in that case.
+        "trend":     sst_cooling_trend(sst_today, sst_3d_ago),
         "seasonal":  seasonal_residual(chl_climo_doy, chl_climo_annual_mean),
         "exposure":  exposure_index(u_wind_today, v_wind_today, swell_dir_today_deg, swell_height_today_m, coast_normal_deg_field),
         "tide":      tide_index(tide_range_m, depth_m, dist_to_shore_km),

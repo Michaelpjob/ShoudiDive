@@ -43,6 +43,11 @@ def predict_all(
 
     sst_today:          np.ndarray = None,
     sst_climo:          np.ndarray = None,
+    # 2026-05-19: optional 3-day-ago SST for the `trend` driver
+    # (deepening-cold-pool detector). When None or NaN-heavy the
+    # trend signal degrades to zero and the model behaves as
+    # pre-trend — no callers required to upgrade simultaneously.
+    sst_3d_ago:         np.ndarray = None,
 
     u_wind_5d:          np.ndarray = None,
     v_wind_5d:          np.ndarray = None,
@@ -99,6 +104,7 @@ def predict_all(
         is_sandy=is_sandy,
         cloud_fraction_7d=cloud_fraction_7d,
         coast_normal_deg_for_upwell=coast_normal_deg_for_upwell,
+        sst_3d_ago=sst_3d_ago,
     )
 
     chl = model.predict_chl(
