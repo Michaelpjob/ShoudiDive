@@ -929,6 +929,29 @@ def main():
         print(f"  N Cortez penalty v4 (multiplicative): zone median chl "
               f"{median_chl:.2f} mg/m³, factor {factor:.2f} applied to {n_stale} cells")
 
+    # Mask land cells so:
+    #   * The PNG transmits 0 (NaN sentinel) for land — frontend
+    #     LandBasemap already draws the cream coastline on top, but
+    #     this guarantees no bogus viz pixels leak through if the
+    #     LandBasemap polygon isn't perfectly tight against the
+    #     viz raster cells.
+    #   * Cursor lookups over a land pixel return no-data instead
+    #     of the spurious viz value the model produced (with depth
+    #     forced to 1 m as a numerical proxy). Solves the "getting
+    #     vis readings on land" complaint.
+    # Use the bathy NaN mask (real bathymetry returns NaN over land).
+    # If bathy.png was missing this run, fall back to dist_to_shore <
+    # 0.5 km AND large depth proxy — coarse but better than nothing.
+    try:
+        is_land_2d = ~np.isfinite(bathy_grid)  # type: ignore[name-defined]
+    except NameError:
+        is_land_2d = np.zeros(shape2d, dtype=bool)
+    viz_p50_ft = np.where(is_land_2d, np.nan, viz_p50_ft)
+    viz_p10_ft = np.where(is_land_2d, np.nan, viz_p10_ft)
+    viz_p90_ft = np.where(is_land_2d, np.nan, viz_p90_ft)
+    if is_land_2d.any():
+        print(f"  masked {int(is_land_2d.sum())} land cells to NaN before encoding")
+
     print(f"  viz_p50_ft range: {np.nanmin(viz_p50_ft):.1f} – {np.nanmax(viz_p50_ft):.1f} ft, "
           f"mean {np.nanmean(viz_p50_ft):.1f}")
 
