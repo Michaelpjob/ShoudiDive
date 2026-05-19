@@ -599,6 +599,47 @@ def encode_wave_png(height_m, period_s, direction_deg, out_path: Path) -> None:
     Image.fromarray(rgba, mode="RGBA").save(out_path, optimize=True)
 
 
+def _resmooth_bucket_png(png_path: Path, sigma: float = 2.0) -> None:
+    """Load a wave bucket PNG, apply the v6 Gaussian smooth to Hs and
+    re-encode in place. Period + direction + alpha are preserved.
+
+    Used to fix up STALE buckets that an earlier refresh wrote before
+    the v6 smoothing existed. Without this, the daily refresh leaves
+    those buckets visually rough even though the pipeline now writes
+    smoothed PNGs."""
+    img = np.asarray(Image.open(png_path).convert("RGBA"), dtype=np.float32)
+    h_byte = img[..., 0]
+    p_byte = img[..., 1]
+    d_byte = img[..., 2]
+    a_byte = img[..., 3]
+
+    valid = a_byte > 0
+    h_lo, h_hi = HEIGHT_RANGE_M
+    hs_m = h_lo + (h_byte / 255.0) * (h_hi - h_lo)
+    hs_m = np.where(valid, hs_m, np.nan).astype(np.float32)
+
+    # Same NaN-aware Gaussian smooth as inside _blend_swell_chop.
+    finite = np.isfinite(hs_m)
+    if not finite.any():
+        return
+    filled = np.where(finite, hs_m, 0.0).astype(np.float32)
+    weight = finite.astype(np.float32)
+    hs_smoothed = gaussian_filter(filled, sigma=sigma)
+    w_smoothed = gaussian_filter(weight, sigma=sigma)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        hs_renorm = np.where(w_smoothed > 0, hs_smoothed / w_smoothed, np.nan)
+    hs_m_smoothed = np.where(finite, hs_renorm, np.nan).astype(np.float32)
+
+    h_byte_new = np.clip((hs_m_smoothed - h_lo) / (h_hi - h_lo), 0, 1) * 255.0
+    rgba = np.zeros(img.shape, dtype=np.uint8)
+    rgba[..., 0] = np.where(finite, h_byte_new, 0).astype(np.uint8)
+    rgba[..., 1] = p_byte.astype(np.uint8)
+    rgba[..., 2] = d_byte.astype(np.uint8)
+    rgba[..., 3] = a_byte.astype(np.uint8)
+    Image.fromarray(rgba, mode="RGBA").save(png_path, optimize=True)
+
+
 # ---- Direction math (vector mean) -------------------------------------------
 
 def vector_mean_direction(dirs_deg: np.ndarray, axis=None) -> np.ndarray:
@@ -773,6 +814,25 @@ def main() -> None:
                 if (mean_hs_m is not None and mean_tp is not None and mean_dp is not None)
                 else f"  d{day_offset} {bucket_name:>9}: no data"
             )
+
+    # 4.5) Post-process: re-apply the v6 Gaussian smooth to every
+    #      existing bucket PNG on disk. Catches the case where the
+    #      current refresh cycle doesn't cover an early-PT bucket
+    #      (e.g. 00z cycle has no hours before 17:00 PT yesterday,
+    #      so today's morning bucket stays at whatever the previous
+    #      refresh wrote). Without this, those stale buckets render
+    #      with the old un-smoothed data and the user still sees a
+    #      "hard line" even though the current code would smooth it.
+    print("post-process: smoothing existing bucket PNGs to v6 spec")
+    for day_offset in range(5):
+        for bucket_name, _h0, _h1 in BUCKETS:
+            png_path = BUCKETS_DIR / f"d{day_offset}_{bucket_name}_wave.png"
+            if not png_path.exists():
+                continue
+            try:
+                _resmooth_bucket_png(png_path)
+            except Exception as e:
+                print(f"  could not re-smooth {png_path.name}: {e!s}")
 
     # 5) Per-day shells with confidence + Pacific date label.
     days = []
