@@ -363,7 +363,31 @@ def decode_wind_uv_png(path: Path):
     return u, v
 
 
-def _blend_swell_chop(h_grid, p_grid, d_grid, u, v):
+def _paths_cross_land(iy, ix, is_land, n_samples: int = 32):
+    """For every cell (y, x), test whether the Euclidean line from
+    (y, x) to (iy[y, x], ix[y, x]) passes through any land cell.
+
+    Used by `_blend_swell_chop` to prevent Pacific groundswell from
+    bleeding across the Baja peninsula and inflating Sea-of-Cortez Hs.
+    Cells whose path to their nearest WW3-valid source crosses land
+    have their swell weight zeroed → wind-chop dominates there.
+
+    Vectorised: samples `n_samples - 1` evenly-spaced points along
+    every cell's path simultaneously and ORs the land mask at each.
+    For a 140×110 grid with 32 samples this is ~30 cheap array ops.
+    """
+    h, w = is_land.shape
+    yy, xx = np.indices((h, w))
+    blocked = np.zeros((h, w), dtype=bool)
+    for s in range(1, n_samples):
+        f = s / n_samples
+        py = (yy + (iy - yy) * f).round().astype(np.int32).clip(0, h - 1)
+        px = (xx + (ix - xx) * f).round().astype(np.int32).clip(0, w - 1)
+        blocked |= is_land[py, px]
+    return blocked
+
+
+def _blend_swell_chop(h_grid, p_grid, d_grid, u, v, is_land=None):
     """Pure-function blend of WW3 swell + SMB wind-sea on a 2D grid.
 
     Separated from `fill_with_wind_chop` (which handles the wind PNG
@@ -378,9 +402,12 @@ def _blend_swell_chop(h_grid, p_grid, d_grid, u, v):
          neighbour (via the indices distance_transform_edt already
          returns) — so the decay actually has something to decay,
          instead of multiplying weight×0 and producing a cliff.
-      4. Hs_combined = sqrt( (backfilled_swell * weight)^2 + windsea^2 )
-      5. Period/direction: backfilled swell where weight > 0.3 (swell
-         still meaningful), else wind-sea.
+      4. Zero weight at cells whose straight-line path to that nearest
+         source crosses land (Baja peninsula) — keeps the Sea of
+         Cortez wind-chop-dominated even with the smoother decay.
+      5. Hs_combined = sqrt( (backfilled_swell * weight)^2 + windsea^2 )
+      6. Period/direction: backfilled swell where weight > 0.3, else
+         wind-sea.
 
     All three return arrays are valid (finite) wherever EITHER source
     has data — no NaN islands at the WW3 edge.
@@ -397,6 +424,15 @@ def _blend_swell_chop(h_grid, p_grid, d_grid, u, v):
     # and `0 * weight = 0` produced a single-cell cliff regardless of
     # `decay_cells`. The user saw it as "hard line where swell goes
     # from 9 ft to 1 ft over one cell" on Vizcaíno.
+    #
+    # v4 (2026-05-18): also block decay across the peninsula via
+    # `_paths_cross_land`. Without this, the smoother decay would
+    # bleed Pacific groundswell straight through the Vizcaíno peninsula
+    # into mid-Cortez (decay at 10 cells = exp(-0.5) = 0.6 → 5 m source
+    # = 3 m apparent in Cortez, which is physically wrong — peninsula
+    # blocks ocean swell). Southern Cabo Falso wrap still works because
+    # the line-of-sight path from a south-Cortez cell to a Pacific cell
+    # near the tip stays in ocean — only paths *across* land get zeroed.
     swell_valid = np.isfinite(h_grid)
     if not swell_valid.any():
         # gfswave failed everywhere — fall back to pure wind chop.
@@ -421,6 +457,10 @@ def _blend_swell_chop(h_grid, p_grid, d_grid, u, v):
     d_swell_nn = d_grid[tuple(indices)].astype(np.float32)
     d_swell_nn = np.where(np.isfinite(d_swell_nn), d_swell_nn, 0.0)
 
+    if is_land is not None and is_land.shape == h_grid.shape:
+        blocked = _paths_cross_land(indices[0], indices[1], is_land)
+        swell_weight = np.where(blocked, 0.0, swell_weight).astype(np.float32)
+
     h_wind = np.where(np.isfinite(chop_hs), chop_hs, 0.0).astype(np.float32)
     h_total = np.sqrt(
         (h_swell_nn * swell_weight) ** 2 + h_wind ** 2,
@@ -441,18 +481,43 @@ def _blend_swell_chop(h_grid, p_grid, d_grid, u, v):
     return h_out, p_out, d_out
 
 
-def fill_with_wind_chop(h_grid, p_grid, d_grid, day_offset: int, hour_pt: int):
+def load_land_mask_for_swell_grid():
+    """Resamples the region's bathy.png to the swell grid and returns a
+    boolean land mask (True = land, shape (GRID_H, GRID_W)).
+
+    bathy.png encodes ocean depth in the L channel with 0 = NaN/land,
+    1..255 = linear 0..6000 m. We nearest-neighbour sample down to
+    the swell grid (140×110) and treat L==0 as land.
+
+    Returns None if bathy.png isn't on disk — caller skips the land-
+    blocking step in that case (same behaviour as pre-v4).
+    """
+    bathy_path = active_region().data_output_dir(ROOT) / "bathy.png"
+    if not bathy_path.exists():
+        return None
+    img = np.asarray(Image.open(bathy_path).convert("L"), dtype=np.uint8)
+    src_h, src_w = img.shape
+    yy, xx = np.indices((GRID_H, GRID_W))
+    sy = (yy * src_h / GRID_H).astype(np.int32).clip(0, src_h - 1)
+    sx = (xx * src_w / GRID_W).astype(np.int32).clip(0, src_w - 1)
+    return img[sy, sx] == 0
+
+
+def fill_with_wind_chop(h_grid, p_grid, d_grid, day_offset: int, hour_pt: int, is_land=None):
     """Loads the matching hourly wind PNG and delegates to _blend_swell_chop.
 
     If the wind PNG isn't on disk yet (refresh-wind hasn't run), return
     the input grids unchanged so the heatmap still shows native WW3 with
     no fallback — same behaviour as before the wind-chop fallback.
+
+    `is_land`: optional (GRID_H, GRID_W) bool mask. If provided, swell
+    decay is blocked across land — see `_paths_cross_land`.
     """
     wind_path = WIND_HOURLY_DIR / f"d{day_offset}_h{hour_pt:02d}_uv.png"
     u, v = decode_wind_uv_png(wind_path)
     if u is None:
         return h_grid, p_grid, d_grid
-    return _blend_swell_chop(h_grid, p_grid, d_grid, u, v)
+    return _blend_swell_chop(h_grid, p_grid, d_grid, u, v, is_land=is_land)
 
 
 # ---- Encoding ---------------------------------------------------------------
@@ -516,6 +581,16 @@ def main() -> None:
     anchor_pt_date = datetime.now(PT).date()
     print(f"Day anchor: {anchor_pt_date} (Pacific, today)")
 
+    # Load region land mask once — fed into every fill_with_wind_chop
+    # call to block Pacific swell from bleeding across the Baja
+    # peninsula into the Sea of Cortez. Missing bathy.png is OK; the
+    # blend silently skips land-blocking in that case.
+    is_land = load_land_mask_for_swell_grid()
+    if is_land is None:
+        print("land mask: bathy.png not found — skipping land-blocked decay")
+    else:
+        print(f"land mask: {int(is_land.sum())} of {is_land.size} cells flagged land")
+
     # 2) Pull each hourly step. gfswave wcoast is published at 1-hour
     #    spacing through f120, so we just iterate. Failures are logged
     #    and the affected (day, hour) slot stays empty — bucket
@@ -546,6 +621,7 @@ def main() -> None:
             # day in the Cortez — what's there IS local wind chop, not swell.
             h_grid, p_grid, d_grid = fill_with_wind_chop(
                 h_grid, p_grid, d_grid, day_offset, valid_pt.hour,
+                is_land=is_land,
             )
             hourly[(day_offset, valid_pt.hour)] = {
                 "h": h_grid, "p": p_grid, "d": d_grid,

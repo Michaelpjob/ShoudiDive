@@ -113,6 +113,50 @@ def test_blend_handles_no_ww3_data_anywhere():
     )
 
 
+def test_blend_blocks_swell_across_land_barrier():
+    """A peninsula running north-south down the grid middle should
+    prevent Pacific swell on the west from bleeding through to wind-
+    chop-only Cortez on the east. With is_land set, the east side
+    should be wind-sea magnitude only."""
+    h, w = 30, 90
+    h_grid = np.full((h, w), np.nan, dtype=np.float32)
+    h_grid[:, : w // 3] = 4.0  # WW3 valid on west third only
+    p_grid = np.full((h, w), np.nan, dtype=np.float32)
+    p_grid[:, : w // 3] = 12.0
+    d_grid = np.full((h, w), np.nan, dtype=np.float32)
+    d_grid[:, : w // 3] = 270.0
+    u = np.full((h, w), 5.0, dtype=np.float32)
+    v = np.full((h, w), 0.0, dtype=np.float32)
+    # Land barrier: middle third, columns w/3 .. 2w/3 (but not at the
+    # very north or south edges, so swell could in theory wrap around).
+    is_land = np.zeros((h, w), dtype=bool)
+    is_land[2:-2, w // 3 + 2 : 2 * w // 3] = True
+
+    h_out, _, _ = _blend_swell_chop(h_grid, p_grid, d_grid, u, v, is_land=is_land)
+
+    # Cell deep on the Cortez side (right third, middle latitude) must
+    # be wind-chop only — Pacific is 30 cells away straight through
+    # land, weight should zero out.
+    cortez_middle = float(h_out[h // 2, w - 5])
+    assert cortez_middle < 1.0, (
+        f"cortez cell Hs={cortez_middle:.3f} m — should be wind-chop only "
+        "(~0.4 m); Pacific swell bled across the land barrier"
+    )
+
+    # Pacific side should still see the source.
+    pacific = float(h_out[h // 2, 2])
+    assert 3.9 < pacific < 4.2
+
+    # Same setup but WITHOUT is_land: Cortez side gets the over-bleed
+    # (this is the v3-only regression we're guarding against).
+    h_out_no_block, _, _ = _blend_swell_chop(h_grid, p_grid, d_grid, u, v)
+    cortez_unblocked = float(h_out_no_block[h // 2, w - 5])
+    assert cortez_unblocked > 1.0, (
+        f"sanity check: without land mask, cortez Hs={cortez_unblocked:.3f} m "
+        "should be > 1 m (proving the v3 over-bleed)"
+    )
+
+
 def test_blend_handles_no_wind_chop_anywhere():
     """If the wind UV is all-NaN, the blend should preserve WW3 valid
     cells and return NaN beyond them (no false data)."""
