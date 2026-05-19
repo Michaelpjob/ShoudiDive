@@ -30,7 +30,7 @@ import numpy as np
 import requests
 import xarray as xr
 from PIL import Image
-from scipy.ndimage import distance_transform_edt
+from scipy.ndimage import distance_transform_edt, gaussian_filter
 from scipy.spatial import cKDTree
 
 # Bbox via pipeline/regions/ (PR-X-1). CA / PNW / tropical switch on
@@ -363,28 +363,28 @@ def decode_wind_uv_png(path: Path):
     return u, v
 
 
-def _paths_cross_land(iy, ix, is_land, n_samples: int = 32):
-    """For every cell (y, x), test whether the Euclidean line from
-    (y, x) to (iy[y, x], ix[y, x]) passes through any land cell.
+def _path_land_fraction(iy, ix, is_land, n_samples: int = 32):
+    """For every cell (y, x), return the fraction (0..1) of samples
+    along the Euclidean line from (y, x) to (iy[y, x], ix[y, x]) that
+    land in a land cell.
 
-    Used by `_blend_swell_chop` to prevent Pacific groundswell from
-    bleeding across the Baja peninsula and inflating Sea-of-Cortez Hs.
-    Cells whose path to their nearest WW3-valid source crosses land
-    have their swell weight zeroed → wind-chop dominates there.
-
-    Vectorised: samples `n_samples - 1` evenly-spaced points along
-    every cell's path simultaneously and ORs the land mask at each.
-    For a 140×110 grid with 32 samples this is ~30 cheap array ops.
+    Used by `_blend_swell_chop` to scale the swell decay weight: full
+    weight when the path is all-water, zero when it's all-land,
+    smoothly interpolated in between. Prevents the binary "blocked /
+    unblocked" v4 behaviour from producing its own cliff at cells
+    where the geodesic path just-barely starts/stops clipping a
+    peninsula tip.
     """
     h, w = is_land.shape
     yy, xx = np.indices((h, w))
-    blocked = np.zeros((h, w), dtype=bool)
+    count = np.zeros((h, w), dtype=np.float32)
+    steps = max(n_samples - 1, 1)
     for s in range(1, n_samples):
         f = s / n_samples
         py = (yy + (iy - yy) * f).round().astype(np.int32).clip(0, h - 1)
         px = (xx + (ix - xx) * f).round().astype(np.int32).clip(0, w - 1)
-        blocked |= is_land[py, px]
-    return blocked
+        count += is_land[py, px].astype(np.float32)
+    return count / steps
 
 
 def _blend_swell_chop(h_grid, p_grid, d_grid, u, v, is_land=None):
@@ -457,9 +457,14 @@ def _blend_swell_chop(h_grid, p_grid, d_grid, u, v, is_land=None):
     d_swell_nn = d_grid[tuple(indices)].astype(np.float32)
     d_swell_nn = np.where(np.isfinite(d_swell_nn), d_swell_nn, 0.0)
 
+    # v5 (2026-05-18): fractional land-blocking. Previous v4 used a
+    # binary cross-land mask which produced its own 1-cell cliff at
+    # cells where the geodesic path just-barely clips/clears a
+    # peninsula tip. Soft scaling by the land-fraction along the path
+    # gives a smooth taper of swell into deep Cortez.
     if is_land is not None and is_land.shape == h_grid.shape:
-        blocked = _paths_cross_land(indices[0], indices[1], is_land)
-        swell_weight = np.where(blocked, 0.0, swell_weight).astype(np.float32)
+        land_frac = _path_land_fraction(indices[0], indices[1], is_land)
+        swell_weight = (swell_weight * (1.0 - land_frac)).astype(np.float32)
 
     h_wind = np.where(np.isfinite(chop_hs), chop_hs, 0.0).astype(np.float32)
     h_total = np.sqrt(
@@ -468,6 +473,22 @@ def _blend_swell_chop(h_grid, p_grid, d_grid, u, v, is_land=None):
 
     has_any = swell_valid | np.isfinite(chop_hs)
     h_out = np.where(has_any, h_total, np.nan).astype(np.float32)
+
+    # v5: final spatial smooth (sigma=1 cell ≈ 9 km) over the valid Hs
+    # field. Softens 1-cell-wide colormap-band crossings that read as
+    # "hard lines" in the rendered heatmap, without changing the
+    # large-scale gradient. NaN-aware via mask renormalisation —
+    # gaussian_filter would otherwise spread NaN over the whole field.
+    finite_mask = np.isfinite(h_out)
+    if finite_mask.any():
+        h_filled = np.where(finite_mask, h_out, 0.0).astype(np.float32)
+        weight = finite_mask.astype(np.float32)
+        h_smoothed = gaussian_filter(h_filled, sigma=1.0)
+        w_smoothed = gaussian_filter(weight,  sigma=1.0)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            h_renorm = np.where(w_smoothed > 0, h_smoothed / w_smoothed, np.nan)
+        h_out = np.where(finite_mask, h_renorm, np.nan).astype(np.float32)
 
     # Period/direction: backfilled swell where weight > 0.3 (swell
     # still meaningful at ~24 cells out), else wind-sea. Old threshold
