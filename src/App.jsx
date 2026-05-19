@@ -1538,157 +1538,234 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
             ) : layer === "chl" ? (
               <div className="info-section">
                 <h4 className="info-h">Water Clarity (Chlorophyll-a)</h4>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(31,58,85)" }}></span>
-                  <strong>Deep navy</strong> = gin-clear, low-productivity water. Best
-                  visibility for divers and spearos.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(91,141,181)" }}></span>
-                  <strong>Mid blue</strong> = typical clear nearshore viz.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(127,160,90)" }}></span>
-                  <strong>Olive green</strong> = upwelling — fish food, but viz drops.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(122,90,60)" }}></span>
-                  <strong>Warm brown</strong> = peak upwelling or mild bloom. Avoid if water smells off.
-                </p>
+                {(() => {
+                  const r = activeRegion();
+                  const copy = {
+                    navy:  "gin-clear, low-productivity water. Best visibility for divers and spearos.",
+                    blue:  "typical clear nearshore viz.",
+                    green: "upwelling — fish food, but viz drops.",
+                    brown: "peak upwelling or mild bloom. Avoid if water smells off.",
+                  };
+                  if (r === "baja") Object.assign(copy, {
+                    navy:  "Cabo Pulmo / Espíritu Santo / Cerralvo summer clarity — 80–100 ft+ on calm days.",
+                    blue:  "typical south-Baja Pacific + open Cortez water.",
+                    green: "Pacific Baja upwelling (Vizcaíno tongue, Cedros) — colder, fishier, viz drops.",
+                    brown: "north-Cortez summer bloom or post-rain river plume (Sonora/Sinaloa mainland). Cortez green-tide season is Jul–Sep.",
+                  });
+                  return (
+                    <>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(31,58,85)" }}></span>
+                        <strong>Deep navy</strong> = {copy.navy}
+                      </p>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(91,141,181)" }}></span>
+                        <strong>Mid blue</strong> = {copy.blue}
+                      </p>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(127,160,90)" }}></span>
+                        <strong>Olive green</strong> = {copy.green}
+                      </p>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(122,90,60)" }}></span>
+                        <strong>Warm brown</strong> = {copy.brown}
+                      </p>
+                    </>
+                  );
+                })()}
               </div>
             ) : layer === "wind" ? (
               <div className="info-section">
                 <h4 className="info-h">Wind Speed (10 m)</h4>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(170,210,240)" }}></span>
-                  <strong>Light blue</strong> = 5 kt or less. Glassy. Paddleable, divable.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(120,200,160)" }}></span>
-                  <strong>Green</strong> = ~10 kt. Light breeze. Surface texture, still mellow.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(220,220,100)" }}></span>
-                  <strong>Yellow</strong> = ~15 kt. Moderate chop. Boat-handling matters.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(240,160,70)" }}></span>
-                  <strong>Orange</strong> = ~20 kt. Small craft advisory territory.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(140,30,90)" }}></span>
-                  <strong>Magenta</strong> = 35 kt+. Gale. Stay home.
-                </p>
-                <p className="info-p">
-                  Particles trace direction (the line is "from where wind is coming"). Hover
-                  for the exact knots and compass bearing.
-                </p>
+                {(() => {
+                  const r = activeRegion();
+                  const copy = {
+                    light:   "Glassy. Paddleable, divable.",
+                    green:   "Light breeze. Surface texture, still mellow.",
+                    yellow:  "Moderate chop. Boat-handling matters.",
+                    orange:  "Small craft advisory territory.",
+                    magenta: "Gale. Stay home.",
+                  };
+                  if (r === "baja") Object.assign(copy, {
+                    light:   "Glassy. Cortez at dawn, Pacific Baja calm morning. Pangas + spearos out.",
+                    green:   "Light breeze. Typical Cortez afternoon (sea breeze on, before the gulf builds).",
+                    yellow:  "El Norte ramping in the upper gulf, Pacific Baja whitecaps. Watch panga safety.",
+                    orange:  "Sustained Norte / cold-front passage. Cortez crossings get sporty.",
+                    magenta: "Chubasco / Norte storm winds. Stay home — Cortez gets steep + dangerous fast.",
+                  });
+                  return (
+                    <>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(170,210,240)" }}></span>
+                        <strong>Light blue</strong> = 5 kt or less. {copy.light}
+                      </p>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(120,200,160)" }}></span>
+                        <strong>Green</strong> = ~10 kt. {copy.green}
+                      </p>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(220,220,100)" }}></span>
+                        <strong>Yellow</strong> = ~15 kt. {copy.yellow}
+                      </p>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(240,160,70)" }}></span>
+                        <strong>Orange</strong> = ~20 kt. {copy.orange}
+                      </p>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(140,30,90)" }}></span>
+                        <strong>Magenta</strong> = 35 kt+. {copy.magenta}
+                      </p>
+                      <p className="info-p">
+                        Particles trace direction (the line is "from where wind is coming"). Hover
+                        for the exact knots and compass bearing.
+                      </p>
+                    </>
+                  );
+                })()}
               </div>
             ) : layer === "current" ? (
               <div className="info-section">
                 <h4 className="info-h">Surface Current</h4>
-                <p className="info-p">
-                  <strong>Beta estimate.</strong> Use this as planning context only, and
-                  verify with local observations, boat drift, and in-water feel before
-                  committing to a dive.
-                </p>
-                <p className="info-p">
-                  Color shows estimated surface-current speed in knots. Particle trails show
-                  where the water is setting, which matters for drift, anchoring, and how stable
-                  a kelp-bed dive window will feel.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(125,211,252)" }}></span>
-                  <strong>Blue</strong> is weak current, generally easier diving.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(94,234,212)" }}></span>
-                  <strong>Teal</strong> is noticeable set. Watch the boat, floatline, and exit.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(250,204,21)" }}></span>
-                  <strong>Yellow</strong> is strong enough to matter for most freedivers.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(220,38,38)" }}></span>
-                  <strong>Red/purple</strong> is high-risk surface set. Treat as a no-go unless
-                  you have strong local confirmation.
-                </p>
-                <p className="info-p" style={{ fontSize: 11, color: "var(--ink-3)" }}>
-                  This is a surface-current product. Reef-depth current can differ near points,
-                  kelp, shelves, and island structure.
-                </p>
+                {(() => {
+                  const r = activeRegion();
+                  const intro = r === "baja"
+                    ? "Color shows estimated surface-current speed in knots. Cortez gets dominated by tidal pumping — the Midriff Islands sill funnels 3–5 kt flows between Tiburón and Ángel de la Guarda; south Cortez points (Cerralvo, Cabo Pulmo) run gentler."
+                    : "Color shows estimated surface-current speed in knots. Particle trails show where the water is setting, which matters for drift, anchoring, and how stable a kelp-bed dive window will feel.";
+                  const teal = r === "baja"
+                    ? "noticeable set. Watch the panga drift on Cortez crossings and at point breaks."
+                    : "noticeable set. Watch the boat, floatline, and exit.";
+                  const yellow = r === "baja"
+                    ? "Cortez tidal pump. El Bajo / Marisla / Midriff channels run yellow at peak ebb/flood."
+                    : "strong enough to matter for most freedivers.";
+                  const red = r === "baja"
+                    ? "Salsipuedes / Canal de Ballenas tidal-race territory. Local-guide-only."
+                    : "high-risk surface set. Treat as a no-go unless you have strong local confirmation.";
+                  return (
+                    <>
+                      <p className="info-p">
+                        <strong>Beta estimate.</strong> Use this as planning context only, and
+                        verify with local observations, boat drift, and in-water feel before
+                        committing to a dive.
+                      </p>
+                      <p className="info-p">{intro}</p>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(125,211,252)" }}></span>
+                        <strong>Blue</strong> is weak current, generally easier diving.
+                      </p>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(94,234,212)" }}></span>
+                        <strong>Teal</strong> is {teal}
+                      </p>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(250,204,21)" }}></span>
+                        <strong>Yellow</strong> is {yellow}
+                      </p>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(220,38,38)" }}></span>
+                        <strong>Red/purple</strong> is {red}
+                      </p>
+                      <p className="info-p" style={{ fontSize: 11, color: "var(--ink-3)" }}>
+                        This is a surface-current product. Reef-depth current can differ near points,
+                        kelp, shelves, and island structure.
+                      </p>
+                    </>
+                  );
+                })()}
               </div>
             ) : layer === "swell" ? (
               <div className="info-section">
                 <h4 className="info-h">Swell · Hs / Tp / Dp</h4>
-                <p className="info-p">
-                  Three numbers per cell — significant wave height (<strong>Hs</strong>, the
-                  headline ft), peak period (<strong>Tp</strong>, seconds), and primary
-                  direction (<strong>Dp</strong>, "from" compass). Color shows Hs.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(236,254,255)" }}></span>
-                  <strong>Glassy</strong> — 0–1 ft. Flat. Perfect for novices and freedivers.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(103,232,249)" }}></span>
-                  <strong>Calm</strong> — 1–3 ft. Easy nearshore conditions.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(132,204,22)" }}></span>
-                  <strong>Workable</strong> — 3–5 ft. Manageable surge, fun-size surf.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(234,179,8)" }}></span>
-                  <strong>Sketchy</strong> — 5–8 ft. OK offshore; rough nearshore.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(249,115,22)" }}></span>
-                  <strong>Big</strong> — 8–12 ft. Stay deep; advanced surf only.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(220,38,38)" }}></span>
-                  <strong>XL</strong> — 12–20 ft. Don't dive. Gnarly surf.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(127,29,29)" }}></span>
-                  <strong>Storm seas</strong> — 20+ ft. Mavericks/Cortes territory.
-                </p>
-                <p className="info-p" style={{ fontSize: 11, color: "var(--ink-3)" }}>
-                  Period flips the feel: a 4 ft / <strong>16 s</strong> day is a clean
-                  long-period groundswell; same 4 ft / <strong>8 s</strong> is choppy
-                  windswell. Tooltip + the timeline badge expose Tp and Dp directly.
-                </p>
+                {(() => {
+                  const r = activeRegion();
+                  const stormTxt = r === "baja"
+                    ? "Cabo Falso storm-swell / hurricane outflow."
+                    : "Mavericks/Cortes territory.";
+                  return (
+                    <>
+                      <p className="info-p">
+                        Three numbers per cell — significant wave height (<strong>Hs</strong>, the
+                        headline ft), peak period (<strong>Tp</strong>, seconds), and primary
+                        direction (<strong>Dp</strong>, "from" compass). Color shows Hs.
+                      </p>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(236,254,255)" }}></span>
+                        <strong>Glassy</strong> — 0–1 ft. Flat. Perfect for novices and freedivers.
+                      </p>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(103,232,249)" }}></span>
+                        <strong>Calm</strong> — 1–3 ft. Easy nearshore conditions.
+                      </p>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(132,204,22)" }}></span>
+                        <strong>Workable</strong> — 3–5 ft. Manageable surge, fun-size surf.
+                      </p>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(234,179,8)" }}></span>
+                        <strong>Sketchy</strong> — 5–8 ft. OK offshore; rough nearshore.
+                      </p>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(249,115,22)" }}></span>
+                        <strong>Big</strong> — 8–12 ft. Stay deep; advanced surf only.
+                      </p>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(220,38,38)" }}></span>
+                        <strong>XL</strong> — 12–20 ft. Don't dive. Gnarly surf.
+                      </p>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(127,29,29)" }}></span>
+                        <strong>Storm seas</strong> — 20+ ft. {stormTxt}
+                      </p>
+                      <p className="info-p" style={{ fontSize: 11, color: "var(--ink-3)" }}>
+                        Period flips the feel: a 4 ft / <strong>16 s</strong> day is a clean
+                        long-period groundswell; same 4 ft / <strong>8 s</strong> is choppy
+                        windswell. Tooltip + the timeline badge expose Tp and Dp directly.
+                        {r === "baja" && " Pacific Baja gets NW groundswell year-round; Cortez sees almost no real swell — most height shown there is local wind chop."}
+                      </p>
+                    </>
+                  );
+                })()}
               </div>
             ) : (
               <div className="info-section">
                 <h4 className="info-h">Predicted Visibility · model output</h4>
-                <p className="info-p">
-                  <strong>This is a prediction, not a measurement.</strong> A zone-aware
-                  model blends satellite, weather, and ocean inputs to estimate the
-                  Secchi-equivalent visibility you'd expect in feet.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(194,65,12)" }}></span>
-                  <strong>Poor</strong> — 0–10 ft. Burnt orange; silty / blown out.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(34,197,94)" }}></span>
-                  <strong>Fair</strong> — 10–20 ft. Green; diveable but washed out.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(6,182,212)" }}></span>
-                  <strong>Good</strong> — 20–30 ft. Cyan; typical CA kelp diving.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(3,105,161)" }}></span>
-                  <strong>Very Good</strong> — 30–50 ft. Blue; clean blue water.
-                </p>
-                <p className="info-p">
-                  <span className="swatch" style={{ background: "rgb(31,77,117)" }}></span>
-                  <strong>Excellent</strong> — 50 ft+. Deep navy; once-a-year clarity.
-                </p>
+                {(() => {
+                  const r = activeRegion();
+                  const goodCopy = r === "baja"
+                    ? "Cyan; typical open Cortez or Pacific Baja nearshore."
+                    : "Cyan; typical CA kelp diving.";
+                  const exCopy = r === "baja"
+                    ? "Deep navy; Cabo Pulmo / Espíritu Santo / Cerralvo / Carmen on a calm low-chl day. 90–115 ft is reachable in summer."
+                    : "Deep navy; once-a-year clarity.";
+                  return (
+                    <>
+                      <p className="info-p">
+                        <strong>This is a prediction, not a measurement.</strong> A zone-aware
+                        model blends satellite, weather, and ocean inputs to estimate the
+                        Secchi-equivalent visibility you'd expect in feet.
+                      </p>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(194,65,12)" }}></span>
+                        <strong>Poor</strong> — 0–10 ft. Burnt orange; silty / blown out.
+                      </p>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(34,197,94)" }}></span>
+                        <strong>Fair</strong> — 10–20 ft. Green; diveable but washed out.
+                      </p>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(6,182,212)" }}></span>
+                        <strong>Good</strong> — 20–30 ft. {goodCopy}
+                      </p>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(3,105,161)" }}></span>
+                        <strong>Very Good</strong> — 30–50 ft. Blue; clean blue water.
+                      </p>
+                      <p className="info-p">
+                        <span className="swatch" style={{ background: "rgb(31,77,117)" }}></span>
+                        <strong>Excellent</strong> — 50 ft+. {exCopy}
+                      </p>
+                    </>
+                  );
+                })()}
               </div>
             )}
             <div className="info-section">

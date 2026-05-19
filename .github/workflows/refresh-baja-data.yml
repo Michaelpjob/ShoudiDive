@@ -74,6 +74,8 @@ jobs:
       - name: Fetch 7-day precipitation
         continue-on-error: true
         timeout-minutes: 5
+        env:
+          EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
         run: python pipeline/fetch_precip.py
 
       - name: Fetch river discharge (no-op for baja — CA USGS stations only)

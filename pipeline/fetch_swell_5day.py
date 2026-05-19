@@ -30,7 +30,7 @@ import numpy as np
 import requests
 import xarray as xr
 from PIL import Image
-from scipy.ndimage import distance_transform_edt
+from scipy.ndimage import distance_transform_edt, gaussian_filter
 from scipy.spatial import cKDTree
 
 # Bbox via pipeline/regions/ (PR-X-1). CA / PNW / tropical switch on
@@ -81,10 +81,39 @@ SESSION.headers.update({
 
 
 def _head_ok(url: str) -> bool:
-    try:
-        return SESSION.head(url, timeout=30, allow_redirects=True).status_code == 200
-    except requests.RequestException:
-        return False
+    """True if `url` returns 200. Tries HEAD then falls back to a
+    range-limited GET so we recover from NOMADS' HEAD-throttling on
+    busy days (GitHub runners get rate-limited from time to time
+    even when straight curl works fine).
+
+    First non-decisive response is printed so CI logs surface why we
+    bailed (403/429/5xx) instead of always reporting "not yet
+    published"."""
+    last_diag = None
+    for attempt in range(3):
+        try:
+            r = SESSION.head(url, timeout=30, allow_redirects=True)
+            if r.status_code == 200:
+                return True
+            if r.status_code == 404:
+                return False
+            last_diag = f"HEAD attempt {attempt}: {r.status_code}"
+        except requests.RequestException as e:
+            last_diag = f"HEAD attempt {attempt}: {type(e).__name__}"
+        # HEAD didn't decisively succeed/fail — try a 1-byte range GET.
+        try:
+            r = SESSION.get(url, headers={"Range": "bytes=0-0"},
+                            timeout=30, allow_redirects=True)
+            if r.status_code in (200, 206):
+                return True
+            if r.status_code == 404:
+                return False
+            last_diag = f"GET attempt {attempt}: {r.status_code}"
+        except requests.RequestException as e:
+            last_diag = f"GET attempt {attempt}: {type(e).__name__}"
+    if last_diag:
+        print(f"    head_ok({url.split('/')[-1]}): {last_diag}")
+    return False
 
 
 # ---- Region-aware gfswave subset selection ---------------------------------
@@ -219,7 +248,31 @@ def open_wave(grib_path: Path):
     return lat2d, lng2d, height, period, direction
 
 
-def fill_nearest(arr, max_cells: int = 40):
+def _fill_max_cells_for_region():
+    """Per-region cap on how far fill_nearest propagates.
+
+    CA needs the default ~40 cells (~310 km on its grid) to bridge the
+    broader gfswave masked zones around Pt Conception + Channel Islands
+    lee + SB/SD bays. For regions with enclosed-sea geography (Baja's
+    Sea of Cortez, surrounded by a peninsula on one side + mainland on
+    the other), the wide fill is actively wrong: WW3 masks the Cortez
+    interior because shallow + enclosed, and a 40-cell fill bridges
+    ACROSS the peninsula and paints Pacific swell values onto Cortez
+    cells. User reported "swell data looks off in Cortez" — that's
+    why. Drop to 5 cells (~45 km) for baja so inner-shelf gaps still
+    fill but the peninsula blocks the bleed.
+    """
+    try:
+        from pipeline.regions import active_region
+    except ModuleNotFoundError:
+        from regions import active_region
+    name = active_region().name
+    if name == "baja":
+        return 5
+    return 40
+
+
+def fill_nearest(arr, max_cells: int | None = None):
     """Fill NaN cells with their nearest valid neighbour's value.
 
     gfswave wcoast 0.16° masks shallow / nearshore cells where bathymetry
@@ -229,12 +282,11 @@ def fill_nearest(arr, max_cells: int = 40):
     a few km offshore have perfectly good values.
 
     `max_cells` caps how far the fill can propagate (in grid cells, ~5 km
-    each). 40 cells ≈ 200 km — wide enough to bridge gfswave's broader
-    masked zones around Pt Conception, the Channel Islands lee shore, and
-    inside SB / SD bays, but still narrow enough that far-inland cells
-    (Arizona desert, etc.) stay NaN rather than getting painted with
-    offshore Pacific Hs.
+    each). Defaults to _fill_max_cells_for_region() — see that function
+    for region rationale.
     """
+    if max_cells is None:
+        max_cells = _fill_max_cells_for_region()
     valid = np.isfinite(arr)
     if not valid.any():
         return arr
@@ -276,6 +328,259 @@ def regrid_to_bbox(lat2d, lng2d, *fields, threshold_deg=0.4):
     return tuple(out)
 
 
+# ---- Wind-chop fallback for cells WW3 doesn't model ------------------------
+#
+# gfswave (WW3) masks shallow + enclosed bodies of water (Sea of Cortez,
+# Salish Sea, harbours, …). For those cells the answer "no swell data"
+# is technically right — there isn't ocean swell propagating through
+# them — but operationally users still want to know "what's the local
+# wind chop?". We compute a fetch-limited wave height from the HRRR/GFS
+# wind already fetched by fetch_wind_5day.py earlier in the same
+# workflow, using the standard SMB (Sverdrup-Munk-Bretschneider)
+# fetch-limited formula:
+#
+#   gHs/U² = 0.283 · tanh(0.0125 · (gF/U²)^0.42)
+#   gTp/U  = 7.54  · tanh(0.077  · (gF/U²)^0.25)
+#
+# Where U = wind speed at 10 m, F = fetch in metres, g = 9.81 m/s².
+# Fetch is fixed at 50 km — Sea of Cortez is ~100 km wide so this is a
+# reasonable middle-ground for inner-gulf cells. The result is a
+# "wind sea" estimate (not swell), but it's what's physically there.
+
+WIND_HOURLY_DIR = active_region().data_output_dir(ROOT) / "wind" / "hourly"
+SMB_FETCH_M = 50_000.0
+WIND_UV_RANGE = (-30.0, 30.0)  # must match fetch_wind_5day.py's UV_RANGE
+
+
+def smb_fetch_limited(u_speed_ms: np.ndarray, fetch_m: float = SMB_FETCH_M):
+    """Return (Hs in m, Tp in s) for a 2D wind-speed grid using SMB.
+
+    Calm-wind cells (<1 m/s) keep the floor value SMB gives at u=1 m/s
+    (~0.12 m Hs) instead of going NaN. The previous code masked these
+    to NaN to "keep land/no-data cells transparent" — but cells with
+    NaN wind get NaN from `u = max(NaN, 1.0) = NaN` propagation anyway,
+    so the explicit `<1.0` mask was only dropping legitimately glassy
+    cells. That left Cortez dawn cells (~0.5 m/s) entirely transparent
+    when WW3 had no swell coverage there, producing the dark "holes"
+    the user reported on 2026-05-18.
+    """
+    g = 9.81
+    u = np.maximum(u_speed_ms, 1.0)  # guard against /U² blowup
+    gf_over_u2 = g * fetch_m / (u * u)
+    hs = (u * u / g) * 0.283 * np.tanh(0.0125 * np.power(gf_over_u2, 0.42))
+    tp = (u / g) * 7.54 * np.tanh(0.077 * np.power(gf_over_u2, 0.25))
+    mask = ~np.isfinite(u_speed_ms)
+    hs = np.where(mask, np.nan, hs)
+    tp = np.where(mask, np.nan, tp)
+    return hs, tp
+
+
+def decode_wind_uv_png(path: Path):
+    """Inverse of fetch_wind_5day.encode_uv_png. Returns (U, V) in m/s
+    with NaN where the source PNG marked alpha=0.
+
+    Returns (None, None) if the wind PNG isn't on disk — caller should
+    skip the wind-chop fallback in that case (gfswave-only cells stay
+    NaN, same as today's behaviour).
+    """
+    if not path.exists():
+        return None, None
+    img = np.asarray(Image.open(path).convert("RGBA"), dtype=np.float32)
+    a = img[..., 3]
+    valid = a > 0
+    lo, hi = WIND_UV_RANGE
+    u = lo + (img[..., 0] / 255.0) * (hi - lo)
+    v = lo + (img[..., 1] / 255.0) * (hi - lo)
+    u = np.where(valid, u, np.nan)
+    v = np.where(valid, v, np.nan)
+    return u, v
+
+
+def _path_land_fraction(iy, ix, is_land, n_samples: int = 32):
+    """For every cell (y, x), return the fraction (0..1) of samples
+    along the Euclidean line from (y, x) to (iy[y, x], ix[y, x]) that
+    land in a land cell.
+
+    Used by `_blend_swell_chop` to scale the swell decay weight: full
+    weight when the path is all-water, zero when it's all-land,
+    smoothly interpolated in between. Prevents the binary "blocked /
+    unblocked" v4 behaviour from producing its own cliff at cells
+    where the geodesic path just-barely starts/stops clipping a
+    peninsula tip.
+    """
+    h, w = is_land.shape
+    yy, xx = np.indices((h, w))
+    count = np.zeros((h, w), dtype=np.float32)
+    steps = max(n_samples - 1, 1)
+    for s in range(1, n_samples):
+        f = s / n_samples
+        py = (yy + (iy - yy) * f).round().astype(np.int32).clip(0, h - 1)
+        px = (xx + (ix - xx) * f).round().astype(np.int32).clip(0, w - 1)
+        count += is_land[py, px].astype(np.float32)
+    return count / steps
+
+
+def _blend_swell_chop(h_grid, p_grid, d_grid, u, v, is_land=None):
+    """Pure-function blend of WW3 swell + SMB wind-sea on a 2D grid.
+
+    Separated from `fill_with_wind_chop` (which handles the wind PNG
+    I/O) so it's unit-testable on synthetic inputs. See
+    pipeline/tests/test_swell_chop_blend.py.
+
+    Algorithm:
+      1. Compute SMB fetch-limited wind-sea Hs/Tp from wind UV.
+      2. Compute swell-decay weight = exp(-d/decay_cells), where d is
+         the grid-cell distance to the nearest WW3-valid cell.
+      3. Backfill h/p/d at WW3-invalid cells from the nearest valid
+         neighbour (via the indices distance_transform_edt already
+         returns) — so the decay actually has something to decay,
+         instead of multiplying weight×0 and producing a cliff.
+      4. Zero weight at cells whose straight-line path to that nearest
+         source crosses land (Baja peninsula) — keeps the Sea of
+         Cortez wind-chop-dominated even with the smoother decay.
+      5. Hs_combined = sqrt( (backfilled_swell * weight)^2 + windsea^2 )
+      6. Period/direction: backfilled swell where weight > 0.3, else
+         wind-sea.
+
+    All three return arrays are valid (finite) wherever EITHER source
+    has data — no NaN islands at the WW3 edge.
+    """
+    speed = np.sqrt(u * u + v * v)
+    chop_hs, chop_tp = smb_fetch_limited(speed)
+    chop_dir = (np.degrees(np.arctan2(-u, -v)) + 360.0) % 360.0
+
+    # v3 (2026-05-18): keep decay_cells = 20 (~180 km on Baja's
+    # 0.082°/cell grid) AND backfill h_swell from the nearest valid
+    # WW3 cell instead of zeroing it. The previous v2 had the decay
+    # comment right but the implementation wrong: `h_swell` was
+    # `where(valid, h_grid, 0.0)` so beyond the boundary it was 0,
+    # and `0 * weight = 0` produced a single-cell cliff regardless of
+    # `decay_cells`. The user saw it as "hard line where swell goes
+    # from 9 ft to 1 ft over one cell" on Vizcaíno.
+    #
+    # v4 (2026-05-18): also block decay across the peninsula via
+    # `_paths_cross_land`. Without this, the smoother decay would
+    # bleed Pacific groundswell straight through the Vizcaíno peninsula
+    # into mid-Cortez (decay at 10 cells = exp(-0.5) = 0.6 → 5 m source
+    # = 3 m apparent in Cortez, which is physically wrong — peninsula
+    # blocks ocean swell). Southern Cabo Falso wrap still works because
+    # the line-of-sight path from a south-Cortez cell to a Pacific cell
+    # near the tip stays in ocean — only paths *across* land get zeroed.
+    swell_valid = np.isfinite(h_grid)
+    if not swell_valid.any():
+        # gfswave failed everywhere — fall back to pure wind chop.
+        chop_only_mask = np.isfinite(chop_hs)
+        h_out = np.where(chop_only_mask, chop_hs, np.nan).astype(np.float32)
+        p_out = np.where(chop_only_mask, chop_tp, np.nan).astype(np.float32)
+        d_out = np.where(chop_only_mask, chop_dir, np.nan).astype(np.float32)
+        return h_out, p_out, d_out
+
+    distances, indices = distance_transform_edt(
+        ~swell_valid, return_distances=True, return_indices=True,
+    )
+    decay_cells = 20.0
+    swell_weight = np.exp(-distances / decay_cells).astype(np.float32)
+
+    # Backfill: at each cell, use the value at the nearest WW3-valid
+    # cell. Inside valid cells that's a self-map (h[indices] = h[self]).
+    h_swell_nn = h_grid[tuple(indices)].astype(np.float32)
+    h_swell_nn = np.where(np.isfinite(h_swell_nn), h_swell_nn, 0.0)
+    p_swell_nn = p_grid[tuple(indices)].astype(np.float32)
+    p_swell_nn = np.where(np.isfinite(p_swell_nn), p_swell_nn, 0.0)
+    d_swell_nn = d_grid[tuple(indices)].astype(np.float32)
+    d_swell_nn = np.where(np.isfinite(d_swell_nn), d_swell_nn, 0.0)
+
+    # v5 (2026-05-18): fractional land-blocking. Previous v4 used a
+    # binary cross-land mask which produced its own 1-cell cliff at
+    # cells where the geodesic path just-barely clips/clears a
+    # peninsula tip. Soft scaling by the land-fraction along the path
+    # gives a smooth taper of swell into deep Cortez.
+    if is_land is not None and is_land.shape == h_grid.shape:
+        land_frac = _path_land_fraction(indices[0], indices[1], is_land)
+        swell_weight = (swell_weight * (1.0 - land_frac)).astype(np.float32)
+
+    h_wind = np.where(np.isfinite(chop_hs), chop_hs, 0.0).astype(np.float32)
+    h_total = np.sqrt(
+        (h_swell_nn * swell_weight) ** 2 + h_wind ** 2,
+    ).astype(np.float32)
+
+    has_any = swell_valid | np.isfinite(chop_hs)
+    h_out = np.where(has_any, h_total, np.nan).astype(np.float32)
+
+    # v5/v6: final spatial smooth over the valid Hs field. Softens
+    # 1-cell-wide colormap-band crossings that read as "hard lines"
+    # in the rendered heatmap, without changing the large-scale
+    # gradient. NaN-aware via mask renormalisation — gaussian_filter
+    # would otherwise spread NaN over the whole field.
+    #
+    # v6 (2026-05-18): bumped sigma 1.0 → 2.0 (~9 km → ~18 km blur)
+    # after forecast-day d1/d2 buckets still showed a 2.7 ft cliff at
+    # the cell just east of Cedros where the path-land-fraction
+    # flipped between adjacent cells. sigma=2 smears Voronoi-boundary
+    # discontinuities across enough cells that the colormap reads as
+    # a continuous gradient.
+    finite_mask = np.isfinite(h_out)
+    if finite_mask.any():
+        h_filled = np.where(finite_mask, h_out, 0.0).astype(np.float32)
+        weight = finite_mask.astype(np.float32)
+        h_smoothed = gaussian_filter(h_filled, sigma=2.0)
+        w_smoothed = gaussian_filter(weight,  sigma=2.0)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            h_renorm = np.where(w_smoothed > 0, h_smoothed / w_smoothed, np.nan)
+        h_out = np.where(finite_mask, h_renorm, np.nan).astype(np.float32)
+
+    # Period/direction: backfilled swell where weight > 0.3 (swell
+    # still meaningful at ~24 cells out), else wind-sea. Old threshold
+    # was 0.5 which paired with the cliff bug — at 0.5 the swell zone
+    # was only ~4 cells wide, making the cliff worse.
+    swell_dom = swell_weight > 0.3
+    p_out = np.where(swell_dom, p_swell_nn, chop_tp).astype(np.float32)
+    d_out = np.where(swell_dom, d_swell_nn, chop_dir).astype(np.float32)
+    p_out = np.where(has_any, p_out, np.nan).astype(np.float32)
+    d_out = np.where(has_any, d_out, np.nan).astype(np.float32)
+    return h_out, p_out, d_out
+
+
+def load_land_mask_for_swell_grid():
+    """Resamples the region's bathy.png to the swell grid and returns a
+    boolean land mask (True = land, shape (GRID_H, GRID_W)).
+
+    bathy.png encodes ocean depth in the L channel with 0 = NaN/land,
+    1..255 = linear 0..6000 m. We nearest-neighbour sample down to
+    the swell grid (140×110) and treat L==0 as land.
+
+    Returns None if bathy.png isn't on disk — caller skips the land-
+    blocking step in that case (same behaviour as pre-v4).
+    """
+    bathy_path = active_region().data_output_dir(ROOT) / "bathy.png"
+    if not bathy_path.exists():
+        return None
+    img = np.asarray(Image.open(bathy_path).convert("L"), dtype=np.uint8)
+    src_h, src_w = img.shape
+    yy, xx = np.indices((GRID_H, GRID_W))
+    sy = (yy * src_h / GRID_H).astype(np.int32).clip(0, src_h - 1)
+    sx = (xx * src_w / GRID_W).astype(np.int32).clip(0, src_w - 1)
+    return img[sy, sx] == 0
+
+
+def fill_with_wind_chop(h_grid, p_grid, d_grid, day_offset: int, hour_pt: int, is_land=None):
+    """Loads the matching hourly wind PNG and delegates to _blend_swell_chop.
+
+    If the wind PNG isn't on disk yet (refresh-wind hasn't run), return
+    the input grids unchanged so the heatmap still shows native WW3 with
+    no fallback — same behaviour as before the wind-chop fallback.
+
+    `is_land`: optional (GRID_H, GRID_W) bool mask. If provided, swell
+    decay is blocked across land — see `_paths_cross_land`.
+    """
+    wind_path = WIND_HOURLY_DIR / f"d{day_offset}_h{hour_pt:02d}_uv.png"
+    u, v = decode_wind_uv_png(wind_path)
+    if u is None:
+        return h_grid, p_grid, d_grid
+    return _blend_swell_chop(h_grid, p_grid, d_grid, u, v, is_land=is_land)
+
+
 # ---- Encoding ---------------------------------------------------------------
 
 def encode_wave_png(height_m, period_s, direction_deg, out_path: Path) -> None:
@@ -296,6 +601,47 @@ def encode_wave_png(height_m, period_s, direction_deg, out_path: Path) -> None:
     rgba[..., 3] = (valid * 255).astype(np.uint8)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     Image.fromarray(rgba, mode="RGBA").save(out_path, optimize=True)
+
+
+def _resmooth_bucket_png(png_path: Path, sigma: float = 2.0) -> None:
+    """Load a wave bucket PNG, apply the v6 Gaussian smooth to Hs and
+    re-encode in place. Period + direction + alpha are preserved.
+
+    Used to fix up STALE buckets that an earlier refresh wrote before
+    the v6 smoothing existed. Without this, the daily refresh leaves
+    those buckets visually rough even though the pipeline now writes
+    smoothed PNGs."""
+    img = np.asarray(Image.open(png_path).convert("RGBA"), dtype=np.float32)
+    h_byte = img[..., 0]
+    p_byte = img[..., 1]
+    d_byte = img[..., 2]
+    a_byte = img[..., 3]
+
+    valid = a_byte > 0
+    h_lo, h_hi = HEIGHT_RANGE_M
+    hs_m = h_lo + (h_byte / 255.0) * (h_hi - h_lo)
+    hs_m = np.where(valid, hs_m, np.nan).astype(np.float32)
+
+    # Same NaN-aware Gaussian smooth as inside _blend_swell_chop.
+    finite = np.isfinite(hs_m)
+    if not finite.any():
+        return
+    filled = np.where(finite, hs_m, 0.0).astype(np.float32)
+    weight = finite.astype(np.float32)
+    hs_smoothed = gaussian_filter(filled, sigma=sigma)
+    w_smoothed = gaussian_filter(weight, sigma=sigma)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        hs_renorm = np.where(w_smoothed > 0, hs_smoothed / w_smoothed, np.nan)
+    hs_m_smoothed = np.where(finite, hs_renorm, np.nan).astype(np.float32)
+
+    h_byte_new = np.clip((hs_m_smoothed - h_lo) / (h_hi - h_lo), 0, 1) * 255.0
+    rgba = np.zeros(img.shape, dtype=np.uint8)
+    rgba[..., 0] = np.where(finite, h_byte_new, 0).astype(np.uint8)
+    rgba[..., 1] = p_byte.astype(np.uint8)
+    rgba[..., 2] = d_byte.astype(np.uint8)
+    rgba[..., 3] = a_byte.astype(np.uint8)
+    Image.fromarray(rgba, mode="RGBA").save(png_path, optimize=True)
 
 
 # ---- Direction math (vector mean) -------------------------------------------
@@ -337,6 +683,16 @@ def main() -> None:
     anchor_pt_date = datetime.now(PT).date()
     print(f"Day anchor: {anchor_pt_date} (Pacific, today)")
 
+    # Load region land mask once — fed into every fill_with_wind_chop
+    # call to block Pacific swell from bleeding across the Baja
+    # peninsula into the Sea of Cortez. Missing bathy.png is OK; the
+    # blend silently skips land-blocking in that case.
+    is_land = load_land_mask_for_swell_grid()
+    if is_land is None:
+        print("land mask: bathy.png not found — skipping land-blocked decay")
+    else:
+        print(f"land mask: {int(is_land.sum())} of {is_land.size} cells flagged land")
+
     # 2) Pull each hourly step. gfswave wcoast is published at 1-hour
     #    spacing through f120, so we just iterate. Failures are logged
     #    and the affected (day, hour) slot stays empty — bucket
@@ -360,6 +716,15 @@ def main() -> None:
             h_grid = fill_nearest(h_grid)
             p_grid = fill_nearest(p_grid)
             d_grid = fill_nearest(d_grid)
+            # WW3 masks enclosed/shallow water (Sea of Cortez, Salish Sea).
+            # Fill those cells with SMB wind-chop computed from the HRRR/GFS
+            # wind PNG fetched by fetch_wind_5day.py earlier in the same
+            # workflow. Better than "no data" for users actually planning a
+            # day in the Cortez — what's there IS local wind chop, not swell.
+            h_grid, p_grid, d_grid = fill_with_wind_chop(
+                h_grid, p_grid, d_grid, day_offset, valid_pt.hour,
+                is_land=is_land,
+            )
             hourly[(day_offset, valid_pt.hour)] = {
                 "h": h_grid, "p": p_grid, "d": d_grid,
                 "valid_at": valid_at_utc,
@@ -453,6 +818,25 @@ def main() -> None:
                 if (mean_hs_m is not None and mean_tp is not None and mean_dp is not None)
                 else f"  d{day_offset} {bucket_name:>9}: no data"
             )
+
+    # 4.5) Post-process: re-apply the v6 Gaussian smooth to every
+    #      existing bucket PNG on disk. Catches the case where the
+    #      current refresh cycle doesn't cover an early-PT bucket
+    #      (e.g. 00z cycle has no hours before 17:00 PT yesterday,
+    #      so today's morning bucket stays at whatever the previous
+    #      refresh wrote). Without this, those stale buckets render
+    #      with the old un-smoothed data and the user still sees a
+    #      "hard line" even though the current code would smooth it.
+    print("post-process: smoothing existing bucket PNGs to v6 spec")
+    for day_offset in range(5):
+        for bucket_name, _h0, _h1 in BUCKETS:
+            png_path = BUCKETS_DIR / f"d{day_offset}_{bucket_name}_wave.png"
+            if not png_path.exists():
+                continue
+            try:
+                _resmooth_bucket_png(png_path)
+            except Exception as e:
+                print(f"  could not re-smooth {png_path.name}: {e!s}")
 
     # 5) Per-day shells with confidence + Pacific date label.
     days = []

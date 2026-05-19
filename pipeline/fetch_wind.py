@@ -315,16 +315,24 @@ def regrid_to_bbox(lat2d, lng2d, u, v, source: str):
 # crispness improves once bathy lands.
 
 def load_land_mask(out_dir: Path, grid_w: int, grid_h: int,
-                   land_threshold: float = 0.7) -> np.ndarray | None:
+                   land_threshold: float = 0.5) -> np.ndarray | None:
     """Read bathy.png and downsample to a wind-grid-resolution land mask.
 
     Returns a boolean numpy array where True = land, False = ocean.
     None if bathy.png is missing.
 
     `land_threshold` controls how aggressively coastal cells get flagged:
-      0.5 = a cell is "land" if more than half its area is land
-      0.7 = a cell is "land" only if >70% of its area is land (default)
-      0.9 = a cell is "land" only if >90% of its area is land (most lenient)
+      0.3 = a cell is "land" if >30% of its area is land (most aggressive)
+      0.5 = a cell is "land" if more than half its area is land (default)
+      0.7 = a cell is "land" only if >70% of its area is land (most lenient
+            — previous default; produced visible halos near Channel Islands
+            because cells that were ~60% land kept wind data but had
+            particles dying quickly inside them, so the rendering looked
+            patchy. 0.5 is a better balance: still keeps wind data over
+            cells that are majority ocean, which covers the actual
+            nearshore.)
+      0.9 = essentially no mask at the wind-grid level — defers all land
+            handling to the frontend's pixel-resolution geojson mask.
 
     2026-05-14 — first attempt at this used nearest-neighbor sampling
     (a single bathy pixel near each wind cell's center decided land vs

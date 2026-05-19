@@ -1,11 +1,20 @@
 """Fetch 7-day cumulative precipitation over the bbox via OPeNDAP.
 
-Source: NOAA CPC US Unified Daily Precipitation V1.0 (real-time), 0.25° CONUS,
-1-day latency. Hosted on PSL's THREDDS server — OPeNDAP slicing means we only
-download the last 7 days × bbox subset (~10 KB), not the whole annual file.
+Source: NOAA CPC Global Unified Daily Precipitation V1.0. Replaces the
+US-only `cpc_us_precip` product (2026-05-18) which returned ~0 mm for
+any cell in baja / tropical bboxes, silently zeroing the runoff_idx
+driver in viz_predict for those regions. The global version covers
+everywhere at 0.5° (~50 km), updated daily, hosted on the same NOAA
+PSL THREDDS server — no auth needed.
 
-Encoded output: public/data/precip_7d.png — 8-bit grayscale, 0=NaN, 1..255 maps
-to 0..200 mm linear. 200 mm = 7.9 inches, a major-storm 7-day total.
+Earlier (2026-05-18) attempt to use NASA GPM IMERG V07B was reverted
+because GES DISC's bearer-token auth requires an explicit GES DISC
+application approval in the user's Earthdata Login profile (a manual
+UI step we can't automate from CI). Global CPC is coarser but works
+out of the box; we'll revisit IMERG once the EDL config is sorted.
+
+Encoded output: public/data/precip_7d.png — 8-bit grayscale, 0=NaN,
+1..255 maps to 0..200 mm linear. 200 mm = 7.9 inches.
 
 Run:  python pipeline/fetch_precip.py
 """
@@ -21,8 +30,6 @@ import numpy as np
 import xarray as xr
 from PIL import Image
 
-# Bbox via pipeline/regions/ (PR-X-1). CA / PNW / tropical switch on
-# SHOULDIDIVE_REGION; default `ca` preserves today's behavior.
 try:
     from pipeline.regions import active_region
 except ModuleNotFoundError:
@@ -42,9 +49,21 @@ OUT_DIR = active_region().data_output_dir(ROOT)
 
 
 def latest_url() -> str:
-    """Pick the right annual file. RT yearly file, V1.0 versioning."""
+    """NOAA CPC Global Unified Precipitation Analysis V1.0 — current year file.
+
+    Global 0.5° daily. Same THREDDS server pattern we used for the
+    US-only product, just with a different dataset path. No auth.
+    """
     year = datetime.now(timezone.utc).year
-    return f"https://psl.noaa.gov/thredds/dodsC/Datasets/cpc_us_precip/RT/precip.V1.0.{year}.nc"
+    return (
+        f"https://psl.noaa.gov/thredds/dodsC/Datasets/"
+        f"cpc_global_precip/precip.{year}.nc"
+    )
+
+
+def pdt(t):
+    """numpy datetime64 → date."""
+    return date(*[int(x) for x in str(t)[:10].split("-")])
 
 
 def fetch_7day_sum() -> tuple[np.ndarray, np.ndarray, np.ndarray, list[date]]:
@@ -56,48 +75,35 @@ def fetch_7day_sum() -> tuple[np.ndarray, np.ndarray, np.ndarray, list[date]]:
         warnings.simplefilter("ignore")
         ds = xr.open_dataset(url)
 
-    # Spatial subset
     sub = ds.sel(
-        lat=slice(BBOX["lat_min"] - 0.3, BBOX["lat_max"] + 0.3),
-        lon=slice(CPC_LON_MIN - 0.3, CPC_LON_MAX + 0.3),
+        lat=slice(BBOX["lat_min"] - 0.5, BBOX["lat_max"] + 0.5),
+        lon=slice(CPC_LON_MIN - 0.5, CPC_LON_MAX + 0.5),
     )
-    # Temporal subset: last 7 valid days
     sub = sub.isel(time=slice(-7, None))
     days = [pdt(t) for t in sub.time.values]
     print(f"  using days: {days[0]} -> {days[-1]} ({len(days)} days)")
 
-    arr = sub["precip"].values  # shape (T, lat, lon)
-    arr = np.where(np.isfinite(arr), arr, 0.0)  # treat NaN as 0 (no rain)
+    arr = sub["precip"].values  # (T, lat, lon)
+    arr = np.where(np.isfinite(arr), arr, 0.0)
     summed = arr.sum(axis=0)
     lats = sub.lat.values
     lngs = ((sub.lon.values + 180.0) % 360.0) - 180.0
     ds.close()
 
-    # CPC stores lat ascending; we want row 0 = lat_max for PNG.
     if lats[0] < lats[-1]:
         lats = lats[::-1]
         summed = summed[::-1, :]
-    # Sort lng ascending
     order = np.argsort(lngs)
     lngs = lngs[order]
     summed = summed[:, order]
-    return summed, lats, lngs, days
-
-
-def pdt(t):
-    """numpy datetime64 → date."""
-    return date(*[int(x) for x in str(t)[:10].split("-")])
+    return summed.astype(np.float32), lats, lngs, days
 
 
 def regrid_to_bbox(src_arr, src_lats, src_lngs):
-    """Bilinear sample src_arr (lats top→bottom = lat_max→lat_min, lngs ascending)
-    onto the bbox grid."""
     lat_out = np.linspace(BBOX["lat_max"], BBOX["lat_min"], GRID_H)
     lng_out = np.linspace(BBOX["lng_min"], BBOX["lng_max"], GRID_W)
     grid_lng, grid_lat = np.meshgrid(lng_out, lat_out)
 
-    # Build per-axis fractional indices into src.
-    # src_lats is descending (lat_max at row 0), src_lngs ascending.
     src_lat_max = src_lats.max()
     src_lat_min = src_lats.min()
     src_lng_min = src_lngs.min()
@@ -130,7 +136,7 @@ def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     summed, lats, lngs, days = fetch_7day_sum()
     grid = regrid_to_bbox(summed, lats, lngs)
-    print(f"  precip 7-day: {np.nanmin(grid):.1f}–{np.nanmax(grid):.1f} mm, mean {np.nanmean(grid):.1f}")
+    print(f"  precip 7-day: {np.nanmin(grid):.1f}-{np.nanmax(grid):.1f} mm, mean {np.nanmean(grid):.1f}")
     out_path = OUT_DIR / "precip_7d.png"
     encode_png(grid, *PRECIP_RANGE_MM, out_path)
     print(f"  wrote {out_path.name}")
@@ -147,7 +153,7 @@ def main() -> None:
     manifest.setdefault("layers", {})["precip"] = {
         "range_mm": list(PRECIP_RANGE_MM),
         "grid": {"width": GRID_W, "height": GRID_H},
-        "source": "NOAA CPC US Unified Daily Precip (7-day cumulative)",
+        "source": "NOAA CPC Global Unified Daily Precip (7-day cumulative)",
         "generated_at": generated_at,
         "windows": {
             "now": {

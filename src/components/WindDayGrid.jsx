@@ -8,6 +8,7 @@ import {
   bucketKey,
   hourKey,
 } from "../lib/dataSource.js";
+import { findTodayDay } from "../lib/today.js";
 
 // Beaufort-aligned colour ramp — same kt stops as the legend / particles.
 const KT_STOPS = [
@@ -321,6 +322,14 @@ export default function WindDayGrid({ sel, setSel, layout = "stack" }) {
 //   2. First day with any bucket data → its first bucket
 //   3. Last-resort hardcoded {0, morning} (lets the empty state still mount)
 export function defaultWindSelection(summary) {
+  // Prefer "today" (matched against the summary's own tz) so the app
+  // always opens on the user's current day instead of best_window
+  // (which can be any of the next 5 days) or anchor_date (which lags
+  // when the data is fresh-but-not-current).
+  const todayDay = findTodayDay(summary);
+  if (todayDay?.buckets?.length) {
+    return { day: todayDay.day, bucket: todayDay.buckets[0].bucket, hour: null };
+  }
   if (summary?.best_window) {
     return {
       day:    summary.best_window.day,

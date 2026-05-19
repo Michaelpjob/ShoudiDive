@@ -224,6 +224,19 @@ RIVER_MOUTHS = [
     ("tijuana",      32.555, -117.130),  # Tijuana River
     ("carmel",       36.539, -121.929),  # Carmel River
     ("santa-ynez",   34.701, -120.597),  # Santa Ynez River, Lompoc
+    # Baja Mexico arroyos + mainland rivers (2026-05-18). Baja
+    # peninsula is mostly arid; the truly impactful rivers for Cortez
+    # clarity are the mainland-Mexico ones flowing into the eastern
+    # gulf during summer monsoon (Aug-Sep). Río Colorado delta is
+    # impactful for north Cortez whenever upstream releases happen
+    # (rare these days but the geography still concentrates settled
+    # silt at the river mouth).
+    ("colorado",        31.850, -114.740),  # Río Colorado delta, N Cortez
+    ("yaqui",           27.620, -110.550),  # Río Yaqui, Sonora mainland
+    ("mayo",            26.860, -109.650),  # Río Mayo, Sonora mainland
+    ("fuerte",          25.910, -109.040),  # Río Fuerte, Sinaloa mainland
+    ("sinaloa",         25.050, -108.070),  # Río Sinaloa, mainland
+    ("magdalena-baja",  24.830, -112.000),  # Río Santo Domingo / Magdalena, Pac
 ]
 
 
@@ -844,6 +857,100 @@ def main():
     viz_p10_ft = result["viz_p10_ft"].reshape(shape2d)  # turbid end
     viz_p90_ft = result["viz_p90_ft"].reshape(shape2d)  # clear end
     quality   = result["quality"].reshape(shape2d)
+
+    # Northern Sea of Cortez stale-water penalty (Baja only).
+    # North of the Midriff Islands (Tiburón / Ángel de la Guarda, lat
+    # ~28.5°N), the gulf has restricted deep-water exchange. Summer
+    # stagnation + plankton bloom + tidal-mud stirring drops viz
+    # consistently below what the chl-only model predicts.
+    #
+    # v2 (2026-05-18): instead of a flat 16-ft penalty, modulate by
+    # local chl so clean-water days in Bahía Ángeles aren't penalised
+    # the same as a peak bloom near Isla Rasa:
+    #
+    #   penalty_ft = BASE + EXTRA * tanh(chl / 0.6)
+    #
+    #   chl=0.10 → 5 + 22·0.16 =  8.5 ft  (a clean day, modest hit)
+    #   chl=0.30 → 5 + 22·0.46 = 15.2 ft
+    #   chl=0.60 → 5 + 22·0.76 = 21.7 ft
+    #   chl=1.00 → 5 + 22·0.93 = 25.5 ft
+    #   chl=2.00+→ 5 + 22·1.00 = 27.0 ft  (bloom-grade, drops Excellent
+    #                                       to Good/Fair as observed)
+    #
+    # Base term reflects the chronic stagnation that exists even when
+    # the satellite chl returns clean (subsurface mud, low DO, etc.);
+    # the chl-coupled term captures the visible bloom signal. Followups:
+    # scale by month + SST anomaly, replace bbox with proper polygon.
+    if active_region().name == "baja":
+        in_north_cortez = (
+            (lat_grid >= 28.5) & (lat_grid <= 32.0) &
+            (lng_grid >= -115.0) & (lng_grid <= -113.0)
+        )
+        # v3 (2026-05-18): use the ZONE MEDIAN chl as the single regional
+        # signal driving the penalty, instead of per-cell chl. Per-cell
+        # chl-modulation was double-counting the chl input — the standard
+        # secchi_from_chl already responds to local chl, and adding a
+        # per-cell chl penalty on top produced patchy red/green hotspots
+        # that didn't match the actual smoother-than-that stagnation
+        # phenomenon. Stagnation is a REGIONAL effect (limited exchange,
+        # low DO, settled tidal mud) — model it as one factor for the
+        # whole zone, scaled by the regional bloom level, and let
+        # secchi_from_chl handle per-cell variation cleanly.
+        chl_2d = chl_obs_today.reshape(shape2d)
+        chl_for_penalty = np.where(
+            np.isfinite(chl_2d), chl_2d,
+            chl_lastvalid.reshape(shape2d),
+        )
+        zone_chl = chl_for_penalty[in_north_cortez]
+        zone_chl_valid = zone_chl[np.isfinite(zone_chl) & (zone_chl > 0)]
+        if zone_chl_valid.size > 0:
+            median_chl = float(np.median(zone_chl_valid))
+        else:
+            median_chl = 0.3
+        # v4 (2026-05-18): switch from additive to MULTIPLICATIVE penalty.
+        # The additive 19.5 ft penalty was clipping clean-base cells (chl
+        # 0.3-0.5 → base secchi 12-15 ft) all the way to Poor (red), even
+        # though those cells should read Good/Fair. Multiplicative keeps
+        # the gradient: a 26% reduction at typical chl makes a 25-ft cell
+        # become 18 ft (Fair/Good edge) instead of clipped 0 ft. Smooth
+        # field, no zero-pool artifacts.
+        #
+        #   factor = 1 - 0.4 · tanh(median_chl / 0.8)
+        #   chl 0.10 → factor 0.95  (winter clean — barely-there hit)
+        #   chl 0.30 → factor 0.86
+        #   chl 0.65 → factor 0.74  (typical late-spring → 26% off)
+        #   chl 1.50 → factor 0.64
+        #   chl 3.00+→ factor 0.61  (summer-bloom floor)
+        factor = 1.0 - 0.4 * np.tanh(median_chl / 0.8)
+        viz_p50_ft = np.where(in_north_cortez, viz_p50_ft * factor, viz_p50_ft)
+        viz_p10_ft = np.where(in_north_cortez, viz_p10_ft * factor, viz_p10_ft)
+        viz_p90_ft = np.where(in_north_cortez, viz_p90_ft * factor, viz_p90_ft)
+        n_stale = int(np.sum(in_north_cortez & np.isfinite(viz_p50_ft)))
+        print(f"  N Cortez penalty v4 (multiplicative): zone median chl "
+              f"{median_chl:.2f} mg/m³, factor {factor:.2f} applied to {n_stale} cells")
+
+    # Mask land cells so:
+    #   * The PNG transmits 0 (NaN sentinel) for land — frontend
+    #     LandBasemap already draws the cream coastline on top, but
+    #     this guarantees no bogus viz pixels leak through if the
+    #     LandBasemap polygon isn't perfectly tight against the
+    #     viz raster cells.
+    #   * Cursor lookups over a land pixel return no-data instead
+    #     of the spurious viz value the model produced (with depth
+    #     forced to 1 m as a numerical proxy). Solves the "getting
+    #     vis readings on land" complaint.
+    # Use the bathy NaN mask (real bathymetry returns NaN over land).
+    # If bathy.png was missing this run, fall back to dist_to_shore <
+    # 0.5 km AND large depth proxy — coarse but better than nothing.
+    try:
+        is_land_2d = ~np.isfinite(bathy_grid)  # type: ignore[name-defined]
+    except NameError:
+        is_land_2d = np.zeros(shape2d, dtype=bool)
+    viz_p50_ft = np.where(is_land_2d, np.nan, viz_p50_ft)
+    viz_p10_ft = np.where(is_land_2d, np.nan, viz_p10_ft)
+    viz_p90_ft = np.where(is_land_2d, np.nan, viz_p90_ft)
+    if is_land_2d.any():
+        print(f"  masked {int(is_land_2d.sum())} land cells to NaN before encoding")
 
     print(f"  viz_p50_ft range: {np.nanmin(viz_p50_ft):.1f} – {np.nanmax(viz_p50_ft):.1f} ft, "
           f"mean {np.nanmean(viz_p50_ft):.1f}")

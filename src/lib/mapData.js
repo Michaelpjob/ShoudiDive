@@ -226,20 +226,44 @@ const REGION_SAVED_SPOTS = {
     { id: "blue-hole",   name: "Blue Hole",       lng:  -87.535, lat: 17.316 },
   ],
   baja: [
-    // Pacific side
+    // Pacific side — surf + dive points (N to S)
+    { id: "k38",          name: "K-38",            lng: -117.05, lat: 32.36 },
+    { id: "salsipuedes",  name: "Salsipuedes",     lng: -116.78, lat: 31.66 },
+    { id: "sacramento",   name: "Sacramento Reef", lng: -116.04, lat: 30.55 },
+    { id: "quatro-casas", name: "Quatro Casas",    lng: -116.05, lat: 30.75 },
+    { id: "santa-ros",    name: "Santa Rosalillita",lng: -114.27, lat: 28.65 },
+    { id: "san-benito",   name: "Isla San Benito", lng: -115.55, lat: 28.31 },
     { id: "cedros",       name: "Isla Cedros",     lng: -115.20, lat: 28.20 },
     { id: "bahia-tort",   name: "Bahía Tortugas",  lng: -114.88, lat: 27.69 },
-    // Cabo corridor
+    { id: "abreojos",     name: "Punta Abreojos",  lng: -113.60, lat: 26.71 },
+    { id: "scorpion",     name: "Scorpion Bay",    lng: -112.50, lat: 26.25 },
+    { id: "punta-conejo", name: "Punta Conejo",    lng: -111.30, lat: 23.80 },
+    // Cabo corridor — surf (Costa Azul) + dive points
+    { id: "costa-azul",   name: "Costa Azul",      lng: -109.69, lat: 23.05 },
+    { id: "cabo-falso",   name: "Cabo Falso",      lng: -110.00, lat: 22.87 },
     { id: "cabo",         name: "Cabo San Lucas",  lng: -109.92, lat: 22.89 },
     { id: "gordo-banks",  name: "Gordo Banks",     lng: -109.34, lat: 22.95 },
     // Sea of Cortez — south
     { id: "cabo-pulmo",   name: "Cabo Pulmo",      lng: -109.43, lat: 23.43 },
+    { id: "los-islotes",  name: "Los Islotes",     lng: -110.39, lat: 24.59 },
     { id: "espiritu-stm", name: "Espíritu Santo",  lng: -110.37, lat: 24.50 },
     { id: "el-bajo",      name: "El Bajo",         lng: -109.96, lat: 24.59 },
+    { id: "marisla",      name: "Marisla Smt",     lng: -110.40, lat: 24.45 },
     { id: "cerralvo",     name: "Cerralvo",        lng: -109.86, lat: 24.27 },
-    // Sea of Cortez — central + north
+    // Sea of Cortez — central (Loreto NP)
+    { id: "isla-carmen",  name: "Isla Carmen",     lng: -111.18, lat: 26.02 },
+    { id: "isla-danzante",name: "Isla Danzante",   lng: -111.27, lat: 25.78 },
     { id: "loreto",       name: "Loreto",          lng: -111.34, lat: 26.01 },
+    // Mulegé / Santa Rosalía area
+    { id: "isla-tortuga", name: "Isla Tortuga",    lng: -111.88, lat: 27.43 },
+    { id: "isla-san-mar", name: "Isla San Marcos", lng: -112.10, lat: 27.21 },
+    // Midriff Islands
+    { id: "isla-tiburon", name: "Isla Tiburón",    lng: -112.40, lat: 29.00 },
+    { id: "isla-ag",      name: "Ángel de la G.",  lng: -113.30, lat: 29.30 },
+    { id: "isla-rasa",    name: "Isla Rasa",       lng: -112.97, lat: 28.83 },
     { id: "bahia-angel",  name: "Bahía Ángeles",   lng: -113.55, lat: 28.95 },
+    // North Cortez
+    { id: "roca-consag",  name: "Roca Consag",     lng: -114.48, lat: 31.10 },
     { id: "san-felipe",   name: "San Felipe",      lng: -114.83, lat: 31.03 },
   ],
 };
@@ -264,7 +288,44 @@ const REGION_SST_RANGE = {
   ca:       [9,  25], // °C — legacy CA calibration
   pnw:      [5,  20], // °C — Olympic + Salish + OR outer coast
   tropical: [20, 32], // °C — Caribbean / Gulf / Florida year-round
-  baja:     [14, 32], // °C — Pacific upwelling north + Cortez summer south
+  // Baja: PNG ENCODER is [14, 32] (matches baja.py layer_range_overrides;
+  // covers Pacific upwelling floor + Cortez summer max). DISPLAY range
+  // history:
+  //   [14, 32] — original; produced barely-visible mid-cyan because the
+  //              ramp center was at 23°C and most spring water sits
+  //              17-22°C → t≈0.16-0.5, no saturation, low contrast.
+  //   [20, 24] — overcorrected; only a 4°C window meant every cell
+  //              <20 saturated deep navy ("too blue") and every cell
+  //              >24 saturated red ("too red"). User QA flagged it.
+  //   [14, 30] — current; same 16°C span as CA's [9, 25] but shifted
+  //              into the subtropical range Baja water actually
+  //              occupies. Cold upwelling at Cedros (15°C) maps to
+  //              deep blue ~t=0.06; Pacific Baja typical 18-21°C
+  //              maps to mid-blue/cyan ~t=0.25-0.44; Cabo summer
+  //              26-28°C maps to orange ~t=0.75-0.88; only the
+  //              extreme north-Cortez August surface (>30°C) hits
+  //              saturated red. The result: real warm water looks
+  //              warm, real cold water looks cold, none of it
+  //              looks "extreme" unless it actually is.
+  //   [20, 24] — a 4°C window centered on May's mean SST
+  // (21.75°C from history summary). Pixel histogram on the live bundle
+  // confirmed that with looser ranges (>50% of opaque cells render
+  // deep navy / dark blue) the overlay was invisible against the
+  // basemap blue at the default 62% opacity.
+  //
+  //   <20 °C  → saturates deep navy (Pacific upwelling, NorCal-current
+  //             tongue at Cedros / Bahía Tortugas / Ensenada winter)
+  //   20–22°C → blue → cyan (typical Pacific Baja + N Cortez spring)
+  //   22–23°C → cyan → yellow (transition, mid-Cortez)
+  //   23–24°C → yellow → orange (Cabo / La Paz summer)
+  //   >24 °C  → saturates red (peak Cortez summer, Bahía Ángeles +
+  //             San Felipe August surface)
+  //
+  // Trade-off: we lose nuance for cells outside [20,24]. Dive UX cares
+  // about discriminating swim-comfortable bands (suit choice) more
+  // than absolute extremes. Cursor pill still shows real °C/°F from
+  // the manifest range (decode is independent of display range).
+  baja:     [14, 30],
 };
 export const SST_RANGE =
   REGION_SST_RANGE[activeRegion()] || REGION_SST_RANGE.ca;

@@ -155,6 +155,71 @@ async function run() {
       fullPage: false,
     });
 
+    // Dump the FULL chain of <g> ancestors from the DataOverlay <image>
+    // up to the SVG root, with each ancestor's clip-path/mask attrs.
+    // This tells us definitively whether the mask wrapper is still
+    // applied (despite my conditional fix being in the bundle).
+    const ancestry = await page.evaluate(() => {
+      const imgs = Array.from(document.querySelectorAll("svg image, image[href]"));
+      let target = null;
+      for (const img of imgs) {
+        const href = img.getAttribute("href") || img.getAttribute("xlink:href") || "";
+        if (href.startsWith("data:image/png")) { target = img; break; }
+      }
+      if (!target) return { error: "no data:image/png <image>" };
+      const chain = [];
+      let el = target;
+      while (el && el !== document.body) {
+        chain.push({
+          tag: el.tagName,
+          cls: el.getAttribute("class") || "",
+          clipPath: el.getAttribute("clip-path") || "",
+          mask: el.getAttribute("mask") || "",
+        });
+        el = el.parentElement;
+      }
+      return { chainLength: chain.length, chain };
+    });
+    console.log(`[probe-baja] ancestry of DataOverlay <image>: ${JSON.stringify(ancestry, null, 2)}`);
+
+    // One-time mask geometry inspection: pull the ocean-mask paths
+    // and report their bounding boxes to determine if any land path
+    // exceeds the inner bbox and is over-clipping the data overlay.
+    const maskInfo = await page.evaluate(() => {
+      const mask = document.getElementById("ocean-mask");
+      const clip = document.getElementById("ocean-clip");
+      if (!mask || !clip) return { error: "ocean-mask or ocean-clip not found" };
+      const maskRect = mask.querySelector("rect");
+      const maskPaths = Array.from(mask.querySelectorAll("path"));
+      const clipPaths = Array.from(clip.querySelectorAll("path"));
+      function describePath(p) {
+        try {
+          const bbox = p.getBBox ? p.getBBox() : null;
+          const d = (p.getAttribute("d") || "");
+          return {
+            len: d.length,
+            firstChars: d.slice(0, 80),
+            bbox: bbox ? { x: bbox.x.toFixed(1), y: bbox.y.toFixed(1), w: bbox.width.toFixed(1), h: bbox.height.toFixed(1) } : null,
+            fill: p.getAttribute("fill"),
+            fillRule: p.getAttribute("fill-rule") || p.getAttribute("clip-rule"),
+          };
+        } catch (e) { return { error: e.message }; }
+      }
+      return {
+        maskRect: maskRect ? {
+          x: maskRect.getAttribute("x"),
+          y: maskRect.getAttribute("y"),
+          w: maskRect.getAttribute("width"),
+          h: maskRect.getAttribute("height"),
+          fill: maskRect.getAttribute("fill"),
+        } : null,
+        maskPathCount: maskPaths.length,
+        maskPaths: maskPaths.slice(0, 5).map(describePath),
+        clipPaths: clipPaths.map(describePath),
+      };
+    });
+    console.log(`[probe-baja] mask geometry: ${JSON.stringify(maskInfo, null, 2)}`);
+
     for (const label of LAYERS) {
       console.log(`[probe-baja] layer=${label}`);
       const switched = await selectLayer(page, label);
@@ -179,6 +244,92 @@ async function run() {
         path: resolve(ARTIFACTS, `${label.toLowerCase()}_full.png`),
         fullPage: false,
       });
+      // Targeted isolation: take screenshots with each suspect
+      // disabled separately.
+      // 1) Hide ONLY LandBasemap.
+      await page.evaluate(() => {
+        const land = document.querySelector(".basemap.basemap-land");
+        if (land) land.style.display = "none";
+      });
+      await new Promise((r) => setTimeout(r, 500));
+      await page.screenshot({
+        path: resolve(ARTIFACTS, `${label.toLowerCase()}_no-land.png`),
+        fullPage: false,
+      });
+      // Restore land
+      await page.evaluate(() => {
+        const land = document.querySelector(".basemap.basemap-land");
+        if (land) land.style.display = "";
+      });
+      // 2) Inspect what LandBasemap paths look like
+      const landInfo = await page.evaluate(() => {
+        const land = document.querySelector(".basemap.basemap-land");
+        if (!land) return null;
+        const paths = Array.from(land.querySelectorAll("path"));
+        return {
+          pathCount: paths.length,
+          firstPathLen: paths[0]?.getAttribute("d")?.length || 0,
+          firstPathBBox: (() => {
+            try {
+              const b = paths[0]?.getBBox();
+              return b ? { x: b.x.toFixed(1), y: b.y.toFixed(1), w: b.width.toFixed(1), h: b.height.toFixed(1) } : null;
+            } catch { return null; }
+          })(),
+          firstPathFill: paths[0]?.getAttribute("fill"),
+        };
+      });
+      console.log(`  LandBasemap info: ${JSON.stringify(landInfo)}`);
+      // Now strip the ocean-clip / ocean-mask from any ancestor <g>
+      // wrapping the DataOverlay, AND hide the LandBasemap, AND bump
+      // opacity to 1. Take another screenshot — if data is suddenly
+      // visible, we've isolated the cause.
+      const stripResult = await page.evaluate(() => {
+        const imgs = Array.from(document.querySelectorAll("svg image, image[href]"));
+        let modified = [];
+        for (const img of imgs) {
+          const href = img.getAttribute("href") || img.getAttribute("xlink:href") || "";
+          if (!href.startsWith("data:image/png")) continue;
+          // Walk ancestors, strip clip-path/mask attrs
+          let el = img.parentElement;
+          while (el && el.tagName !== "BODY") {
+            if (el.getAttribute && (el.getAttribute("clip-path") || el.getAttribute("mask"))) {
+              modified.push({
+                tag: el.tagName,
+                clipPath: el.getAttribute("clip-path"),
+                mask: el.getAttribute("mask"),
+              });
+              el.removeAttribute("clip-path");
+              el.removeAttribute("mask");
+            }
+            // Also bump opacity to 1 on the data-overlay group
+            if (el.getAttribute && el.getAttribute("class") === "data-overlay") {
+              el.setAttribute("opacity", "1");
+              modified.push({ tag: el.tagName + ".data-overlay", opacityBumpedTo: 1 });
+            }
+            el = el.parentElement;
+          }
+          break; // first img only
+        }
+        // Hide LandBasemap so we can see all data over land (peninsula)
+        const land = document.querySelector(".basemap.basemap-land");
+        if (land) {
+          land.style.display = "none";
+          modified.push({ tag: "basemap-land", action: "display:none" });
+        }
+        return modified;
+      });
+      console.log(`  strip result: ${JSON.stringify(stripResult)}`);
+      // Force a small re-render delay
+      await new Promise((r) => setTimeout(r, 800));
+      await page.screenshot({
+        path: resolve(ARTIFACTS, `${label.toLowerCase()}_NOMASK.png`),
+        fullPage: false,
+      });
+      // Re-instate the clip-path/mask for the next layer iteration by
+      // forcing a React re-render via clicking around. Simpler: just
+      // reload the page before the next layer.
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await new Promise((r) => setTimeout(r, 6000));
     }
 
     const allOk = layerResults.every((r) => r.ok);

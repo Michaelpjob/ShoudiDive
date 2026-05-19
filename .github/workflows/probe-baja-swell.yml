@@ -1,0 +1,56 @@
+name: Probe Baja swell smoothness
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Origin to probe (e.g. https://dev.shouldidive.pages.dev)"
+        required: false
+        default: "https://dev.shouldidive.pages.dev"
+      day:
+        description: "Day offset (0..4)"
+        required: false
+        default: "0"
+      bucket:
+        description: "Bucket (predawn|morning|midday|afternoon|evening)"
+        required: false
+        default: "morning"
+  workflow_run:
+    workflows: ["Refresh Baja wind data"]
+    types: [completed]
+  push:
+    branches: [dev]
+    paths:
+      - "pipeline/fetch_swell_5day.py"
+      - "tests/swell-smoothness-monitor.mjs"
+      - ".github/workflows/probe-baja-swell.yml"
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install puppeteer
+        run: npm install --no-save puppeteer@^24.0.0
+
+      - name: Probe live swell PNG smoothness
+        env:
+          PROBE_BASE_URL: ${{ github.event.inputs.base_url || 'https://dev.shouldidive.pages.dev' }}
+          PROBE_DAY: ${{ github.event.inputs.day || '0' }}
+          PROBE_BUCKET: ${{ github.event.inputs.bucket || 'morning' }}
+        run: node tests/swell-smoothness-monitor.mjs
+
+      - name: Upload artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: swell-smoothness
+          path: test-output/swell-smoothness/
+          if-no-files-found: warn
