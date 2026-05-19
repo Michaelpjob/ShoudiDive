@@ -252,15 +252,27 @@ SECCHI_COEFFS: Dict[str, SecchiCoefficients] = {
     #     water year-round; Cabo Pulmo + Espíritu Santo + Los Islotes
     #     are famous for 80–100 ft viz on calm days. a≈9/13/14 puts
     #     chl=0.1 in the 85–95 ft band, matching reality.
+    # v2 (2026-05-18): bumped south_baja + mid_baja `a` after user QA.
+    # The previous values capped at ~85 ft for the south-Cortez summer
+    # clarity peak (Yavaros / Espíritu Santo / Cabo Pulmo in August
+    # routinely hit 100+ ft on calm low-chl days). Old → new:
+    #   south_baja_islands   13.0 → 16.0  (chl 0.10 → 105 ft)
+    #   south_baja_offshore  14.0 → 17.0  (chl 0.10 → 112 ft)
+    #   south_baja_nearshore  9.0 → 11.0  (small bump, nearshore still
+    #                                       feels rivermouth + reef edge)
+    #   mid_baja_islands     10.0 → 12.0
+    #   mid_baja_offshore    11.0 → 13.0
+    # North Baja Pacific stays modest — that water is upwelling-cold
+    # and rarely hits 100+ ft regardless of chl.
     "north_baja_nearshore": SecchiCoefficients(a=5.0,  b=0.28),
     "north_baja_islands":   SecchiCoefficients(a=8.0,  b=0.30),
     "north_baja_offshore":  SecchiCoefficients(a=9.0,  b=0.32),
     "mid_baja_nearshore":   SecchiCoefficients(a=7.0,  b=0.28),
-    "mid_baja_islands":     SecchiCoefficients(a=10.0, b=0.30),
-    "mid_baja_offshore":    SecchiCoefficients(a=11.0, b=0.32),
-    "south_baja_nearshore": SecchiCoefficients(a=9.0,  b=0.28),
-    "south_baja_islands":   SecchiCoefficients(a=13.0, b=0.30),
-    "south_baja_offshore":  SecchiCoefficients(a=14.0, b=0.32),
+    "mid_baja_islands":     SecchiCoefficients(a=12.0, b=0.30),
+    "mid_baja_offshore":    SecchiCoefficients(a=13.0, b=0.32),
+    "south_baja_nearshore": SecchiCoefficients(a=11.0, b=0.28),
+    "south_baja_islands":   SecchiCoefficients(a=16.0, b=0.30),
+    "south_baja_offshore":  SecchiCoefficients(a=17.0, b=0.32),
 }
 
 
