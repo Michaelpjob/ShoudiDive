@@ -393,12 +393,22 @@ def fill_with_wind_chop(h_grid, p_grid, d_grid, day_offset: int, hour_pt: int):
     chop_dir = (np.degrees(np.arctan2(-u, -v)) + 360.0) % 360.0
 
     # Swell decay weight: exp(-d / cells_decay) where d is grid-cell
-    # distance from the nearest WW3-valid cell. cells_decay=6 → at 6
-    # cells out (~55 km on our 0.082°/cell grid) the swell contribution
-    # drops to e^-1 ≈ 0.37; at 18 cells (~165 km) it's e^-3 ≈ 0.05.
+    # distance from the nearest WW3-valid cell.
+    #
+    # v2 (2026-05-18): bumped decay_cells 6 → 20 after the user reported
+    # a visible diagonal line in the swell layer where WW3-valid cells
+    # met the wind-sea fill area (still went from ~10 ft swell to ~2 ft
+    # chop over only 6 cells). At 20 cells decay (~180 km on Baja's
+    # 0.082°/cell grid), swell drops to e^-1 ≈ 0.37 at 20 cells out
+    # and e^-3 ≈ 0.05 at 60 cells — much smoother and physically more
+    # realistic: open-ocean swell DOES propagate hundreds of km before
+    # decay matters, the only place it shouldn't bleed is across land.
+    # The peninsula already blocks land-side bleed because WW3 returns
+    # NaN over the peninsula and the distance_transform_edt counts
+    # land cells as obstacles too (we never seed valid swell over land).
     swell_valid = np.isfinite(h_grid)
     distances = distance_transform_edt(~swell_valid)
-    decay_cells = 6.0
+    decay_cells = 20.0
     swell_weight = np.exp(-distances / decay_cells).astype(np.float32)
     # Inside valid cells the weight is exp(0) = 1, exactly preserving
     # WW3's value when combined as a pure swell with no wind-sea.
