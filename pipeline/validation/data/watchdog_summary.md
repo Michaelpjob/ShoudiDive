@@ -1,4 +1,4 @@
-# Validation watchdog — 2026-05-19T13:09Z
+# Validation watchdog — 2026-05-19T13:25Z
 
 **4 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
@@ -32,16 +32,16 @@ Failed scrapers: rcca-mpa-baseline. Silent scraper failures can starve validatio
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_nearshore` | 4 | 11.47 | +3.19 | 100% | -0.81 |
-| `central_nearshore` | 1 | 3.37 | +3.37 | 100% | — |
+| `bight_nearshore` | 4 | 11.29 | +2.60 | 100% | -0.81 |
+| `central_nearshore` | 1 | 0.41 | -0.41 | 100% | — |
 
 ## Per-source bias (informational)
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `cencoos` | 1 | +3.37 ft |
-| `dive-shop-diveviz` | 1 | -13.63 ft |
-| `dive-shop-justgetwet` | 3 | +8.79 ft |
+| `cencoos` | 1 | -0.41 ft |
+| `dive-shop-diveviz` | 1 | -14.17 ft |
+| `dive-shop-justgetwet` | 3 | +8.19 ft |
 
 ## How to act on this issue
 
