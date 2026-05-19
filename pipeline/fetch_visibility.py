@@ -906,23 +906,28 @@ def main():
         if zone_chl_valid.size > 0:
             median_chl = float(np.median(zone_chl_valid))
         else:
-            median_chl = 0.3  # mid-range fallback when satellite missed
-        # Penalty: 10 ft chronic floor (mud + low-DO + tidal) plus a
-        # bloom-driven add-on capped at 12 ft. So clean-bloom days hit
-        # ~12 ft, peak summer bloom days hit ~22 ft. Less aggressive
-        # than v2 — secchi_from_chl already drops the base viz for
-        # high-chl cells, and adding 27 ft on top was clipping huge
-        # swaths to 0 ft (the red patches in the user's screenshot).
-        BASE_FT = 10.0
-        BLOOM_FT = 12.0
-        uniform_penalty = BASE_FT + BLOOM_FT * np.tanh(median_chl / 0.6)
-        penalty_per_cell = np.where(in_north_cortez, uniform_penalty, 0.0)
-        viz_p50_ft = np.maximum(viz_p50_ft - penalty_per_cell, 0)
-        viz_p10_ft = np.maximum(viz_p10_ft - penalty_per_cell, 0)
-        viz_p90_ft = np.maximum(viz_p90_ft - penalty_per_cell, 0)
+            median_chl = 0.3
+        # v4 (2026-05-18): switch from additive to MULTIPLICATIVE penalty.
+        # The additive 19.5 ft penalty was clipping clean-base cells (chl
+        # 0.3-0.5 → base secchi 12-15 ft) all the way to Poor (red), even
+        # though those cells should read Good/Fair. Multiplicative keeps
+        # the gradient: a 26% reduction at typical chl makes a 25-ft cell
+        # become 18 ft (Fair/Good edge) instead of clipped 0 ft. Smooth
+        # field, no zero-pool artifacts.
+        #
+        #   factor = 1 - 0.4 · tanh(median_chl / 0.8)
+        #   chl 0.10 → factor 0.95  (winter clean — barely-there hit)
+        #   chl 0.30 → factor 0.86
+        #   chl 0.65 → factor 0.74  (typical late-spring → 26% off)
+        #   chl 1.50 → factor 0.64
+        #   chl 3.00+→ factor 0.61  (summer-bloom floor)
+        factor = 1.0 - 0.4 * np.tanh(median_chl / 0.8)
+        viz_p50_ft = np.where(in_north_cortez, viz_p50_ft * factor, viz_p50_ft)
+        viz_p10_ft = np.where(in_north_cortez, viz_p10_ft * factor, viz_p10_ft)
+        viz_p90_ft = np.where(in_north_cortez, viz_p90_ft * factor, viz_p90_ft)
         n_stale = int(np.sum(in_north_cortez & np.isfinite(viz_p50_ft)))
-        print(f"  N Cortez penalty v3: zone median chl {median_chl:.2f} mg/m³, "
-              f"uniform penalty {uniform_penalty:.1f}ft applied to {n_stale} cells")
+        print(f"  N Cortez penalty v4 (multiplicative): zone median chl "
+              f"{median_chl:.2f} mg/m³, factor {factor:.2f} applied to {n_stale} cells")
 
     print(f"  viz_p50_ft range: {np.nanmin(viz_p50_ft):.1f} – {np.nanmax(viz_p50_ft):.1f} ft, "
           f"mean {np.nanmean(viz_p50_ft):.1f}")
