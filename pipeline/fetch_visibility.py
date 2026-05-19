@@ -886,27 +886,43 @@ def main():
             (lat_grid >= 28.5) & (lat_grid <= 32.0) &
             (lng_grid >= -115.0) & (lng_grid <= -113.0)
         )
+        # v3 (2026-05-18): use the ZONE MEDIAN chl as the single regional
+        # signal driving the penalty, instead of per-cell chl. Per-cell
+        # chl-modulation was double-counting the chl input — the standard
+        # secchi_from_chl already responds to local chl, and adding a
+        # per-cell chl penalty on top produced patchy red/green hotspots
+        # that didn't match the actual smoother-than-that stagnation
+        # phenomenon. Stagnation is a REGIONAL effect (limited exchange,
+        # low DO, settled tidal mud) — model it as one factor for the
+        # whole zone, scaled by the regional bloom level, and let
+        # secchi_from_chl handle per-cell variation cleanly.
         chl_2d = chl_obs_today.reshape(shape2d)
-        # Use lastvalid where today is NaN so cloudy-day cells still
-        # get the right penalty.
         chl_for_penalty = np.where(
             np.isfinite(chl_2d), chl_2d,
             chl_lastvalid.reshape(shape2d),
         )
-        chl_for_penalty = np.where(
-            np.isfinite(chl_for_penalty), chl_for_penalty, 0.3,
-        )  # mid value when both missing
-        BASE_FT = 5.0
-        EXTRA_FT = 22.0
-        penalty_per_cell = BASE_FT + EXTRA_FT * np.tanh(chl_for_penalty / 0.6)
-        penalty_per_cell = np.where(in_north_cortez, penalty_per_cell, 0.0)
+        zone_chl = chl_for_penalty[in_north_cortez]
+        zone_chl_valid = zone_chl[np.isfinite(zone_chl) & (zone_chl > 0)]
+        if zone_chl_valid.size > 0:
+            median_chl = float(np.median(zone_chl_valid))
+        else:
+            median_chl = 0.3  # mid-range fallback when satellite missed
+        # Penalty: 10 ft chronic floor (mud + low-DO + tidal) plus a
+        # bloom-driven add-on capped at 12 ft. So clean-bloom days hit
+        # ~12 ft, peak summer bloom days hit ~22 ft. Less aggressive
+        # than v2 — secchi_from_chl already drops the base viz for
+        # high-chl cells, and adding 27 ft on top was clipping huge
+        # swaths to 0 ft (the red patches in the user's screenshot).
+        BASE_FT = 10.0
+        BLOOM_FT = 12.0
+        uniform_penalty = BASE_FT + BLOOM_FT * np.tanh(median_chl / 0.6)
+        penalty_per_cell = np.where(in_north_cortez, uniform_penalty, 0.0)
         viz_p50_ft = np.maximum(viz_p50_ft - penalty_per_cell, 0)
         viz_p10_ft = np.maximum(viz_p10_ft - penalty_per_cell, 0)
         viz_p90_ft = np.maximum(viz_p90_ft - penalty_per_cell, 0)
         n_stale = int(np.sum(in_north_cortez & np.isfinite(viz_p50_ft)))
-        mean_pen = float(np.mean(penalty_per_cell[in_north_cortez]))
-        print(f"  applied N Cortez chl-modulated penalty: {n_stale} cells, "
-              f"mean {mean_pen:.1f}ft")
+        print(f"  N Cortez penalty v3: zone median chl {median_chl:.2f} mg/m³, "
+              f"uniform penalty {uniform_penalty:.1f}ft applied to {n_stale} cells")
 
     print(f"  viz_p50_ft range: {np.nanmin(viz_p50_ft):.1f} – {np.nanmax(viz_p50_ft):.1f} ft, "
           f"mean {np.nanmean(viz_p50_ft):.1f}")
