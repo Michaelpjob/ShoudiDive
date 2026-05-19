@@ -1377,10 +1377,11 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
             <button
               className={layer === "current" ? "active" : ""}
               onClick={() => setLayer("current")}
-              title="Surface current speed and direction from HFR observations plus tide/wind inference"
+              title="Surface current speed and direction from HFR observations plus tide/wind inference (BETA — model blends sparse HF-radar coverage with bulk wind/tide inference; verify against local knowledge)."
             >
               <span className="lt-label">Current</span>
               <span className="lt-sub">kt</span>
+              <span className="lt-beta">Beta</span>
             </button>
             <button
               className={layer === "viz" ? "active" : ""}
