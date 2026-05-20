@@ -10,6 +10,11 @@
 // to VALID below, (c) add it to the RegionSwitcher REGIONS list.
 
 const VALID = ["ca", "pnw", "tropical", "baja"];
+// Regions visible on the production custom domain (shouldidive.com).
+// PNW + tropical stay dev-only until their pipelines reach feature parity
+// with CA + Baja. Adding a region to PROD_REGIONS makes ?region=<id> work
+// on prod AND shows the chip in RegionSwitcher.
+const PROD_REGIONS = ["ca", "baja"];
 const DEFAULT_REGION = "ca";
 
 let _cached = null;
@@ -28,11 +33,12 @@ let _cached = null;
 function _regionFromHostname() {
   try {
     const h = (window.location.hostname || "").toLowerCase();
-    // Production hostname is CA-ONLY. PNW / tropical / baja are dev-
-    // only betas; surfacing them on shouldidive.com would imply a
-    // level of polish + data validation they don't yet have. Pin to
-    // CA on prod so a URL hack like `?region=pnw` is a no-op there.
-    if (h === "shouldidive.com" || h === "www.shouldidive.com") return "ca";
+    // Production hostname (shouldidive.com): no longer hard-pinned to
+    // "ca". Returns null so activeRegion() falls through to URL /
+    // localStorage resolution, gated by PROD_REGIONS — `?region=baja`
+    // now works on prod, `?region=pnw` still falls back to CA because
+    // PNW isn't in PROD_REGIONS. (2026-05-20: Baja promoted to prod.)
+    if (h === "shouldidive.com" || h === "www.shouldidive.com") return null;
     if (h.startsWith("pnw-beta.")) return "pnw";
     if (h.startsWith("tropical-beta.")) return "tropical";
     if (h.startsWith("baja-beta.")) return "baja";
@@ -50,11 +56,35 @@ function _regionFromHostname() {
 }
 
 /**
+ * Which regions are valid given the current hostname. Used by
+ * activeRegion() to gate URL/localStorage resolution AND by
+ * RegionSwitcher to decide which chips to show.
+ *
+ * Prod: PROD_REGIONS (today: ca + baja).
+ * Anywhere else (dev / *-beta / localhost / preview branch): all VALID.
+ */
+function _validRegionsForHost() {
+  try {
+    const h = (window.location.hostname || "").toLowerCase();
+    if (h === "shouldidive.com" || h === "www.shouldidive.com") {
+      return PROD_REGIONS;
+    }
+  } catch {
+    // SSR / no-window — assume dev tolerance.
+  }
+  return VALID;
+}
+
+export function validRegionsForHost() {
+  return _validRegionsForHost();
+}
+
+/**
  * True when the current hostname is the production custom domain.
- * Used by RegionSwitcher to hide beta chips entirely on shouldidive.com
- * (the hostname pin via `_regionFromHostname` already forces region=ca
- * there, but we also want the chip list to read "California only" so
- * visitors don't see beta options they can't switch to).
+ * Today this is only used by RegionSwitcher to decide which chips to
+ * render — `validRegionsForHost()` is the cleaner answer for that
+ * (filters the chip list to PROD_REGIONS on prod). Kept as a public
+ * export because some analytics code still reads it as "am I on prod".
  */
 function _isProductionHost() {
   try {
@@ -91,16 +121,21 @@ export function activeRegion() {
     return fromHost;
   }
 
+  // Validate against host-permitted regions (PROD_REGIONS on
+  // shouldidive.com, full VALID list everywhere else). A `?region=pnw`
+  // URL on prod falls through to the default instead of resolving to
+  // PNW data that prod doesn't carry.
+  const valid = _validRegionsForHost();
   let resolved = DEFAULT_REGION;
   try {
     const params = new URLSearchParams(window.location.search);
     const fromUrl = params.get("region");
-    if (fromUrl && VALID.includes(fromUrl)) {
+    if (fromUrl && valid.includes(fromUrl)) {
       resolved = fromUrl;
       try { window.localStorage.setItem("region", fromUrl); } catch {}
     } else {
       const stored = window.localStorage.getItem("region");
-      if (stored && VALID.includes(stored)) resolved = stored;
+      if (stored && valid.includes(stored)) resolved = stored;
     }
   } catch {
     // SSR / private-mode fallback — stick with the default.
@@ -126,7 +161,11 @@ export function isRegionLocked() {
  * piecemeal yet.
  */
 export function setActiveRegion(next) {
-  if (!VALID.includes(next)) return;
+  // Validate against host-permitted regions, not just VALID. Prevents
+  // a setActiveRegion("pnw") call on prod (e.g. from a leaked devtool
+  // shortcut) from sticking PNW into localStorage and reloading into
+  // a 404 data tree.
+  if (!_validRegionsForHost().includes(next)) return;
   try { window.localStorage.setItem("region", next); } catch {}
   const url = new URL(window.location.href);
   if (next === DEFAULT_REGION) url.searchParams.delete("region");
