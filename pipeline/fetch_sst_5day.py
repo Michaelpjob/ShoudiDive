@@ -276,7 +276,46 @@ def main() -> int:
 
     # Write per-day PNGs + a summary.json mirroring fetch_wind_5day.
     SST5D_DIR.mkdir(parents=True, exist_ok=True)
+
+    # 2026-05-20: anchor forecast dates to the OBSERVATION date, not
+    # wall-clock today. The forecast model produces lead-0 = sst_now
+    # exactly (decay=1.0), so the f0 PNG's content is the anchor's
+    # observation. Labeling f0 as "today" when MUR's lag-of-the-day
+    # puts the anchor on yesterday or the day before creates a
+    # visible date gap in the timeline (history ends at anchor_date,
+    # forecast f0 jumps to wall-clock today — missing days in between
+    # vanish). Anchor the forecast dates to whatever date fetch.py
+    # actually wrote into sst_1d.png so the timeline stays consecutive.
     today = datetime.now(timezone.utc).date()
+    anchor_date = today  # default if manifest lookup fails
+    try:
+        if MANIFEST_PATH.exists():
+            _m = json.loads(MANIFEST_PATH.read_text())
+            _dates = (
+                ((_m.get("layers") or {}).get("sst") or {})
+                .get("windows", {})
+                .get("1d", {})
+                .get("dates")
+            )
+            if isinstance(_dates, list) and _dates:
+                anchor_date = date.fromisoformat(str(_dates[-1]))
+    except Exception as exc:
+        print(
+            f"[sst5d] manifest sst.windows.1d.dates lookup failed ({exc!s}) "
+            f"— falling back to wall-clock today for forecast labels"
+        )
+
+    # Compute label date for each forecast lead. f0 corresponds to the
+    # anchor's observation itself (decay=1.0 in persistence_decay), so
+    # f0_date = anchor_date + 0 = anchor_date. d0 history (written
+    # earlier by fetch.py) shares this date; the frontend's defaultSst
+    # selection picks the slot whose date matches wall-clock today.
+    print(
+        f"[sst5d] anchor date {anchor_date.isoformat()} "
+        f"(wall-clock today {today.isoformat()}, "
+        f"lag {(today - anchor_date).days} day(s))"
+    )
+
     days = []
     for d in range(HORIZON_DAYS):
         dpath = SST5D_DIR / f"d{d}.png"
@@ -298,9 +337,27 @@ def main() -> int:
             # block emits, so the frontend stays consistent regardless
             # of which forecaster wrote the most recent summary.
             "slot":        f"f{d}",
-            "day":         DAY_LABELS_REL[d],
+            # 2026-05-20: anchor-relative slot offsets, so "Today"
+            # always matches wall-clock today (= f<lag>). DAY_LABELS_REL
+            # was a fixed array indexed by slot — that meant slot 0
+            # was always labeled "Today" even when slot 0's date was
+            # 2 days behind. Compute label-from-today on the fly.
+            "day":         (
+                "Today" if d == (today - anchor_date).days
+                else (
+                    f"+{d - (today - anchor_date).days}"
+                    if d > (today - anchor_date).days
+                    else f"{d - (today - anchor_date).days}"
+                )
+            ),
             "offset":      d,
-            "date":        (today + timedelta(days=d)).isoformat(),
+            # 2026-05-20: anchor-relative dates. f0 = anchor_date so
+            # the forecast track picks up exactly where the history
+            # track left off (d0 history is also anchor_date). When
+            # the anchor is today, f0 = today as before; when it
+            # lags, the timeline still walks anchor_date → +1 → +2
+            # → … without skipping the missing wall-clock days.
+            "date":        (anchor_date + timedelta(days=d)).isoformat(),
             "url":         f"/data/sst5d/d{d}.png",
             "confidence":  CONFIDENCE_BY_DAY[d],
             "mean":        st["mean"],     # frontend uses .mean for the
@@ -329,10 +386,18 @@ def main() -> int:
         "scale":        SST_SCALE,
         "unit":         SST_UNIT_C,
         "grid":         {"width": W, "height": H},
-        # Defaults the frontend uses to pick the initial slider position
-        # before the user moves it. f0 = today.
-        "default_slot": "f0",
-        "latest_slot":  "f0",
+        # 2026-05-20: default_slot now points at the slot whose date
+        # matches wall-clock today, not blindly at f0. With the
+        # anchor-relative date change above, f0 == anchor_date — so
+        # when MUR lags, "today" lives at f1 or f2 instead. The
+        # frontend's defaultSstSelection prefers default_slot over
+        # date-match heuristics, so set it correctly here.
+        "default_slot": f"f{(today - anchor_date).days}"
+                          if 0 <= (today - anchor_date).days < HORIZON_DAYS
+                          else "f0",
+        "latest_slot":  f"f{(today - anchor_date).days}"
+                          if 0 <= (today - anchor_date).days < HORIZON_DAYS
+                          else "f0",
         "beta":         True,  # tells the SstModeToggle this is the beta
                                # forecast tier; matches fetch.py emission
         "days":         days,
