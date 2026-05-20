@@ -67,8 +67,68 @@ def effective_sigma(zone, age_days):
     return sigma_base * np.sqrt(1.0 + age / tau)
 
 
-def cdom_obs_trust(dist_to_river_km):
-    return np.clip(dist_to_river_km / CDOM_CONTAMINATION_DIST_KM, 0.0, 1.0)
+def cdom_obs_trust(dist_to_river_km, runoff_idx=None, river_idx=None):
+    """Per-cell weight on a fresh chl observation when blending with
+    the predicted chl prior.
+
+    Base: geometric distance to nearest river mouth (clip to [0, 1] at
+    CDOM_CONTAMINATION_DIST_KM = 3 km). The motivating concern is that
+    dissolved organic matter from river outflow can be misread as chl
+    by ocean-color algorithms, so near-mouth cells get downweighted.
+
+    2026-05-20 refinement — same bug-class as the Kd_490 fix in PR #67.
+    The geometric filter is too aggressive when rivers are not actually
+    flowing. In dry CA spring/summer with low river discharge AND no
+    recent precipitation, the chl signal near the coast is much more
+    likely to be real upwelling bloom than CDOM noise — same Pt
+    Conception / Western Channel Islands failure mode the Kd_490 fix
+    addressed, but on the chl path instead of the Kd path.
+
+    We compute an "active CDOM" proxy from the runoff_idx and river_idx
+    drivers (both pre-decayed by distance from source) and relax the
+    geometric filter by up to 80% when both are low. The 80% cap leaves
+    a 20% buffer for unmodelled CDOM sources (storm runoff that didn't
+    register, urban outfalls, harbor plumes).
+
+    Worked examples (CDOM_CONTAMINATION_DIST_KM = 3 km):
+
+      Pt Conception (1 km from Cojo Creek), dry day, no rain:
+        base_trust  = 1/3 = 0.33
+        cdom_active = max(runoff_idx≈0, river_idx≈0) = 0
+        relief      = 0.8 × (1 − 0) = 0.8
+        effective   = 0.33 + 0.67 × 0.8 = 0.87   (87% obs, 13% prior)
+
+      Pt Conception, Pineapple Express in progress:
+        cdom_active = ~1.0
+        relief      = 0
+        effective   = base_trust = 0.33  (full suppression preserved)
+
+      Channel-Islands offshore cell, 30 km from any river:
+        base_trust  = 1.0
+        effective   = 1.0  (no change either way)
+
+    Backward compatibility: calling cdom_obs_trust with only
+    dist_to_river_km returns the original geometric trust. Callers
+    that don't pass the new kwargs get the pre-refinement behaviour.
+    """
+    base_trust = np.clip(dist_to_river_km / CDOM_CONTAMINATION_DIST_KM, 0.0, 1.0)
+    if runoff_idx is None and river_idx is None:
+        return base_trust
+    cdom_active = np.zeros_like(base_trust, dtype=np.float64)
+    if runoff_idx is not None:
+        # runoff_idx already in [0, 1] (tanh × distance decay).
+        cdom_active = np.maximum(cdom_active, np.asarray(runoff_idx, dtype=np.float64))
+    if river_idx is not None:
+        # river_idx can go NEGATIVE when discharge is below climatology
+        # (a DRY river — extra confidence there's no CDOM). Clip the
+        # negative side to 0 so dry-river cells don't inflate cdom_active.
+        cdom_active = np.maximum(
+            cdom_active,
+            np.maximum(np.asarray(river_idx, dtype=np.float64), 0.0),
+        )
+    cdom_active = np.clip(cdom_active, 0.0, 1.0)
+    relief = 0.8 * (1.0 - cdom_active)
+    return base_trust + (1.0 - base_trust) * relief
 
 
 def assign_quality(chl_obs_today, chl_lastvalid_age_days, interpolated_mask):
@@ -113,7 +173,16 @@ def predict_chl(*, chl_obs_today, chl_lastvalid, chl_lastvalid_age_days,
     log_chl_pred = np.log(chl_pers) + log_adj
 
     has_today = ~np.isnan(chl_obs_today)
-    cdom_trust = cdom_obs_trust(dist_to_river_km)
+    # 2026-05-20: pass runoff + river indices so the CDOM filter relaxes
+    # when no active runoff/discharge — same bug class as the Kd_490
+    # stale-override (PR #67). Without this, near-coast bloom cells in
+    # dry spring/summer get the chl observation downweighted to 17-67%
+    # because of geometric proximity to a river mouth that's not flowing.
+    cdom_trust = cdom_obs_trust(
+        dist_to_river_km,
+        runoff_idx=drivers.get("precip"),
+        river_idx=drivers.get("river"),
+    )
     obs_log = np.log(np.maximum(chl_obs_today, CHL_MIN_MGPM3))
     log_chl_pred = np.where(
         has_today,
