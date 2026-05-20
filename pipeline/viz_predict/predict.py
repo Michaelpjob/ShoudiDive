@@ -163,6 +163,28 @@ def predict_all(
         )
         w_kd = np.clip(w_kd, 0.0, config.KD_BLEND_WEIGHT_FRESH)
 
+        # 2026-05-20: bloom-overrides-stale-Kd guard.
+        # The Kd_490 product publishes ~11 days behind today. When a
+        # bloom kicks off in the last few days, stale Kd still reflects
+        # pre-bloom (clear) water — secchi_kd = 1.7/Kd_low = large.
+        # The blend then pulls secchi UP toward the stale clear reading,
+        # overriding the fresh chl observation that's actively painting
+        # the bloom. Concrete case: 2026-05-20 Pt Conception / Channel
+        # Islands bloom — chl_1d clearly orange (chl ~2-4 mg/m³) but
+        # viz reading 20 ft because Kd was still seeing 0.05/m clear
+        # water from a week ago.
+        #
+        # Guard: when chl_obs_today is fresh (age=0) AND indicates
+        # bloom-grade values, zero out the Kd weight. The chl observation
+        # is the more recent measurement and should win. Threshold 1.5
+        # mg/m³ is above the spring climatology (~0.3-0.8 mg/m³) but
+        # below the gap-filled artefact range (~5+ mg/m³); catches real
+        # blooms without triggering on day-to-day climo noise.
+        chl_is_bloom_today = (
+            (~np.isnan(chl_obs_today)) & (chl_obs_today > 1.5)
+        )
+        w_kd = np.where(chl_is_bloom_today, 0.0, w_kd)
+
         # Blend each percentile with the same Kd value — this shrinks the
         # uncertainty band when Kd is fresh (an observation is narrower
         # than a prior), which is the correct Bayesian behaviour.
