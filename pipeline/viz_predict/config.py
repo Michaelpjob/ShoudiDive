@@ -165,9 +165,14 @@ DRIVER_COEFFS: Dict[str, DriverCoefficients] = {
     "central_islands":    DriverCoefficients(upwell=0.12, swell=0.10, precip=0.05, river=0.05, sst=-0.05, trend=0.06, seasonal=0.35, exposure=0.30, tide=0.02, substrate=0.05, cloud=-0.06),
     "central_offshore":   DriverCoefficients(upwell=0.10, swell=0.02, precip=0.00, river=0.00, sst=-0.04, trend=0.04, seasonal=0.30, exposure=0.05, tide=0.00, substrate=0.00, cloud=-0.04),
 
-    "transition_nearshore": DriverCoefficients(upwell=0.08, swell=0.25, precip=0.18, river=0.28, sst=-0.04, trend=0.04, seasonal=0.22, exposure=0.13, tide=0.08, substrate=0.12, cloud=-0.06),
-    "transition_islands":   DriverCoefficients(upwell=0.06, swell=0.08, precip=0.04, river=0.04, sst=-0.03, trend=0.03, seasonal=0.16, exposure=0.22, tide=0.02, substrate=0.05, cloud=-0.05),
-    "transition_offshore":  DriverCoefficients(upwell=0.04, swell=0.02, precip=0.00, river=0.00, sst=-0.02, trend=0.02, seasonal=0.12, exposure=0.03, tide=0.00, substrate=0.00, cloud=-0.03),
+    # 2026-05-19: transition_* coefficients bumped halfway toward
+    # central_* (was halfway toward bight). Western SB Channel +
+    # Channel Islands see upwelling plumes wrapping around Pt
+    # Conception, so chl prediction should respond more like central
+    # than like bight. Paired with secchi a drop in SECCHI_COEFFS.
+    "transition_nearshore": DriverCoefficients(upwell=0.13, swell=0.27, precip=0.19, river=0.29, sst=-0.05, trend=0.06, seasonal=0.30, exposure=0.16, tide=0.09, substrate=0.13, cloud=-0.07),
+    "transition_islands":   DriverCoefficients(upwell=0.09, swell=0.09, precip=0.04, river=0.04, sst=-0.04, trend=0.05, seasonal=0.25, exposure=0.26, tide=0.02, substrate=0.05, cloud=-0.05),
+    "transition_offshore":  DriverCoefficients(upwell=0.07, swell=0.02, precip=0.00, river=0.00, sst=-0.03, trend=0.03, seasonal=0.20, exposure=0.04, tide=0.00, substrate=0.00, cloud=-0.03),
 
     "bight_nearshore":  DriverCoefficients(upwell=0.04, swell=0.20, precip=0.16, river=0.25, sst=-0.02, trend=0.03, seasonal=0.15, exposure=0.10, tide=0.10, substrate=0.18, cloud=-0.04),
     "bight_islands":    DriverCoefficients(upwell=0.03, swell=0.06, precip=0.03, river=0.03, sst=-0.02, trend=0.02, seasonal=0.12, exposure=0.20, tide=0.02, substrate=0.05, cloud=-0.03),
@@ -272,9 +277,27 @@ SECCHI_COEFFS: Dict[str, SecchiCoefficients] = {
     "central_nearshore":    SecchiCoefficients(a=3.5, b=0.28),
     "central_islands":      SecchiCoefficients(a=5.0, b=0.30),
     "central_offshore":     SecchiCoefficients(a=5.5, b=0.32),
-    "transition_nearshore": SecchiCoefficients(a=6.0, b=0.28),
-    "transition_islands":   SecchiCoefficients(a=7.5, b=0.30),
-    "transition_offshore":  SecchiCoefficients(a=9.0, b=0.32),
+    # 2026-05-19 (v3.6): drop transition `a` ~33% closer to central.
+    # Empirical: user QA on a clear Pt Conception upwelling event with
+    # chl >2 mg/m³ in the Western SB Channel / Channel Islands area
+    # was reading 21 ft "Good" — reality on an active bloom day there
+    # is 5–15 ft. Root cause: transition zone was calibrated as "in
+    # between central and bight" assuming sheltered geometry, but the
+    # Western Santa Barbara Channel (San Miguel / Santa Rosa / Anacapa
+    # west / west Santa Cruz) is exposed to the upwelling plume that
+    # wraps Pt Conception, so it behaves more like central than like
+    # bight. v3.5 → v3.6:
+    #   transition_nearshore  6.0 → 4.0  (chl 2 → 33 ft instead of 48)
+    #   transition_islands    7.5 → 5.5  (chl 2 → 45 ft instead of 62)
+    #   transition_offshore   9.0 → 6.5  (chl 2 → 54 ft instead of 75)
+    # Companion bump in DRIVER_COEFFS for transition_* moves the chl
+    # PREDICTION (when satellite chl is missing/old) closer to central
+    # too, so cells without fresh observation also tighten up.
+    # If west-vs-east SB Channel needs further differentiation,
+    # introduce a sub-zone in LAT_ZONE_BOUNDS or a longitude split.
+    "transition_nearshore": SecchiCoefficients(a=4.0, b=0.28),
+    "transition_islands":   SecchiCoefficients(a=5.5, b=0.30),
+    "transition_offshore":  SecchiCoefficients(a=6.5, b=0.32),
     "bight_nearshore":      SecchiCoefficients(a=6.5, b=0.28),
     # v3.4 (2026-05-05): a=6.5 → 8.5. v3.3 dropped a from 8.0 to 6.5 to
     # fit 4 JustGetWet shore-dive observations (La Jolla / Pt Loma area)
