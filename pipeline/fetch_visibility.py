@@ -513,6 +513,63 @@ def main():
     u_today = bilinear_sample(u_src,   u_src.shape[1],   u_src.shape[0],   lng_grid, lat_grid)
     v_today = bilinear_sample(v_src,   v_src.shape[1],   v_src.shape[0],   lng_grid, lat_grid)
 
+    # 2026-05-20: chl_2d / chl_3d fallback for NaN cells in chl_1d.
+    # chl_blend.py emits three windows from the same upstream sources:
+    #   chl_1d.png — blended freshest single value per cell
+    #   chl_2d.png — 2-frame nanmean smoothing per source, then blend
+    #   chl_3d.png — 3-frame nanmean smoothing per source, then blend
+    # The 2d/3d windows include additional satellite frames, so they
+    # can cover cells where chl_1d's DINEOF gap-fill still failed (no
+    # clear pixel within the freshest-pixel window). Fall back from
+    # 1d → 2d → 3d so the viz model never goes to climo-only on a cell
+    # where ANY recent chl observation exists.
+    #
+    # Fallback gets an approximate age (the 1d sidecar only covers 1d
+    # cells). Treat the 2d window as effectively age=2 days and 3d as
+    # age=3 days — they're temporal smoothings, so the implied "freshest
+    # contributing pixel" is at least the window length. persistence_
+    # with_decay applies its zone tau against this age normally.
+    chl_2d_path = OUT_DIR / "chl_2d.png"
+    chl_3d_path = OUT_DIR / "chl_3d.png"
+    chl_today_2d_grid = None
+    chl_today_3d_grid = None
+    if chl_2d_path.exists():
+        chl_2d_src = decode_log10_png(chl_2d_path, 0.05, 20.0)
+        chl_today_2d_grid = bilinear_sample(
+            chl_2d_src, chl_2d_src.shape[1], chl_2d_src.shape[0],
+            lng_grid, lat_grid,
+        )
+    if chl_3d_path.exists():
+        chl_3d_src = decode_log10_png(chl_3d_path, 0.05, 20.0)
+        chl_today_3d_grid = bilinear_sample(
+            chl_3d_src, chl_3d_src.shape[1], chl_3d_src.shape[0],
+            lng_grid, lat_grid,
+        )
+
+    # Cell-wise fallback cascade. Track which window each cell came
+    # from so we can assign the right age below + log coverage stats.
+    chl_fallback_source = np.zeros(chl_today.shape, dtype=np.int8)  # 1=1d, 2=2d, 3=3d, 0=NaN
+    chl_fallback_source = np.where(np.isfinite(chl_today), 1, chl_fallback_source)
+    if chl_today_2d_grid is not None:
+        use_2d = (~np.isfinite(chl_today)) & np.isfinite(chl_today_2d_grid)
+        chl_today = np.where(use_2d, chl_today_2d_grid, chl_today)
+        chl_fallback_source = np.where(use_2d, 2, chl_fallback_source)
+    if chl_today_3d_grid is not None:
+        use_3d = (~np.isfinite(chl_today)) & np.isfinite(chl_today_3d_grid)
+        chl_today = np.where(use_3d, chl_today_3d_grid, chl_today)
+        chl_fallback_source = np.where(use_3d, 3, chl_fallback_source)
+
+    n_2d_filled = int((chl_fallback_source == 2).sum())
+    n_3d_filled = int((chl_fallback_source == 3).sum())
+    n_still_nan = int((chl_fallback_source == 0).sum())
+    if n_2d_filled or n_3d_filled or n_still_nan:
+        print(
+            f"  chl coverage: 1d primary, "
+            f"{n_2d_filled} cells filled from chl_2d, "
+            f"{n_3d_filled} from chl_3d, "
+            f"{n_still_nan} still NaN (climo fallback)"
+        )
+
     # Flatten to 1D for predict_all — easier than reshape-then-restore.
     shape2d = lat_grid.shape
     n = lat_grid.size
@@ -792,6 +849,19 @@ def main():
         # haven't regenerated the sidecar yet.
         print("  chl_1d_age_days.png missing — assuming chl is fresh (legacy behaviour)")
         age_resampled = np.where(np.isnan(chl_today), 999.0, 0.0)
+
+    # 2026-05-20: apply synthetic age to cells that came from the
+    # chl_2d / chl_3d fallback above. The chl_1d sidecar only has
+    # ages for cells chl_1d covered; fallback cells inherit 999 from
+    # the NaN-protection step earlier, which would make persistence
+    # collapse to climatology even though we now have real (if older)
+    # observation data. Assign window-midpoint ages instead:
+    #   chl_2d fallback → age = 2.0 days
+    #   chl_3d fallback → age = 3.0 days
+    # persistence_with_decay then weighs the obs by exp(-age/tau)
+    # against climo as usual.
+    age_resampled = np.where(chl_fallback_source == 2, 2.0, age_resampled)
+    age_resampled = np.where(chl_fallback_source == 3, 3.0, age_resampled)
 
     # `chl_obs_today` = TODAY's actual observation (NaN if stale).
     # `chl_lastvalid` = most recent valid obs at any age (drives
