@@ -163,23 +163,63 @@ def predict_all(
         )
         w_kd = np.clip(w_kd, 0.0, config.KD_BLEND_WEIGHT_FRESH)
 
-        # 2026-05-20: bloom-overrides-stale-Kd guard.
-        # The Kd_490 product publishes ~11 days behind today. When a
-        # bloom kicks off in the last few days, stale Kd still reflects
-        # pre-bloom (clear) water — secchi_kd = 1.7/Kd_low = large.
-        # The blend then pulls secchi UP toward the stale clear reading,
-        # overriding the fresh chl observation that's actively painting
-        # the bloom. Concrete case: 2026-05-20 Pt Conception / Channel
-        # Islands bloom — chl_1d clearly orange (chl ~2-4 mg/m³) but
-        # viz reading 20 ft because Kd was still seeing 0.05/m clear
-        # water from a week ago.
+        # 2026-05-20 (rev 2): two-condition stale-Kd guard.
         #
-        # Guard: when chl_obs_today is fresh (age=0) AND indicates
-        # bloom-grade values, zero out the Kd weight. The chl observation
-        # is the more recent measurement and should win. Threshold 1.5
-        # mg/m³ is above the spring climatology (~0.3-0.8 mg/m³) but
-        # below the gap-filled artefact range (~5+ mg/m³); catches real
-        # blooms without triggering on day-to-day climo noise.
+        # Rev 1 (PR #67) only fired on chl_obs_today (age=0) bloom. But
+        # the chl observation pipeline gates chl_obs_today to age==0
+        # cells — currently 0 of 6896 cells qualify because the chl_1d
+        # PNG comes out of DINEOF gap-fill with a mean age of ~2.5 days.
+        # That made the rev-1 guard dead code in real conditions, and
+        # Kd_490 at 11-day age was still pulling secchi from ~9 ft up
+        # to 17-36 ft via its 7-26% weight in the blend.
+        #
+        # Two conditions now zero w_kd:
+        #
+        #   (a) chl_obs_today fresh AND bloom-grade (rev-1 case — still
+        #       useful when the gap-fill catches up to today)
+        #
+        #   (b) The chl signal we ACTUALLY USED in chl prediction is
+        #       both (i) more recent than Kd by a meaningful margin and
+        #       (ii) reads bloom-grade. The chl signal age is:
+        #         - 0 if chl_obs_today is fresh, else
+        #         - chl_lastvalid_age_days (the gap-fill blend's age)
+        #       When this is significantly fresher than Kd's age, Kd is
+        #       reflecting older conditions than chl captured and
+        #       shouldn't contribute. Required margin is 3 days — leaves
+        #       Kd contributing when the two are within typical noise
+        #       but suppresses it when Kd is genuinely behind.
+        #
+        # Bloom-grade threshold (1.5 mg/m³) is above spring climatology
+        # (~0.3-0.8 in central + transition) and below DINEOF gap-fill
+        # artefact ceiling (~5+).
+        chl_signal_age = np.where(
+            (~np.isnan(chl_obs_today)),
+            0.0,
+            np.where(
+                np.isnan(chl_lastvalid_age_days),
+                999.0,
+                chl_lastvalid_age_days,
+            ),
+        )
+        # Which chl value to compare against the bloom threshold —
+        # whichever one we're using as the signal at this cell.
+        chl_signal_value = np.where(
+            (~np.isnan(chl_obs_today)),
+            np.where(np.isnan(chl_obs_today), 0.0, chl_obs_today),
+            np.where(np.isnan(chl_lastvalid), 0.0, chl_lastvalid),
+        )
+
+        chl_recent_bloom = (chl_signal_age <= 7.0) & (chl_signal_value > 1.5)
+        kd_older_than_chl = age > (chl_signal_age + 3.0)
+
+        # Either condition suppresses Kd.
+        w_kd = np.where(
+            chl_recent_bloom & kd_older_than_chl,
+            0.0,
+            w_kd,
+        )
+        # Belt-and-suspenders: also keep the rev-1 condition active for
+        # the (eventual) case where chl_obs_today fires fresh on bloom.
         chl_is_bloom_today = (
             (~np.isnan(chl_obs_today)) & (chl_obs_today > 1.5)
         )
