@@ -1,6 +1,6 @@
-# Validation watchdog — 2026-05-20T17:39Z
+# Validation watchdog — 2026-05-20T17:57Z
 
-**5 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
+**4 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
@@ -10,25 +10,19 @@ Multiple scrapers may be silently broken.
 
 **Suggested action:** Open the latest hourly ingest workflow run; look for `FAILED` lines per scraper.
 
-### 🔴 2. 1 critical external feed(s) are red
+### ⚠️ 2. 1 non-critical external feed(s) are red
 
-A required upstream data source failed the latest feed-health probe.
-
-**Suggested action:** Inspect `pipeline/validation/data/feed_health.json`, then retry the affected fetch workflow after confirming the upstream feed recovered.
-
-### ⚠️ 3. 2 non-critical external feed(s) are red
-
-Red feeds: chl_climo_modis_pfeg, ingest_eagle4. Fallbacks may keep the model running, but redundancy is degraded.
+Red feeds: ingest_eagle4. Fallbacks may keep the model running, but redundancy is degraded.
 
 **Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
 
-### 🔴 4. Published-data freshness gate found 2 issue(s)
+### 🔴 3. Published-data freshness gate found 1 issue(s)
 
-Freshness/completeness failures: precip:layer_date_stale, sst:sst_source_query_failed.
+Freshness/completeness failures: precip:layer_date_stale.
 
 **Suggested action:** Open `pipeline/validation/data/freshness_health.json`; fix the failing fetcher or rerun the matching workflow before trusting the deploy.
 
-### 🔴 5. 1 ingest scraper(s) failed in the latest run
+### 🔴 4. 1 ingest scraper(s) failed in the latest run
 
 Failed scrapers: rcca-mpa-baseline. Silent scraper failures can starve validation before the daily volume floor catches up.
 
@@ -38,7 +32,7 @@ Failed scrapers: rcca-mpa-baseline. Silent scraper failures can starve validatio
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_nearshore` | 4 | 11.06 | +2.36 | 100% | -0.80 |
+| `bight_nearshore` | 4 | 11.06 | +2.35 | 100% | -0.80 |
 | `central_nearshore` | 1 | 1.52 | -1.52 | 100% | — |
 
 ## Per-source bias (informational)
@@ -46,8 +40,8 @@ Failed scrapers: rcca-mpa-baseline. Silent scraper failures can starve validatio
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
 | `cencoos` | 1 | -1.52 ft |
-| `dive-shop-diveviz` | 1 | -14.11 ft |
-| `dive-shop-justgetwet` | 3 | +7.85 ft |
+| `dive-shop-diveviz` | 1 | -14.13 ft |
+| `dive-shop-justgetwet` | 3 | +7.84 ft |
 
 ## How to act on this issue
 
