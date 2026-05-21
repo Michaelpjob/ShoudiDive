@@ -198,13 +198,28 @@ def _walk_zip_for_rows(zip_path: pathlib.Path) -> list[dict]:
             for name in zf.namelist():
                 if not name.lower().endswith(".csv"):
                     continue
-                with zf.open(name) as fp:
-                    text = fp.read().decode("utf-8", errors="replace")
-                reader = csv.DictReader(io.StringIO(text))
-                headers = reader.fieldnames or []
-                if not any(c in headers for c in VIS_COL_CANDIDATES):
+                # 2026-05-21: per-file error trap. One malformed CSV in
+                # the RCCA archive ("new-line character seen in unquoted
+                # field") was failing the whole scraper, starving the
+                # validation pipeline of every other RCCA observation
+                # for ~5 days. Skip the bad file with a warning and
+                # keep collecting from the rest.
+                try:
+                    with zf.open(name) as fp:
+                        text = fp.read().decode("utf-8", errors="replace")
+                    # Normalize bare-CR line endings to LF, which csv module
+                    # handles cleanly. Several RCCA exports include
+                    # Mac-classic CR-only newlines inside quoted fields
+                    # that the default csv dialect chokes on.
+                    text = text.replace("\r\n", "\n").replace("\r", "\n")
+                    reader = csv.DictReader(io.StringIO(text))
+                    headers = reader.fieldnames or []
+                    if not any(c in headers for c in VIS_COL_CANDIDATES):
+                        continue
+                    rows = list(reader)
+                except (csv.Error, UnicodeDecodeError) as exc:
+                    print(f"  rcca: skipped {name} ({exc.__class__.__name__}: {exc})")
                     continue
-                rows = list(reader)
                 if rows:
                     print(f"    rcca: {name} → {len(rows)} rows")
                     out.extend(rows)
