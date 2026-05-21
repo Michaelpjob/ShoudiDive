@@ -75,11 +75,38 @@ def fetch_7day_sum() -> tuple[np.ndarray, np.ndarray, np.ndarray, list[date]]:
         warnings.simplefilter("ignore")
         ds = xr.open_dataset(url)
 
+    # 2026-05-21: sortby('lat') before slicing. The CPC global precip
+    # dataset stores lats in DESCENDING order (89.75 → -89.75).
+    # xarray's .sel(lat=slice(lo, hi)) requires the slice direction to
+    # match the coordinate's order — with `lat_min < lat_max` against
+    # a descending dim, the result is an empty slice and the downstream
+    # `if lats[0] < lats[-1]` raises IndexError. Surface change in
+    # late May 2026 (the dataset has worked unchanged before — likely
+    # an xarray version bump tightened slice-direction tolerance).
+    # Sorting first normalizes both dims so the slice always works.
+    if "lat" in ds.coords:
+        ds = ds.sortby("lat")
+    if "lon" in ds.coords:
+        ds = ds.sortby("lon")
+
     sub = ds.sel(
         lat=slice(BBOX["lat_min"] - 0.5, BBOX["lat_max"] + 0.5),
         lon=slice(CPC_LON_MIN - 0.5, CPC_LON_MAX + 0.5),
     )
     sub = sub.isel(time=slice(-7, None))
+
+    # Defence-in-depth: surface a clean error if the slice still came back
+    # empty (e.g. NOAA renamed coords, dataset moved). The IndexError on
+    # the next line is unreadable; this is.
+    if sub.lat.size == 0 or sub.lon.size == 0:
+        raise RuntimeError(
+            f"CPC slice empty after sortby: "
+            f"lat range {ds.lat.values.min():.2f}..{ds.lat.values.max():.2f}, "
+            f"lon range {ds.lon.values.min():.2f}..{ds.lon.values.max():.2f}, "
+            f"asked lat {BBOX['lat_min']}..{BBOX['lat_max']} lon "
+            f"{CPC_LON_MIN}..{CPC_LON_MAX}. Source URL: {url}"
+        )
+
     days = [pdt(t) for t in sub.time.values]
     print(f"  using days: {days[0]} -> {days[-1]} ({len(days)} days)")
 

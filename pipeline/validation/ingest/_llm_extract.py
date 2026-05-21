@@ -117,13 +117,38 @@ def extract_from_prose(report_text: str) -> list[dict]:
     # Strip any markdown fence the model might have added despite the
     # instruction. Anthropic tends to be obedient on this but
     # belt-and-suspenders is cheap.
+    #
+    # 2026-05-21: also handle the case where the model returns a valid
+    # JSON array followed by prose explanation (markdown fence at end
+    # then a paragraph). Observed failure: raw was `[]\n```\n\nThe
+    # report contains water condition observations but no identifiable
+    # spot name. Without knowing which California location...`. The
+    # original `json.loads(raw)` choked on the trailing text. Extract
+    # just the first JSON array via bracket-matching so prose around
+    # it doesn't break the parser.
     if raw.startswith("```"):
-        raw = raw.strip("`")
+        raw = raw.strip("`").strip()
         if raw.lower().startswith("json"):
             raw = raw[4:].strip()
 
+    # Locate the first JSON array via bracket matching. Tolerates prose
+    # before or after the array, plus stray closing fences.
+    json_text = raw
+    arr_start = raw.find("[")
+    if arr_start >= 0:
+        depth = 0
+        for i in range(arr_start, len(raw)):
+            ch = raw[i]
+            if ch == "[":
+                depth += 1
+            elif ch == "]":
+                depth -= 1
+                if depth == 0:
+                    json_text = raw[arr_start : i + 1]
+                    break
+
     try:
-        parsed = json.loads(raw)
+        parsed = json.loads(json_text)
     except json.JSONDecodeError as exc:
         print(f"  llm: JSON parse failed ({exc}); raw={raw[:200]!r}")
         return []
