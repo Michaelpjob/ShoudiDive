@@ -405,7 +405,35 @@ def test_sst5d_forecast_continuity(region):
     days = s.get("days", [])
     assert len(days) >= 5, f"{region}: sst5d has only {len(days)} days (expect >= 5)"
 
-    offsets = [day.get("offset") for day in days]
+    # 2026-05-21: two writer scripts emit sst5d/summary.json with
+    # subtly different schemas:
+    #   * fetch_sst_5day.py (CA + PNW)
+    #       day: "Today" / "+1" / ...  (string label)
+    #       offset: 0, 1, 2, ...        (numeric)
+    #   * fetch.py:395 (tropical)
+    #       day: 0, 1, 2, ...           (numeric, doubles as offset)
+    #       no "offset" field
+    # Try offset first, fall back to numeric day, finally parse from
+    # the slot name ("f<N>"). The test only cares that the leads are
+    # monotonically increasing — whichever field the writer chose to
+    # carry the integer ordering is fine.
+    def _lead(day_dict):
+        if isinstance(day_dict.get("offset"), int):
+            return day_dict["offset"]
+        if isinstance(day_dict.get("day"), int):
+            return day_dict["day"]
+        slot = day_dict.get("slot", "")
+        if isinstance(slot, str) and slot.startswith("f"):
+            try:
+                return int(slot[1:])
+            except ValueError:
+                pass
+        return None
+
+    offsets = [_lead(day) for day in days]
+    assert all(o is not None for o in offsets), (
+        f"{region}: sst5d day(s) missing offset/day/slot — got {offsets}"
+    )
     assert offsets == sorted(offsets), f"{region}: sst5d days out of order"
 
     for day in days:
