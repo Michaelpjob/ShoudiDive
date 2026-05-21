@@ -1,18 +1,18 @@
-# Validation watchdog — 2026-05-20T19:10Z
+# Validation watchdog — 2026-05-21T09:42Z
 
 **4 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
-### 🔴 1. Only 22 observations in the last 24h (floor: 50)
+### 🔴 1. Only 23 observations in the last 24h (floor: 50)
 
 Multiple scrapers may be silently broken.
 
 **Suggested action:** Open the latest hourly ingest workflow run; look for `FAILED` lines per scraper.
 
-### ⚠️ 2. 1 non-critical external feed(s) are red
+### ⚠️ 2. 2 non-critical external feed(s) are red
 
-Red feeds: ingest_eagle4. Fallbacks may keep the model running, but redundancy is degraded.
+Red feeds: chl_dineof_nrt_4km, ingest_eagle4. Fallbacks may keep the model running, but redundancy is degraded.
 
 **Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
 
@@ -32,16 +32,16 @@ Failed scrapers: rcca-mpa-baseline. Silent scraper failures can starve validatio
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_nearshore` | 5 | 10.99 | +4.03 | 100% | -0.81 |
-| `central_nearshore` | 1 | 1.52 | -1.52 | 100% | — |
+| `bight_nearshore` | 4 | 11.98 | +4.65 | 100% | -0.96 |
+| `central_nearshore` | 1 | 2.53 | -2.53 | 100% | — |
 
 ## Per-source bias (informational)
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `cencoos` | 1 | -1.52 ft |
-| `dive-shop-diveviz` | 1 | -14.11 ft |
-| `dive-shop-justgetwet` | 4 | +8.57 ft |
+| `cencoos` | 1 | -2.53 ft |
+| `dive-shop-diveviz` | 1 | -14.23 ft |
+| `dive-shop-justgetwet` | 3 | +10.94 ft |
 
 ## How to act on this issue
 
