@@ -222,6 +222,17 @@ jobs:
       # lets us iterate on the bundle (push to dev → deploy-dev fires)
       # without having to refire the heavy data pipeline.
 
+      - name: Sentinel — fail if SST/chl/wind PNGs unchanged from HEAD
+        # Complements `check_fetch_freshness.py` (which is mtime-based,
+        # catches "fetcher didn't run") with a content-based check that
+        # catches "fetcher ran but produced byte-identical output."
+        # Real ocean data should produce at least one differing byte
+        # across SST + chl + wind on every refresh; if all three are
+        # identical to git HEAD, a swallowed-exception silent failure
+        # is the most likely cause. NOT continue-on-error: this needs
+        # to fail the run so the bot inbox lights up.
+        run: python pipeline/check_data_changed.py
+
       - name: Commit refreshed data
         if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         run: |

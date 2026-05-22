@@ -608,3 +608,230 @@ def test_top_level_at_least_as_fresh_as_sst(region):
             f"refresh-{region}-data.yml for the manifest-build step "
             f"landing after all fetchers."
         )
+
+
+# ---------------------------------------------------------------------------
+# Category 6: MANIFEST ↔ DISK CONSISTENCY
+#
+# Added 2026-05-21 after a comprehensive audit. The bug class this
+# targets: the manifest claims a layer / URL / shape that doesn't
+# match what's actually on disk in public/data/. We've already hit
+# several instances of this (sst_3d_ago path mismatch, kd490_url
+# field rename, sst5d slot-vs-url filename drift) — each surfaced
+# only via the live probe HOURS after merge. This test catches the
+# same class at PR time.
+# ---------------------------------------------------------------------------
+
+def _walk_manifest_png_urls(manifest, region):
+    """Yield (label, url_str) for every PNG URL the manifest claims.
+
+    Walks: layers[*].windows[*].url, .speed_url, .uv_url, .wave_url.
+    Plus: history days[*].url and forecast days[*].url when summaries
+    are inlined under the layer entry. Skips remote http:// URLs.
+    """
+    layers = manifest.get("layers") or {}
+    for layer_id, info in layers.items():
+        if not isinstance(info, dict):
+            continue
+        windows = info.get("windows") or {}
+        for win_key, win in windows.items():
+            if not isinstance(win, dict):
+                continue
+            for field in ("url", "speed_url", "uv_url", "wave_url"):
+                v = win.get(field)
+                if isinstance(v, str) and not v.startswith("http"):
+                    yield (f"{region}/{layer_id}/{win_key}/{field}", v)
+
+
+@pytest.mark.parametrize("region", REGIONS)
+def test_manifest_urls_resolve_to_real_files(region):
+    """Every PNG URL the manifest declares must exist on disk.
+
+    Catches: layer URL typos, fetcher writes to wrong path, manifest
+    pointing at a stale name after a fetcher rename, regional path
+    rewrites not applied. Walks all layers + windows + (speed|uv|wave)_url
+    fields.
+    """
+    m = _manifest(region)
+    if m is None:
+        pytest.skip(f"no committed data for region={region}")
+    d = _region_dir(region)
+    if d is None:
+        pytest.skip(f"no region dir for {region}")
+
+    missing = []
+    for label, url in _walk_manifest_png_urls(m, region):
+        # `/data/foo.png` → `<region_dir>/foo.png`. Strip the leading
+        # `/data/` prefix; for regions other than CA, strip the
+        # `/data/<region>/` prefix too.
+        path_part = url.lstrip("/")
+        if path_part.startswith("data/"):
+            path_part = path_part[len("data/"):]
+        if region != "ca" and path_part.startswith(f"{region}/"):
+            path_part = path_part[len(region) + 1:]
+        target = d / path_part
+        if not target.exists():
+            missing.append(f"{label}: {url} → {target.relative_to(DATA_ROOT)}")
+
+    assert not missing, (
+        f"{region}: manifest references {len(missing)} URL(s) that don't "
+        f"exist on disk. This is exactly the LayerSpec drift that the "
+        f"live-cp-manifest probe catches 36+ h post-merge — failing here "
+        f"keeps it at PR time. Missing:\n  " + "\n  ".join(missing[:8])
+    )
+
+
+@pytest.mark.parametrize("region", REGIONS)
+def test_manifest_grid_dims_match_png_dims(region):
+    """The manifest's per-layer `grid.{width,height}` must match the
+    actual PNG dimensions.
+
+    Catches: a fetcher swapping (w, h) order, a regrid changing shape
+    without bumping the manifest entry, accidental cross-region PNG
+    being served under a CA URL, or a deploy step replacing one
+    region's PNG with another's.
+
+    The frontend's bilinear sampler trusts the manifest grid field
+    blindly; a mismatch produces stretched / mis-projected layers
+    without any visible error, just a wrong-looking map.
+    """
+    m = _manifest(region)
+    if m is None:
+        pytest.skip(f"no committed data for region={region}")
+    d = _region_dir(region)
+    if d is None:
+        pytest.skip(f"no region dir for {region}")
+
+    mismatches = []
+    layers = m.get("layers") or {}
+    for layer_id, info in layers.items():
+        if not isinstance(info, dict):
+            continue
+        grid = info.get("grid") or {}
+        try:
+            expected_w = int(grid.get("width"))
+            expected_h = int(grid.get("height"))
+        except (TypeError, ValueError):
+            continue  # No grid claim, nothing to validate.
+
+        # Find any one PNG belonging to this layer to dim-check against.
+        windows = info.get("windows") or {}
+        png_path = None
+        for win in windows.values():
+            if not isinstance(win, dict):
+                continue
+            for field in ("url", "speed_url", "uv_url", "wave_url"):
+                v = win.get(field)
+                if isinstance(v, str) and not v.startswith("http"):
+                    p = v.lstrip("/")
+                    if p.startswith("data/"):
+                        p = p[len("data/"):]
+                    if region != "ca" and p.startswith(f"{region}/"):
+                        p = p[len(region) + 1:]
+                    candidate = d / p
+                    if candidate.exists():
+                        png_path = candidate
+                        break
+            if png_path:
+                break
+        if not png_path:
+            continue  # No PNG to check; covered by the URL test above.
+
+        try:
+            with Image.open(png_path) as im:
+                actual_w, actual_h = im.size
+        except Exception as exc:
+            mismatches.append(
+                f"{layer_id}: failed to read {png_path.name} ({exc})"
+            )
+            continue
+
+        if actual_w != expected_w or actual_h != expected_h:
+            mismatches.append(
+                f"{layer_id}: manifest grid {expected_w}x{expected_h} but "
+                f"{png_path.name} is {actual_w}x{actual_h}"
+            )
+
+    assert not mismatches, (
+        f"{region}: {len(mismatches)} layer(s) have manifest grid that "
+        f"disagrees with the actual PNG dimensions. Mismatches:\n  "
+        + "\n  ".join(mismatches[:6])
+    )
+
+
+# ---------------------------------------------------------------------------
+# Category 7: MODEL-ACCURACY REGRESSION
+#
+# Reads the watchdog's per-zone metrics. Fails the gate if any zone
+# with a meaningful sample size shows non-positive correlation
+# between predicted and observed viz — the model is predicting
+# opposite-to-reality on that zone.
+#
+# Threshold rationale: r > 0 is a low bar (any positive correlation
+# at all). Stricter "30-point drop from baseline" would need a
+# checked-in baseline; deferring that until promote-baseline.yml
+# can produce one with stable validation volume. Until then, "do
+# not regress to negative correlation" is the floor.
+# ---------------------------------------------------------------------------
+
+PER_ZONE_METRICS_PATH = (
+    REPO_ROOT / "pipeline" / "validation" / "data" / "per_zone_metrics.json"
+)
+PEARSON_FLOOR = 0.0  # any negative correlation is a structural problem
+MIN_OBSERVATIONS = 10  # sample size below which we don't have signal
+
+
+def test_per_zone_pearson_not_negative():
+    """No zone with >= MIN_OBSERVATIONS observations should have a
+    negative Pearson correlation between predicted and observed viz.
+
+    What this catches: a zone-coefficient change (or fetcher regression
+    affecting one zone) flipping the model's directional accuracy on
+    that zone. The watchdog already surfaces this in markdown, but
+    only after the data lands on main. This test promotes it to a
+    PR-time gate.
+
+    Skips zones with too few observations to be statistically
+    meaningful. The MIN_OBSERVATIONS floor is intentionally low so
+    we still gate on small-n zones once they accumulate samples.
+    """
+    if not PER_ZONE_METRICS_PATH.exists():
+        pytest.skip("per_zone_metrics.json not present (watchdog never ran)")
+
+    try:
+        metrics = json.loads(PER_ZONE_METRICS_PATH.read_text())
+    except (json.JSONDecodeError, OSError) as exc:
+        pytest.skip(f"per_zone_metrics.json unreadable: {exc}")
+
+    # Schema: {"computed_at": ..., "lookback_days": N, "zones": {<zone>: {...}}}
+    # Older versions of this file may have been flat top-level; tolerate
+    # both via the .get("zones", metrics) fallback.
+    zones = (metrics or {}).get("zones", metrics) or {}
+    failures = []
+    for zone, stats in zones.items():
+        if not isinstance(stats, dict):
+            continue
+        n = stats.get("n")
+        r = stats.get("pearson_r")
+        if not isinstance(n, int) or n < MIN_OBSERVATIONS:
+            continue
+        if r is None:
+            continue
+        try:
+            r_val = float(r)
+        except (TypeError, ValueError):
+            continue
+        if r_val < PEARSON_FLOOR:
+            failures.append(
+                f"{zone}: Pearson r = {r_val:.3f} on n={n} observations "
+                f"(floor {PEARSON_FLOOR})"
+            )
+
+    assert not failures, (
+        "One or more zones with a meaningful sample size show "
+        "non-positive Pearson correlation between predicted and "
+        "observed viz. The model is structurally wrong on these "
+        "zones — check DRIVER_COEFFS + SECCHI_COEFFS for the failing "
+        "zones in pipeline/viz_predict/config.py. Failing zones:\n  "
+        + "\n  ".join(failures)
+    )

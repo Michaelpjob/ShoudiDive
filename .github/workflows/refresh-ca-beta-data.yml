@@ -146,6 +146,13 @@ jobs:
       # Build + deploy steps were removed 2026-05-13 — data-only flow.
       # deploy-ca-beta.yml (triggered below) handles the publish.
 
+      - name: Sentinel — fail if SST/chl/wind PNGs unchanged from HEAD
+        # See refresh-ca-data.yml for the full rationale. Catches the
+        # silent-fetcher case where mtime advances but content stays
+        # byte-identical to git HEAD. SHOULDIDIVE_REGION carries
+        # through to the script via the job-level env.
+        run: python pipeline/check_data_changed.py
+
       - name: Commit refreshed CA-beta data
         if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         run: |
