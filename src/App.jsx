@@ -294,6 +294,14 @@ export default function App() {
   const [sstMode, setSstMode] = useState("history");
   const [sstSel, setSstSel] = useState({ slot: "d0" });
   const [sstForecastSel, setSstForecastSel] = useState({ slot: "f0" });
+  // 2026-05-22: Track whether the user has manually toggled SST mode.
+  // If they haven't, we auto-pick "forecast" on first data load when
+  // wall-clock today only lives in the forecast summary (MUR lags by
+  // ~1-2 days, so on a typical day "today" lives in the forecast
+  // track at slot f<lag>, NOT in history's d0). Without this auto-
+  // pick, opening the app on a normal day lands the playhead at
+  // d0 = 2 days ago and the user thinks today is missing.
+  const sstModeUserToggledRef = useRef(false);
   const [windSel, setWindSel] = useState({ day: 0, bucket: "morning", hour: null });
   const [swellSel, setSwellSel] = useState({ day: 0, bucket: "morning", hour: null });
   const [currentSel, setCurrentSel] = useState({ day: 0, bucket: "midday" });
@@ -325,6 +333,33 @@ export default function App() {
     const cSummary = getCurrent5dSummary();
     if (cSummary && !currentSelectionHasData(cSummary, currentSel)) {
       setCurrentSel(defaultCurrentSelection(cSummary));
+    }
+
+    // 2026-05-22: Auto-pick SST mode based on where wall-clock today
+    // lives. MUR satellite SST publishes ~1-2 days behind, so on a
+    // normal day:
+    //   * history's latest = d0 = anchor_date (2 days ago)
+    //   * forecast's f<lag> = today (the model-projected nowcast)
+    // The default sstMode = "history" lands the playhead on d0, which
+    // the user sees as "today is missing." Auto-switch to forecast if
+    // today only lives in the forecast summary.
+    //
+    // Skip if the user has already toggled the mode explicitly via
+    // SstModeToggle — their choice wins over the auto-pick.
+    if (!sstModeUserToggledRef.current && tSummary && tfSummary) {
+      const today = new Date().toISOString().slice(0, 10);  // YYYY-MM-DD UTC
+      const historyHasToday = tSummary.days?.some((d) => d.date === today);
+      const forecastHasToday = tfSummary.days?.some((d) => d.date === today);
+      // Only flip when forecast has today AND history doesn't. If both
+      // have today (MUR caught up), prefer history (observed > modelled).
+      // If neither has today (extreme MUR outage), stay on history so
+      // user sees the most recent OBSERVATION rather than a deeply-
+      // decayed forecast.
+      if (forecastHasToday && !historyHasToday && sstMode !== "forecast") {
+        setSstMode("forecast");
+      } else if (historyHasToday && sstMode !== "history") {
+        setSstMode("history");
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataState?.ready, dataState?.manifest?.generated_at]);
@@ -361,6 +396,10 @@ export default function App() {
     if (next !== sstMode) {
       track("sst_mode_change", { from: sstMode, to: next });
     }
+    // Mark that the user has made an explicit choice — disables the
+    // auto-pick effect below so we don't undo their toggle on the next
+    // data refresh.
+    sstModeUserToggledRef.current = true;
     setSstMode(next);
   };
 
