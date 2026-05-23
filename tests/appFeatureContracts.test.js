@@ -14,9 +14,16 @@ test("Temp keeps historical and beta forecast SST timelines instead of reverting
   const app = read("src/App.jsx");
   const mobileSheet = read("src/components/MobileSheet.jsx");
   const dataSource = read("src/lib/dataSource.js");
+  // 2026-05-23 Stage 4: DesktopView extracted from App.jsx into
+  // src/components/MapShell.jsx. The SST timeline + SstModeToggle +
+  // SstCurrentCard imports/JSX live in MapShell now; pin the
+  // contract on MapShell, same pattern this test uses for the
+  // loaders split (dataSource → loaders/*.js) and the hook split
+  // (App.jsx useState → useTimelineSelections.js).
+  const mapShell = read("src/components/MapShell.jsx");
 
-  assert.match(app, /import SstTimeline,\s*\{[\s\S]*SstCurrentCard[\s\S]*sstSelToSlotKey/);
-  assert.match(app, /SstModeToggle/);
+  assert.match(mapShell, /import SstTimeline,\s*\{[\s\S]*SstCurrentCard[\s\S]*SstModeToggle[\s\S]*sstSelToSlotKey/);
+  assert.match(mapShell, /SstModeToggle/);
   assert.match(app, /getSstForecastSummary/);
   // 2026-05-23: useState calls for SST mode + forecast selection
   // moved into src/hooks/useTimelineSelections.js as part of the
@@ -31,9 +38,10 @@ test("Temp keeps historical and beta forecast SST timelines instead of reverting
   // it breaks here BEFORE the build fails on missing identifiers.
   assert.match(app, /import \{ useTimelineSelections \} from "\.\/hooks\/useTimelineSelections\.js"/);
   assert.match(app, /sstMode,\s*setSstMode[\s\S]*sstSel,\s*setSstSel[\s\S]*sstForecastSel,\s*setSstForecastSel/);
-  assert.match(app, /layer === "sst"\s*\?\s*\(sstTimelineSummary \? sstSelToSlotKey\(sstActiveSel, sstTimelineSummary\) : composite\)/);
-  assert.match(app, /\{layer === "sst" && hasSstTimeline && \(\s*<SstTimeline sel=\{sstActiveSel\} setSel=\{setSstActiveSel\} units=\{units\} mode=\{activeSstMode\} \/>/);
-  assert.match(app, /layer === "sst" && hasSstTimeline \?\s*\(\s*<div className="composite wind-grid-host">[\s\S]*Sea temp forecast[\s\S]*<SstModeToggle[\s\S]*<SstCurrentCard sel=\{sstActiveSel\} units=\{units\} mode=\{activeSstMode\} \/>/);
+  // Render-path assertions follow the JSX into MapShell.
+  assert.match(mapShell, /layer === "sst"\s*\?\s*\(sstTimelineSummary \? sstSelToSlotKey\(sstActiveSel, sstTimelineSummary\) : composite\)/);
+  assert.match(mapShell, /\{layer === "sst" && hasSstTimeline && \(\s*<SstTimeline sel=\{sstActiveSel\} setSel=\{setSstActiveSel\} units=\{units\} mode=\{activeSstMode\} \/>/);
+  assert.match(mapShell, /layer === "sst" && hasSstTimeline \?\s*\(\s*<div className="composite wind-grid-host">[\s\S]*Sea temp forecast[\s\S]*<SstModeToggle[\s\S]*<SstCurrentCard sel=\{sstActiveSel\} units=\{units\} mode=\{activeSstMode\} \/>/);
   assert.match(mobileSheet, /layer === "sst" && hasSstTimeline \? `Sea temp/);
   assert.match(mobileSheet, /layer === "sst" && hasSstTimeline \?\s*\(\s*<>[\s\S]*<SstModeToggle[\s\S]*<SstCurrentCard sel=\{activeSstSel\} units=\{units\} mode=\{activeSstMode\} \/>/);
   // 2026-05-09: dataSource.js's loadManifest if/else if chain was split
@@ -53,8 +61,9 @@ test("Temp keeps historical and beta forecast SST timelines instead of reverting
 });
 
 test("Current, swell, wind, and mobile overlay features remain wired", () => {
-  const app = read("src/App.jsx");
   const mobileSheet = read("src/components/MobileSheet.jsx");
+  // 2026-05-23 Stage 4: timeline JSX moved with DesktopView into MapShell.jsx.
+  const mapShell = read("src/components/MapShell.jsx");
   // 2026-05-09: app.css was split into per-area files (tokens, shell,
   // popups, mobile, wind) — read them all and concat for the grep
   // contract checks below. The barrel `app.css` only carries @imports
@@ -67,10 +76,10 @@ test("Current, swell, wind, and mobile overlay features remain wired", () => {
     read("src/styles/mobile.css") +
     read("src/styles/wind.css");
 
-  assert.match(app, /<CurrentTimeline sel=\{currentSel\} setSel=\{setCurrentSel\} \/>/);
-  assert.match(app, /<CurrentCurrentCard sel=\{currentSel\} \/>/);
-  assert.match(app, /<SwellTimeline sel=\{swellSel\} setSel=\{setSwellSel\} \/>/);
-  assert.match(app, /<WindTimeline sel=\{windSel\} setSel=\{setWindSel\} \/>/);
+  assert.match(mapShell, /<CurrentTimeline sel=\{currentSel\} setSel=\{setCurrentSel\} \/>/);
+  assert.match(mapShell, /<CurrentCurrentCard sel=\{currentSel\} \/>/);
+  assert.match(mapShell, /<SwellTimeline sel=\{swellSel\} setSel=\{setSwellSel\} \/>/);
+  assert.match(mapShell, /<WindTimeline sel=\{windSel\} setSel=\{setWindSel\} \/>/);
   assert.match(mobileSheet, /className="ms-overlay-quick"/);
   assert.match(mobileSheet, /aria-pressed=\{mpaOn\}/);
   assert.match(mobileSheet, /aria-pressed=\{bathyOn\}/);
