@@ -53,6 +53,25 @@ try:
 except ModuleNotFoundError:
     from lib.layer_spec import LAYER_SPECS
 
+# Shared HTTP + encoder helpers landed in Stage 6 of the pipeline
+# refactor. Same dual-import pattern as the layer_spec line above to
+# handle `python pipeline/fetch.py` (sys.path = pipeline/) vs
+# `python -m pipeline.fetch` (sys.path = repo root).
+try:
+    from pipeline.lib.http import http_get
+    from pipeline.lib.encode import (
+        encode_age_sidecar_png,
+        encode_linear_png,
+        encode_log10_png,
+    )
+except ModuleNotFoundError:
+    from lib.http import http_get
+    from lib.encode import (
+        encode_age_sidecar_png,
+        encode_linear_png,
+        encode_log10_png,
+    )
+
 # Bbox sourced from `pipeline/regions/` (PR-X-1 scaffold). The CA
 # region snapshot matches today's hardcoded values bit-for-bit; the
 # `SHOULDIDIVE_REGION` env var (default `ca`) switches to PNW or
@@ -236,10 +255,20 @@ def fetch_day(
         if not nc_path.exists():
             url = erddap_url(source_cfg, d, source_stride)
             print(f"  GET {layer} {d}{suffix}", flush=True)
-            try:
-                r = requests.get(url, timeout=180, headers=REQUEST_HEADERS)
-            except requests.RequestException as exc:
-                print(f"  {layer} {d}{suffix}: {exc.__class__.__name__} - skipping", flush=True)
+            # Stage 6 — replaced the bare `requests.get(url, timeout=180,
+            # headers=REQUEST_HEADERS)` with the shared `http_get`. Same
+            # User-Agent, same 180s timeout, BUT now exponential-backoff
+            # retries the call on transient transport failures and 5xx /
+            # 429 responses (~2/4s sleeps between attempts). 4xx (incl.
+            # the dataset-403 case the legacy comments document at PFEG)
+            # is returned without retry — same as before. The host-
+            # fallback above is unchanged.
+            r = http_get(url, timeout=180)
+            if r is None:
+                # http_get returns None when every retry attempt raised
+                # a transport exception. Match the legacy log line so
+                # check_published.py's grep doesn't shift.
+                print(f"  {layer} {d}{suffix}: RequestException - skipping", flush=True)
                 continue
             if r.status_code != 200:
                 print(f"  {layer} {d}{suffix}: HTTP {r.status_code} - skipping", flush=True)
@@ -313,22 +342,30 @@ def build_age_array(stack: list[np.ndarray], dates: list[date], end: date) -> np
 def encode_age_png(age_arr: np.ndarray, out: Path) -> None:
     """Encode the age array as 8-bit grayscale PNG. Convention:
     pixel 0 = no data, pixel 1..255 = age days (raw value - 1).
-    The +1 offset reserves 0 for the no-data sentinel."""
-    px = np.where(age_arr == 255, 0, np.minimum(age_arr.astype(np.int16) + 1, 255)).astype(np.uint8)
-    Image.fromarray(px, mode="L").save(out, optimize=True)
+    The +1 offset reserves 0 for the no-data sentinel.
+
+    Stage 6 — delegates to :func:`pipeline.lib.encode.encode_age_sidecar_png`.
+    The function shim stays here so other modules importing
+    ``fetch.encode_age_png`` don't break; the body is now a single
+    delegating call.
+    """
+    encode_age_sidecar_png(age_arr, out)
 
 
 def encode_png(arr: np.ndarray, cfg: dict, out: Path) -> None:
+    """Encode a 2D float array as the layer's published PNG.
+
+    Stage 6 — delegates to :mod:`pipeline.lib.encode`. The branch on
+    ``cfg["scale"]`` stays here so callers can hand us a layer-cfg dict
+    (they keep doing so for :func:`build_sst_forecast` etc.). Output is
+    byte-identical to the prior in-file implementation; see
+    ``pipeline/tests/test_lib_encode.py`` for the regression coverage.
+    """
     lo, hi = cfg["range"]
     if cfg["scale"] == "log10":
-        with np.errstate(divide="ignore", invalid="ignore"):
-            scaled = (np.log10(arr) - np.log10(lo)) / (np.log10(hi) - np.log10(lo))
+        encode_log10_png(arr, lo, hi, out)
     else:
-        scaled = (arr - lo) / (hi - lo)
-    valid = np.isfinite(scaled)
-    px = np.zeros(arr.shape, dtype=np.uint8)
-    px[valid] = np.clip(np.round(scaled[valid] * 254 + 1), 1, 255).astype(np.uint8)
-    Image.fromarray(px, mode="L").save(out, optimize=True)
+        encode_linear_png(arr, lo, hi, out)
 
 
 def _layer_stats(arr: np.ndarray) -> dict:
