@@ -113,9 +113,20 @@ export default [
       // The plugin's "recommended" config drags in dozens of style
       // rules (prop-types, jsx-key on every map, etc.) that would
       // generate noise without catching production failures. Pin the
-      // two that actually matter:
+      // ones that actually matter:
       "react/jsx-uses-vars":         "error",  // makes no-unused-vars JSX-aware
       "react/jsx-uses-react":        "off",    // new JSX transform — React not in scope
+      // 2026-05-23: base ESLint `no-undef` does NOT catch undeclared
+      // JSX tags — `<MoonWidget/>` slips through because the JSX
+      // transform turns it into `_jsx(MoonWidget, ...)` and the rule
+      // sees the variable read but flags it elsewhere. The dedicated
+      // react/jsx-no-undef rule is the one that catches it. Without
+      // this, the Stage 4 refactor shipped a no-undef bug for
+      // <MoonWidget/> that web-smoke caught at runtime ("MoonWidget
+      // is not defined") AFTER lint reported green. Same failure
+      // class as the 2026-05-07 white-screen incident this whole
+      // config exists to prevent — close the door.
+      "react/jsx-no-undef":          "error",
     },
   },
 ];

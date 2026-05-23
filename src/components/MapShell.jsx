@@ -53,6 +53,7 @@ import SstTimeline, {
   sstSelToSlotKey,
 } from "./SstTimeline.jsx";
 import { SstTrendChip, SstSparkline } from "./SstTrendBits.jsx";
+import { MoonWidget } from "./MoonIcon.jsx";
 
 import { useMapViewport } from "../hooks/useMapViewport.js";
 import { usePopupState } from "../hooks/usePopupState.js";
