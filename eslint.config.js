@@ -16,6 +16,7 @@
 // bug." Style preferences belong in a formatter (prettier), not here.
 
 import js from "@eslint/js";
+import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
 import globals from "globals";
 
@@ -57,7 +58,17 @@ export default [
       },
     },
     plugins: {
+      react,
       "react-hooks": reactHooks,
+    },
+    settings: {
+      react: {
+        // We don't import React types — Vite + the new JSX transform
+        // handle that automatically. Declaring `version: "detect"`
+        // would force the plugin to read node_modules/react/package.json
+        // on every lint run; pinning here keeps the lint step under 5 s.
+        version: "18.3",
+      },
     },
     rules: {
       // Inherit the recommended baseline.
@@ -67,14 +78,20 @@ export default [
       "no-undef":                  "error",
 
       // ---- other no-mistake-no-cost rules --------------------------
-      // no-unused-vars is intentionally OFF until eslint-plugin-react
-      // is added — without `react/jsx-uses-vars` it false-positives on
-      // every component imported for JSX (e.g. <MoonWidget/> looks
-      // unused to base ESLint because espree doesn't recognize JSX as
-      // a "use"). TODO: pull in eslint-plugin-react and re-enable as
-      // `warn`. Until then, dead-import noise stays in the source —
-      // an acceptable trade for silencing the white-screen-class fire.
-      "no-unused-vars":            "off",
+      // 2026-05-22 (Stage 1): re-enabled now that eslint-plugin-react is
+      // present. `react/jsx-uses-vars` (auto-loaded by the plugin) tells
+      // base ESLint that <Foo/> counts as a "use" of Foo, so this rule
+      // no longer false-positives on every JSX-imported component.
+      // Set to `warn` (not error) so a real dead-import surfaces in
+      // the lint job without blocking the merge — the goal is to drive
+      // the codebase to zero unused identifiers gradually, not to make
+      // every refactor PR wait on a cleanup step.
+      "no-unused-vars":            ["warn", {
+        args: "none",                   // function args often documented but unused
+        ignoreRestSiblings: true,       // `const {x, ...rest} = obj;` shouldn't warn on x
+        varsIgnorePattern: "^_",        // `_unused` is the standard "I know" prefix
+        argsIgnorePattern: "^_",
+      }],
       "no-unreachable":            "error",
       "no-self-compare":           "error",
       "no-self-assign":            "error",
@@ -91,6 +108,14 @@ export default [
       // bugs (stale closures, conditional hook calls).
       "react-hooks/rules-of-hooks":  "error",
       "react-hooks/exhaustive-deps": "warn",
+
+      // ---- React plugin: keep ONLY the rules that catch real bugs.
+      // The plugin's "recommended" config drags in dozens of style
+      // rules (prop-types, jsx-key on every map, etc.) that would
+      // generate noise without catching production failures. Pin the
+      // two that actually matter:
+      "react/jsx-uses-vars":         "error",  // makes no-unused-vars JSX-aware
+      "react/jsx-uses-react":        "off",    // new JSX transform — React not in scope
     },
   },
 ];
