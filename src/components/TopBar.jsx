@@ -5,6 +5,7 @@
 
 import RegionSwitcher from "./RegionSwitcher.jsx";
 import { activeRegion } from "../lib/region.js";
+import { track } from "../lib/analytics.js";
 
 const REGION_TAGLINES = {
   ca:       "Sea Temp · Water Clarity · Wind · Current · California Coast",
@@ -86,6 +87,7 @@ export default function TopBar({ onSettings, settingsOpen, dataState }) {
           rel="noopener noreferrer"
           className="tip-fish"
           title="Tip the creator on Venmo (@michaelpjob)"
+          onClick={() => track("tip_click", { source: "topbar" })}
         >
           <svg
             className="tip-fish-icon"
