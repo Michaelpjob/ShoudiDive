@@ -18,8 +18,19 @@ test("Temp keeps historical and beta forecast SST timelines instead of reverting
   assert.match(app, /import SstTimeline,\s*\{[\s\S]*SstCurrentCard[\s\S]*sstSelToSlotKey/);
   assert.match(app, /SstModeToggle/);
   assert.match(app, /getSstForecastSummary/);
-  assert.match(app, /const \[sstMode, setSstMode\] = useState\("history"\)/);
-  assert.match(app, /const \[sstForecastSel, setSstForecastSel\] = useState\(\{ slot: "f0" \}\)/);
+  // 2026-05-23: useState calls for SST mode + forecast selection
+  // moved into src/hooks/useTimelineSelections.js as part of the
+  // Stage 3 refactor. App.jsx now destructures them from the hook;
+  // pin the contract on the hook's source, mirroring how this test
+  // already handles the loaders split (dataSource → loaders/*.js).
+  const timelineHook = read("src/hooks/useTimelineSelections.js");
+  assert.match(timelineHook, /const \[sstMode, _setSstMode\] = useState\("history"\)/);
+  assert.match(timelineHook, /const \[sstForecastSel, setSstForecastSel\] = useState\(\{ slot: "f0" \}\)/);
+  // App.jsx must consume the hook + destructure the names downstream
+  // components depend on. If a future refactor renames the destructure
+  // it breaks here BEFORE the build fails on missing identifiers.
+  assert.match(app, /import \{ useTimelineSelections \} from "\.\/hooks\/useTimelineSelections\.js"/);
+  assert.match(app, /sstMode,\s*setSstMode[\s\S]*sstSel,\s*setSstSel[\s\S]*sstForecastSel,\s*setSstForecastSel/);
   assert.match(app, /layer === "sst"\s*\?\s*\(sstTimelineSummary \? sstSelToSlotKey\(sstActiveSel, sstTimelineSummary\) : composite\)/);
   assert.match(app, /\{layer === "sst" && hasSstTimeline && \(\s*<SstTimeline sel=\{sstActiveSel\} setSel=\{setSstActiveSel\} units=\{units\} mode=\{activeSstMode\} \/>/);
   assert.match(app, /layer === "sst" && hasSstTimeline \?\s*\(\s*<div className="composite wind-grid-host">[\s\S]*Sea temp forecast[\s\S]*<SstModeToggle[\s\S]*<SstCurrentCard sel=\{sstActiveSel\} units=\{units\} mode=\{activeSstMode\} \/>/);

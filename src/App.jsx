@@ -7,7 +7,6 @@ import WindParticles from "./components/WindParticles.jsx";
 import MpaLayer, { styleForType } from "./components/MpaLayer.jsx";
 import BathyLayer, {
   styleForClass,
-  loadBathyFeatures,
   visibleBathyFeatures,
   bathyLabels,
 } from "./components/BathyLayer.jsx";
@@ -19,6 +18,9 @@ import BathyPopup from "./components/BathyPopup.jsx";
 import MpaPopup from "./components/MpaPopup.jsx";
 import CoronadosBanner from "./components/CoronadosBanner.jsx";
 import Tooltip from "./components/Tooltip.jsx";
+import { useTimelineSelections } from "./hooks/useTimelineSelections.js";
+import { usePopupState } from "./hooks/usePopupState.js";
+import { useMapViewport } from "./hooks/useMapViewport.js";
 import {
   project,
   unproject,
@@ -271,81 +273,21 @@ export default function App() {
   const [prefs, setPrefs] = useState(loadPrefs);
   const [layer, setLayer] = useState("sst");
   const [composite, setComposite] = useState(2);
-  // Timeline layers each maintain their own selection. SST carries both
-  // observed history and a beta forecast. The helper for each layer turns
-  // its selection into the slot key the data layer understands.
-  const [sstMode, setSstMode] = useState("history");
-  const [sstSel, setSstSel] = useState({ slot: "d0" });
-  const [sstForecastSel, setSstForecastSel] = useState({ slot: "f0" });
-  // 2026-05-22: Track whether the user has manually toggled SST mode.
-  // If they haven't, we auto-pick "forecast" on first data load when
-  // wall-clock today only lives in the forecast summary (MUR lags by
-  // ~1-2 days, so on a typical day "today" lives in the forecast
-  // track at slot f<lag>, NOT in history's d0). Without this auto-
-  // pick, opening the app on a normal day lands the playhead at
-  // d0 = 2 days ago and the user thinks today is missing.
-  const sstModeUserToggledRef = useRef(false);
-  const [windSel, setWindSel] = useState({ day: 0, bucket: "morning", hour: null });
-  const [swellSel, setSwellSel] = useState({ day: 0, bucket: "morning", hour: null });
-  const [currentSel, setCurrentSel] = useState({ day: 0, bucket: "midday" });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const dataState = useDataVersion();
 
-  // Reconcile timeline selections against their loaded summaries. Today's
-  // morning + pre-dawn buckets get dropped from summary.json once they're
-  // past, so a hardcoded initial selection often points at a non-existent
-  // slot. SST history can also be shorter than seven days during upstream
-  // gaps, so it gets the same data-driven check.
-  useEffect(() => {
-    const tSummary = getSstHistorySummary();
-    if (tSummary && !sstSelectionHasData(tSummary, sstSel)) {
-      setSstSel(defaultSstSelection(tSummary));
-    }
-    const tfSummary = getSstForecastSummary();
-    if (tfSummary && !sstSelectionHasData(tfSummary, sstForecastSel)) {
-      setSstForecastSel(defaultSstSelection(tfSummary));
-    }
-    const wSummary = getWind5dSummary();
-    if (wSummary && !selectionHasData(wSummary, windSel)) {
-      setWindSel(defaultWindSelection(wSummary));
-    }
-    const sSummary = getSwell5dSummary();
-    if (sSummary && !selectionHasData(sSummary, swellSel)) {
-      setSwellSel(defaultWindSelection(sSummary));
-    }
-    const cSummary = getCurrent5dSummary();
-    if (cSummary && !currentSelectionHasData(cSummary, currentSel)) {
-      setCurrentSel(defaultCurrentSelection(cSummary));
-    }
-
-    // 2026-05-22: Auto-pick SST mode based on where wall-clock today
-    // lives. MUR satellite SST publishes ~1-2 days behind, so on a
-    // normal day:
-    //   * history's latest = d0 = anchor_date (2 days ago)
-    //   * forecast's f<lag> = today (the model-projected nowcast)
-    // The default sstMode = "history" lands the playhead on d0, which
-    // the user sees as "today is missing." Auto-switch to forecast if
-    // today only lives in the forecast summary.
-    //
-    // Skip if the user has already toggled the mode explicitly via
-    // SstModeToggle — their choice wins over the auto-pick.
-    if (!sstModeUserToggledRef.current && tSummary && tfSummary) {
-      const today = new Date().toISOString().slice(0, 10);  // YYYY-MM-DD UTC
-      const historyHasToday = tSummary.days?.some((d) => d.date === today);
-      const forecastHasToday = tfSummary.days?.some((d) => d.date === today);
-      // Only flip when forecast has today AND history doesn't. If both
-      // have today (MUR caught up), prefer history (observed > modelled).
-      // If neither has today (extreme MUR outage), stay on history so
-      // user sees the most recent OBSERVATION rather than a deeply-
-      // decayed forecast.
-      if (forecastHasToday && !historyHasToday && sstMode !== "forecast") {
-        setSstMode("forecast");
-      } else if (historyHasToday && sstMode !== "history") {
-        setSstMode("history");
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataState?.ready, dataState?.manifest?.generated_at]);
+  // Timeline selection state + MUR-lag auto-pick of SST mode. Extracted
+  // into a hook on 2026-05-23 (Stage 3 of the refactor); see
+  // src/hooks/useTimelineSelections.js for the reconcile + auto-pick
+  // effect that this hook runs on dataState change.
+  const {
+    sstMode, setSstMode,
+    sstSel, setSstSel,
+    sstForecastSel, setSstForecastSel,
+    windSel, setWindSel,
+    swellSel, setSwellSel,
+    currentSel, setCurrentSel,
+  } = useTimelineSelections(dataState);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", prefs.theme);
@@ -379,10 +321,10 @@ export default function App() {
     if (next !== sstMode) {
       track("sst_mode_change", { from: sstMode, to: next });
     }
-    // Mark that the user has made an explicit choice — disables the
-    // auto-pick effect below so we don't undo their toggle on the next
-    // data refresh.
-    sstModeUserToggledRef.current = true;
+    // setSstMode comes from useTimelineSelections — it flips the
+    // hook's internal `userToggledRef` automatically, so the auto-pick
+    // effect inside the hook respects this user choice on subsequent
+    // data refreshes. No need to touch the ref here.
     setSstMode(next);
   };
 
@@ -505,8 +447,24 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
   const renderLayer = layer;
   const isMobile = useIsMobile();
 
-  const stageRef = useRef(null);
-  const [size, setSize] = useState({ w: 1200, h: 700 });
+  // Viewport state extracted into useMapViewport (2026-05-23, Stage 3
+  // of the refactor). The hook owns the SVG ref + container size +
+  // viewBox state + pan-in-progress flag + clampVb/zoomAt geometry
+  // helpers + the anti-stale renderVb computation. The gesture event
+  // handlers below stay in DesktopView because they're tied to JSX
+  // event wiring + DesktopView's hover state.
+  const {
+    stageRef,
+    size,
+    vb, setVb,
+    isPanning, setIsPanning,
+    panStateRef,
+    clampVb,
+    zoomAt,
+    renderVb,
+    zoomLevel,
+    MAX_ZOOM,
+  } = useMapViewport();
   const [hover, setHover] = useState(null);
   const [activeSpot, setActiveSpotRaw] = useState("lajolla");
   // Wrap setActiveSpot so every saved-spot click — desktop list or
@@ -523,10 +481,21 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
   const [controlsOpen, setControlsOpen] = useState(true);
   const [spotsOpen, setSpotsOpen] = useState(true);
   const [legendOpen, setLegendOpen] = useState(true);
-  const [selectedMpa, setSelectedMpa] = useState(null);
-  const [selectedBathy, setSelectedBathy] = useState(null);
-  const [bathyFeatures, setBathyFeatures] = useState(null);
+  // MPA/bathy popup state extracted into usePopupState (2026-05-23,
+  // Stage 3 of the refactor). The hook owns the selected* state +
+  // the toggle-off effects + the bathy lazy-load. See
+  // src/hooks/usePopupState.js.
+  const {
+    selectedMpa, setSelectedMpa,
+    selectedBathy, setSelectedBathy,
+    bathyFeatures,
+  } = usePopupState({ mpaOn, bathyOn });
 
+  // updateMpaOn / updateBathyOn stay here — they wrap mpaOn/bathyOn
+  // setters (which are App-level state, not hook-managed) AND
+  // synchronously clear the selected popup. The hook's toggle-off
+  // effect is the safety-net catch-all for any other path that
+  // disables the layer.
   const updateMpaOn = (next) => {
     const value = typeof next === "function" ? next(mpaOn) : next;
     if (!value) setSelectedMpa(null);
@@ -538,100 +507,11 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
     setBathyOn(value);
   };
 
-  useEffect(() => {
-    if (!mpaOn) setSelectedMpa(null);
-  }, [mpaOn]);
-
-  useEffect(() => {
-    if (!bathyOn) setSelectedBathy(null);
-  }, [bathyOn]);
-
-  // Lazy-load bathy features whenever the layer flips on (used for both the
-  // SVG markers and the screen-space labels).
-  useEffect(() => {
-    if (!bathyOn || bathyFeatures) return;
-    let cancelled = false;
-    loadBathyFeatures().then((fc) => {
-      if (cancelled || !fc) return;
-      setBathyFeatures(fc.features || []);
-    });
-    return () => { cancelled = true; };
-  }, [bathyOn, bathyFeatures]);
-
-  // Pan/zoom state — viewBox in original svg coords. Initial = full extent.
-  const [vb, setVb] = useState({ x: 0, y: 0, w: 1, h: 1 });
-  const [isPanning, setIsPanning] = useState(false);
-  const panStateRef = useRef(null);
-  const MAX_ZOOM = 8;
-
-  useEffect(() => {
-    let raf = 0;
-    function measure() {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        if (!stageRef.current) return;
-        const r = stageRef.current.getBoundingClientRect();
-        setSize((prev) =>
-          Math.abs(prev.w - r.width) < 0.5 && Math.abs(prev.h - r.height) < 0.5
-            ? prev
-            : { w: r.width, h: r.height }
-        );
-      });
-    }
-    measure();
-    const ro =
-      typeof ResizeObserver !== "undefined" && stageRef.current
-        ? new ResizeObserver(measure)
-        : null;
-    if (ro && stageRef.current) ro.observe(stageRef.current);
-    window.addEventListener("resize", measure);
-    window.addEventListener("orientationchange", measure);
-    window.visualViewport?.addEventListener("resize", measure);
-    return () => {
-      cancelAnimationFrame(raf);
-      ro?.disconnect();
-      window.removeEventListener("resize", measure);
-      window.removeEventListener("orientationchange", measure);
-      window.visualViewport?.removeEventListener("resize", measure);
-    };
-  }, []);
-
-  // Reset / clamp the viewBox whenever the stage size changes.
-  useEffect(() => {
-    setVb((prev) => {
-      // First-time init or after a resize that breaks proportions: reset to fit.
-      if (prev.w <= 1 || Math.abs(prev.w / prev.h - size.w / size.h) > 0.001) {
-        return { x: 0, y: 0, w: size.w, h: size.h };
-      }
-      return prev;
-    });
-  }, [size.w, size.h]);
-
   // Stale hover state from the previous layer carries an incompatible val
   // shape (number for sst/chl, {u,v,kt} object for wind). Drop it on switch.
   useEffect(() => {
     setHover(null);
   }, [layer]);
-
-  function clampVb(next) {
-    const w = Math.max(size.w / MAX_ZOOM, Math.min(size.w, next.w));
-    const h = w * (size.h / size.w);
-    const x = Math.max(0, Math.min(size.w - w, next.x));
-    const y = Math.max(0, Math.min(size.h - h, next.y));
-    return { x, y, w, h };
-  }
-
-  function zoomAt(screenX, screenY, factor) {
-    const r = stageRef.current?.getBoundingClientRect();
-    if (!r) return;
-    const newW = vb.w * factor;
-    const cursorVbX = vb.x + (screenX / r.width) * vb.w;
-    const cursorVbY = vb.y + (screenY / r.height) * vb.h;
-    const newH = newW * (size.h / size.w);
-    const newX = cursorVbX - (screenX / r.width) * newW;
-    const newY = cursorVbY - (screenY / r.height) * newH;
-    setVb(clampVb({ x: newX, y: newY, w: newW, h: newH }));
-  }
 
   function onWheel(e) {
     // No preventDefault — body has overflow:hidden so there's nothing to
@@ -878,19 +758,10 @@ function DesktopView({ layer, setLayer, composite, setComposite, sstMode, setSst
   const timeOpts = TIME_OPTIONS[layer];
 
   // Render with a size-matched viewBox immediately after orientation changes.
-  // The state reset above catches up on the next commit, but iOS Safari can
-  // visibly stretch a stale portrait-ratio viewBox across landscape for a frame.
-  const renderVb = useMemo(() => {
-    if (!(size.w > 0) || !(size.h > 0)) return vb;
-    const ratio = size.w / size.h;
-    if (vb.w <= 1 || vb.h <= 1 || Math.abs(vb.w / vb.h - ratio) > 0.001) {
-      return { x: 0, y: 0, w: size.w, h: size.h };
-    }
-    return vb;
-  }, [vb, size.w, size.h]);
-
-  // Current zoom factor: ratio of full-extent width to visible viewBox width.
-  const zoomLevel = size.w > 0 && renderVb.w > 0 ? size.w / renderVb.w : 1;
+  // renderVb + zoomLevel are computed inside useMapViewport (the hook
+  // returns them from its destructuring above). The anti-stale logic
+  // for the iOS Safari mid-resize stretched-coastline case lives in
+  // the hook now — see src/hooks/useMapViewport.js.
 
   // Assemble all labels for the screen-space overlay (constant size + collision).
   const allLabels = useMemo(() => {
