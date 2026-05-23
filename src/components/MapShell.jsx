@@ -26,9 +26,8 @@ import {
 import { SeaBasemap, LandBasemap, OceanMaskDefs, PLACE_LABELS } from "./Basemap.jsx";
 import DataOverlay from "./DataOverlay.jsx";
 import WindParticles from "./WindParticles.jsx";
-import MpaLayer, { styleForType } from "./MpaLayer.jsx";
+import MpaLayer from "./MpaLayer.jsx";
 import BathyLayer, {
-  styleForClass,
   visibleBathyFeatures,
   bathyLabels,
 } from "./BathyLayer.jsx";
@@ -38,9 +37,8 @@ import BathyPopup from "./BathyPopup.jsx";
 import MpaPopup from "./MpaPopup.jsx";
 import CoronadosBanner from "./CoronadosBanner.jsx";
 import Tooltip from "./Tooltip.jsx";
-import WindDayGrid, {
+import {
   WindCurrentSelectionCard,
-  selectionHasData,
   selToSlotKey,
 } from "./WindDayGrid.jsx";
 import WindTimeline from "./WindTimeline.jsx";
@@ -89,6 +87,7 @@ import {
   getSwell5dStats,
 } from "../lib/dataSource.js";
 import { resolveSstMode } from "../lib/sstMode.js";
+import { activeRegion } from "../lib/region.js";
 import {
   isMapGestureChildTarget,
   shouldPinMapTap,
@@ -276,7 +275,6 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
     zoomAt,
     renderVb,
     zoomLevel,
-    MAX_ZOOM,
   } = useMapViewport();
   const [hover, setHover] = useState(null);
   const [activeSpot, setActiveSpotRaw] = useState("lajolla");

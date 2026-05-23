@@ -107,13 +107,16 @@ test("moved, stale, and control-surface taps never create map pins", () => {
 });
 
 test("mobile timeline regression wiring stays in place", () => {
-  const app = readFileSync(resolve(repoRoot, "src/App.jsx"), "utf8");
+  // 2026-05-23 Stage 4: DesktopView extracted from App.jsx into
+  // src/components/MapShell.jsx — the gesture guards + hover overlay
+  // gating live with the map JSX in MapShell now.
+  const mapShell = readFileSync(resolve(repoRoot, "src/components/MapShell.jsx"), "utf8");
   const timelineHook = readFileSync(resolve(repoRoot, "src/components/useTimelineDrag.js"), "utf8");
   const currentTimeline = readFileSync(resolve(repoRoot, "src/components/CurrentTimeline.jsx"), "utf8");
 
-  assert.match(app, /!\s*isMobile\s*&&\s*hover\s*&&\s*\(/);
-  assert.match(app, /isMapGestureChildTarget\(e\.target\)/);
-  assert.match(app, /shouldPinMapTap\(\{\s*tap,\s*layer,/);
+  assert.match(mapShell, /!\s*isMobile\s*&&\s*hover\s*&&\s*\(/);
+  assert.match(mapShell, /isMapGestureChildTarget\(e\.target\)/);
+  assert.match(mapShell, /shouldPinMapTap\(\{\s*tap,\s*layer,/);
   assert.match(timelineHook, /onPointerDown[\s\S]*?e\.stopPropagation\(\)/);
   assert.match(timelineHook, /onPointerMove[\s\S]*?e\.stopPropagation\(\)/);
   assert.match(timelineHook, /onPointerUp[\s\S]*?e\.stopPropagation\(\)/);
