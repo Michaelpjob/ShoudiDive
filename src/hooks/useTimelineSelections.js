@@ -27,19 +27,29 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+// Summary getters live in dataSource.js; selection-validity + default-
+// picker helpers live in each layer's component module (because they
+// know that layer's slot-key shape). Import-source matches App.jsx
+// before the extraction.
 import {
   getSstHistorySummary,
   getSstForecastSummary,
   getWind5dSummary,
   getSwell5dSummary,
   getCurrent5dSummary,
-  defaultSstSelection,
-  defaultWindSelection,
-  defaultCurrentSelection,
-  sstSelectionHasData,
-  selectionHasData,
-  currentSelectionHasData,
 } from "../lib/dataSource.js";
+import {
+  defaultSstSelection,
+  sstSelectionHasData,
+} from "../components/SstTimeline.jsx";
+import {
+  defaultWindSelection,
+  selectionHasData,
+} from "../components/WindDayGrid.jsx";
+import {
+  currentSelectionHasData,
+  defaultCurrentSelection,
+} from "../components/CurrentTimeline.jsx";
 
 export function useTimelineSelections(dataState) {
   const [sstMode, _setSstMode] = useState("history");
