@@ -1,89 +1,172 @@
-# CA Coast Conditions
+# ShouldIDive
 
-Daily satellite-derived sea surface temperature and water clarity for the
-Southern + Central California coast (32.4°–37.6°N, -124° to -117°). Live at
-[shouldidive.com](https://shouldidive.com).
+Live ocean conditions for divers, freedivers, surfers, and anglers — Sea
+surface temperature, water clarity (chlorophyll + Kd490 + visibility
+model), wind, swell, currents, RTOFS forecast, and 5-day forecasts for
+all of them.
+
+Live at [shouldidive.com](https://shouldidive.com). Repo name is
+`ShoudiDive` (typo we inherited); the public-facing brand is
+**ShouldIDive** and the Vite package name is `ca-coast-conditions` —
+those mismatches are cosmetic, not bugs.
+
+## Regions
+
+Each region has its own bbox + data pipeline + Cloudflare Pages
+deployment target. Picked by `SHOULDIDIVE_REGION` env var on the
+pipeline side and resolved by `src/lib/region.js` from the hostname on
+the frontend.
+
+| Region | Bbox | Live URL |
+|---|---|---|
+| **ca** (prod) | 31.8°–42.0°N, -128.5° to -116.8° (NorCal + SoCal) | [shouldidive.com](https://shouldidive.com) |
+| **ca-beta** | same bbox as ca; staging surface | ca-beta.shouldidive.pages.dev |
+| **pnw** | 42.0°–49.0°N, -127.0° to -122.0° (Oregon + Washington + Salish Sea) | pnw-beta.shouldidive.pages.dev |
+| **tropical** | 10.0°–31.0°N, -98.0° to -60.0° (FL + Caribbean + Gulf + Bahamas) | tropical-beta.shouldidive.pages.dev |
 
 ## What's here
 
-- `src/` — Vite + React frontend
-- `pipeline/` — Python script that pulls fresh SST and chlorophyll-a from
-  NOAA CoastWatch ERDDAP and writes manifest + PNGs into `public/data/`
-- `.github/workflows/refresh-data.yml` — daily cron that runs the pipeline
-  and commits the result; Cloudflare Pages redeploys on push
+- `src/` — Vite + React frontend. Renders SVG basemaps + DataOverlay
+  canvas with per-layer color ramps. Components include map (SeaBasemap,
+  LandBasemap, MapLabels), data overlay (DataOverlay, WindParticles,
+  MpaLayer, BathyLayer), and a per-layer timeline (SstTimeline,
+  WindTimeline, SwellTimeline, CurrentTimeline).
+- `pipeline/` — Python data fetcher + visibility predictor. Pulls SST
+  (MUR L4), chlorophyll (VIIRS/MODIS via DINEOF blend), Kd_490, wind
+  (HRRR + GFS), swell (NOAA WW3), currents (HFR + tide/wind blend),
+  RTOFS ocean-model SST + currents, precipitation (NOAA CPC), river
+  discharge (USGS), tides (NOAA CO-OPS), MPA boundaries, bathymetry
+  (GMRT). Writes manifest + PNGs into `public/data/`. The `viz_predict/`
+  subpackage produces the predicted-visibility layer (beta) from
+  upwelling activity + SST anomaly + chl + zone coefficients.
+- `mobile/` — React Native / Expo client that shares the same manifest
+  + PNG data layer as the web frontend.
+- `functions/` — Cloudflare Pages Functions for analytics endpoint
+  (`/api/analytics/event`) and a `_middleware.js` that hard-404s
+  scanner-known paths.
+- `tests/` — Web frontend contract tests (`*.test.js`) +
+  `tests/checkpoints/*.test.js` (data-shape, rendering-math, sst-trend,
+  mobile-adaptive) + `tests/live-checkpoints/` (post-deploy probes).
+- `pipeline/tests/` — Python pytest suite incl. the 42-test
+  `test_data_integrity.py` that validates the post-fetch outputs.
+- `.github/workflows/` — see below.
 
-Data sources, both no-auth, fetched daily:
+## Workflows
 
-- **SST** — GHRSST MUR L4, 1 km, gap-filled (`jplMURSST41`)
-- **Chlorophyll** — VIIRS S-NPP + NOAA-20 NRT, 9 km, gap-filled
-  (`nesdisVHNnoaaSNPPnoaa20NRTchlaGapfilledDaily`)
+| Workflow | Schedule | Purpose |
+|---|---|---|
+| `dev-checks.yml` | push to dev, PR → main | Web build + lint + tests + smoke + visual-paint + pipeline-tests + manifest-validate + secrets-scan + workflow-lint |
+| `refresh-ca-data.yml` | daily 06:00 UTC | Pull fresh CA data, commit PNGs, trigger `deploy-prod.yml` |
+| `refresh-ca-wind.yml` | hourly :15 | Pull fresh CA wind, commit, trigger deploy |
+| `refresh-pnw-{data,wind}.yml` + `refresh-tropical-{data,wind}.yml` | daily + hourly | Same shape per region |
+| `refresh-ca-beta-{data,wind}.yml` | hourly + daily | Staging deploy of CA pipeline (with the dev branch) |
+| `deploy-prod.yml` | push to main + workflow_dispatch | Code-only deploy fast path to shouldidive.com |
+| `deploy-{ca-beta,pnw-beta,tropical-beta}.yml` | workflow_run + workflow_dispatch | Deploy each region's beta to its Cloudflare Pages branch |
+| `deploy-verify.yml` | every 4 h + after deploys | live-cp-manifest + live-cp-render probes against shouldidive.com; opens an Issue if either fails |
+| `uptime-monitor.yml` | every 5 min | Lightweight homepage + manifest reachability probe |
+| `sync-dev.yml` | push to main (bot only) | Auto-merge main → dev so cron pushes don't leave open PRs DIRTY |
+| `health-check.yml` + `ingest-ground-truth.yml` + `promote-baseline.yml` | various crons | Validation pipeline (feed health, scraped dive-shop observations, baseline promotion) |
+| `codeql.yml` | weekly + on push | JS + Python SAST |
+
+The branching contract that those workflows enforce lives in
+[`CLAUDE.md`](CLAUDE.md) (also copied to `AGENTS.md` for OpenAI Codex
+and other agents that follow that convention).
 
 ## Local dev
 
-```
+```bash
 npm install
 npm run dev          # frontend on http://127.0.0.1:5173
 
-# one-time pipeline setup
+# Run any of the regional pipelines
 cd pipeline
 python -m venv .venv
-.venv\Scripts\python.exe -m pip install -r requirements.txt
+.venv/Scripts/python.exe -m pip install -r requirements.txt
 
-# pull fresh data
-.venv\Scripts\python.exe fetch.py
+SHOULDIDIVE_REGION=ca .venv/Scripts/python.exe fetch.py            # SST + chl + kd490
+SHOULDIDIVE_REGION=ca .venv/Scripts/python.exe fetch_wind.py       # wind
+SHOULDIDIVE_REGION=ca .venv/Scripts/python.exe fetch_sst_5day.py   # SST forecast
+SHOULDIDIVE_REGION=ca .venv/Scripts/python.exe fetch_visibility.py # viz model
+# (or run refresh-ca-data.yml's full pipeline locally via that script's shell)
 ```
 
-`fetch.py` writes `public/data/manifest.json` plus `{sst,chl}_{1d,2d,3d}.png`.
-Vite serves them at `/data/...` and `src/lib/dataSource.js` decodes them at
-boot.
+The fetcher steps write into `public/data/` (for `ca`) or
+`public/data/<region>/` (for `pnw` / `tropical`). Vite serves them at
+`/data/...` and `src/lib/dataSource.js` decodes them at boot.
 
-## Deployment (one-time setup)
+## Data sources
 
-### 1. Push to GitHub
+All no-auth, all fetched by `pipeline/fetch_*.py`:
 
-Create an empty repo (no README, no .gitignore — we have those). Then:
+- **SST** — GHRSST MUR L4 1 km gap-filled (`jplMURSST41`), with optional
+  buoy-correction blend and a nearshore-correction layer
+- **SST climatology** — NOAA OISST v2.1 1991-2020 30-year monthly
+  normal (`noaa_psl_55a2_880b_1f29` on NEFSC ERDDAP)
+- **Chlorophyll** — Multi-source DINEOF blend (NRT + science-quality
+  VIIRS + MODIS), written to `chl_1d.png` / `chl_2d.png` / `chl_3d.png`
+  with age + source sidecars
+- **Kd_490** — DINEOF gap-filled multi-sensor Kd_490
+- **Wind** — NOAA HRRR (3 km) + GFS (0.25°) — HRRR for current,
+  GFS for 5-day forecast
+- **Swell** — NOAA WaveWatch III (gfswave)
+- **Currents** — HF-radar + tide + wind inference blend
+- **RTOFS** — NOAA RTOFS Global 2ds ocean model (SST + surface currents,
+  daily 00z cycle)
+- **Precip** — NOAA CPC global daily, 7-day rolling sum
+- **Rivers** — USGS NWIS gauges
+- **Tides** — NOAA CO-OPS per-region station list
+- **MPAs** — California Department of Fish & Wildlife polygons
+- **Bathymetry** — GMRT global multi-resolution topography
 
-```
-git remote add origin git@github.com:<user>/ca-coast-conditions.git
-git branch -M main
-git push -u origin main
-```
+## Visibility model
 
-### 2. Connect Cloudflare Pages
+`pipeline/viz_predict/` produces the (beta) predicted Secchi depth in
+feet for every cell. Pipeline:
 
-1. [Cloudflare dashboard](https://dash.cloudflare.com) → **Workers & Pages** → **Create** → **Pages** → **Connect to Git**
-2. Pick the GitHub repo. Authorize if prompted.
-3. Build configuration:
-   - Framework preset: **Vite**
-   - Build command: `npm run build`
-   - Build output directory: `dist`
-   - Root directory: leave empty
-4. Save and deploy. First build takes ~1 minute.
+1. Per-cell zone classification (lat band × distance from shore)
+2. Drivers: upwelling-activity (wind + cold-SST coupled), SST anomaly,
+   SST 3-day cooling trend, seasonal chl residual, runoff (precip + dist
+   to river), river discharge anomaly, swell-driven bottom stir, exposure
+   index, tide index, kelp-canopy gating, substrate type, cloud fraction
+3. Persistence-with-decay blend of the observed chl over the last few
+   days (tau per zone)
+4. Chl → Secchi via per-zone `a · chl^(−b)` coefficients
+5. Optional Kd_490 blend (gated to suppress when Kd is stale relative to
+   chl)
+6. Frontend renders as a separate "viz" layer with a "Beta" pill
 
-You'll get a `*.pages.dev` URL immediately. Verify it works.
+The model is region-aware (different coefficients per lat band) and is
+the main thing being actively tuned — the per-zone Pearson-r regression
+test in `pipeline/tests/test_data_integrity.py` is the gate that catches
+when a zone's tuning regresses.
 
-### 3. Custom domain (shouldidive.com)
+## Deployment
 
-In the Pages project → **Custom domains** → **Set up a custom domain** →
-enter `shouldidive.com`.
+Cloudflare Pages, one project per region:
 
-- If shouldidive.com's DNS is on Cloudflare: one-click attach.
-- If it's elsewhere: Cloudflare gives you a CNAME target — add a CNAME
-  record at the registrar pointing `shouldidive.com` (and `www`) to the
-  Cloudflare-provided target. Or move DNS to Cloudflare for free TLS at
-  the edge.
+- `shouldidive` (prod) maps to `main` branch
+- `ca-beta` branch → ca-beta.shouldidive.pages.dev
+- `pnw-beta` / `tropical-beta` branches → those preview subdomains
+- `dev` branch → dev.shouldidive.pages.dev
 
-After DNS propagates (minutes to a few hours) the site is live at
-shouldidive.com with auto-renewing TLS.
+`refresh-*-data.yml` writes data and triggers a `deploy-*.yml`; data and
+code are decoupled (refresh doesn't build/deploy; deploy doesn't refresh
+data). `deploy-cloudflare` composite action handles the actual
+`wrangler pages deploy` with a pinned wrangler version + token-strip
+workaround.
 
-### 4. Confirm the daily cron works
+## Where the system docs live
 
-Go to the GitHub repo → **Actions** → **Refresh ocean data** → **Run
-workflow**. It'll fetch fresh data and commit. Cloudflare Pages picks up
-the push and redeploys within ~30 seconds. After that the cron fires
-automatically every 24 h at 06:00 UTC.
+- [`CLAUDE.md`](CLAUDE.md) — agent branching + workflow contract
+- [`SECURITY.md`](SECURITY.md) — security posture + CSP / HSTS rationale
+- [`tests/CHECKPOINTS.md`](tests/CHECKPOINTS.md) — full taxonomy of what
+  each test gate catches
+- `pipeline/algorithm-design.md` + `pipeline/viz_predict/` docstrings —
+  visibility model design + per-zone coefficient rationale
 
 ## Costs
 
-Free tier of all of Cloudflare Pages, GitHub Actions, and the underlying
-NOAA endpoints. ~85 KB of new PNG data per day in git history.
+Free tier of GitHub Actions, Cloudflare Pages, and the underlying NOAA /
+NASA / Copernicus / USGS / CDFW endpoints. Daily PNG refreshes accumulate
+git history (~50–100 MB total at time of writing); planned migration to
+Cloudflare R2 will stop that bloat.
