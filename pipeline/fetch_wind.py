@@ -38,6 +38,17 @@ try:
 except ModuleNotFoundError:
     from regions import active_region
 
+# Shared HTTP + encoder helpers (Stage 6 of the pipeline refactor).
+# Same dual-import pattern as `regions` above.
+try:
+    from pipeline.lib.http import SESSION as _SHARED_SESSION
+    from pipeline.lib.http import http_get
+    from pipeline.lib.encode import encode_linear_png
+except ModuleNotFoundError:
+    from lib.http import SESSION as _SHARED_SESSION
+    from lib.http import http_get
+    from lib.encode import encode_linear_png
+
 BBOX = active_region().bbox
 
 NOMADS_HRRR = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/hrrr/prod"
@@ -98,13 +109,27 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = active_region().data_output_dir(ROOT)
 CACHE_DIR = ROOT / "pipeline" / ".cache"
 
-# NOMADS HTTP/2 implementation is broken; force HTTP/1.1.
-SESSION = requests.Session()
-SESSION.headers.update({"Accept": "*/*", "User-Agent": "shouldidive/0.1 (+github.com/Michaelpjob/ShoudiDive)"})
+# Stage 6 — was a local `requests.Session()` with a private
+# "shouldidive/0.1" User-Agent. Now points at the shared
+# `pipeline.lib.http.SESSION`, which carries the canonical UA
+# ("shouldidive-data-pipeline/1.0 +https://shouldidive.com"). Same
+# transport adapters underneath. NOMADS' HTTP/1.1 quirk is a server-
+# side limitation that doesn't care which client UA we send.
+SESSION = _SHARED_SESSION
 
 
 def _get(url, **kwargs):
-    return SESSION.get(url, timeout=180, **kwargs)
+    """Byte-range / .idx fetcher used by `_fetch_uv_slice`.
+
+    Stage 6 — was a thin wrapper around `SESSION.get(url, timeout=180,
+    **kwargs)`. Now routes through `pipeline.lib.http.http_get` which
+    adds exponential-backoff retries on transient transport failures
+    and 5xx / 429 responses. `raise_on_failure=True` matches the
+    legacy "caller will eventually `.raise_for_status()`" pattern --
+    a permanent failure raises, transient ones are retried up to the
+    backoff schedule.
+    """
+    return http_get(url, timeout=180, raise_on_failure=True, **kwargs)
 
 
 # ---- HRRR run discovery -----------------------------------------------------
@@ -413,13 +438,16 @@ def apply_land_mask(u: np.ndarray, v: np.ndarray,
 # ---- Encoders ---------------------------------------------------------------
 
 def encode_speed_png(u: np.ndarray, v: np.ndarray, out_path: Path) -> None:
+    """Encode wind speed (computed from u,v vectors) as a grayscale PNG.
+
+    Stage 6 — the linear-scale PNG encoding logic moved to
+    :func:`pipeline.lib.encode.encode_linear_png`. The unit conversion
+    (m/s -> knots via 1.94384) and the u/v magnitude calculation stay
+    in this file because they're wind-specific. Output is byte-
+    identical to the prior implementation.
+    """
     speed_kt = np.sqrt(u * u + v * v) * 1.94384
-    valid = np.isfinite(speed_kt)
-    lo, hi = SPEED_RANGE
-    scaled = (speed_kt - lo) / (hi - lo)
-    px = np.zeros(speed_kt.shape, dtype=np.uint8)
-    px[valid] = np.clip(np.round(scaled[valid] * 254 + 1), 1, 255).astype(np.uint8)
-    Image.fromarray(px, mode="L").save(out_path, optimize=True)
+    encode_linear_png(speed_kt, SPEED_RANGE[0], SPEED_RANGE[1], out_path)
 
 
 def encode_uv_png(u: np.ndarray, v: np.ndarray, out_path: Path) -> None:

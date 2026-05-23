@@ -45,6 +45,15 @@ try:
 except ModuleNotFoundError:
     from regions import active_region
 
+# Shared HTTP + encoder helpers (Stage 6 of the pipeline refactor).
+# Same dual-import pattern as `regions` above.
+try:
+    from pipeline.lib.http import http_get
+    from pipeline.lib.encode import encode_linear_png, encode_log10_png
+except ModuleNotFoundError:
+    from lib.http import http_get
+    from lib.encode import encode_linear_png, encode_log10_png
+
 BBOX = active_region().bbox
 
 # 2026-05-13 — `coastwatch.pfeg.noaa.gov` started returning 403 / network-
@@ -125,8 +134,12 @@ def erddap_nc(dataset: str, variable: str, d: date, stride: int, pre_xy: str,
         f"[({lng_min}):{stride}:({lng_max})]"
     )
     print(f"  GET {dataset} {d}", flush=True)
-    r = SESSION.get(url, timeout=180)
-    r.raise_for_status()
+    # Stage 6 — was `SESSION.get(url, timeout=180); r.raise_for_status()`.
+    # The shared `http_get` adds exponential-backoff retries on transient
+    # 5xx/429/transport failures; `raise_on_failure=True` preserves the
+    # legacy "raise on any non-2xx" behavior so callers' `try / except
+    # Exception` blocks still trigger on a permanent failure.
+    r = http_get(url, timeout=180, raise_on_failure=True)
     nc_path.write_bytes(r.content)
     return nc_path
 
@@ -208,21 +221,26 @@ def mean_stack(samples: list[date], dataset: str, variable: str, stride: int, pr
 
 
 def encode_linear(arr, lo, hi, out_path):
-    valid = np.isfinite(arr)
-    scaled = (arr - lo) / (hi - lo)
-    px = np.zeros(arr.shape, dtype=np.uint8)
-    px[valid] = np.clip(np.round(scaled[valid] * 254 + 1), 1, 255).astype(np.uint8)
-    Image.fromarray(px, mode="L").save(out_path, optimize=True)
+    """Thin wrapper around the shared linear encoder (Stage 6 refactor).
+
+    Kept as a module-level function so any callers importing
+    ``pipeline.fetch_climatology.encode_linear`` keep working. Output
+    is byte-identical to the prior local implementation -- verified by
+    ``pipeline/tests/test_lib_encode.py::test_encode_linear_matches_fetch_climatology``.
+    """
+    encode_linear_png(arr, lo, hi, out_path)
 
 
 def encode_log10(arr, lo, hi, out_path):
-    valid = np.isfinite(arr) & (arr > 0)
-    log_lo, log_hi = np.log10(lo), np.log10(hi)
-    px = np.zeros(arr.shape, dtype=np.uint8)
-    if valid.any():
-        scaled = (np.log10(arr[valid]) - log_lo) / (log_hi - log_lo)
-        px[valid] = np.clip(np.round(scaled * 254 + 1), 1, 255).astype(np.uint8)
-    Image.fromarray(px, mode="L").save(out_path, optimize=True)
+    """Thin wrapper around the shared log10 encoder (Stage 6 refactor).
+
+    The legacy local version computed ``valid = np.isfinite(arr) & (arr > 0)``
+    explicitly and short-circuited if no cells were valid; the shared
+    helper accomplishes the same outcome through ``np.errstate`` +
+    ``np.isfinite(scaled)``. Byte-identical output is asserted by
+    ``test_encode_log10_matches_fetch_climatology``.
+    """
+    encode_log10_png(arr, lo, hi, out_path)
 
 
 def kelvin_to_c(arr):
@@ -269,8 +287,10 @@ def fetch_oisst_monthly_climo(month: int):
             f"[({lng_min_0360}):1:({lng_max_0360})]"
         )
         print(f"  GET OISST climo month={month:02d}", flush=True)
-        r = SESSION.get(url, timeout=180)
-        r.raise_for_status()
+        # Stage 6 — same migration as `erddap_nc` above: SESSION.get +
+        # raise_for_status -> http_get with raise_on_failure=True. Adds
+        # retry-on-transient behavior; preserves legacy raise semantics.
+        r = http_get(url, timeout=180, raise_on_failure=True)
         nc_path.write_bytes(r.content)
 
     result = open_first_array(nc_path)
