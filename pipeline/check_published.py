@@ -52,9 +52,16 @@ OUT_PATH  = REPO_ROOT / "pipeline" / "validation" / "data" / "published_health.j
 REMOTE_BASE   = "https://shouldidive.com"
 MANIFEST_URL  = f"{REMOTE_BASE}/data/manifest.json"
 
+# Cloudflare's Bot Fight Mode 403s any UA it can't fingerprint to a real
+# browser. The puppeteer-based live-cp-render passes because it ships a
+# real Chrome UA; this Python probe previously sent "ShoudiDive-..." and
+# got blocked on every run starting ~2026-05-20 (visible in health-check
+# logs as `[CRIT] manifest_http_error: HTTP 403`). Send a recent Chrome
+# UA to land on the same allow path — the underlying behavior is still
+# "fetch one JSON file every 4h" so there's no abuse concern.
 USER_AGENT = (
-    "ShoudiDive-PublishedChecker/1.0 "
-    "(+https://shouldidive.com/about/validation; live deploy probe)"
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 )
 DEFAULT_TIMEOUT = 25
 
