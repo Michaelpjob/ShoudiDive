@@ -118,6 +118,7 @@ export default function App() {
         onSettings={() => setSettingsOpen((v) => !v)}
         settingsOpen={settingsOpen}
         dataState={dataState}
+        layer={layer}
       />
       {settingsOpen && (
         <SettingsPopover onClose={() => setSettingsOpen(false)} />

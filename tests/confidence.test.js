@@ -84,8 +84,17 @@ test("ConfidenceDot is wired into MobileSheet chips via L.id", () => {
   assert.match(src, /<ConfidenceDot layer={L\.id}/);
 });
 
-test("TopBar renders the region confidence badge", () => {
+test("TopBar renders the active-layer confidence badge", () => {
   const src = read("src/components/TopBar.jsx");
-  assert.match(src, /getRegionConfidence/);
-  assert.match(src, /region-confidence/);
+  // Switched from getRegionConfidence to getLayerConfidence(layer) so
+  // the badge updates as the user clicks chips. The chip-strip dots
+  // still cover the per-region overview.
+  assert.match(src, /getLayerConfidence/);
+  assert.match(src, /layer-confidence/);
+  assert.match(src, /TopBar\(\{[^}]*layer/);  // accepts `layer` prop
+});
+
+test("App.jsx threads the active layer into TopBar", () => {
+  const src = read("src/App.jsx");
+  assert.match(src, /<TopBar[\s\S]{0,400}layer=\{layer\}/);
 });
