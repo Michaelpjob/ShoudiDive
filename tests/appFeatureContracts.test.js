@@ -15,15 +15,21 @@ test("Temp keeps historical and beta forecast SST timelines instead of reverting
   const mobileSheet = read("src/components/MobileSheet.jsx");
   const dataSource = read("src/lib/dataSource.js");
   // 2026-05-23 Stage 4: DesktopView extracted from App.jsx into
-  // src/components/MapShell.jsx. The SST timeline + SstModeToggle +
-  // SstCurrentCard imports/JSX live in MapShell now; pin the
-  // contract on MapShell, same pattern this test uses for the
-  // loaders split (dataSource → loaders/*.js) and the hook split
-  // (App.jsx useState → useTimelineSelections.js).
+  // src/components/MapShell.jsx. The SST timeline scrubber stays in
+  // MapShell because it sits inside .map-stage (under the desktop
+  // panels).
+  // 2026-05-24 Stage 4b: the desktop chrome (Tooltip + 4 collapsible
+  // panels + zoom-ctl + attribution) moved into DesktopLayout.jsx —
+  // including SstModeToggle + SstCurrentCard + SstTrendChip +
+  // SstSparkline (consumed inside the Saved Spots + controls panels).
+  // MapShell still owns the SST timeline scrubber + sstSelToSlotKey;
+  // DesktopLayout owns the mode toggle + current-value cards.
   const mapShell = read("src/components/MapShell.jsx");
+  const desktopLayout = read("src/components/DesktopLayout.jsx");
 
-  assert.match(mapShell, /import SstTimeline,\s*\{[\s\S]*SstCurrentCard[\s\S]*SstModeToggle[\s\S]*sstSelToSlotKey/);
-  assert.match(mapShell, /SstModeToggle/);
+  assert.match(mapShell, /import SstTimeline,\s*\{\s*sstSelToSlotKey\s*\}/);
+  assert.match(desktopLayout, /import \{[\s\S]*SstCurrentCard[\s\S]*SstModeToggle[\s\S]*\} from "\.\/SstTimeline\.jsx"/);
+  assert.match(desktopLayout, /SstModeToggle/);
   // 2026-05-23 Stage 5b: SST mode resolution + summary access moved
   // INTO useTimelineSelections.js. The hook computes activeSstMode +
   // sstActiveSel + sstTimelineSummary via resolveSstMode and returns
@@ -51,10 +57,13 @@ test("Temp keeps historical and beta forecast SST timelines instead of reverting
   // MobileSheet) all use the derived activeSstMode/sstActiveSel.
   assert.match(app, /sstMode,\s*setSstMode/);
   assert.match(app, /activeSstMode,\s*sstActiveSel,\s*setSstActiveSel/);
-  // Render-path assertions follow the JSX into MapShell.
+  // Render-path assertions: the activeComposite ternary + the SST
+  // timeline scrubber stay in MapShell (inside .map-stage). The
+  // controls-panel SST mode toggle + current-value card moved to
+  // DesktopLayout (Stage 4b).
   assert.match(mapShell, /layer === "sst"\s*\?\s*\(sstTimelineSummary \? sstSelToSlotKey\(sstActiveSel, sstTimelineSummary\) : composite\)/);
   assert.match(mapShell, /\{layer === "sst" && hasSstTimeline && \(\s*<SstTimeline sel=\{sstActiveSel\} setSel=\{setSstActiveSel\} units=\{units\} mode=\{activeSstMode\} \/>/);
-  assert.match(mapShell, /layer === "sst" && hasSstTimeline \?\s*\(\s*<div className="composite wind-grid-host">[\s\S]*Sea temp forecast[\s\S]*<SstModeToggle[\s\S]*<SstCurrentCard sel=\{sstActiveSel\} units=\{units\} mode=\{activeSstMode\} \/>/);
+  assert.match(desktopLayout, /layer === "sst" && hasSstTimeline \?\s*\(\s*<div className="composite wind-grid-host">[\s\S]*Sea temp forecast[\s\S]*<SstModeToggle[\s\S]*<SstCurrentCard sel=\{sstActiveSel\} units=\{units\} mode=\{activeSstMode\} \/>/);
   assert.match(mobileSheet, /layer === "sst" && hasSstTimeline \? `Sea temp/);
   assert.match(mobileSheet, /layer === "sst" && hasSstTimeline \?\s*\(\s*<>[\s\S]*<SstModeToggle[\s\S]*<SstCurrentCard sel=\{sstActiveSel\} units=\{units\} mode=\{activeSstMode\} \/>/);
   // 2026-05-09: dataSource.js's loadManifest if/else if chain was split
@@ -76,7 +85,12 @@ test("Temp keeps historical and beta forecast SST timelines instead of reverting
 test("Current, swell, wind, and mobile overlay features remain wired", () => {
   const mobileSheet = read("src/components/MobileSheet.jsx");
   // 2026-05-23 Stage 4: timeline JSX moved with DesktopView into MapShell.jsx.
+  // 2026-05-24 Stage 4b: the timeline *scrubbers* stay in MapShell (inside
+  // .map-stage), but the per-layer current-value CARDS (CurrentCurrentCard,
+  // SwellCurrentCard, WindCurrentSelectionCard) moved into the controls
+  // panel in DesktopLayout.jsx.
   const mapShell = read("src/components/MapShell.jsx");
+  const desktopLayout = read("src/components/DesktopLayout.jsx");
   // 2026-05-09: app.css was split into per-area files (tokens, shell,
   // popups, mobile, wind) — read them all and concat for the grep
   // contract checks below. The barrel `app.css` only carries @imports
@@ -89,10 +103,12 @@ test("Current, swell, wind, and mobile overlay features remain wired", () => {
     read("src/styles/mobile.css") +
     read("src/styles/wind.css");
 
+  // Timeline scrubbers stay in MapShell.
   assert.match(mapShell, /<CurrentTimeline sel=\{currentSel\} setSel=\{setCurrentSel\} \/>/);
-  assert.match(mapShell, /<CurrentCurrentCard sel=\{currentSel\} \/>/);
   assert.match(mapShell, /<SwellTimeline sel=\{swellSel\} setSel=\{setSwellSel\} \/>/);
   assert.match(mapShell, /<WindTimeline sel=\{windSel\} setSel=\{setWindSel\} \/>/);
+  // Current-value cards live in DesktopLayout's controls panel.
+  assert.match(desktopLayout, /<CurrentCurrentCard sel=\{currentSel\} \/>/);
   assert.match(mobileSheet, /className="ms-overlay-quick"/);
   assert.match(mobileSheet, /aria-pressed=\{mpaOn\}/);
   assert.match(mobileSheet, /aria-pressed=\{bathyOn\}/);

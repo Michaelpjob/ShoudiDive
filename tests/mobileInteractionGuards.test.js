@@ -110,11 +110,16 @@ test("mobile timeline regression wiring stays in place", () => {
   // 2026-05-23 Stage 4: DesktopView extracted from App.jsx into
   // src/components/MapShell.jsx — the gesture guards + hover overlay
   // gating live with the map JSX in MapShell now.
+  // 2026-05-24 Stage 4b: the !isMobile + Tooltip hover overlay moved
+  // further down into src/components/DesktopLayout.jsx; the gesture
+  // guards (isMapGestureChildTarget, shouldPinMapTap) stay in
+  // MapShell because they're wired to the .map-stage event handlers.
   const mapShell = readFileSync(resolve(repoRoot, "src/components/MapShell.jsx"), "utf8");
+  const desktopLayout = readFileSync(resolve(repoRoot, "src/components/DesktopLayout.jsx"), "utf8");
   const timelineHook = readFileSync(resolve(repoRoot, "src/components/useTimelineDrag.js"), "utf8");
   const currentTimeline = readFileSync(resolve(repoRoot, "src/components/CurrentTimeline.jsx"), "utf8");
 
-  assert.match(mapShell, /!\s*isMobile\s*&&\s*hover\s*&&\s*\(/);
+  assert.match(desktopLayout, /!\s*isMobile\s*&&\s*hover\s*&&\s*\(/);
   assert.match(mapShell, /isMapGestureChildTarget\(e\.target\)/);
   assert.match(mapShell, /shouldPinMapTap\(\{\s*tap,\s*layer,/);
   assert.match(timelineHook, /onPointerDown[\s\S]*?e\.stopPropagation\(\)/);
