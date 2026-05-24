@@ -733,6 +733,7 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
         hasSstHistory={hasSstHistory}
         hasSstForecast={hasSstForecast}
         windSel={windSel}
+        setWindSel={setWindSel}
         swellSel={swellSel}
         currentSel={currentSel}
         units={units}

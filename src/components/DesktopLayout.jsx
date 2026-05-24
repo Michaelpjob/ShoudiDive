@@ -134,7 +134,8 @@ export default function DesktopLayout({
   composite, setComposite,
   sstMode, setSstMode, sstActiveSel, activeSstMode,
   hasSstTimeline, hasSstHistory, hasSstForecast,
-  windSel, swellSel, currentSel,
+  windSel, setWindSel,
+  swellSel, currentSel,
   // Prefs read by panels
   units,
   // Map-driven UI state
