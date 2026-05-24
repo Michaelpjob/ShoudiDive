@@ -3,10 +3,13 @@ import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
 import "./styles/app.css";
 import { initAnalytics } from "./lib/analytics.js";
+import { PrefsProvider } from "./contexts/PrefsContext.jsx";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <App />
+    <PrefsProvider>
+      <App />
+    </PrefsProvider>
   </React.StrictMode>
 );
 

@@ -1,24 +1,21 @@
-// Post-Stage-4 (2026-05-23): App.jsx is the thin top-level shell.
-// It owns app-wide state (prefs, layer, timeline selections via
-// useTimelineSelections), renders the TopBar + SettingsPopover, then
-// hands off to MapShell which owns the map stage + all data overlay
-// rendering. Everything MapShell uses imports from its own module,
-// not from here.
+// Post-Stage-5 (2026-05-23): App.jsx is the thin top-level shell.
+// It owns layer + composite + settingsOpen state and the timeline
+// selections (via useTimelineSelections). Prefs (theme/opacity/units/
+// mpaOn/bathyOn) live in PrefsContext — provider wraps the tree in
+// src/main.jsx; consumers read via usePrefs() directly.
+// Renders TopBar + SettingsPopover, hands off to MapShell.
 import { useEffect, useState } from "react";
 import { activeRegion } from "./lib/region.js";
 import TopBar from "./components/TopBar.jsx";
 import SettingsPopover from "./components/SettingsPopover.jsx";
 import MapShell from "./components/MapShell.jsx";
 import { useTimelineSelections } from "./hooks/useTimelineSelections.js";
-import { resolveSstMode } from "./lib/sstMode.js";
 import {
   loadManifest,
   subscribe,
   getDataState,
   getWind5dSummary,
   getCurrent5dSummary,
-  getSstForecastSummary,
-  getSstHistorySummary,
   getSwell5dSummary,
 } from "./lib/dataSource.js";
 import { sstSelToSlotKey } from "./components/SstTimeline.jsx";
@@ -37,24 +34,6 @@ function useDataVersion() {
 }
 
 
-
-const PREF_KEY = "ca-coast-conditions:prefs:v1";
-const OVERLAY_DEFAULTS_MIGRATION_KEY = "ca-coast-conditions:prefs:migrations:overlay-defaults-v1";
-const DEFAULT_PREFS = { theme: "light", opacity: 0.62, units: "F", mpaOn: true, bathyOn: true };
-
-function loadPrefs() {
-  try {
-    const raw = localStorage.getItem(PREF_KEY);
-    const prefs = raw ? { ...DEFAULT_PREFS, ...JSON.parse(raw) } : { ...DEFAULT_PREFS };
-    if (!localStorage.getItem(OVERLAY_DEFAULTS_MIGRATION_KEY)) {
-      prefs.bathyOn = true;
-      localStorage.setItem(OVERLAY_DEFAULTS_MIGRATION_KEY, "1");
-    }
-    return prefs;
-  } catch {
-    return DEFAULT_PREFS;
-  }
-}
 
 // Region-aware browser tab title. index.html ships a static
 // "ShouldIDive — CA Coast Conditions" fallback; this overrides it
@@ -75,7 +54,6 @@ function useRegionAwareTitle() {
 
 export default function App() {
   useRegionAwareTitle();
-  const [prefs, setPrefs] = useState(loadPrefs);
   const [layer, setLayer] = useState("sst");
   const [composite, setComposite] = useState(2);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -85,6 +63,10 @@ export default function App() {
   // into a hook on 2026-05-23 (Stage 3 of the refactor); see
   // src/hooks/useTimelineSelections.js for the reconcile + auto-pick
   // effect that this hook runs on dataState change.
+  //
+  // Stage 5b (2026-05-23) added the derived activeSstMode + sstActiveSel
+  // exports so MapShell + MobileSheet don't re-derive them locally with
+  // slightly-divergent inline conditionals.
   const {
     sstMode, setSstMode,
     sstSel, setSstSel,
@@ -92,23 +74,9 @@ export default function App() {
     windSel, setWindSel,
     swellSel, setSwellSel,
     currentSel, setCurrentSel,
+    activeSstMode, sstActiveSel, setSstActiveSel,
+    sstTimelineSummary, hasSstTimeline,
   } = useTimelineSelections(dataState);
-
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", prefs.theme);
-    document.body.setAttribute("data-theme", prefs.theme);
-    try {
-      localStorage.setItem(PREF_KEY, JSON.stringify(prefs));
-    } catch { /* ignore quota */ }
-  }, [prefs]);
-
-  function setPref(key, val) {
-    setPrefs((p) => ({ ...p, [key]: val }));
-    // Track settings changes — answers "do users actually toggle theme,
-    // change opacity, switch units?". Don't include the value as a
-    // string for free-form fields; just the key + a JSON-safe value.
-    track("settings_change", { key, val });
-  }
 
   // Wrapped state setters that fire analytics events alongside the
   // setState. Passing these down to DesktopView (and through to
@@ -135,8 +103,10 @@ export default function App() {
 
   // Moon-phase icon should track the active time slider when those
   // layers are active, otherwise show "now". Computed at render time
-  // so it updates whenever the selected time/layer changes.
-  const viewingDate = selToDate(layer, sstMode, sstSel, sstForecastSel, windSel, swellSel, currentSel);
+  // so it updates whenever the selected time/layer changes. Stage 5b:
+  // takes the hook's pre-resolved sstActiveSel + sstTimelineSummary
+  // so it doesn't have to call resolveSstMode itself.
+  const viewingDate = selToDate(layer, sstActiveSel, sstTimelineSummary, windSel, swellSel, currentSel);
 
   return (
     <div className="app">
@@ -146,7 +116,7 @@ export default function App() {
         dataState={dataState}
       />
       {settingsOpen && (
-        <SettingsPopover prefs={prefs} setPref={setPref} onClose={() => setSettingsOpen(false)} />
+        <SettingsPopover onClose={() => setSettingsOpen(false)} />
       )}
       <MapShell
         layer={layer}
@@ -155,23 +125,18 @@ export default function App() {
         setComposite={setComposite}
         sstMode={sstMode}
         setSstMode={trackedSetSstMode}
-        sstSel={sstSel}
-        setSstSel={setSstSel}
-        sstForecastSel={sstForecastSel}
-        setSstForecastSel={setSstForecastSel}
+        sstActiveSel={sstActiveSel}
+        setSstActiveSel={setSstActiveSel}
+        activeSstMode={activeSstMode}
+        sstTimelineSummary={sstTimelineSummary}
+        hasSstTimeline={hasSstTimeline}
         windSel={windSel}
         setWindSel={setWindSel}
         swellSel={swellSel}
         setSwellSel={setSwellSel}
         currentSel={currentSel}
         setCurrentSel={setCurrentSel}
-        opacity={prefs.opacity}
-        units={prefs.units}
         dataState={dataState}
-        mpaOn={prefs.mpaOn}
-        setMpaOn={(v) => setPref("mpaOn", v)}
-        bathyOn={prefs.bathyOn}
-        setBathyOn={(v) => setPref("bathyOn", v)}
         viewingDate={viewingDate}
       />
     </div>
@@ -181,14 +146,14 @@ export default function App() {
 // Map a timeline selection to a real Date so the moon icon can update
 // with the selected time. Returns null when the active layer has no
 // timeline (chl/viz), so the widget falls back to "now".
-function selToDate(layer, sstMode, sstSel, sstForecastSel, windSel, swellSel, currentSel) {
+//
+// Stage 5b (2026-05-23): takes the already-resolved sstActiveSel +
+// sstTimelineSummary from the hook instead of recomputing the
+// history-vs-forecast pick locally.
+function selToDate(layer, sstActiveSel, sstTimelineSummary, windSel, swellSel, currentSel) {
   if (layer === "sst") {
-    const history = getSstHistorySummary();
-    const forecast = getSstForecastSummary();
-    const activeMode = resolveSstMode(sstMode, history, forecast);
-    const summary = activeMode === "forecast" ? forecast : history;
-    const slot = sstSelToSlotKey(activeMode === "forecast" ? sstForecastSel : sstSel, summary);
-    const dayInfo = summary?.days?.find((d) => d.slot === slot);
+    const slot = sstSelToSlotKey(sstActiveSel, sstTimelineSummary);
+    const dayInfo = sstTimelineSummary?.days?.find((d) => d.slot === slot);
     return dayInfo?.date ? new Date(`${dayInfo.date}T12:00:00Z`) : null;
   }
   let sel = null;

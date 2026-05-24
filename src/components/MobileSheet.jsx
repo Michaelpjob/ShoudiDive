@@ -28,8 +28,6 @@ import {
   getCurrentUV,
   getVizFt,
   getSwell5dStats,
-  getSstForecastSummary,
-  getSstHistorySummary,
   getCurrent5dSummary,
   windSource,
   currentSource,
@@ -40,6 +38,7 @@ import WindDayGrid from "./WindDayGrid.jsx";
 import { SwellCurrentCard } from "./SwellTimeline.jsx";
 import { SstCurrentCard, SstModeToggle } from "./SstTimeline.jsx";
 import { CurrentCurrentCard } from "./CurrentTimeline.jsx";
+import { usePrefs } from "../contexts/PrefsContext.jsx";
 
 const LAYERS = [
   { id: "sst",   label: "Temp",  unit: "°{U}" },
@@ -114,15 +113,16 @@ export default function MobileShell({
   layer, setLayer,
   composite, setComposite,
   sstMode, setSstMode,
-  sstSel, setSstSel,
-  sstForecastSel, setSstForecastSel,
+  sstActiveSel, setSstActiveSel,
+  activeSstMode,
+  hasSstTimeline,
   windSel, setWindSel,
   swellSel, setSwellSel,
   currentSel, setCurrentSel,
   activeComposite,
-  units, dataState,
-  mpaOn, setMpaOn,
-  bathyOn, setBathyOn,
+  dataState,
+  setMpaOn,
+  setBathyOn,
   activeSpot, setActiveSpot,
   timeOpts,
   compositeText,
@@ -131,20 +131,20 @@ export default function MobileShell({
   setHover,
 }) {
   const [open, setOpen] = useState(false);
+  // Stage 5c: units/mpaOn/bathyOn come from context (PrefsProvider in
+  // src/main.jsx). setMpaOn/setBathyOn stay as props because MapShell
+  // wraps them with a popup-clearing side effect before passing them in
+  // (see updateMpaOn/updateBathyOn there).
+  const { prefs } = usePrefs();
+  const { units, mpaOn, bathyOn } = prefs;
   // wind + swell + current use slot keys; sst uses history/forecast slots
   // when loaded; chl/viz use integer composites.
-  const hasSstHistory = Boolean(getSstHistorySummary());
-  const hasSstForecast = Boolean(getSstForecastSummary());
-  const activeSstMode =
-    sstMode === "forecast" && hasSstForecast
-      ? "forecast"
-      : hasSstHistory
-      ? "history"
-      : hasSstForecast
-      ? "forecast"
-      : "history";
-  const hasSstTimeline = hasSstHistory || hasSstForecast;
-  const activeSstSel = activeSstMode === "forecast" ? sstForecastSel : sstSel;
+  //
+  // Stage 5b (2026-05-23): activeSstMode + sstActiveSel + hasSstTimeline
+  // now arrive pre-resolved from the useTimelineSelections hook (via
+  // MapShell). MobileSheet used to recompute them locally with a
+  // slightly-different inline conditional than MapShell did — both
+  // call sites collapse to the hook's single resolveSstMode call now.
   const hasCurrentSummary = Boolean(getCurrent5dSummary());
   const lookupKey = activeComposite ?? composite;
   const focal = focalPoint(hover, activeSpot);
@@ -192,7 +192,7 @@ export default function MobileShell({
                   hasHistory={hasSstHistory}
                   hasForecast={hasSstForecast}
                 />
-                <SstCurrentCard sel={activeSstSel} units={units} mode={activeSstMode} />
+                <SstCurrentCard sel={sstActiveSel} units={units} mode={activeSstMode} />
               </>
             ) : layer === "wind" ? (
               <WindDayGrid sel={windSel} setSel={setWindSel} layout="stack" />

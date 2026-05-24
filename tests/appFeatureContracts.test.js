@@ -24,13 +24,22 @@ test("Temp keeps historical and beta forecast SST timelines instead of reverting
 
   assert.match(mapShell, /import SstTimeline,\s*\{[\s\S]*SstCurrentCard[\s\S]*SstModeToggle[\s\S]*sstSelToSlotKey/);
   assert.match(mapShell, /SstModeToggle/);
-  assert.match(app, /getSstForecastSummary/);
+  // 2026-05-23 Stage 5b: SST mode resolution + summary access moved
+  // INTO useTimelineSelections.js. The hook computes activeSstMode +
+  // sstActiveSel + sstTimelineSummary via resolveSstMode and returns
+  // them pre-resolved. App.jsx no longer imports getSstForecastSummary
+  // (selToDate consumes the hook's sstTimelineSummary instead) — pin
+  // the contract on the hook source where the call lives now.
+  const timelineHook = read("src/hooks/useTimelineSelections.js");
+  assert.match(timelineHook, /import \{ resolveSstMode \} from "\.\.\/lib\/sstMode\.js"/);
+  assert.match(timelineHook, /getSstHistorySummary/);
+  assert.match(timelineHook, /getSstForecastSummary/);
+  assert.match(timelineHook, /activeSstMode = resolveSstMode\(/);
   // 2026-05-23: useState calls for SST mode + forecast selection
   // moved into src/hooks/useTimelineSelections.js as part of the
   // Stage 3 refactor. App.jsx now destructures them from the hook;
   // pin the contract on the hook's source, mirroring how this test
   // already handles the loaders split (dataSource → loaders/*.js).
-  const timelineHook = read("src/hooks/useTimelineSelections.js");
   assert.match(timelineHook, /const \[sstMode, _setSstMode\] = useState\("history"\)/);
   assert.match(timelineHook, /const \[sstForecastSel, setSstForecastSel\] = useState\(\{ slot: "f0" \}\)/);
   // App.jsx must consume the hook + destructure the names downstream
@@ -38,12 +47,13 @@ test("Temp keeps historical and beta forecast SST timelines instead of reverting
   // it breaks here BEFORE the build fails on missing identifiers.
   assert.match(app, /import \{ useTimelineSelections \} from "\.\/hooks\/useTimelineSelections\.js"/);
   assert.match(app, /sstMode,\s*setSstMode[\s\S]*sstSel,\s*setSstSel[\s\S]*sstForecastSel,\s*setSstForecastSel/);
+  assert.match(app, /activeSstMode,\s*sstActiveSel,\s*setSstActiveSel/);
   // Render-path assertions follow the JSX into MapShell.
   assert.match(mapShell, /layer === "sst"\s*\?\s*\(sstTimelineSummary \? sstSelToSlotKey\(sstActiveSel, sstTimelineSummary\) : composite\)/);
   assert.match(mapShell, /\{layer === "sst" && hasSstTimeline && \(\s*<SstTimeline sel=\{sstActiveSel\} setSel=\{setSstActiveSel\} units=\{units\} mode=\{activeSstMode\} \/>/);
   assert.match(mapShell, /layer === "sst" && hasSstTimeline \?\s*\(\s*<div className="composite wind-grid-host">[\s\S]*Sea temp forecast[\s\S]*<SstModeToggle[\s\S]*<SstCurrentCard sel=\{sstActiveSel\} units=\{units\} mode=\{activeSstMode\} \/>/);
   assert.match(mobileSheet, /layer === "sst" && hasSstTimeline \? `Sea temp/);
-  assert.match(mobileSheet, /layer === "sst" && hasSstTimeline \?\s*\(\s*<>[\s\S]*<SstModeToggle[\s\S]*<SstCurrentCard sel=\{activeSstSel\} units=\{units\} mode=\{activeSstMode\} \/>/);
+  assert.match(mobileSheet, /layer === "sst" && hasSstTimeline \?\s*\(\s*<>[\s\S]*<SstModeToggle[\s\S]*<SstCurrentCard sel=\{sstActiveSel\} units=\{units\} mode=\{activeSstMode\} \/>/);
   // 2026-05-09: dataSource.js's loadManifest if/else if chain was split
   // into per-layer files under src/lib/loaders/. The state.layers.sst7d /
   // sst5d assignment lines now live in those files. Read them so the
