@@ -39,6 +39,7 @@ import { SwellCurrentCard } from "./SwellTimeline.jsx";
 import { SstCurrentCard, SstModeToggle } from "./SstTimeline.jsx";
 import { CurrentCurrentCard } from "./CurrentTimeline.jsx";
 import { usePrefs } from "../contexts/PrefsContext.jsx";
+import ConfidenceDot from "./ConfidenceDot.jsx";
 
 const LAYERS = [
   { id: "sst",   label: "Temp",  unit: "°{U}" },
@@ -396,6 +397,7 @@ export default function MobileShell({
               >
                 <span className="ms-chip-label">
                   {L.label}
+                  <ConfidenceDot layer={L.id} className="ms-chip-conf" />
                   {L.beta && <span className="ms-chip-beta">Beta</span>}
                 </span>
                 <span className="ms-chip-sub mono">{sub}</span>
