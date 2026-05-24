@@ -24,25 +24,22 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-import requests
-
 ROOT = Path(__file__).resolve().parents[1]
 
 # Region-aware output dir. CA stays at public/data/; PNW + tropical
 # land under public/data/<region>/. See pipeline/regions/ (PR-X-1).
 try:
     from pipeline.regions import active_region
+    from pipeline.lib.http import http_get
 except ModuleNotFoundError:
     from regions import active_region
+    from lib.http import http_get
 
 REGION = active_region()
 OUT_DIR = REGION.data_output_dir(ROOT)
 STATIONS = REGION.tide_stations
 
 API = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
-
-SESSION = requests.Session()
-SESSION.headers.update({"Accept": "application/json", "User-Agent": "shouldidive/0.1"})
 
 
 def fetch_tide_range_m(station_id: str) -> float | None:
@@ -63,8 +60,10 @@ def fetch_tide_range_m(station_id: str) -> float | None:
         "application": "shouldidive",
     }
     try:
-        r = SESSION.get(API, params=params, timeout=30)
-        r.raise_for_status()
+        # Stage 6a: was SESSION.get + raise_for_status with per-file UA.
+        # http_get adds the shared lib/http Session + retries with
+        # exponential backoff (NOAA CO-OPS occasionally throttles).
+        r = http_get(API, params=params, timeout=30, raise_on_failure=True)
         data = r.json()
     except Exception as e:
         print(f"  {station_id}: fetch failed — {e!s}")
