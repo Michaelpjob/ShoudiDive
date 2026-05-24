@@ -98,3 +98,24 @@ test("App.jsx threads the active layer into TopBar", () => {
   const src = read("src/App.jsx");
   assert.match(src, /<TopBar[\s\S]{0,400}layer=\{layer\}/);
 });
+
+test("confidence.js exposes horizon-aware decay", () => {
+  const src = read("src/lib/confidence.js");
+  assert.match(src, /function horizonDecay/);
+  // SST forecast persistence drop at +4
+  assert.match(src, /sst[\s\S]*?horizonDays >= 4[\s\S]*?delta:\s*-2/);
+  // Dynamical layers drop at day 5
+  assert.match(src, /wind[\s\S]*?horizonDays >= 5[\s\S]*?delta:\s*-2/);
+});
+
+test("App.jsx computes activeHorizonDays + passes to TopBar", () => {
+  const src = read("src/App.jsx");
+  assert.match(src, /function layerHorizonDays/);
+  assert.match(src, /activeHorizonDays\s*=\s*layerHorizonDays/);
+  assert.match(src, /<TopBar[\s\S]{0,400}horizonDays=\{activeHorizonDays\}/);
+});
+
+test("TopBar passes horizonDays into getLayerConfidence", () => {
+  const src = read("src/components/TopBar.jsx");
+  assert.match(src, /getLayerConfidence\(layer,\s*\{\s*horizonDays\s*\}\)/);
+});

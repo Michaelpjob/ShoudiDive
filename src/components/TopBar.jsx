@@ -48,7 +48,7 @@ function FreediverLogo() {
   );
 }
 
-export default function TopBar({ onSettings, settingsOpen, dataState, layer }) {
+export default function TopBar({ onSettings, settingsOpen, dataState, layer, horizonDays }) {
   const generated = dataState?.manifest?.generated_at;
   const lastUpdate = generated
     ? new Date(generated).toLocaleString("en-US", {
@@ -87,7 +87,7 @@ export default function TopBar({ onSettings, settingsOpen, dataState, layer }) {
           // trust the layer I'm currently looking at?" — the actionable
           // read for a diver mid-decision.
           if (!layer) return null;
-          const lc = getLayerConfidence(layer);
+          const lc = getLayerConfidence(layer, { horizonDays });
           if (!lc) return null;
           const layerName = LAYER_NAMES[layer] || layer;
           const tooltipReasons =
