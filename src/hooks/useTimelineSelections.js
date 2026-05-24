@@ -10,12 +10,23 @@
 //
 // API:
 //   const t = useTimelineSelections(dataState);
-//   t.sstMode, t.setSstMode             — "history" | "forecast", auto-picked on first load
+//   t.sstMode, t.setSstMode             — "history" | "forecast" (raw user intent)
 //   t.sstSel, t.setSstSel               — {slot} pointing at a history day
 //   t.sstForecastSel, t.setSstForecastSel
 //   t.windSel, t.setWindSel             — {day, bucket, hour} for the wind 5-day grid
 //   t.swellSel, t.setSwellSel           — same shape as windSel
 //   t.currentSel, t.setCurrentSel       — {day, bucket} (no hour — currents are bucket-level)
+//
+//   Derived SST mode/sel (Stage 5b, 2026-05-23) — single source of truth for
+//   "which SST track is active right now and what's the current selection in
+//   it." Computed via resolveSstMode against the live summaries each render.
+//   MapShell + MobileSheet used to recompute these locally with subtly
+//   different logic; harmonised into the hook so there's one definition.
+//   t.activeSstMode                     — "history" | "forecast" (resolved against summaries)
+//   t.sstActiveSel                      — {slot} for whichever track is active
+//   t.setSstActiveSel                   — corresponding setter
+//   t.sstTimelineSummary                — the summary object for the active mode
+//   t.hasSstTimeline                    — Boolean(sstTimelineSummary)
 //
 // Notes:
 //   * The PUBLIC setSstMode flips `userToggledRef.current = true` so the
@@ -38,6 +49,7 @@ import {
   getSwell5dSummary,
   getCurrent5dSummary,
 } from "../lib/dataSource.js";
+import { resolveSstMode } from "../lib/sstMode.js";
 import {
   defaultSstSelection,
   sstSelectionHasData,
@@ -127,6 +139,25 @@ export function useTimelineSelections(dataState) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataState?.ready, dataState?.manifest?.generated_at]);
 
+  // ---- Derived SST mode / selection (Stage 5b harmonisation) ----------
+  // Computed each render against the LIVE summaries so layers know whether
+  // history or forecast is the active track and what slot is selected
+  // there. Two-system duplication (MapShell + MobileSheet each computing
+  // this with slightly-different inline conditionals) collapsed to one
+  // call site here. Callers receive ready-to-render activeSstMode +
+  // sstActiveSel + setSstActiveSel + sstTimelineSummary + hasSstTimeline,
+  // plus hasSstHistory + hasSstForecast for the SstModeToggle's per-track
+  // availability indicators.
+  const sstHistorySummary = getSstHistorySummary();
+  const sstForecastSummary = getSstForecastSummary();
+  const activeSstMode = resolveSstMode(sstMode, sstHistorySummary, sstForecastSummary);
+  const sstTimelineSummary = activeSstMode === "forecast" ? sstForecastSummary : sstHistorySummary;
+  const sstActiveSel = activeSstMode === "forecast" ? sstForecastSel : sstSel;
+  const setSstActiveSel = activeSstMode === "forecast" ? setSstForecastSel : setSstSel;
+  const hasSstTimeline = Boolean(sstTimelineSummary);
+  const hasSstHistory = Boolean(sstHistorySummary);
+  const hasSstForecast = Boolean(sstForecastSummary);
+
   return {
     sstMode, setSstMode,
     sstSel, setSstSel,
@@ -134,5 +165,12 @@ export function useTimelineSelections(dataState) {
     windSel, setWindSel,
     swellSel, setSwellSel,
     currentSel, setCurrentSel,
+    // Derived (Stage 5b):
+    activeSstMode,
+    sstActiveSel, setSstActiveSel,
+    sstTimelineSummary,
+    hasSstTimeline,
+    hasSstHistory,
+    hasSstForecast,
   };
 }

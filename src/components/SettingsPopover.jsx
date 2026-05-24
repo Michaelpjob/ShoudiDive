@@ -1,9 +1,12 @@
 // Settings popover — theme, opacity, units. Carved out of App.jsx
-// (2026-05-09) as part of the Tier-1 architecture split. Pure
-// presentational; all state lives in App.jsx and is mutated via
-// the setPref callback.
+// (2026-05-09) as part of the Tier-1 architecture split. Reads + writes
+// prefs via usePrefs() context (Stage 5c, 2026-05-23) — App.jsx no
+// longer needs to thread prefs/setPref through props.
 
-export default function SettingsPopover({ prefs, setPref, onClose }) {
+import { usePrefs } from "../contexts/PrefsContext.jsx";
+
+export default function SettingsPopover({ onClose }) {
+  const { prefs, setPref } = usePrefs();
   return (
     <div className="settings-pop" role="dialog" aria-label="Settings">
       {/* Close button — was missing entirely; on mobile the popover

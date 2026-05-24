@@ -57,6 +57,7 @@ import { MoonWidget } from "./MoonIcon.jsx";
 
 import { useMapViewport } from "../hooks/useMapViewport.js";
 import { usePopupState } from "../hooks/usePopupState.js";
+import { usePrefs } from "../contexts/PrefsContext.jsx";
 import {
   project,
   unproject,
@@ -82,12 +83,9 @@ import {
   isReal,
   getWind5dSummary,
   getCurrent5dSummary,
-  getSstForecastSummary,
-  getSstHistorySummary,
   getSwell5dSummary,
   getSwell5dStats,
 } from "../lib/dataSource.js";
-import { resolveSstMode } from "../lib/sstMode.js";
 import { activeRegion } from "../lib/region.js";
 import {
   isMapGestureChildTarget,
@@ -234,30 +232,28 @@ function formatWindow(dates, fallback, layer) {
   return `${a.month} ${a.day} – ${b.month} ${b.day}, ${b.year}`;
 }
 
-export default function MapShell({ layer, setLayer, composite, setComposite, sstMode, setSstMode, sstSel, setSstSel, sstForecastSel, setSstForecastSel, windSel, setWindSel, swellSel, setSwellSel, currentSel, setCurrentSel, opacity, units, dataState, mpaOn, setMpaOn, bathyOn, setBathyOn, viewingDate }) {
+export default function MapShell({ layer, setLayer, composite, setComposite, sstMode, setSstMode, sstActiveSel, setSstActiveSel, activeSstMode, sstTimelineSummary, hasSstTimeline, hasSstHistory, hasSstForecast, windSel, setWindSel, swellSel, setSwellSel, currentSel, setCurrentSel, dataState, viewingDate }) {
+  // Prefs (opacity / units / mpaOn / bathyOn) read directly from
+  // PrefsContext — extracted in Stage 5c (2026-05-23) so they no
+  // longer have to be drilled through App → MapShell as props.
+  const { prefs, setPref } = usePrefs();
+  const { opacity, units, mpaOn, bathyOn } = prefs;
+  const setMpaOn = (v) => setPref("mpaOn", v);
+  const setBathyOn = (v) => setPref("bathyOn", v);
   // Timeline layers use a slot-key string derived from their selection
   // state; helpers fall back to a valid slot if the requested one has no
   // data. Chl/viz keep the legacy integer composite.
-  const sstHistorySummary = getSstHistorySummary();
-  const sstForecastSummary = getSstForecastSummary();
-  const activeSstMode = resolveSstMode(sstMode, sstHistorySummary, sstForecastSummary);
-  const sstTimelineSummary = activeSstMode === "forecast" ? sstForecastSummary : sstHistorySummary;
-  const sstActiveSel = activeSstMode === "forecast" ? sstForecastSel : sstSel;
-  const setSstActiveSel = activeSstMode === "forecast" ? setSstForecastSel : setSstSel;
-  const hasSstTimeline = Boolean(sstTimelineSummary);
+  //
+  // Stage 5b (2026-05-23): activeSstMode + sstActiveSel + sstTimelineSummary
+  // + hasSstTimeline now come pre-resolved from useTimelineSelections so
+  // we don't recompute them here (and MobileSheet doesn't recompute them
+  // either, with subtly different inline logic).
   const activeComposite =
     layer === "sst"   ? (sstTimelineSummary ? sstSelToSlotKey(sstActiveSel, sstTimelineSummary) : composite)
     : layer === "wind"  ? selToSlotKey(windSel,  getWind5dSummary())
     : layer === "swell" ? selToSlotKey(swellSel, getSwell5dSummary())
     : layer === "current" ? currentSelToSlotKey(currentSel, getCurrent5dSummary())
     : composite;
-  // Map-render layer override. The `sst-trend` palette mode was wired
-  // up alongside a Now/Trend/Forecast toggle that got dropped during
-  // conflict resolution with main's existing SstModeToggle (which
-  // handles history vs forecast already). Until the two mode systems
-  // are harmonised, hand DataOverlay the layer state directly. The
-  // trend chip + sparkline in saved-spots (Phase A) still ship.
-  const renderLayer = layer;
   const isMobile = useIsMobile();
 
   // Viewport state extracted into useMapViewport (2026-05-23, Stage 3
@@ -686,14 +682,11 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
                 />
               )}
 
-              {/* Data overlay (positions itself inside the fitted box).
-                  renderLayer is `layer` for normal modes and "sst-trend"
-                  when the trend toggle is on — so the diverging palette
-                  paints without any panel/UI thinking the layer changed. */}
+              {/* Data overlay (positions itself inside the fitted box). */}
               <DataOverlay
                 width={size.w}
                 height={size.h}
-                layer={renderLayer}
+                layer={layer}
                 composite={activeComposite}
                 opacity={opacity}
                 dataReady={dataState?.ready}
@@ -939,8 +932,8 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
               <SstModeToggle
                 mode={activeSstMode}
                 setMode={setSstMode}
-                hasHistory={Boolean(sstHistorySummary)}
-                hasForecast={Boolean(sstForecastSummary)}
+                hasHistory={hasSstHistory}
+                hasForecast={hasSstForecast}
               />
               <SstCurrentCard sel={sstActiveSel} units={units} mode={activeSstMode} />
               <div className="composite-window">
@@ -1594,16 +1587,18 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
         layer={layer} setLayer={setLayer}
         composite={composite} setComposite={setComposite}
         sstMode={sstMode} setSstMode={setSstMode}
-        sstSel={sstSel} setSstSel={setSstSel}
-        sstForecastSel={sstForecastSel} setSstForecastSel={setSstForecastSel}
+        sstActiveSel={sstActiveSel} setSstActiveSel={setSstActiveSel}
+        activeSstMode={activeSstMode}
+        hasSstTimeline={hasSstTimeline}
+        hasSstHistory={hasSstHistory}
+        hasSstForecast={hasSstForecast}
         windSel={windSel} setWindSel={setWindSel}
         swellSel={swellSel} setSwellSel={setSwellSel}
         currentSel={currentSel} setCurrentSel={setCurrentSel}
         activeComposite={activeComposite}
-        units={units}
         dataState={dataState}
-        mpaOn={mpaOn} setMpaOn={updateMpaOn}
-        bathyOn={bathyOn} setBathyOn={updateBathyOn}
+        setMpaOn={updateMpaOn}
+        setBathyOn={updateBathyOn}
         activeSpot={activeSpot} setActiveSpot={setActiveSpot}
         timeOpts={timeOpts}
         compositeText={compositeText}
