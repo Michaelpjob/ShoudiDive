@@ -395,9 +395,9 @@ export default function MobileShell({
                 role="tab"
                 aria-selected={active}
               >
+                <ConfidenceDot layer={L.id} className="ms-chip-conf" />
                 <span className="ms-chip-label">
                   {L.label}
-                  <ConfidenceDot layer={L.id} className="ms-chip-conf" />
                   {L.beta && <span className="ms-chip-beta">Beta</span>}
                 </span>
                 <span className="ms-chip-sub mono">{sub}</span>
