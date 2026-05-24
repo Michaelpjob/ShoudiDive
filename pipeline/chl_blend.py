@@ -57,8 +57,10 @@ from PIL import Image
 # tropical when those regions are wired in PR-X-3.
 try:
     from pipeline.regions import active_region
+    from pipeline.lib.http import http_get
 except ModuleNotFoundError:
     from regions import active_region
+    from lib.http import http_get
 
 BBOX = active_region().bbox
 
@@ -171,10 +173,12 @@ def _nasa_search_files(session: requests.Session, sensor: str, d: date) -> list[
         "edate": d.isoformat(),
         "results_as_file": 1,
     }
-    try:
-        r = session.get(NASA_OBDAAC_FILE_SEARCH, params=params, timeout=HTTP_TIMEOUT)
-    except requests.RequestException as exc:
-        print(f"  nasa-search {sensor} {d}: {exc.__class__.__name__}: {exc}", flush=True)
+    # Stage 6a (2026-05-24): http_get adds retries on the EARTHDATA
+    # session — previously a transient 503 dropped the daily file.
+    r = http_get(NASA_OBDAAC_FILE_SEARCH, params=params,
+                 timeout=HTTP_TIMEOUT, session=session)
+    if r is None:
+        print(f"  nasa-search {sensor} {d}: all retries failed", flush=True)
         return []
     if r.status_code != 200:
         return []
@@ -194,10 +198,9 @@ def _nasa_download(session: requests.Session, filename: str) -> Optional[Path]:
     if cache_path.exists():
         return cache_path
     url = f"{NASA_OBDAAC_GETFILE}/{filename}"
-    try:
-        r = session.get(url, timeout=HTTP_TIMEOUT, allow_redirects=True)
-    except requests.RequestException as exc:
-        print(f"  nasa-dl {filename}: {exc.__class__.__name__}: {exc}", flush=True)
+    r = http_get(url, timeout=HTTP_TIMEOUT, session=session, allow_redirects=True)
+    if r is None:
+        print(f"  nasa-dl {filename}: all retries failed", flush=True)
         return None
     if r.status_code != 200 or len(r.content) < 50_000:
         # < 50 KB is almost certainly the Earthdata HTML login page or a
@@ -309,10 +312,9 @@ def _make_noaa_erddap_fetcher(host: str, dataset: str, has_altitude: bool = True
                 f"[({BBOX['lng_min']}):1:({BBOX['lng_max']})]"
             )
             session = _noaa_session()
-            try:
-                r = session.get(url, timeout=HTTP_TIMEOUT)
-            except requests.RequestException as exc:
-                print(f"  noaa-erddap {dataset} {d}: {exc.__class__.__name__}", flush=True)
+            r = http_get(url, timeout=HTTP_TIMEOUT, session=session)
+            if r is None:
+                print(f"  noaa-erddap {dataset} {d}: all retries failed", flush=True)
                 return None
             if r.status_code != 200:
                 return None
