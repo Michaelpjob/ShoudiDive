@@ -112,6 +112,14 @@ export default function App() {
   // so it doesn't have to call resolveSstMode itself.
   const viewingDate = selToDate(layer, sstActiveSel, sstTimelineSummary, windSel, swellSel, currentSel);
 
+  // Forecast horizon for the active layer's current slider position.
+  // Drives the TopBar confidence badge so it drops as the user scrubs
+  // further into the forecast (e.g. wind +4 days reads -1 from ceiling
+  // because NOAA model skill drops past day 3).
+  const activeHorizonDays = layerHorizonDays(layer, {
+    sstActiveSel, windSel, swellSel, currentSel,
+  });
+
   return (
     <div className="app">
       <TopBar
@@ -119,6 +127,7 @@ export default function App() {
         settingsOpen={settingsOpen}
         dataState={dataState}
         layer={layer}
+        horizonDays={activeHorizonDays}
       />
       {settingsOpen && (
         <SettingsPopover onClose={() => setSettingsOpen(false)} />
@@ -189,6 +198,31 @@ function selToDate(layer, sstActiveSel, sstTimelineSummary, windSel, swellSel, c
   return new Date(y, m - 1, d, hour, 0, 0);
 }
 
-
-
+// Active-layer forecast horizon in days (0 = today, positive = future).
+// Drives the TopBar confidence badge — see src/lib/confidence.js for
+// the per-layer skill-decay curve.
+//
+// Resolves the slider state for whichever layer is active:
+//   sst:  "f3" → +3 d forecast; "d-2" → -2 d history (negative = past,
+//         confidence stays at ceiling for observations); "d0" → 0
+//   wind/swell/current: sel.day (0..6)
+//   chl/viz: no slider, 0
+function layerHorizonDays(layer, sels) {
+  if (layer === "sst") {
+    const slot = sels?.sstActiveSel?.slot || "";
+    if (slot.startsWith("f")) {
+      const n = parseInt(slot.slice(1), 10);
+      return Number.isFinite(n) ? n : 0;
+    }
+    if (slot.startsWith("d-")) {
+      const n = parseInt(slot.slice(1), 10);  // negative, e.g. -2
+      return Number.isFinite(n) ? n : 0;
+    }
+    return 0;
+  }
+  if (layer === "wind")    return sels?.windSel?.day    ?? 0;
+  if (layer === "swell")   return sels?.swellSel?.day   ?? 0;
+  if (layer === "current") return sels?.currentSel?.day ?? 0;
+  return 0;
+}
 

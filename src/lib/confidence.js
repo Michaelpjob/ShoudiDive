@@ -66,6 +66,37 @@ const CONFIDENCE_LABELS = {
   1: { name: "Climatology",  color: "rgb(220, 38, 38)" },   // red-600
 };
 
+// Forecast-horizon decay. Skill drops with lead time — HRRR is observed
+// for ~18 h then becomes the GFS forecast, gfswave is reasonable to
+// ~3 days, persistence_decay SST loses faith beyond +3.
+//
+// Returns a score delta (negative number) given the layer and the
+// number of days INTO the forecast (0 = today, positive = future,
+// negative = history). Historical scrubs return 0 (observed always).
+function horizonDecay(layer, horizonDays) {
+  if (horizonDays == null || horizonDays <= 0) return { delta: 0, reason: null };
+
+  if (layer === "sst") {
+    // SST forecast = persistence_decay, doesn't track real ocean physics
+    // beyond a few days. Penalize sooner than the dynamical layers.
+    if (horizonDays >= 4) return { delta: -2, reason: `forecast +${horizonDays} d (persistence skill fades)` };
+    if (horizonDays >= 2) return { delta: -1, reason: `forecast +${horizonDays} d (persistence drift starting)` };
+    return { delta: 0, reason: null };
+  }
+
+  if (layer === "wind" || layer === "swell" || layer === "current") {
+    // Dynamical models (HRRR / WW3 / GFS) hold reasonable skill out to
+    // ~3 days. Drop by 1 at day 3 and again at day 5 (forecast-end).
+    if (horizonDays >= 5) return { delta: -2, reason: `forecast +${horizonDays} d (NOAA model skill drop)` };
+    if (horizonDays >= 3) return { delta: -1, reason: `forecast +${horizonDays} d (NOAA model uncertainty growing)` };
+    return { delta: 0, reason: null };
+  }
+
+  // chl / viz have no time-slider on their own layer (chl is one snapshot,
+  // viz is one prediction). Horizon is irrelevant — return 0.
+  return { delta: 0, reason: null };
+}
+
 // Pull dynamic signals from today's manifest. Returns score-adjustments
 // and human-readable reasons so the tooltip can explain WHY today's
 // number is lower than the ceiling.
@@ -104,13 +135,16 @@ function dynamicModulation(layer, manifest) {
   return { delta, reasons };
 }
 
-export function getLayerConfidence(layer) {
+export function getLayerConfidence(layer, opts = {}) {
   const r = activeRegion();
   const base = STATIC_CONFIDENCE[r]?.[layer];
   if (!base) return null;
   const manifest = getDataState()?.manifest;
-  const { delta, reasons } = dynamicModulation(layer, manifest);
-  const score = Math.max(1, Math.min(5, base.score + delta));
+  const { delta: dynDelta, reasons: dynReasons } = dynamicModulation(layer, manifest);
+  const { delta: horDelta, reason: horReason } = horizonDecay(layer, opts.horizonDays);
+  const reasons = [...dynReasons];
+  if (horReason) reasons.push(horReason);
+  const score = Math.max(1, Math.min(5, base.score + dynDelta + horDelta));
   const label = CONFIDENCE_LABELS[score];
   return {
     score,
