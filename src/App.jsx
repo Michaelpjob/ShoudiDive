@@ -67,15 +67,19 @@ export default function App() {
   // Stage 5b (2026-05-23) added the derived activeSstMode + sstActiveSel
   // exports so MapShell + MobileSheet don't re-derive them locally with
   // slightly-divergent inline conditionals.
+  // Stage 5c: raw sstSel/setSstSel/sstForecastSel/setSstForecastSel
+  // are no longer needed at App's level — downstream consumers all
+  // use the derived sstActiveSel/setSstActiveSel via the hook's
+  // unified API. The raw values still live in the hook for the
+  // toggle/auto-pick logic, just not exposed up here.
   const {
     sstMode, setSstMode,
-    sstSel, setSstSel,
-    sstForecastSel, setSstForecastSel,
     windSel, setWindSel,
     swellSel, setSwellSel,
     currentSel, setCurrentSel,
     activeSstMode, sstActiveSel, setSstActiveSel,
     sstTimelineSummary, hasSstTimeline,
+    hasSstHistory, hasSstForecast,
   } = useTimelineSelections(dataState);
 
   // Wrapped state setters that fire analytics events alongside the
@@ -130,6 +134,8 @@ export default function App() {
         activeSstMode={activeSstMode}
         sstTimelineSummary={sstTimelineSummary}
         hasSstTimeline={hasSstTimeline}
+        hasSstHistory={hasSstHistory}
+        hasSstForecast={hasSstForecast}
         windSel={windSel}
         setWindSel={setWindSel}
         swellSel={swellSel}

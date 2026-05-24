@@ -46,7 +46,10 @@ test("Temp keeps historical and beta forecast SST timelines instead of reverting
   // components depend on. If a future refactor renames the destructure
   // it breaks here BEFORE the build fails on missing identifiers.
   assert.match(app, /import \{ useTimelineSelections \} from "\.\/hooks\/useTimelineSelections\.js"/);
-  assert.match(app, /sstMode,\s*setSstMode[\s\S]*sstSel,\s*setSstSel[\s\S]*sstForecastSel,\s*setSstForecastSel/);
+  // Stage 5c: App.jsx no longer destructures raw sstSel/sstForecastSel
+  // — those are hook-internal now. The downstream consumers (MapShell,
+  // MobileSheet) all use the derived activeSstMode/sstActiveSel.
+  assert.match(app, /sstMode,\s*setSstMode/);
   assert.match(app, /activeSstMode,\s*sstActiveSel,\s*setSstActiveSel/);
   // Render-path assertions follow the JSX into MapShell.
   assert.match(mapShell, /layer === "sst"\s*\?\s*\(sstTimelineSummary \? sstSelToSlotKey\(sstActiveSel, sstTimelineSummary\) : composite\)/);

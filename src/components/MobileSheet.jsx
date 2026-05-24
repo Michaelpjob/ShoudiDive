@@ -116,6 +116,8 @@ export default function MobileShell({
   sstActiveSel, setSstActiveSel,
   activeSstMode,
   hasSstTimeline,
+  hasSstHistory,
+  hasSstForecast,
   windSel, setWindSel,
   swellSel, setSwellSel,
   currentSel, setCurrentSel,

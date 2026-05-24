@@ -145,7 +145,9 @@ export function useTimelineSelections(dataState) {
   // there. Two-system duplication (MapShell + MobileSheet each computing
   // this with slightly-different inline conditionals) collapsed to one
   // call site here. Callers receive ready-to-render activeSstMode +
-  // sstActiveSel + setSstActiveSel + sstTimelineSummary + hasSstTimeline.
+  // sstActiveSel + setSstActiveSel + sstTimelineSummary + hasSstTimeline,
+  // plus hasSstHistory + hasSstForecast for the SstModeToggle's per-track
+  // availability indicators.
   const sstHistorySummary = getSstHistorySummary();
   const sstForecastSummary = getSstForecastSummary();
   const activeSstMode = resolveSstMode(sstMode, sstHistorySummary, sstForecastSummary);
@@ -153,6 +155,8 @@ export function useTimelineSelections(dataState) {
   const sstActiveSel = activeSstMode === "forecast" ? sstForecastSel : sstSel;
   const setSstActiveSel = activeSstMode === "forecast" ? setSstForecastSel : setSstSel;
   const hasSstTimeline = Boolean(sstTimelineSummary);
+  const hasSstHistory = Boolean(sstHistorySummary);
+  const hasSstForecast = Boolean(sstForecastSummary);
 
   return {
     sstMode, setSstMode,
@@ -166,5 +170,7 @@ export function useTimelineSelections(dataState) {
     sstActiveSel, setSstActiveSel,
     sstTimelineSummary,
     hasSstTimeline,
+    hasSstHistory,
+    hasSstForecast,
   };
 }

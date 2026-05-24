@@ -232,7 +232,7 @@ function formatWindow(dates, fallback, layer) {
   return `${a.month} ${a.day} – ${b.month} ${b.day}, ${b.year}`;
 }
 
-export default function MapShell({ layer, setLayer, composite, setComposite, sstMode, setSstMode, sstActiveSel, setSstActiveSel, activeSstMode, sstTimelineSummary, hasSstTimeline, windSel, setWindSel, swellSel, setSwellSel, currentSel, setCurrentSel, dataState, viewingDate }) {
+export default function MapShell({ layer, setLayer, composite, setComposite, sstMode, setSstMode, sstActiveSel, setSstActiveSel, activeSstMode, sstTimelineSummary, hasSstTimeline, hasSstHistory, hasSstForecast, windSel, setWindSel, swellSel, setSwellSel, currentSel, setCurrentSel, dataState, viewingDate }) {
   // Prefs (opacity / units / mpaOn / bathyOn) read directly from
   // PrefsContext — extracted in Stage 5c (2026-05-23) so they no
   // longer have to be drilled through App → MapShell as props.
@@ -932,8 +932,8 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
               <SstModeToggle
                 mode={activeSstMode}
                 setMode={setSstMode}
-                hasHistory={Boolean(sstHistorySummary)}
-                hasForecast={Boolean(sstForecastSummary)}
+                hasHistory={hasSstHistory}
+                hasForecast={hasSstForecast}
               />
               <SstCurrentCard sel={sstActiveSel} units={units} mode={activeSstMode} />
               <div className="composite-window">
@@ -1590,6 +1590,8 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
         sstActiveSel={sstActiveSel} setSstActiveSel={setSstActiveSel}
         activeSstMode={activeSstMode}
         hasSstTimeline={hasSstTimeline}
+        hasSstHistory={hasSstHistory}
+        hasSstForecast={hasSstForecast}
         windSel={windSel} setWindSel={setWindSel}
         swellSel={swellSel} setSwellSel={setSwellSel}
         currentSel={currentSel} setCurrentSel={setCurrentSel}
