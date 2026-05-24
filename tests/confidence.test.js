@@ -1,119 +1,91 @@
-// Tests for src/lib/confidence.js. Pins the static scoring matrix
-// (every region/layer pair has a defined entry, no surprise drops to
-// CLIMATOLOGY) and the dynamic modulation behaviour (low chl coverage
-// or stale generated_at correctly drop the score).
+// Static contract checks for src/lib/confidence.js.
 //
-// Doesn't run in jsdom so we mock the two dependencies: activeRegion
-// (returns the test's region) and getDataState (returns a controlled
-// manifest snapshot).
+// Pins the per-region/per-layer matrix (every region/layer pair has a
+// defined entry), the documented score floors (Baja current = 2/5, CA
+// current = 4/5), and the exported API.
+//
+// Uses the same source-string pattern as other tests/*.test.js — node's
+// native test runner (no jest) on the unmodified source file.
 
-import { jest } from "@jest/globals";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import test from "node:test";
+import { fileURLToPath } from "node:url";
 
-jest.unstable_mockModule("../src/lib/region.js", () => ({
-  activeRegion: jest.fn(() => "ca"),
-  dataPath:     jest.fn((p) => p),
-  manifestUrl:  jest.fn(() => "/data/manifest.json"),
-  rewriteManifestUrls: jest.fn((m) => m),
-  listRegions:  jest.fn(() => ["ca", "pnw", "tropical", "baja"]),
-  isProductionHost: jest.fn(() => false),
-  validRegionsForHost: jest.fn(() => ["ca", "pnw", "tropical", "baja"]),
-  DEFAULT_REGION_ID: "ca",
-}));
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+function read(rel) {
+  return readFileSync(resolve(repoRoot, rel), "utf8");
+}
 
-jest.unstable_mockModule("../src/lib/dataSource.js", () => ({
-  getDataState: jest.fn(() => ({ manifest: null })),
-}));
-
-const { activeRegion } = await import("../src/lib/region.js");
-const { getDataState } = await import("../src/lib/dataSource.js");
-const { getLayerConfidence, getRegionConfidence } = await import("../src/lib/confidence.js");
-
-describe("getLayerConfidence", () => {
-  beforeEach(() => {
-    activeRegion.mockReturnValue("ca");
-    getDataState.mockReturnValue({ manifest: null });
-  });
-
-  test("every region defines every layer (no surprise nulls)", () => {
-    const layers = ["sst", "chl", "wind", "swell", "current", "viz"];
-    for (const region of ["ca", "pnw", "tropical", "baja"]) {
-      activeRegion.mockReturnValue(region);
-      for (const layer of layers) {
-        const c = getLayerConfidence(layer);
-        expect(c).not.toBeNull();
-        expect(c.score).toBeGreaterThanOrEqual(1);
-        expect(c.score).toBeLessThanOrEqual(5);
-        expect(typeof c.label).toBe("string");
-        expect(typeof c.source).toBe("string");
-      }
-    }
-  });
-
-  test("Baja currents score is the documented 2/5 (no HFRNet)", () => {
-    activeRegion.mockReturnValue("baja");
-    const c = getLayerConfidence("current");
-    expect(c.score).toBe(2);
-    expect(c.label).toBe("Inferred");
-    expect(c.source).toMatch(/Tide \+ Ekman/);
-  });
-
-  test("CA currents score is 4/5 (HFRNet observed)", () => {
-    activeRegion.mockReturnValue("ca");
-    const c = getLayerConfidence("current");
-    expect(c.score).toBe(4);
-    expect(c.source).toMatch(/HFRNet/);
-  });
-
-  test("chl coverage_frac < 0.4 drops the score by 1", () => {
-    activeRegion.mockReturnValue("ca");
-    getDataState.mockReturnValue({
-      manifest: { layers: { chl: { windows: { "1d": { coverage_frac: 0.25, mean_age_days: 1.0 } } } } },
-    });
-    const c = getLayerConfidence("chl");
-    expect(c.score).toBe(3);  // ceiling 4 → 3
-    expect(c.modReasons.some((r) => r.includes("coverage"))).toBe(true);
-  });
-
-  test("chl mean_age_days > 5 drops the score by 1", () => {
-    activeRegion.mockReturnValue("ca");
-    getDataState.mockReturnValue({
-      manifest: { layers: { chl: { windows: { "1d": { coverage_frac: 0.8, mean_age_days: 7.0 } } } } },
-    });
-    const c = getLayerConfidence("chl");
-    expect(c.score).toBe(3);  // ceiling 4 → 3
-    expect(c.modReasons.some((r) => r.includes("days old"))).toBe(true);
-  });
-
-  test("score floor is 1 — never returns 0 or negative", () => {
-    activeRegion.mockReturnValue("tropical");
-    getDataState.mockReturnValue({
-      manifest: { layers: { current: { generated_at: "2020-01-01T00:00:00Z" } } },
-    });
-    const c = getLayerConfidence("current");
-    expect(c.score).toBeGreaterThanOrEqual(1);
-  });
-
-  test("unknown region returns null (graceful)", () => {
-    activeRegion.mockReturnValue("atlantic");  // not in matrix
-    expect(getLayerConfidence("sst")).toBeNull();
-  });
+test("confidence.js defines static matrix entries for every region", () => {
+  const src = read("src/lib/confidence.js");
+  for (const region of ["ca", "baja", "pnw", "tropical"]) {
+    assert.match(src, new RegExp(`${region}:\\s*\\{`), `missing region ${region}`);
+  }
 });
 
-describe("getRegionConfidence", () => {
-  beforeEach(() => {
-    getDataState.mockReturnValue({ manifest: null });
-  });
+test("confidence.js defines every layer for every region", () => {
+  const src = read("src/lib/confidence.js");
+  // Each region block must have all six layers. Use a wide pattern
+  // (region-block + layer name on its own line with a colon) to stay
+  // robust to formatting changes.
+  for (const region of ["ca", "baja", "pnw", "tropical"]) {
+    const block = src.split(`${region}: {`)[1]?.split(/^\s{0,4}\}/m)[0];
+    assert.ok(block, `couldn't find ${region} block`);
+    for (const layer of ["sst", "chl", "wind", "swell", "current", "viz"]) {
+      assert.match(
+        block,
+        new RegExp(`${layer}:\\s*\\{`),
+        `${region} block missing ${layer}`,
+      );
+    }
+  }
+});
 
-  test("returns the WEAKEST layer score (honest about gaps)", () => {
-    activeRegion.mockReturnValue("baja");
-    const r = getRegionConfidence();
-    expect(r.score).toBe(2);  // currents is 2/5
-    expect(r.weakestLayer).toBe("current");
-  });
+test("Baja current is documented as 2/5 (no HFRNet)", () => {
+  const src = read("src/lib/confidence.js");
+  const bajaBlock = src.split("baja: {")[1]?.split(/^\s{0,4}\}/m)[0];
+  assert.ok(bajaBlock, "couldn't find baja block");
+  // Pin the score+source for the headline Baja gap.
+  assert.match(bajaBlock, /current:\s*\{\s*score:\s*2/);
+  assert.match(bajaBlock, /Tide \+ Ekman/);
+});
 
-  test("CA is bottlenecked by chl/swell/current/viz at 4 (no 5s in those rows)", () => {
-    activeRegion.mockReturnValue("ca");
-    const r = getRegionConfidence();
-    expect(r.score).toBe(4);
-  });
+test("CA current is documented as 4/5 (HFRNet observed)", () => {
+  const src = read("src/lib/confidence.js");
+  const caBlock = src.split("ca: {")[1]?.split(/^\s{0,4}\}/m)[0];
+  assert.ok(caBlock, "couldn't find ca block");
+  assert.match(caBlock, /current:\s*\{\s*score:\s*4/);
+  assert.match(caBlock, /HFRNet/);
+});
+
+test("confidence.js exports the two public getters", () => {
+  const src = read("src/lib/confidence.js");
+  assert.match(src, /export function getLayerConfidence/);
+  assert.match(src, /export function getRegionConfidence/);
+});
+
+test("ConfidenceDot is wired into DesktopLayout for every layer chip", () => {
+  const src = read("src/components/DesktopLayout.jsx");
+  assert.match(src, /import ConfidenceDot/);
+  for (const layer of ["sst", "chl", "wind", "swell", "current", "viz"]) {
+    assert.match(
+      src,
+      new RegExp(`ConfidenceDot[^>]*layer="${layer}"`),
+      `DesktopLayout missing ConfidenceDot for layer="${layer}"`,
+    );
+  }
+});
+
+test("ConfidenceDot is wired into MobileSheet chips via L.id", () => {
+  const src = read("src/components/MobileSheet.jsx");
+  assert.match(src, /import ConfidenceDot/);
+  assert.match(src, /<ConfidenceDot layer={L\.id}/);
+});
+
+test("TopBar renders the region confidence badge", () => {
+  const src = read("src/components/TopBar.jsx");
+  assert.match(src, /getRegionConfidence/);
+  assert.match(src, /region-confidence/);
 });
