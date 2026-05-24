@@ -27,7 +27,6 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import numpy as np
-import requests
 import xarray as xr
 from PIL import Image
 from scipy.ndimage import distance_transform_edt, gaussian_filter
@@ -37,12 +36,17 @@ from scipy.spatial import cKDTree
 # SHOULDIDIVE_REGION; default `ca` preserves today's behavior.
 try:
     from pipeline.regions import active_region
+    from pipeline.lib import nomads
 except ModuleNotFoundError:
     from regions import active_region
+    from lib import nomads
 
 BBOX = active_region().bbox
 
-NOMADS_GFS = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod"
+# Base URL aliased from lib/nomads (Stage 6a). The robust 3-retry
+# head_ok variant that originated in this file is now the shared
+# implementation in lib/nomads.head_ok.
+NOMADS_GFS = nomads.NOMADS_GFS
 
 GRID_W, GRID_H = 140, 110
 
@@ -73,47 +77,10 @@ HOURLY_DIR  = OUT_DIR / "hourly"
 BUCKETS_DIR = OUT_DIR / "buckets"
 CACHE_DIR   = ROOT / "pipeline" / ".cache"
 
-SESSION = requests.Session()
-SESSION.headers.update({
-    "Accept": "*/*",
-    "User-Agent": "shouldidive/0.1 (+github.com/Michaelpjob/ShoudiDive)",
-})
-
-
-def _head_ok(url: str) -> bool:
-    """True if `url` returns 200. Tries HEAD then falls back to a
-    range-limited GET so we recover from NOMADS' HEAD-throttling on
-    busy days (GitHub runners get rate-limited from time to time
-    even when straight curl works fine).
-
-    First non-decisive response is printed so CI logs surface why we
-    bailed (403/429/5xx) instead of always reporting "not yet
-    published"."""
-    last_diag = None
-    for attempt in range(3):
-        try:
-            r = SESSION.head(url, timeout=30, allow_redirects=True)
-            if r.status_code == 200:
-                return True
-            if r.status_code == 404:
-                return False
-            last_diag = f"HEAD attempt {attempt}: {r.status_code}"
-        except requests.RequestException as e:
-            last_diag = f"HEAD attempt {attempt}: {type(e).__name__}"
-        # HEAD didn't decisively succeed/fail — try a 1-byte range GET.
-        try:
-            r = SESSION.get(url, headers={"Range": "bytes=0-0"},
-                            timeout=30, allow_redirects=True)
-            if r.status_code in (200, 206):
-                return True
-            if r.status_code == 404:
-                return False
-            last_diag = f"GET attempt {attempt}: {r.status_code}"
-        except requests.RequestException as e:
-            last_diag = f"GET attempt {attempt}: {type(e).__name__}"
-    if last_diag:
-        print(f"    head_ok({url.split('/')[-1]}): {last_diag}")
-    return False
+# Shared NOMADS session — connection-pooled, single UA. lib/nomads
+# replaced the per-file Session in Stage 6a (2026-05-24). The robust
+# _head_ok originally defined here became the canonical lib/nomads.head_ok.
+SESSION = nomads.session()
 
 
 # ---- Region-aware gfswave subset selection ---------------------------------
@@ -138,24 +105,14 @@ def _gfswave_subset() -> str:
 
 # ---- Run discovery ----------------------------------------------------------
 
-def _idx_url(run_date: date, run_hour: int, fhour: int) -> str:
-    return (
-        f"{NOMADS_GFS}/gfs.{run_date.strftime('%Y%m%d')}/{run_hour:02d}/wave/gridded/"
-        f"gfswave.t{run_hour:02d}z.{_gfswave_subset()}.f{fhour:03d}.grib2.idx"
-    )
-
-
 def find_latest_gfswave_run_with_horizon(hours: int = 120) -> tuple[date, int]:
     """Latest gfswave cycle (00/06/12/18z) whose f{hours:03d} is published."""
-    now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
-    cycle = (now.hour // 6) * 6
-    candidate = now.replace(hour=cycle)
-    for _ in range(8):
-        if _head_ok(_idx_url(candidate.date(), candidate.hour, hours)):
-            return candidate.date(), candidate.hour
-        print(f"  miss: gfswave {candidate.strftime('%Y-%m-%d %H')}z f{hours:03d} not yet published")
-        candidate -= timedelta(hours=6)
-    raise RuntimeError(f"No gfswave cycle with f{hours:03d} found in last 48 hours")
+    subset = _gfswave_subset()
+    return nomads.find_latest_run(
+        idx_url_for=lambda d, h: nomads.gfswave_idx_url(d, h, fhour=hours, subset=subset),
+        max_lookback_cycles=8,
+        label=f"gfswave {subset} f{hours:03d}",
+    )
 
 
 # ---- Byte-range slice fetch -------------------------------------------------
