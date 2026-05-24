@@ -5,8 +5,17 @@
 
 import RegionSwitcher from "./RegionSwitcher.jsx";
 import { activeRegion } from "../lib/region.js";
-import { getRegionConfidence } from "../lib/confidence.js";
+import { getLayerConfidence } from "../lib/confidence.js";
 import { track } from "../lib/analytics.js";
+
+const LAYER_NAMES = {
+  sst:     "Sea Temp",
+  chl:     "Chl-a",
+  wind:    "Wind",
+  swell:   "Swell",
+  current: "Current",
+  viz:     "Visibility",
+};
 
 const REGION_TAGLINES = {
   ca:       "Sea Temp · Water Clarity · Wind · Current · California Coast",
@@ -39,7 +48,7 @@ function FreediverLogo() {
   );
 }
 
-export default function TopBar({ onSettings, settingsOpen, dataState }) {
+export default function TopBar({ onSettings, settingsOpen, dataState, layer }) {
   const generated = dataState?.manifest?.generated_at;
   const lastUpdate = generated
     ? new Date(generated).toLocaleString("en-US", {
@@ -71,17 +80,30 @@ export default function TopBar({ onSettings, settingsOpen, dataState }) {
       <div className="topbar-meta">
         <RegionSwitcher />
         {(() => {
-          // Region confidence badge — surfaces the weakest-layer score for
-          // the current region so visitors set expectations on entry. Hover
-          // tells them which layer drags the score down (e.g. Baja → 2/5
-          // "Inferred" because currents have no HFRNet coverage).
-          const rc = getRegionConfidence();
-          if (!rc) return null;
+          // Active-layer confidence badge. Updates as the user clicks
+          // between layer chips (Temp / Chl / Wind / Swell / Current /
+          // Vis). The chip-strip dots still show the regional overview
+          // for ALL layers at once; this badge zooms into "should I
+          // trust the layer I'm currently looking at?" — the actionable
+          // read for a diver mid-decision.
+          if (!layer) return null;
+          const lc = getLayerConfidence(layer);
+          if (!lc) return null;
+          const layerName = LAYER_NAMES[layer] || layer;
+          const tooltipReasons =
+            [lc.reason, ...lc.modReasons].filter(Boolean).join("\n");
           return (
             <span
-              className="region-confidence"
-              title={`Region confidence: ${rc.label} (${rc.score}/5). Weakest layer: ${rc.weakestLayer}. Hover the dots on individual layer chips for per-layer detail.`}
-              aria-label={`Region confidence ${rc.label}, ${rc.score} of 5`}
+              className="layer-confidence"
+              title={
+                `${layerName} confidence: ${lc.label} (${lc.score}/5)\n` +
+                `Source: ${lc.source}\n` +
+                tooltipReasons +
+                (lc.score < lc.ceilingScore
+                  ? `\n(today's score is ${lc.ceilingScore - lc.score} below ceiling)`
+                  : "")
+              }
+              aria-label={`${layerName} confidence ${lc.label}, ${lc.score} of 5`}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -98,12 +120,13 @@ export default function TopBar({ onSettings, settingsOpen, dataState }) {
                   width: 8,
                   height: 8,
                   borderRadius: "50%",
-                  background: rc.color,
+                  background: lc.color,
                   boxShadow: "0 0 0 1px rgba(0,0,0,0.18)",
                 }}
               />
-              <strong>{rc.label}</strong>
-              <span style={{ opacity: 0.65 }}>{rc.score}/5</span>
+              <span style={{ opacity: 0.72 }}>{layerName}</span>
+              <strong>{lc.label}</strong>
+              <span style={{ opacity: 0.65 }}>{lc.score}/5</span>
             </span>
           );
         })()}
