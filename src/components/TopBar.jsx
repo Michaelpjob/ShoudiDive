@@ -5,6 +5,7 @@
 
 import RegionSwitcher from "./RegionSwitcher.jsx";
 import { activeRegion } from "../lib/region.js";
+import { getRegionConfidence } from "../lib/confidence.js";
 import { track } from "../lib/analytics.js";
 
 const REGION_TAGLINES = {
@@ -69,6 +70,43 @@ export default function TopBar({ onSettings, settingsOpen, dataState }) {
       </div>
       <div className="topbar-meta">
         <RegionSwitcher />
+        {(() => {
+          // Region confidence badge — surfaces the weakest-layer score for
+          // the current region so visitors set expectations on entry. Hover
+          // tells them which layer drags the score down (e.g. Baja → 2/5
+          // "Inferred" because currents have no HFRNet coverage).
+          const rc = getRegionConfidence();
+          if (!rc) return null;
+          return (
+            <span
+              className="region-confidence"
+              title={`Region confidence: ${rc.label} (${rc.score}/5). Weakest layer: ${rc.weakestLayer}. Hover the dots on individual layer chips for per-layer detail.`}
+              aria-label={`Region confidence ${rc.label}, ${rc.score} of 5`}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "2px 8px",
+                borderRadius: 999,
+                border: "1px solid var(--line, rgba(0,0,0,0.12))",
+                fontSize: 12,
+              }}
+            >
+              <span
+                style={{
+                  display: "inline-block",
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  background: rc.color,
+                  boxShadow: "0 0 0 1px rgba(0,0,0,0.18)",
+                }}
+              />
+              <strong>{rc.label}</strong>
+              <span style={{ opacity: 0.65 }}>{rc.score}/5</span>
+            </span>
+          );
+        })()}
         <span>
           <span className="dot"></span>
           <strong>{status}</strong> · Last update{" "}
