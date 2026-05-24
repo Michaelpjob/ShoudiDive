@@ -209,7 +209,8 @@ export default function DesktopLayout({
               onClick={() => setLayer("sst")}
               title="Sea-surface temperature from MUR satellite"
             >
-              <span className="lt-label">Temp<ConfidenceDot layer="sst" className="lt-conf" /></span>
+              <ConfidenceDot layer="sst" className="lt-conf" />
+              <span className="lt-label">Temp</span>
               <span className="lt-sub">°{units}</span>
             </button>
             <button
@@ -217,7 +218,8 @@ export default function DesktopLayout({
               onClick={() => setLayer("chl")}
               title="Chlorophyll-a concentration from VIIRS — visibility proxy"
             >
-              <span className="lt-label">Chl<ConfidenceDot layer="chl" className="lt-conf" /></span>
+              <ConfidenceDot layer="chl" className="lt-conf" />
+              <span className="lt-label">Chl</span>
               <span className="lt-sub">mg/m³</span>
             </button>
             <button
@@ -225,7 +227,8 @@ export default function DesktopLayout({
               onClick={() => setLayer("wind")}
               title="10 m wind from HRRR + GFS"
             >
-              <span className="lt-label">Wind<ConfidenceDot layer="wind" className="lt-conf" /></span>
+              <ConfidenceDot layer="wind" className="lt-conf" />
+              <span className="lt-label">Wind</span>
               <span className="lt-sub">kt</span>
             </button>
             <button
@@ -233,7 +236,8 @@ export default function DesktopLayout({
               onClick={() => setLayer("swell")}
               title="Significant wave height + period + direction from NOAA WaveWatch III"
             >
-              <span className="lt-label">Swell<ConfidenceDot layer="swell" className="lt-conf" /></span>
+              <ConfidenceDot layer="swell" className="lt-conf" />
+              <span className="lt-label">Swell</span>
               <span className="lt-sub">ft Hs</span>
             </button>
             <button
@@ -241,7 +245,8 @@ export default function DesktopLayout({
               onClick={() => setLayer("current")}
               title="Surface current speed and direction from HFR observations plus tide/wind inference (BETA — model blends sparse HF-radar coverage with bulk wind/tide inference; verify against local knowledge)."
             >
-              <span className="lt-label">Current<ConfidenceDot layer="current" className="lt-conf" /></span>
+              <ConfidenceDot layer="current" className="lt-conf" />
+              <span className="lt-label">Current</span>
               <span className="lt-sub">kt</span>
               <span className="lt-beta">Beta</span>
             </button>
@@ -250,7 +255,8 @@ export default function DesktopLayout({
               onClick={() => setLayer("viz")}
               title="Predicted dive visibility (BETA — model unvalidated for NorCal; use as advisory only). Output is feet, not a direct measurement."
             >
-              <span className="lt-label">Vis<ConfidenceDot layer="viz" className="lt-conf" /></span>
+              <ConfidenceDot layer="viz" className="lt-conf" />
+              <span className="lt-label">Vis</span>
               <span className="lt-sub">ft</span>
               <span className="lt-beta">Beta</span>
             </button>
