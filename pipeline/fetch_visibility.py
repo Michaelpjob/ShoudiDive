@@ -191,8 +191,23 @@ def decode_age_png(path: Path):
 
 
 def bilinear_sample(src_arr, src_w, src_h, lng_grid, lat_grid):
-    """Sample src_arr at the given lng/lat using bilinear interp.
-    src_arr is shape (src_h, src_w) where row 0 = lat_max."""
+    """Sample src_arr at the given lng/lat using NaN-aware bilinear interp.
+    src_arr is shape (src_h, src_w) where row 0 = lat_max.
+
+    2026-05-21 (NaN-aware): the previous version did a plain
+    `v00·(1−tx)(1−ty) + v10·…` blend. Any NaN corner propagated to the
+    output, so a single-pixel chl speckle surrounded by NaN cells in
+    the lower-res chl_1d.png made bilinear_sample return NaN at the
+    higher-res viz grid cell. The chl_2d/3d fallback (added 2026-05-20)
+    then OVERRODE that NaN with a smoothed (clear-water) value, and viz
+    predicted "Good" at a cell the user saw flagged as bloom on the
+    chl LAYER. Caught by direct inspection of the Baja prod PNGs
+    on 2026-05-21 — 80-ft viz over chl=14 mg/m³ blooms in south Baja.
+
+    NaN-aware behaviour matches what src/lib/dataSource.js does for
+    frontend sampling: if all four corners are valid, normal bilinear.
+    If 1-3 are NaN, average the valid corners. If all 4 are NaN, NaN.
+    """
     fx = (lng_grid - BBOX["lng_min"]) / (BBOX["lng_max"] - BBOX["lng_min"]) * (src_w - 1)
     fy = (BBOX["lat_max"] - lat_grid) / (BBOX["lat_max"] - BBOX["lat_min"]) * (src_h - 1)
     fx = np.clip(fx, 0, src_w - 1)
@@ -204,8 +219,29 @@ def bilinear_sample(src_arr, src_w, src_h, lng_grid, lat_grid):
     v10 = src_arr[y0, x1]
     v01 = src_arr[y1, x0]
     v11 = src_arr[y1, x1]
-    out = v00 * (1 - tx) * (1 - ty) + v10 * tx * (1 - ty) + v01 * (1 - tx) * ty + v11 * tx * ty
-    return out
+    # Full-bilinear when all four corners are finite — preserves the
+    # smooth gradient response the model was tuned against.
+    bilinear = (
+        v00 * (1 - tx) * (1 - ty) + v10 * tx * (1 - ty)
+      + v01 * (1 - tx) * ty       + v11 * tx * ty
+    )
+    # Average of valid corners as the NaN-tolerant fallback.
+    finite_00 = np.isfinite(v00).astype(np.float64)
+    finite_10 = np.isfinite(v10).astype(np.float64)
+    finite_01 = np.isfinite(v01).astype(np.float64)
+    finite_11 = np.isfinite(v11).astype(np.float64)
+    n_valid = finite_00 + finite_10 + finite_01 + finite_11
+    with np.errstate(invalid="ignore"):
+        v00_safe = np.where(np.isfinite(v00), v00, 0.0)
+        v10_safe = np.where(np.isfinite(v10), v10, 0.0)
+        v01_safe = np.where(np.isfinite(v01), v01, 0.0)
+        v11_safe = np.where(np.isfinite(v11), v11, 0.0)
+        avg = (v00_safe + v10_safe + v01_safe + v11_safe) / np.maximum(n_valid, 1.0)
+    # All-NaN cells stay NaN; otherwise pick bilinear if all 4 are valid,
+    # else the average of valid corners.
+    all_finite = (n_valid >= 4.0)
+    any_finite = (n_valid >= 1.0)
+    return np.where(any_finite, np.where(all_finite, bilinear, avg), np.nan)
 
 
 # ---- Static fields from land.geojson --------------------------------------
