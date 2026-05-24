@@ -46,6 +46,10 @@ on:
 
 permissions:
   contents: write
+  # actions: write is needed for the final step where we dispatch
+  # dev-checks.yml against the freshly-synced dev HEAD. Without it,
+  # the GH api call fails with "Resource not accessible by integration".
+  actions: write
 
 concurrency:
   group: sync-dev
@@ -78,10 +82,17 @@ jobs:
           ref: dev
           fetch-depth: 0
           # GITHUB_TOKEN can push to dev — dev isn't branch-protected.
-          # Note: pushes via GITHUB_TOKEN don't trigger downstream
-          # workflows (a GH safety feature), which is fine here — we
-          # don't need dev-checks to re-run on a pure data-file
-          # sync commit.
+          # Caveat: pushes via GITHUB_TOKEN don't trigger downstream
+          # workflows (a GH safety feature to prevent recursion).
+          # 2026-05-24: this used to be flagged as "fine, we don't need
+          # dev-checks to re-run on a pure data-file sync". That was
+          # wrong. When an open dev → main PR exists, branch protection
+          # requires green status checks on the CURRENT head of dev.
+          # A sync commit changes the head SHA, so the PR's required
+          # checks no longer point at a checked commit, and the merge
+          # is BLOCKED until something dispatches dev-checks against
+          # the new HEAD. The final step in this job now does that
+          # explicitly via `gh workflow run`.
 
       - name: Configure git identity
         run: |
@@ -115,6 +126,21 @@ jobs:
         if: steps.check.outputs.ahead != '0'
         run: |
           git push origin dev
+
+      - name: Dispatch dev-checks against the new HEAD
+        # Without this, any open dev → main PR sits BLOCKED — its
+        # required status checks point at a SHA that has no checks
+        # run against it (GITHUB_TOKEN pushes don't trigger
+        # workflows). gh workflow run uses the workflow_dispatch
+        # path which DOES create check-runs visible to branch
+        # protection. Witnessed during the Stage 4 + Stage 5 PR
+        # merge dance — both PRs needed manual dispatches when sync
+        # commits landed mid-merge. Closing the loop here.
+        if: steps.check.outputs.ahead != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run dev-checks.yml --ref dev
 
       - name: Summary
         if: always()

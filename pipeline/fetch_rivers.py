@@ -22,16 +22,16 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-import requests
-
 ROOT = Path(__file__).resolve().parents[1]
 
 # Region-aware output dir. CA stays at public/data/; PNW + tropical
 # land under public/data/<region>/. See pipeline/regions/ (PR-X-1).
 try:
     from pipeline.regions import active_region
+    from pipeline.lib.http import http_get
 except ModuleNotFoundError:
     from regions import active_region
+    from lib.http import http_get
 
 OUT_DIR = active_region().data_output_dir(ROOT)
 
@@ -53,8 +53,10 @@ RIVERS = [
 NWIS_IV = "https://waterservices.usgs.gov/nwis/iv/"
 NWIS_STAT = "https://waterservices.usgs.gov/nwis/stat/"
 
-SESSION = requests.Session()
-SESSION.headers.update({"Accept": "application/json", "User-Agent": "shouldidive/0.1"})
+# Stage 6a (2026-05-24): per-file Session + UA replaced with the
+# shared lib/http.http_get path. Adds exponential-backoff retries on
+# USGS NWIS transient errors that previously bubbled up as "fetch
+# failed — HTTPSConnectionPool ... Read timed out".
 
 
 def fetch_recent_discharge(site: str, period_days: int = 3) -> float | None:
@@ -66,8 +68,7 @@ def fetch_recent_discharge(site: str, period_days: int = 3) -> float | None:
         "period": f"P{period_days}D",
     }
     try:
-        r = SESSION.get(NWIS_IV, params=params, timeout=30)
-        r.raise_for_status()
+        r = http_get(NWIS_IV, params=params, timeout=30, raise_on_failure=True)
         data = r.json()
     except Exception as e:
         print(f"  {site}: iv fetch failed — {e!s}")
@@ -106,8 +107,7 @@ def fetch_monthly_climo(site: str, month: int) -> float | None:
         "statTypeCd": "mean",
     }
     try:
-        r = SESSION.get(NWIS_STAT, params=params, timeout=30)
-        r.raise_for_status()
+        r = http_get(NWIS_STAT, params=params, timeout=30, raise_on_failure=True)
         text = r.text
     except Exception as e:
         print(f"  {site}: stat fetch failed — {e!s}")

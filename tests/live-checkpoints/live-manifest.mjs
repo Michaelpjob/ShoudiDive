@@ -55,10 +55,18 @@ const PERF_BUDGETS = {
 
 // ---- HTTP helper -----------------------------------------------------
 
+// Cloudflare Bot Fight Mode 403s any UA it can't fingerprint to a real
+// browser. Same fix applied to pipeline/check_published.py — use a
+// recent Chrome UA to land on the allow path. The puppeteer-based
+// live-cp-render already passes for the same reason.
+const BROWSER_UA =
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 " +
+  "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+
 async function timedFetch(url, opts = {}) {
   const t0 = performance.now();
   const res = await fetch(url, {
-    headers: { "User-Agent": "ShoudiDive-LiveDeployVerify/1.0", ...opts.headers },
+    headers: { "User-Agent": BROWSER_UA, ...opts.headers },
   });
   const ttfb_ms = performance.now() - t0;
   let bytes = null;
