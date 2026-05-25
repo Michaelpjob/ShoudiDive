@@ -204,11 +204,9 @@ function DayCard({ day, sel, setSel, expanded, onToggleExpanded }) {
           <span className="day-weekday">{day.weekday}</span>
           <span className="day-date">{fmtDate(day.date)}</span>
         </div>
-        {confTier !== "high" && (
-          <span className="day-confidence" title="Forecast confidence drops past 2 days">
-            {confTier === "medium" ? "~ medium" : "~ low"}
-          </span>
-        )}
+        {/* Per-day confidence pill removed 2026-05-24 — the horizon-aware
+            confidence dot in the TopBar carries this signal now and
+            updates as the user scrubs the timeline. */}
       </div>
       <div className="bucket-stack">
         {(day.buckets || []).map((b) => (
@@ -416,11 +414,9 @@ export function WindCurrentSelectionCard({ sel, setSel }) {
             {dirArrow(meanDir)} {cardinal}
           </span>
         </div>
-        {dayInfo && dayInfo.confidence !== "high" && (
-          <div className="wcs-confidence">
-            {dayInfo.confidence === "medium" ? "~ medium-confidence GFS" : "~ low-confidence GFS"}
-          </div>
-        )}
+        {/* Per-day confidence text removed 2026-05-24 — the horizon-aware
+            confidence dot in the TopBar carries this signal now and
+            updates as the user scrubs the timeline. */}
       </div>
     </div>
   );

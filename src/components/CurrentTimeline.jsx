@@ -226,9 +226,10 @@ export default function CurrentTimeline({ sel, setSel }) {
           {Number.isFinite(bucket.consistency) && (
             <span className="tl-pb-dir">{bucket.consistency}% steady</span>
           )}
-          <span className="tl-pb-est" title={sourceLabel(bucket.source)}>
-            {bucket.source === "hfr_observed" ? "" : "~"}
-          </span>
+          {/* 2026-05-25: "~" source-tier marker removed. The TopBar
+              confidence dot carries the per-region + per-horizon
+              signal (Baja currents = Inferred 2/5 always). The
+              source label stays in the timeline's day card. */}
         </div>
       </div>
     </div>

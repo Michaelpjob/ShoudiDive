@@ -5,7 +5,17 @@
 
 import RegionSwitcher from "./RegionSwitcher.jsx";
 import { activeRegion } from "../lib/region.js";
+import { getLayerConfidence } from "../lib/confidence.js";
 import { track } from "../lib/analytics.js";
+
+const LAYER_NAMES = {
+  sst:     "Sea Temp",
+  chl:     "Chl-a",
+  wind:    "Wind",
+  swell:   "Swell",
+  current: "Current",
+  viz:     "Visibility",
+};
 
 const REGION_TAGLINES = {
   ca:       "Sea Temp · Water Clarity · Wind · Current · California Coast",
@@ -38,7 +48,7 @@ function FreediverLogo() {
   );
 }
 
-export default function TopBar({ onSettings, settingsOpen, dataState }) {
+export default function TopBar({ onSettings, settingsOpen, dataState, layer, horizonDays }) {
   const generated = dataState?.manifest?.generated_at;
   const lastUpdate = generated
     ? new Date(generated).toLocaleString("en-US", {
@@ -69,6 +79,57 @@ export default function TopBar({ onSettings, settingsOpen, dataState }) {
       </div>
       <div className="topbar-meta">
         <RegionSwitcher />
+        {(() => {
+          // Active-layer confidence badge. Updates as the user clicks
+          // between layer chips (Temp / Chl / Wind / Swell / Current /
+          // Vis). The chip-strip dots still show the regional overview
+          // for ALL layers at once; this badge zooms into "should I
+          // trust the layer I'm currently looking at?" — the actionable
+          // read for a diver mid-decision.
+          if (!layer) return null;
+          const lc = getLayerConfidence(layer, { horizonDays });
+          if (!lc) return null;
+          const layerName = LAYER_NAMES[layer] || layer;
+          const tooltipReasons =
+            [lc.reason, ...lc.modReasons].filter(Boolean).join("\n");
+          return (
+            <span
+              className="layer-confidence"
+              title={
+                `${layerName} confidence: ${lc.label} (${lc.score}/5)\n` +
+                `Source: ${lc.source}\n` +
+                tooltipReasons +
+                (lc.score < lc.ceilingScore
+                  ? `\n(today's score is ${lc.ceilingScore - lc.score} below ceiling)`
+                  : "")
+              }
+              aria-label={`${layerName} confidence ${lc.label}, ${lc.score} of 5`}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "2px 8px",
+                borderRadius: 999,
+                border: "1px solid var(--line, rgba(0,0,0,0.12))",
+                fontSize: 12,
+              }}
+            >
+              <span
+                style={{
+                  display: "inline-block",
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  background: lc.color,
+                  boxShadow: "0 0 0 1px rgba(0,0,0,0.18)",
+                }}
+              />
+              <span style={{ opacity: 0.72 }}>{layerName}</span>
+              <strong>{lc.label}</strong>
+              <span style={{ opacity: 0.65 }}>{lc.score}/5</span>
+            </span>
+          );
+        })()}
         <span>
           <span className="dot"></span>
           <strong>{status}</strong> · Last update{" "}

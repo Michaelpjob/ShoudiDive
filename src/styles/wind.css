@@ -341,14 +341,11 @@
 }
 .tl-day-cell:last-child { border-right: none; }
 .tl-day-cell.odd  { background: rgb(255 255 255 / 0.02); }
-.tl-day-cell.conf-medium .tl-day-label::after {
-  content: " ~";
-  color: var(--warn);
-}
-.tl-day-cell.conf-low .tl-day-label::after {
-  content: " ~~";
-  color: var(--warn);
-}
+/* 2026-05-25: "~" / "~~" confidence tier markers removed — the
+   TopBar confidence dot now carries the per-horizon signal and
+   updates as the user scrubs the timeline. The conf-{tier} classes
+   stay on .tl-day-cell as a future visual-styling hook (e.g. fade
+   the day cell by confidence) but no longer paint text. */
 .tl-day-label {
   font-size: 11px;
   font-weight: 600;
