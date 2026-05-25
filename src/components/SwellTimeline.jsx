@@ -123,11 +123,9 @@ export function SwellCurrentCard({ sel }) {
             {periodTag}
           </div>
         )}
-        {dayInfo && dayInfo.confidence !== "high" && (
-          <div className="wcs-confidence">
-            {dayInfo.confidence === "medium" ? "~ medium-confidence WW3" : "~ low-confidence WW3"}
-          </div>
-        )}
+        {/* Per-day confidence text removed 2026-05-24 — the horizon-aware
+            confidence dot in the TopBar carries this signal now and updates
+            as the user scrubs the timeline. */}
       </div>
     </div>
   );
