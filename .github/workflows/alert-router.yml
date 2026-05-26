@@ -191,19 +191,19 @@ jobs:
             slug=$(echo "$workflow" | sed 's/[^A-Za-z0-9]/-/g' | tr 'A-Z' 'a-z' | sed 's/--*/-/g')
             title="[${severity}] ${workflow}: ${count} failures in last 2 h"
 
-            body=$(cat <<EOF
-**Workflow:** ${workflow}
-**Severity:** \`${severity}\`
-**Failures in last 2 h:** ${count}
-**Latest run:** [${latest_id}](https://github.com/${REPO}/actions/runs/${latest_id}) at ${latest}
-
-This issue is auto-managed by \`.github/workflows/alert-router.yml\`.
-It will close itself once the workflow goes green for 2 consecutive runs.
-
-To investigate, open the latest failing run via the link above and
-read the failed-job logs.
-EOF
-)
+            # Build issue body via printf (avoids YAML-literal-block
+            # indentation traps that bit heredocs at column 1).
+            body=$(printf '%s\n' \
+              "**Workflow:** ${workflow}" \
+              "**Severity:** \`${severity}\`" \
+              "**Failures in last 2 h:** ${count}" \
+              "**Latest run:** [${latest_id}](https://github.com/${REPO}/actions/runs/${latest_id}) at ${latest}" \
+              "" \
+              "This issue is auto-managed by \`.github/workflows/alert-router.yml\`." \
+              "It will close itself once the workflow goes green for 2 consecutive runs." \
+              "" \
+              "To investigate, open the latest failing run via the link above and" \
+              "read the failed-job logs.")
 
             # Look for an existing issue with both the alert-router label
             # AND a title that contains this workflow's name.
