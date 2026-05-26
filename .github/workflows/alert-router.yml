@@ -91,13 +91,15 @@ jobs:
 
           # Pull recent failures across all workflows.
           # --limit 200 gives us 2 h + buffer.
-          gh run list --status failure --limit 200 \
+          # --repo required because there's no actions/checkout (no .git
+          # to autodetect the base repo).
+          gh run list --repo "$REPO" --status failure --limit 200 \
             --json workflowName,databaseId,createdAt,event,headBranch,conclusion,name \
             > failures.json
 
           # Pull recent successes too — used to AUTO-CLOSE issues when
           # a workflow goes green again.
-          gh run list --status success --limit 200 \
+          gh run list --repo "$REPO" --status success --limit 200 \
             --json workflowName,databaseId,createdAt,event,headBranch \
             > successes.json
 
