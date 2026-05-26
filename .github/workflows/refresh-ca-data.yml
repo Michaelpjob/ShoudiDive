@@ -119,6 +119,15 @@ jobs:
         timeout-minutes: 5
         run: python pipeline/fetch_mpa.py
 
+      - name: Fetch CDFW Administrative Kelp Beds
+        # ArcGIS FeatureServer (ds3135). 87 reference polygons; rarely
+        # changes — most days emits byte-identical output. continue-on-
+        # error so a transient ArcGIS 5xx doesn't break the rest of the
+        # daily refresh.
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_kelp.py
+
       - name: Probe all external feeds
         continue-on-error: true
         timeout-minutes: 5
