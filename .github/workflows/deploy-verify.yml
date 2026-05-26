@@ -89,6 +89,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+      # 2026-05-26: CDN warmup wait. When triggered by workflow_run on
+      # deploy-prod success, Cloudflare's edges take 30-90 s to receive
+      # the new bundle. Probing immediately returned HTTP 403 on ~50% of
+      # post-deploy runs (32 false failures / 14 days). Sleep first.
+      # Scheduled cron runs (the every-4 h heartbeat) skip the sleep —
+      # CDN is already warm by then.
+      - name: Wait for Cloudflare edges to warm (workflow_run only)
+        if: github.event_name == 'workflow_run'
+        run: |
+          echo "Sleeping 90s for CF Pages edge propagation after deploy..."
+          sleep 90
       - name: Probe manifest + PNGs + perf budget
         env:
           LIVE_BASE_URL: https://shouldidive.com
@@ -132,7 +143,11 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # 2026-05-26: removed actions/checkout. This job only writes a local
+      # file + calls the gh issue API; it never touches repo content. The
+      # checkout was failing with HTTP 403 on ~10% of runs (GitHub-side
+      # auth glitch), which produced a meta-failure on top of every real
+      # check failure. Removing it eliminates that class of false alert.
       - name: Compute outcome + body
         id: compute
         run: |
