@@ -281,13 +281,14 @@ jobs:
             --json number \
             --jq '.[0].number // empty')
 
-          body="alert-router last completed: **${ts}**
-
-Next run: within 15 minutes (cron \`*/15 * * * *\`).
-
-If the timestamp above hasn't moved in > 30 minutes, the router is dead
-and any failure-class alerts you'd otherwise expect are missing. Check
-[alert-router runs](https://github.com/${REPO}/actions/workflows/alert-router.yml)."
+          body=$(printf '%s\n' \
+            "alert-router last completed: **${ts}**" \
+            "" \
+            "Next run: within 15 minutes (cron \`*/15 * * * *\`)." \
+            "" \
+            "If the timestamp above hasn't moved in > 30 minutes, the router is dead" \
+            "and any failure-class alerts you'd otherwise expect are missing. Check" \
+            "[alert-router runs](https://github.com/${REPO}/actions/workflows/alert-router.yml).")
 
           gh label create system:alert-router-heartbeat --repo "$REPO" \
             --color "0E7490" \
