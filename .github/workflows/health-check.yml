@@ -146,7 +146,7 @@ jobs:
             echo
             echo "_This issue is auto-managed by \`.github/workflows/health-check.yml\`. "
             echo "It will close itself when the next health-check passes. To force a refresh, "
-            echo "run [refresh-data.yml](https://github.com/${{ github.repository }}/actions/workflows/refresh-data.yml) manually._"
+            echo "run [refresh-ca-data.yml](https://github.com/${{ github.repository }}/actions/workflows/refresh-ca-data.yml) manually._"
           } > "$out"
 
           echo "summary_path=$out" >> "$GITHUB_OUTPUT"
@@ -231,8 +231,11 @@ jobs:
           set -e
           # gh returns ISO-8601 with Z. Pull the most recent run start
           # time across all event types (schedule, push, workflow_dispatch).
+          # 2026-05-26: refresh-data.yml was renamed to refresh-ca-data.yml
+          # in the multi-region split. The old name was generating phantom
+          # "data 14 days stale" alerts because the workflow doesn't exist.
           last_started=$(gh run list \
-            --workflow=refresh-data.yml \
+            --workflow=refresh-ca-data.yml \
             --limit=1 \
             --json startedAt \
             --jq '.[0].startedAt // empty')
@@ -246,17 +249,17 @@ jobs:
             if [ "$elapsed" -lt "$cooldown_seconds" ]; then
               hours_ago=$(( elapsed / 3600 ))
               hours_left=$(( (cooldown_seconds - elapsed) / 3600 ))
-              echo "refresh-data last started ${hours_ago}h ago "
+              echo "refresh-ca-data last started ${hours_ago}h ago "
               echo "(${last_started}); cooldown ${hours_left}h remaining. Skipping retry."
               exit 0
             fi
-            echo "refresh-data last started $last_started — past cooldown, retrying."
+            echo "refresh-ca-data last started $last_started — past cooldown, retrying."
           else
-            echo "No prior refresh-data run found; retrying."
+            echo "No prior refresh-ca-data run found; retrying."
           fi
 
-          echo "Dispatching refresh-data.yml as auto-retry."
-          gh workflow run refresh-data.yml --ref main
+          echo "Dispatching refresh-ca-data.yml as auto-retry."
+          gh workflow run refresh-ca-data.yml --ref main
 
       - name: Upload health JSON as artifact
         # Lets you click into a specific run and grab the raw JSON for

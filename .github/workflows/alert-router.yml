@@ -1,0 +1,308 @@
+name: Alert router
+
+# Centralised failure-classifier. Runs every 15 min, queries the GH
+# Actions API for the last ~2 hours of failures, classifies each
+# (workflow, failure pattern) into a severity tier, and opens / closes
+# ONE rolling Issue per (severity, workflow_class) pair.
+#
+# Designed to separate "did a workflow fail?" from "should a human
+# care?". GitHub Actions execution is noisy (Cloudflare 5xx, GH
+# checkout 403, NOAA upstream flakes); only sustained failure on a
+# production-affecting surface should generate inbox noise.
+#
+# Severity tiers (label = severity:p0|p1|p2|p3):
+#   P0 critical — shouldidive.com homepage 5xx, or manifest stale > 24 h
+#                 (live-cp-render fails AND it's not the first time)
+#   P1 important — dev-checks failing on a currently-open PR for > 1 h
+#   P2 advisory — 3+ consecutive failures of the same workflow,
+#                 OR live-cp-manifest failing for > 2 hours straight
+#   P3 muted   — single transient failure, scheduled cron jitter,
+#                 known-flaky beta-only surfaces
+#
+# Only P0/P1/P2 open or update Issues. P3 is logged in the run log
+# and ignored. The repo's notification subscription is then configured
+# (separately in GH account settings) to email-on only the
+# severity:p0 / severity:p1 labels — so the inbox carries the
+# actionable subset and the rest stays in-app.
+#
+# Heartbeat: every run posts a comment to issue tagged
+# `system:alert-router` updating "last ran at T". If you stop seeing
+# that update, the router itself died and the silence is suspicious.
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"   # every 15 min
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+  actions: read
+
+concurrency:
+  group: alert-router
+  cancel-in-progress: false   # let prior run finish, queue this one
+
+jobs:
+  classify-and-route:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # No actions/checkout — only API calls. Same rationale as
+      # sync-issue in deploy-verify.yml.
+
+      - name: Ensure severity labels exist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          gh label create severity:p0 --repo "$REPO" \
+            --color "B91C1C" \
+            --description "Critical — prod broken, user-visible" \
+            2>/dev/null || true
+          gh label create severity:p1 --repo "$REPO" \
+            --color "EA580C" \
+            --description "Important — blocking work but not user-visible" \
+            2>/dev/null || true
+          gh label create severity:p2 --repo "$REPO" \
+            --color "CA8A04" \
+            --description "Advisory — sustained but non-blocking" \
+            2>/dev/null || true
+          gh label create severity:p3 --repo "$REPO" \
+            --color "65A30D" \
+            --description "Muted — single transient or known-flaky" \
+            2>/dev/null || true
+          gh label create system:alert-router --repo "$REPO" \
+            --color "374151" \
+            --description "Auto-managed by .github/workflows/alert-router.yml" \
+            2>/dev/null || true
+
+      - name: Classify recent failures + sync Issues
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          NOW_EPOCH=$(date -u +%s)
+          WINDOW_SECONDS=$((2 * 3600))   # last 2 hours
+          SINCE_EPOCH=$((NOW_EPOCH - WINDOW_SECONDS))
+
+          # Pull recent failures across all workflows.
+          # --limit 200 gives us 2 h + buffer.
+          gh run list --status failure --limit 200 \
+            --json workflowName,databaseId,createdAt,event,headBranch,conclusion,name \
+            > failures.json
+
+          # Pull recent successes too — used to AUTO-CLOSE issues when
+          # a workflow goes green again.
+          gh run list --status success --limit 200 \
+            --json workflowName,databaseId,createdAt,event,headBranch \
+            > successes.json
+
+          # Filter both lists to the 2-h window in jq + classify into
+          # (workflow_class, severity) buckets.
+          #
+          # Classification rules:
+          #   * deploy-prod  failure × 1+      → P0
+          #   * deploy-verify failure × 3+     → P0 (real CDN broken,
+          #                                     not just edge warmup)
+          #   * dev-checks   failure × 2+      → P1
+          #   * deploy-{baja,ca,pnw,tropical}-beta + deploy-dev:
+          #       failure × 5+   → P2  (sustained CF outage)
+          #       failure < 5    → P3  (routine)
+          #   * health-check failure × 2+      → P2
+          #   * refresh-{region}-{data,wind} failure × 3+ → P2
+          #   * other / single-instance       → P3
+          jq --argjson since "$SINCE_EPOCH" '
+            map(select((.createdAt | fromdateiso8601) >= $since))
+            | group_by(.workflowName)
+            | map({
+                workflow: .[0].workflowName,
+                count:    length,
+                latest:   max_by(.createdAt).createdAt,
+                latest_id: max_by(.createdAt).databaseId
+              })
+          ' failures.json > failures-by-workflow.json
+
+          jq --argjson since "$SINCE_EPOCH" '
+            map(select((.createdAt | fromdateiso8601) >= $since))
+            | group_by(.workflowName)
+            | map({ workflow: .[0].workflowName, count: length })
+          ' successes.json > successes-by-workflow.json
+
+          echo "::group::failures by workflow (last 2 h)"
+          cat failures-by-workflow.json
+          echo "::endgroup::"
+          echo "::group::successes by workflow (last 2 h)"
+          cat successes-by-workflow.json
+          echo "::endgroup::"
+
+          # Build severity classifications.
+          jq '
+            def severity_of(workflow; count):
+              if workflow == "Deploy production (code-only fast path)" then
+                if count >= 1 then "p0" else "p3" end
+              elif workflow == "Verify live deploy" then
+                if count >= 3 then "p0"
+                elif count >= 2 then "p2"
+                else "p3" end
+              elif workflow == "Dev checks" then
+                if count >= 2 then "p1" else "p3" end
+              elif workflow == "Live data health check" then
+                if count >= 2 then "p2" else "p3" end
+              elif (workflow | startswith("Deploy ")) then
+                # beta deploys + deploy-dev
+                if count >= 5 then "p2" else "p3" end
+              elif (workflow | startswith("Refresh ")) then
+                if count >= 3 then "p2" else "p3" end
+              elif workflow == "Sync dev with main" then
+                if count >= 3 then "p2" else "p3" end
+              else
+                if count >= 3 then "p2" else "p3" end
+              end;
+            map(. + { severity: severity_of(.workflow; .count) })
+          ' failures-by-workflow.json > classified.json
+
+          echo "::group::classified"
+          cat classified.json
+          echo "::endgroup::"
+
+          # For each P0/P1/P2 entry: ensure a rolling Issue exists,
+          # tagged severity:<tier> + system:alert-router, titled with
+          # workflow name.
+          # For each workflow that went green in the window AND had an
+          # open issue: close it.
+
+          jq -c '.[]' classified.json | while read -r row; do
+            workflow=$(echo "$row" | jq -r '.workflow')
+            count=$(echo "$row" | jq -r '.count')
+            severity=$(echo "$row" | jq -r '.severity')
+            latest=$(echo "$row" | jq -r '.latest')
+            latest_id=$(echo "$row" | jq -r '.latest_id')
+
+            if [ "$severity" = "p3" ]; then
+              echo "[p3] muted: $workflow (count=$count)"
+              continue
+            fi
+
+            # Slug for matching issue titles
+            slug=$(echo "$workflow" | sed 's/[^A-Za-z0-9]/-/g' | tr 'A-Z' 'a-z' | sed 's/--*/-/g')
+            title="[${severity}] ${workflow}: ${count} failures in last 2 h"
+
+            body=$(cat <<EOF
+**Workflow:** ${workflow}
+**Severity:** \`${severity}\`
+**Failures in last 2 h:** ${count}
+**Latest run:** [${latest_id}](https://github.com/${REPO}/actions/runs/${latest_id}) at ${latest}
+
+This issue is auto-managed by \`.github/workflows/alert-router.yml\`.
+It will close itself once the workflow goes green for 2 consecutive runs.
+
+To investigate, open the latest failing run via the link above and
+read the failed-job logs.
+EOF
+)
+
+            # Look for an existing issue with both the alert-router label
+            # AND a title that contains this workflow's name.
+            existing=$(gh issue list --repo "$REPO" \
+              --label "system:alert-router" \
+              --search "${workflow} in:title" \
+              --state open \
+              --json number,title \
+              --jq ".[] | select(.title | contains(\"${workflow}\")) | .number" \
+              | head -1)
+
+            if [ -n "$existing" ]; then
+              echo "Updating issue #$existing for $workflow ($severity)"
+              gh issue edit "$existing" --repo "$REPO" \
+                --title "$title" \
+                --body "$body" \
+                --remove-label "severity:p0,severity:p1,severity:p2,severity:p3" \
+                --add-label "severity:${severity}" \
+                || true
+            else
+              echo "Opening new issue for $workflow ($severity)"
+              gh issue create --repo "$REPO" \
+                --title "$title" \
+                --body "$body" \
+                --label "severity:${severity},system:alert-router" \
+                || true
+            fi
+          done
+
+          # Close-on-green pass: for any open alert-router issue whose
+          # workflow had 0 failures in the window AND has at least one
+          # success, close it.
+          gh issue list --repo "$REPO" \
+            --label "system:alert-router" \
+            --state open \
+            --json number,title \
+            > open-issues.json
+
+          jq -c '.[]' open-issues.json | while read -r row; do
+            issue_num=$(echo "$row" | jq -r '.number')
+            issue_title=$(echo "$row" | jq -r '.title')
+
+            # Extract workflow name from title (after "] ", before ":")
+            workflow=$(echo "$issue_title" | sed -n 's/^\[[^]]*\] \(.*\): [0-9].*$/\1/p')
+            if [ -z "$workflow" ]; then continue; fi
+
+            fail_count=$(jq --arg w "$workflow" '
+              [.[] | select(.workflow == $w)] | .[0].count // 0
+            ' failures-by-workflow.json)
+            success_count=$(jq --arg w "$workflow" '
+              [.[] | select(.workflow == $w)] | .[0].count // 0
+            ' successes-by-workflow.json)
+
+            if [ "$fail_count" = "0" ] && [ "$success_count" -gt "0" ]; then
+              echo "Closing #$issue_num — $workflow recovered ($success_count successes, 0 failures in 2 h)"
+              gh issue close "$issue_num" --repo "$REPO" \
+                --comment "Workflow recovered: ${success_count} successful runs and 0 failures in the past 2 hours. Auto-closed by alert-router." \
+                || true
+            fi
+          done
+
+      - name: Heartbeat
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          ts=$(date -u +%Y-%m-%dT%H:%MZ)
+          # Single rolling heartbeat issue. If you stop seeing this
+          # update, the router itself is dead.
+          existing=$(gh issue list --repo "$REPO" \
+            --label "system:alert-router-heartbeat" \
+            --state open \
+            --limit 1 \
+            --json number \
+            --jq '.[0].number // empty')
+
+          body="alert-router last completed: **${ts}**
+
+Next run: within 15 minutes (cron \`*/15 * * * *\`).
+
+If the timestamp above hasn't moved in > 30 minutes, the router is dead
+and any failure-class alerts you'd otherwise expect are missing. Check
+[alert-router runs](https://github.com/${REPO}/actions/workflows/alert-router.yml)."
+
+          gh label create system:alert-router-heartbeat --repo "$REPO" \
+            --color "0E7490" \
+            --description "Auto-managed alert-router heartbeat — do not close manually" \
+            2>/dev/null || true
+
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --repo "$REPO" \
+              --title "alert-router heartbeat (last: ${ts})" \
+              --body "$body" \
+              || true
+          else
+            gh issue create --repo "$REPO" \
+              --title "alert-router heartbeat (last: ${ts})" \
+              --body "$body" \
+              --label "system:alert-router-heartbeat" \
+              || true
+          fi
