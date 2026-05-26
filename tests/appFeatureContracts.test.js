@@ -112,6 +112,14 @@ test("Current, swell, wind, and mobile overlay features remain wired", () => {
   assert.match(mobileSheet, /className="ms-overlay-quick"/);
   assert.match(mobileSheet, /aria-pressed=\{mpaOn\}/);
   assert.match(mobileSheet, /aria-pressed=\{bathyOn\}/);
+  // 2026-05-26 (Kelp Bed Zones MVP): the Kelp pill is rendered both in
+  // the open-sheet "Overlays" section AND in the always-visible
+  // .ms-overlay-quick strip. It's region-gated by `kelpAvailable`
+  // (CA-only today) so the chip never shows on Baja/PNW/tropical.
+  // Pinning aria-pressed={kelpOn} ensures the toggle stays wired in
+  // both spots — a future refactor that drops one renderer trips here
+  // before the build does.
+  assert.match(mobileSheet, /aria-pressed=\{kelpOn\}/);
   assert.match(styles, /\.ms-overlay-quick/);
   assert.match(styles, /\.mpa-popup-close/);
   assert.match(styles, /\.mpa-popup-done/);

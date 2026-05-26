@@ -31,6 +31,7 @@ import { SeaBasemap, LandBasemap, OceanMaskDefs, PLACE_LABELS } from "./Basemap.
 import DataOverlay from "./DataOverlay.jsx";
 import WindParticles from "./WindParticles.jsx";
 import MpaLayer from "./MpaLayer.jsx";
+import KelpLayer from "./KelpLayer.jsx";
 import BathyLayer, {
   visibleBathyFeatures,
   bathyLabels,
@@ -39,6 +40,7 @@ import MapLabels from "./MapLabels.jsx";
 import MobileSheet from "./MobileSheet.jsx";
 import BathyPopup from "./BathyPopup.jsx";
 import MpaPopup from "./MpaPopup.jsx";
+import KelpPopup from "./KelpPopup.jsx";
 import CoronadosBanner from "./CoronadosBanner.jsx";
 import { selToSlotKey } from "./WindDayGrid.jsx";
 import WindTimeline from "./WindTimeline.jsx";
@@ -135,9 +137,19 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
   // PrefsContext — extracted in Stage 5c (2026-05-23) so they no
   // longer have to be drilled through App → MapShell as props.
   const { prefs, setPref } = usePrefs();
-  const { opacity, units, mpaOn, bathyOn } = prefs;
+  const { opacity, units, mpaOn, bathyOn, kelpOn } = prefs;
   const setMpaOn = (v) => setPref("mpaOn", v);
   const setBathyOn = (v) => setPref("bathyOn", v);
+  const setKelpOn = (v) => setPref("kelpOn", v);
+
+  // Kelp Bed Zones is California-only today — CDFW ds3135 covers CA
+  // commercial kelp harvest boundaries, which are CA state-water
+  // constructs. Baja / PNW / tropical regions either have no analog
+  // (Baja: SEMARNAT manages a different scheme) or the data isn't
+  // published as a featureserver. The chip + layer hide outside CA so
+  // we don't show a useless toggle.
+  const REGIONS_WITH_KELP = new Set(["ca"]);
+  const kelpAvailable = REGIONS_WITH_KELP.has(activeRegion());
   // Timeline layers use a slot-key string derived from their selection
   // state; helpers fall back to a valid slot if the requested one has no
   // data. Chl/viz keep the legacy integer composite.
@@ -190,8 +202,9 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
   const {
     selectedMpa, setSelectedMpa,
     selectedBathy, setSelectedBathy,
+    selectedKelp, setSelectedKelp,
     bathyFeatures,
-  } = usePopupState({ mpaOn, bathyOn });
+  } = usePopupState({ mpaOn, bathyOn, kelpOn });
 
   // updateMpaOn / updateBathyOn stay here — they wrap mpaOn/bathyOn
   // setters (which are App-level state, not hook-managed) AND
@@ -207,6 +220,11 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
     const value = typeof next === "function" ? next(bathyOn) : next;
     if (!value) setSelectedBathy(null);
     setBathyOn(value);
+  };
+  const updateKelpOn = (next) => {
+    const value = typeof next === "function" ? next(kelpOn) : next;
+    if (!value) setSelectedKelp(null);
+    setKelpOn(value);
   };
 
   // Stale hover state from the previous layer carries an incompatible val
@@ -609,6 +627,16 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
           }}
         />
 
+        <KelpLayer
+          width={size.w}
+          height={size.h}
+          active={kelpOn && kelpAvailable}
+          onSelect={(kelp) => {
+            track("popup_open", { kind: "kelp", status: kelp?.status || "unknown" });
+            setSelectedKelp(kelp);
+          }}
+        />
+
         <BathyLayer
           width={size.w}
           height={size.h}
@@ -743,8 +771,9 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
         timeOpts={timeOpts}
         layerIsReal={layerIsReal}
         activeSpot={activeSpot} setActiveSpot={setActiveSpot}
-        mpaOn={mpaOn} bathyOn={bathyOn}
-        updateMpaOn={updateMpaOn} updateBathyOn={updateBathyOn}
+        mpaOn={mpaOn} bathyOn={bathyOn} kelpOn={kelpOn}
+        kelpAvailable={kelpAvailable}
+        updateMpaOn={updateMpaOn} updateBathyOn={updateBathyOn} updateKelpOn={updateKelpOn}
         size={size} zoomAt={zoomAt} resetView={resetView}
         dataState={dataState}
         isMobile={isMobile}
@@ -760,6 +789,10 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
 
       {selectedMpa && (
         <MpaPopup mpa={selectedMpa} onClose={() => setSelectedMpa(null)} />
+      )}
+
+      {selectedKelp && (
+        <KelpPopup kelp={selectedKelp} onClose={() => setSelectedKelp(null)} />
       )}
 
       {selectedBathy && (
@@ -787,6 +820,8 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
         dataState={dataState}
         setMpaOn={updateMpaOn}
         setBathyOn={updateBathyOn}
+        setKelpOn={updateKelpOn}
+        kelpAvailable={kelpAvailable}
         activeSpot={activeSpot} setActiveSpot={setActiveSpot}
         timeOpts={timeOpts}
         compositeText={compositeText}

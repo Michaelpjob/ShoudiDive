@@ -145,8 +145,10 @@ export default function DesktopLayout({
   activeComposite, compositeText, timeOpts, layerIsReal,
   // Saved-spots panel state (analytics-wrapped setter lives in MapShell)
   activeSpot, setActiveSpot,
-  // MPA/bathy toggles (state owned by App, side-effect wrappers in MapShell)
-  mpaOn, bathyOn, updateMpaOn, updateBathyOn,
+  // MPA/bathy/kelp toggles (state owned by App, side-effect wrappers in MapShell)
+  mpaOn, bathyOn, kelpOn, updateMpaOn, updateBathyOn, updateKelpOn,
+  // Kelp Bed Zones are CA-only today; hide the chip in beta regions.
+  kelpAvailable,
   // Map viewport (zoom +/− buttons + recenter)
   size, zoomAt, resetView,
   // Manifest data state (legend "no data" indicator)
@@ -199,6 +201,17 @@ export default function DesktopLayout({
             >
               Bottom
             </button>
+            {kelpAvailable && (
+              <button
+                type="button"
+                className={"mpa-pill" + (kelpOn ? " active" : "")}
+                onClick={(e) => { e.stopPropagation(); updateKelpOn(!kelpOn); }}
+                title={kelpOn ? "Kelp bed zones visible · click to hide" : "Kelp bed zones hidden · click to show"}
+                aria-pressed={kelpOn}
+              >
+                Kelp
+              </button>
+            )}
             <Chevron open={controlsOpen} />
           </span>
         </div>

@@ -126,6 +126,8 @@ export default function MobileShell({
   dataState,
   setMpaOn,
   setBathyOn,
+  setKelpOn,
+  kelpAvailable,
   activeSpot, setActiveSpot,
   timeOpts,
   compositeText,
@@ -139,7 +141,7 @@ export default function MobileShell({
   // wraps them with a popup-clearing side effect before passing them in
   // (see updateMpaOn/updateBathyOn there).
   const { prefs } = usePrefs();
-  const { units, mpaOn, bathyOn } = prefs;
+  const { units, mpaOn, bathyOn, kelpOn } = prefs;
   // wind + swell + current use slot keys; sst uses history/forecast slots
   // when loaded; chl/viz use integer composites.
   //
@@ -257,6 +259,19 @@ export default function MobileShell({
               >
                 Bottom Detail
               </button>
+              {kelpAvailable && (
+                <button
+                  type="button"
+                  className={"mpa-pill" + (kelpOn ? " active" : "")}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setKelpOn(!kelpOn);
+                  }}
+                  aria-pressed={kelpOn}
+                >
+                  Kelp Beds
+                </button>
+              )}
             </div>
           </section>
 
@@ -333,6 +348,19 @@ export default function MobileShell({
         >
           Bottom
         </button>
+        {kelpAvailable && (
+          <button
+            type="button"
+            className={"mpa-pill" + (kelpOn ? " active" : "")}
+            onClick={(e) => {
+              e.stopPropagation();
+              setKelpOn(!kelpOn);
+            }}
+            aria-pressed={kelpOn}
+          >
+            Kelp
+          </button>
+        )}
       </div>
 
       {/* Always-visible peek strip ------------------------------------- */}
