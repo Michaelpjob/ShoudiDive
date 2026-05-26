@@ -187,8 +187,6 @@ jobs:
               continue
             fi
 
-            # Slug for matching issue titles
-            slug=$(echo "$workflow" | sed 's/[^A-Za-z0-9]/-/g' | tr 'A-Z' 'a-z' | sed 's/--*/-/g')
             title="[${severity}] ${workflow}: ${count} failures in last 2 h"
 
             # Build issue body via printf (avoids YAML-literal-block
