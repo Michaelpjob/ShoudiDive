@@ -61,14 +61,15 @@ function loadBundle(spotId) {
         return null;
       }
     };
-    const [contours, coastline, kelp, mpa, landmarks] = await Promise.all([
+    const [contours, coastline, kelp, mpa, landmarks, soundings] = await Promise.all([
       fetchGeojson("contours"),
       fetchGeojson("coastline"),
       fetchGeojson("kelp"),
       fetchGeojson("mpa"),
       fetchGeojson("landmarks"),
+      fetchGeojson("soundings"),
     ]);
-    return { manifest, bathyUrl: `${base}/${layers.bathy?.url}`, contours, coastline, kelp, mpa, landmarks };
+    return { manifest, bathyUrl: `${base}/${layers.bathy?.url}`, contours, coastline, kelp, mpa, landmarks, soundings };
   })().catch((err) => {
     bundleCache.delete(spotId);  // allow retry on transient failure
     throw err;
@@ -120,25 +121,29 @@ function lineToPath(line, bbox, w, h, closed) {
   return closed ? d + "Z" : d;
 }
 
-// Contour color ramp — shallow (cyan) → deep (deep navy). Diver-relevant
-// depths get the warmer hues so 5/10/20 m read distinctly.
+// Contour color ramp — nautical-chart style. Real NOAA charts use
+// monochrome black-blue contours with cardinal bands ("safety contour"
+// at recreational dive depth, etc.). We approximate with a tight
+// blue-cyan ramp where everything stays readable against the lighter
+// chart-style bathy backdrop.
 function contourColor(depth_m) {
-  if (depth_m <= 5)   return "#a5f3fc";
-  if (depth_m <= 10)  return "#67e8f9";
-  if (depth_m <= 20)  return "#22d3ee";
-  if (depth_m <= 30)  return "#0ea5e9";
-  if (depth_m <= 50)  return "#0369a1";
-  if (depth_m <= 100) return "#1e3a8a";
-  if (depth_m <= 200) return "#1e293b";
+  if (depth_m <= 5)   return "#0891b2";  // cyan-600
+  if (depth_m <= 10)  return "#0e7490";  // cyan-700
+  if (depth_m <= 20)  return "#155e75";  // cyan-800
+  if (depth_m <= 30)  return "#164e63";  // cyan-900
+  if (depth_m <= 50)  return "#1e3a8a";  // blue-900
+  if (depth_m <= 100) return "#1e293b";
   return "#0f172a";
 }
 
-// Stroke weight by depth — every 10 m gets a heavier line, helping the
-// eye pick out cardinal depth bands at a glance.
+// Stroke weight by depth — every 10 m gets a heavier line, every
+// 50 m the heaviest. Recreational dive depth (≤30 m) and OW limit
+// (40 m) are visually obvious.
 function contourStrokeWidth(depth_m) {
-  if (depth_m % 50 === 0) return 1.4;
-  if (depth_m % 10 === 0) return 1.0;
-  return 0.55;
+  if (depth_m % 50 === 0) return 1.6;
+  if (depth_m === 30)    return 1.4;  // OW dive limit — emphasised
+  if (depth_m % 10 === 0) return 1.1;
+  return 0.6;
 }
 
 const MAX_ZOOM = 16;
@@ -165,6 +170,7 @@ export default function SpotDetailView({ spot, onClose }) {
     kelp: true,
     mpa: true,
     landmarks: true,
+    soundings: true,
   });
   // Cursor lng/lat readout — null when the cursor is off-stage. Updated
   // on mouseMove / touch tap. Lets the user see exact coordinates over
@@ -413,6 +419,24 @@ export default function SpotDetailView({ spot, onClose }) {
       };
     });
   }, [bundle, bbox]);
+  // Depth soundings sampled from the bathy grid. Each carries
+  // depth_ft (rounded) and depth_m. Frontend filters by zoom so the
+  // overview shows ~30 well-spaced labels and zoom 4× shows all of
+  // them (matches a NOAA chart's "more detail when you zoom in"
+  // hierarchy). The stride pattern visits every Nth point on each
+  // zoom band, which decorrelates which points are shown.
+  const soundingPts = useMemo(() => {
+    if (!bbox || !bundle?.soundings) return [];
+    return (bundle.soundings.features || []).map((f) => {
+      const [lng, lat] = f.geometry.coordinates;
+      const [x, y] = projectInBbox(bbox, lng, lat, CANVAS_W, CANVAS_H);
+      return {
+        key: `${lng}-${lat}`,
+        x, y,
+        depth_ft: f.properties.depth_ft,
+      };
+    });
+  }, [bundle, bbox]);
 
   // Centre pin in canvas coords
   const pinXY = useMemo(() => {
@@ -506,17 +530,22 @@ export default function SpotDetailView({ spot, onClose }) {
             viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
             preserveAspectRatio="xMidYMid meet"
           >
-            {/* 1. Bathy PNG — full canvas. The deep-blue background
-                gives the depth gradient context even at high zoom. */}
-            <rect x="0" y="0" width={CANVAS_W} height={CANVAS_H} fill="#0a1e3a" />
+            {/* 1. Chart-style bathy backdrop. NOAA nautical charts use
+                light-cyan water with darker tints at depth — gives
+                depth contours, soundings, and aids-to-nav room to read
+                as overlays. We lay down a cyan base, then render the
+                bathy PNG at reduced opacity for depth gradient context
+                (not as the primary depth signal — that's the contours
+                + soundings). */}
+            <rect x="0" y="0" width={CANVAS_W} height={CANVAS_H} fill="#cfe8f1" />
             {layers.bathy && bundle.bathyUrl && (
               <image
                 href={bundle.bathyUrl}
                 x="0" y="0"
                 width={CANVAS_W} height={CANVAS_H}
                 preserveAspectRatio="none"
-                opacity="0.92"
-                style={{ imageRendering: "auto" }}
+                opacity="0.40"
+                style={{ imageRendering: "auto", mixBlendMode: "multiply" }}
               />
             )}
 
@@ -537,16 +566,18 @@ export default function SpotDetailView({ spot, onClose }) {
               </g>
             )}
 
-            {/* 3. Coastline — drawn AFTER bathy so it masks the
-                visualisation cleanly on the land side. */}
+            {/* 3. Coastline — chart-style tan land with a thin dark
+                outline (matches NOAA chart land tinting). Drawn AFTER
+                bathy so it masks the depth gradient cleanly on the
+                land side. */}
             {layers.coastline && (
               <g className="spot-detail-coast" style={{ pointerEvents: "none" }}>
                 {coastlinePaths.map((c) => (
                   <path
                     key={c.key}
                     d={c.d}
-                    fill="#1f2937"
-                    stroke="#0f172a"
+                    fill="#e8d8b8"
+                    stroke="#7c6a48"
                     strokeWidth={0.8 * strokeScale}
                     vectorEffect="non-scaling-stroke"
                   />
@@ -592,42 +623,90 @@ export default function SpotDetailView({ spot, onClose }) {
               </g>
             )}
 
+            {/* 5a. Depth soundings — small black numerals at sampled
+                grid points showing depth in feet, NOAA chart style.
+                Thinned by zoom so the overview shows a clean spread
+                (every 3rd sample) and zoom 4×+ shows all of them.
+                Zoom-gated label size keeps numbers readable but not
+                domineering at any zoom. */}
+            {layers.soundings && (() => {
+              const stride = zoomLevel >= 4 ? 1 : zoomLevel >= 2 ? 2 : 3;
+              const fontPx = 9 / zoomLevel;
+              return (
+                <g className="spot-detail-soundings" style={{ pointerEvents: "none" }}>
+                  {soundingPts.filter((_, i) => i % stride === 0).map((s) => (
+                    <text
+                      key={s.key}
+                      x={s.x} y={s.y}
+                      fill="#0b3a52"
+                      fontSize={fontPx}
+                      fontFamily="ui-sans-serif, system-ui, sans-serif"
+                      fontWeight={500}
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      style={{ paintOrder: "stroke" }}
+                      stroke="#cfe8f1"
+                      strokeWidth={fontPx * 0.18}
+                    >
+                      {s.depth_ft}
+                    </text>
+                  ))}
+                </g>
+              );
+            })()}
+
             {/* 5b. Landmark markers + labels (above polygons,
                 under the centre pin). Importance gates visibility:
                 marquee always shown; major from zoom ≥ 1.5; minor
-                from zoom ≥ 3. Labels are SVG <text> with a small
-                white halo so they read against bathy at any depth. */}
+                from zoom ≥ 3. Marquee landmarks get chart-style
+                anchor icons; minors get a simple magenta dot. */}
             {layers.landmarks && landmarkPts.map((lm) => {
               if (lm.importance === "minor" && zoomLevel < 3) return null;
               if (lm.importance === "major" && zoomLevel < 1.5) return null;
-              const dotR = lm.importance === "marquee" ? 4.2 : 3.2;
-              const fontSize = lm.importance === "marquee" ? 11 : 10;
-              const weight = lm.importance === "marquee" ? 600 : 500;
+              const fontSize = lm.importance === "marquee" ? 11.5 : 10;
+              const weight = lm.importance === "marquee" ? 700 : 600;
+              const labelDx = 8 / zoomLevel;
+              const labelDy = -5 / zoomLevel;
               return (
                 <g key={lm.key} style={{ pointerEvents: "none" }}>
-                  <circle
-                    cx={lm.x} cy={lm.y}
-                    r={dotR / zoomLevel}
-                    fill="#fbbf24"
-                    stroke="#000"
-                    strokeWidth={0.8 / zoomLevel}
-                  />
-                  {/* Halo (drawn behind by being first) for legibility */}
+                  {lm.importance === "marquee" ? (
+                    // Anchor glyph at harbors (NOAA chart symbol).
+                    // Single-character render — scaled by zoom.
+                    <text
+                      x={lm.x} y={lm.y}
+                      fill="#9333ea"
+                      fontSize={18 / zoomLevel}
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      stroke="#fff"
+                      strokeWidth={(18 / zoomLevel) * 0.12}
+                      style={{ paintOrder: "stroke" }}
+                    >⚓</text>
+                  ) : (
+                    <circle
+                      cx={lm.x} cy={lm.y}
+                      r={3.4 / zoomLevel}
+                      fill="#c026d3"
+                      stroke="#fff"
+                      strokeWidth={0.8 / zoomLevel}
+                    />
+                  )}
+                  {/* Label with halo for legibility on any backdrop */}
                   <text
-                    x={lm.x + 7 / zoomLevel}
-                    y={lm.y - 4 / zoomLevel}
-                    fill="#000"
-                    stroke="#000"
-                    strokeWidth={2.4 / zoomLevel}
-                    strokeOpacity="0.65"
+                    x={lm.x + labelDx}
+                    y={lm.y + labelDy}
+                    fill="#1e1b4b"
+                    stroke="#fff"
+                    strokeWidth={2.6 / zoomLevel}
+                    strokeOpacity="0.92"
                     fontSize={fontSize / zoomLevel}
                     fontWeight={weight}
                     style={{ paintOrder: "stroke" }}
                   >{lm.name}</text>
                   <text
-                    x={lm.x + 7 / zoomLevel}
-                    y={lm.y - 4 / zoomLevel}
-                    fill="#fef3c7"
+                    x={lm.x + labelDx}
+                    y={lm.y + labelDy}
+                    fill="#4a044e"
                     fontSize={fontSize / zoomLevel}
                     fontWeight={weight}
                   >{lm.name}</text>
@@ -677,6 +756,7 @@ export default function SpotDetailView({ spot, onClose }) {
         {[
           ["bathy",     "Bathy"],
           ["contours",  "Contours"],
+          ["soundings", "Soundings"],
           ["coastline", "Coast"],
           ["mpa",       "MPA"],
           ["kelp",      "Kelp"],

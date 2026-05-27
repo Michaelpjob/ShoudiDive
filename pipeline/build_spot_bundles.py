@@ -810,6 +810,57 @@ def build_spot(spot_id: str, *, force: bool) -> bool:
         }
         print(f"    [{layer_key}] {feature_count} features → {out_path.name}")
 
+    # Depth soundings — sampled grid of "spot depths" labeled in feet
+    # the way real NOAA nautical charts publish them. We sample the
+    # native bathy grid on a coarse lng/lat lattice, skip land (NaN)
+    # cells, and round to the nearest foot. The frontend then thins
+    # them further by zoom (only show 20-30 at the overview, ramp up
+    # to all of them at deep zoom).
+    #
+    # Lattice density: 24 × 24 candidate points per bundle = 576 max
+    # samples before NaN/land filtering. After filtering a typical
+    # nearshore spot ends up with 150-300 valid soundings — same
+    # density NOAA Chart 18772 (San Diego to Long Beach) publishes
+    # for similar coverage.
+    sounding_features = []
+    sn = 24
+    src_h, src_w = depth_grid.shape
+    lng_step = (bbox["lng_max"] - bbox["lng_min"]) / (sn - 1)
+    lat_step = (bbox["lat_max"] - bbox["lat_min"]) / (sn - 1)
+    for sj in range(sn):
+        for si in range(sn):
+            samp_lng = bbox["lng_min"] + si * lng_step
+            samp_lat = bbox["lat_max"] - sj * lat_step
+            # Map (samp_lng, samp_lat) → cell index in the 480×480 grid.
+            gx = int(round((samp_lng - bbox["lng_min"]) / (bbox["lng_max"] - bbox["lng_min"]) * (src_w - 1)))
+            gy = int(round((bbox["lat_max"] - samp_lat) / (bbox["lat_max"] - bbox["lat_min"]) * (src_h - 1)))
+            gx = max(0, min(src_w - 1, gx))
+            gy = max(0, min(src_h - 1, gy))
+            d_m = depth_grid[gy, gx]
+            if not np.isfinite(d_m) or d_m <= 0:
+                continue  # land — no sounding
+            d_ft = int(round(float(d_m) * 3.28084))
+            # Skip absurd depths (artifact of bilinear NaN edges)
+            if d_ft <= 0 or d_ft > 10000:
+                continue
+            sounding_features.append({
+                "type": "Feature",
+                "geometry": {"type": "Point",
+                             "coordinates": [round(samp_lng, 5), round(samp_lat, 5)]},
+                "properties": {"depth_ft": d_ft, "depth_m": round(float(d_m), 1)},
+            })
+    if sounding_features:
+        soundings_path = bundle_dir / "soundings.geojson"
+        soundings_path.write_text(json.dumps(
+            {"type": "FeatureCollection", "features": sounding_features},
+            separators=(",", ":"),
+        ))
+        layers_meta["soundings"] = {
+            "url": "soundings.geojson",
+            "features": len(sounding_features),
+        }
+        print(f"    [soundings] {len(sounding_features)} features → soundings.geojson")
+
     # Curated landmarks — dive-relevant local place names (harbor,
     # break, point, named reef). Filtered to those inside the spot
     # bbox so the labels don't escape the visible canvas.
@@ -849,6 +900,7 @@ def build_spot(spot_id: str, *, force: bool) -> bool:
             "kelp":      "CDFW Administrative Kelp Beds ds3135 (clipped)",
             "mpa":       "CDFW MPA ds582 (clipped)",
             "landmarks": "Curated per-spot dive-site / harbor labels",
+            "soundings": "Depth soundings sampled from GMRT bathy on a 24x24 lattice",
         },
     }
     manifest_path = bundle_dir / "bundle.json"
