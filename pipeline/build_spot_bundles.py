@@ -940,35 +940,33 @@ def build_spot(spot_id: str, *, force: bool) -> bool:
     }
     region_data_dir = REGION.data_output_dir(REPO_ROOT)
 
-    # Coastline gets a per-spot Overpass fetch at native resolution
-    # (Spot-K, 2026-05-27). The wide-map land.geojson is simplified
-    # to ~10 m for whole-CA rendering — fine at 8× max zoom but eats
-    # harbor jetties + inlet detail at the spot view's 16× ceiling.
-    # User asked for "true coastal view" — Overpass-direct gives
-    # sub-metre vertices, ~1-3k of them per spot bbox.
-    print(f"  fetching native-resolution coastline from Overpass…")
-    coast_fc = fetch_overpass_coastline_for_bbox(bbox)
-    if coast_fc is not None and coast_fc.get("features"):
+    # Coastline: clip the global land.geojson (output of
+    # fetch_coastline.py — already correctly polygonized via
+    # land-seed classification).
+    #
+    # 2026-05-27: walked back from per-spot Overpass fetch. The
+    # Overpass + polygonize-per-spot path produced broken land
+    # polygons because the coastline lines often don't reach all four
+    # bbox edges, so the polygonizer either returned one mega-polygon
+    # spanning both ocean and land, or dropped real land area as
+    # "ocean". User QA caught it: bathy bleeding into areas that
+    # should be land, "black line cuts half the bay off".
+    # The wide-map land.geojson uses a land-seed classifier that
+    # handles partial coastline ways correctly — much more reliable,
+    # even at ~10 m simplification (which is still well below the
+    # spot view's effective pixel size).
+    print(f"  clipping coastline from global land.geojson…")
+    clipped = clip_geojson_to_bbox(region_data_dir / "land.geojson", bbox)
+    if clipped is not None:
         out_path = bundle_dir / "coastline.geojson"
-        out_path.write_text(json.dumps(coast_fc, separators=(",", ":")))
+        out_path.write_text(json.dumps(clipped, separators=(",", ":")))
         layers_meta["coastline"] = {
             "url": "coastline.geojson",
-            "features": len(coast_fc["features"]),
+            "features": len(clipped["features"]),
         }
-        print(f"    [coastline] {len(coast_fc['features'])} features (Overpass native)")
+        print(f"    [coastline] {len(clipped['features'])} features (global clip)")
     else:
-        # Fallback: clip the wide-map land.geojson. Lower fidelity but
-        # better than no coastline.
-        print(f"    [coastline] Overpass returned empty — falling back to land.geojson clip")
-        clipped = clip_geojson_to_bbox(region_data_dir / "land.geojson", bbox)
-        if clipped is not None:
-            out_path = bundle_dir / "coastline.geojson"
-            out_path.write_text(json.dumps(clipped, separators=(",", ":")))
-            layers_meta["coastline"] = {
-                "url": "coastline.geojson",
-                "features": len(clipped["features"]),
-            }
-            print(f"    [coastline] {len(clipped['features'])} features (fallback clip)")
+        print(f"    [coastline] land.geojson not present — skipping")
 
     # Layer source mapping for the remaining layers (kelp + MPA both
     # have statewide curated polygons that already match spot-detail
@@ -1080,7 +1078,7 @@ def build_spot(spot_id: str, *, force: bool) -> bool:
         "layers": layers_meta,
         "sources": {
             "bathy":     "GMRT high-resolution GridServer (NetCDF, ~100 m near coast)",
-            "coastline": "OSM natural=coastline via Overpass — native resolution per spot bbox (~1 m vertices)",
+            "coastline": "OSM natural=coastline via fetch_coastline.py — clipped from global land.geojson",
             "kelp":      "CDFW BIO_CA_Kelp2016 observed aerial-survey canopy (clipped)",
             "mpa":       "CDFW MPA ds582 (clipped)",
             "landmarks": "Curated per-spot dive-site / harbor labels",
