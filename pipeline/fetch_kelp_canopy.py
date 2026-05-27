@@ -169,10 +169,59 @@ def round_coords(geom: dict, decimals: int = 4) -> dict:
     return geom
 
 
+def _get_with_retry(url, params, *, max_attempts=4):
+    """GET with exponential backoff. The kelp-2016 service hits 504
+    Gateway Timeout under modest load — needs retries to stay reliable
+    on the daily refresh. Backoff: 4s, 16s, 64s, 256s for a total
+    cap ~5 min on a fully-degraded service.
+    """
+    import time
+    last_err = None
+    for attempt in range(max_attempts):
+        try:
+            r = requests.get(url, params=params, timeout=180)
+            # Retry on 5xx + 429; raise on 4xx.
+            if r.status_code in (429, 500, 502, 503, 504):
+                last_err = f"HTTP {r.status_code}"
+                if attempt < max_attempts - 1:
+                    delay = 4 ** (attempt + 1)
+                    print(f"  {last_err} — retry {attempt + 1}/{max_attempts} in {delay}s")
+                    time.sleep(delay)
+                    continue
+            r.raise_for_status()
+            return r
+        except requests.exceptions.Timeout as e:
+            last_err = f"timeout: {e}"
+            if attempt < max_attempts - 1:
+                delay = 4 ** (attempt + 1)
+                print(f"  {last_err} — retry {attempt + 1}/{max_attempts} in {delay}s")
+                time.sleep(delay)
+                continue
+            raise
+        except requests.exceptions.ConnectionError as e:
+            last_err = f"connection: {e}"
+            if attempt < max_attempts - 1:
+                delay = 4 ** (attempt + 1)
+                print(f"  {last_err} — retry {attempt + 1}/{max_attempts} in {delay}s")
+                time.sleep(delay)
+                continue
+            raise
+    raise requests.HTTPError(f"exhausted retries; last={last_err}")
+
+
 def fetch_all_features() -> list[dict]:
-    """Page through the FeatureServer query endpoint."""
+    """Page through the FeatureServer query endpoint with retries.
+
+    The kelp-2016 service is heavier than the admin-bed service —
+    each polygon has 100s-1000s of vertices, and the service node
+    routinely 504s on default page sizes. We use a smaller page size
+    (300) + retry-with-backoff (in _get_with_retry) to ride out the
+    flakiness.
+    """
     features: list[dict] = []
     offset = 0
+    page_size = 300  # smaller than admin-bed PAGE_SIZE — fits in the
+                     # service's tighter per-request budget
     while True:
         params = {
             "where": "1=1",
@@ -180,11 +229,10 @@ def fetch_all_features() -> list[dict]:
             "outSR": "4326",
             "f": "geojson",
             "resultOffset": offset,
-            "resultRecordCount": PAGE_SIZE,
+            "resultRecordCount": page_size,
         }
-        print(f"GET BIO_CA_Kelp2016?resultOffset={offset}")
-        r = requests.get(BASE_URL, params=params, timeout=120)
-        r.raise_for_status()
+        print(f"GET BIO_CA_Kelp2016?resultOffset={offset}&resultRecordCount={page_size}")
+        r = _get_with_retry(BASE_URL, params)
         page = r.json()
         page_feats = page.get("features", []) or []
         features.extend(page_feats)
