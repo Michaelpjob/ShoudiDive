@@ -3,31 +3,45 @@ import { project } from "../lib/mapData.js";
 import { dataPath } from "../lib/region.js";
 import { simplifyGeometry, toleranceForZoom } from "../lib/vectorSimplify.js";
 
-// Color/style by lease status, per kelp-MVP handover.
-// CDFW Administrative Kelp Beds publish a STATUS field with values like
-// open / leasable / leased / closed (case-insensitive — fetch_kelp.py
-// lowercases for us). Outline 1.6 px to match MpaLayer; fill 10–14%
-// opacity so kelp doesn't drown the SST raster underneath.
+// Color/style by canopy class.
+// 2026-05-27: switched the data source from CDFW Administrative Kelp
+// Beds (ds3135 — lease boundaries, rectangular) to BIO_CA_Kelp2016
+// (observed aerial-survey canopy). The new data carries a
+// `className` field with two values: "Kelp Canopy" (surface canopy
+// visible from air) and "Kelp Subsurface" (canopy detected below the
+// water surface). Surface canopy is the diver-relevant one — it's
+// what you see from the boat. Subsurface stays visible at lower
+// opacity so the full kelp footprint reads in context.
 const KELP_STYLE = {
-  open:       { stroke: "#2e7d32", fill: "rgba(46, 125, 50, 0.14)" },
-  leasable:   { stroke: "#43a047", fill: "rgba(67, 160, 71, 0.12)" },
-  leased:     { stroke: "#1b5e20", fill: "rgba(27, 94, 32, 0.16)" },
-  closed:     { stroke: "#6d4c41", fill: "rgba(109, 76, 65, 0.14)" },
+  "kelp canopy":     { stroke: "#1b5e20", fill: "rgba(27, 94, 32, 0.36)" },
+  "kelp subsurface": { stroke: "#388e3c", fill: "rgba(56, 142, 60, 0.20)" },
+  // Legacy admin-bed statuses retained for fallback when a consumer
+  // is still pointed at kelp-beds.geojson (admin source). Kept thin
+  // so they don't compete visually with canopy when both layers ship.
+  open:       { stroke: "#2e7d32", fill: "rgba(46, 125, 50, 0.10)" },
+  leasable:   { stroke: "#43a047", fill: "rgba(67, 160, 71, 0.08)" },
+  leased:     { stroke: "#1b5e20", fill: "rgba(27, 94, 32, 0.12)" },
+  closed:     { stroke: "#6d4c41", fill: "rgba(109, 76, 65, 0.10)" },
 };
-const DEFAULT_STYLE = { stroke: "#558b2f", fill: "rgba(85, 139, 47, 0.10)" };
+const DEFAULT_STYLE = { stroke: "#558b2f", fill: "rgba(85, 139, 47, 0.18)" };
 
-export function styleForStatus(status) {
-  if (!status) return DEFAULT_STYLE;
-  return KELP_STYLE[String(status).toLowerCase()] || DEFAULT_STYLE;
+// Style chooser — keeps the original name (styleForStatus) so existing
+// callsites in MapShell + KelpPopup keep working. Accepts either a
+// canopy className ("Kelp Canopy" / "Kelp Subsurface") or a legacy
+// admin-bed status ("open" / "closed" / etc.).
+export function styleForStatus(key) {
+  if (!key) return DEFAULT_STYLE;
+  return KELP_STYLE[String(key).toLowerCase()] || DEFAULT_STYLE;
 }
 
 // Single shared promise so React StrictMode + multiple toggles don't refetch.
+// 2026-05-27: data source flipped from kelp-beds.geojson (admin lease
+// rectangles) to kelp-canopy.geojson (observed aerial-survey canopy).
+// Same single-promise pattern; same shape; just a different feed.
 let kelpPromise = null;
 function loadKelpBeds() {
   if (kelpPromise) return kelpPromise;
-  // Default cache mode so the browser revalidates with the CDN instead of
-  // serving a permanently-pinned copy from disk.
-  kelpPromise = fetch(dataPath("/data/kelp-beds.geojson"))
+  kelpPromise = fetch(dataPath("/data/kelp-canopy.geojson"))
     .then((r) => (r.ok ? r.json() : null))
     .catch(() => null)
     .then(rememberKelpFc);
@@ -154,25 +168,20 @@ export default function KelpLayer({ width, height, active, zoomLevel, onSelect }
   }, [active]);
 
   // Pre-project everything once per (width, height, features, tolerance).
-  // PR-K2-3: include geometry in the row so onSelect can hand it back to
-  // MapShell's zoomToFeature without re-walking the FeatureCollection.
-  // PR-K3-2: simplify geometry by zoom tolerance before path building.
-  // Memo key includes `tolerance` so we re-run simplification only when
-  // zoom crosses a band boundary (12×/8×/4×/2×/1×). For the 87 admin
-  // beds this is near-no-op since the vertex counts are already low —
-  // the win is for the kelp canopy layer (Phase 3) which uses this
-  // same simplifier against ~10k-vertex survey polygons.
+  // Style key is `className` for canopy features (2026-05-27 source
+  // swap) with `status` as the legacy fallback for admin-bed payloads.
   const tolerance = toleranceForZoom(zoomLevel);
   const paths = useMemo(() => {
     if (!features) return [];
     return features.map((f) => {
       const simplified = simplifyGeometry(f.geometry, tolerance);
+      const styleKey = f.properties.className || f.properties.status;
       return {
         id: f.properties.id,
         props: f.properties,
-        geometry: f.geometry, // unsimplified — kept for zoom-to-bed bounds calc
+        geometry: f.geometry,
         d: geometryToPath(simplified, width, height),
-        style: styleForStatus(f.properties.status),
+        style: styleForStatus(styleKey),
       };
     });
   }, [features, width, height, tolerance]);
@@ -210,7 +219,7 @@ export default function KelpLayer({ width, height, active, zoomLevel, onSelect }
             onSelect?.({ ...p.props, _geometry: p.geometry });
           }}
         >
-          <title>{p.props.name}{p.props.status ? ` — ${p.props.status}` : ""}</title>
+          <title>{p.props.name}{p.props.className ? ` — ${p.props.className}` : (p.props.status ? ` — ${p.props.status}` : "")}</title>
         </path>
       ))}
     </g>

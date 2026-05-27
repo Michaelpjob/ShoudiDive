@@ -683,7 +683,7 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
           active={kelpOn && kelpAvailable}
           zoomLevel={zoomLevel}
           onSelect={(kelp) => {
-            track("popup_open", { kind: "kelp", status: kelp?.status || "unknown" });
+            track("popup_open", { kind: "kelp", status: kelp?.className || kelp?.status || "unknown" });
             setSelectedKelp(kelp);
           }}
         />

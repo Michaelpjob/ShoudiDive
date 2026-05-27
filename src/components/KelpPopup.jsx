@@ -27,6 +27,10 @@ function loadKelpStormRisk() {
 function labelForStatus(status) {
   if (!status) return "Unknown";
   const s = String(status).toLowerCase();
+  // 2026-05-27 canopy data
+  if (s === "kelp canopy") return "Surface canopy";
+  if (s === "kelp subsurface") return "Subsurface";
+  // Legacy admin-bed values
   if (s === "open") return "Open";
   if (s === "leasable") return "Leasable";
   if (s === "leased") return "Leased";
@@ -35,7 +39,10 @@ function labelForStatus(status) {
 }
 
 export default function KelpPopup({ kelp, onClose, onZoomTo }) {
-  const style = styleForStatus(kelp.status);
+  // Style + label key — canopy features use `className`, legacy admin
+  // beds use `status`. Pick whichever is present.
+  const statusKey = kelp.className || kelp.status;
+  const style = styleForStatus(statusKey);
   const officialUrl =
     "https://wildlife.ca.gov/Conservation/Marine/Kelp";
   // PR-K5-3: storm-strip risk banner. Fetch the global risk record
@@ -77,16 +84,17 @@ export default function KelpPopup({ kelp, onClose, onZoomTo }) {
           <div>
             <div className="mpa-popup-name">{kelp.name}</div>
             <div className="mpa-popup-fullname">
-              CDFW Administrative Kelp Bed
-              {kelp.bedNumber != null ? ` · #${kelp.bedNumber}` : ""}
+              {kelp.className ? "Observed kelp canopy" : "CDFW Administrative Kelp Bed"}
+              {kelp.year ? ` · ${kelp.year} survey` : ""}
+              {kelp.bedNumber != null ? ` · Bed #${kelp.bedNumber}` : ""}
             </div>
           </div>
-          {kelp.status && (
+          {statusKey && (
             <span
               className="mpa-pill"
               style={{ background: style.fill, borderColor: style.stroke, color: style.stroke }}
             >
-              {labelForStatus(kelp.status)}
+              {labelForStatus(statusKey)}
             </span>
           )}
         </div>
@@ -109,10 +117,23 @@ export default function KelpPopup({ kelp, onClose, onZoomTo }) {
           </div>
         )}
         <p className="mpa-popup-body">
-          Administrative kelp beds are CDFW management boundaries for
-          commercial kelp harvest. Lease status indicates whether the
-          bed is open to harvest, available for lease, currently leased,
-          or closed.
+          {kelp.className ? (
+            <>
+              Polygon traced from a {kelp.year || "recent"} CDFW aerial
+              survey. <strong>Surface canopy</strong> = kelp visible on
+              the water surface from the plane; <strong>subsurface</strong>{" "}
+              = kelp detected just below it. Both indicate observed
+              kelp forest extent at survey time; seasonality means
+              canopy on any given day varies.
+            </>
+          ) : (
+            <>
+              Administrative kelp beds are CDFW management boundaries
+              for commercial kelp harvest. Lease status indicates
+              whether the bed is open to harvest, available for lease,
+              currently leased, or closed.
+            </>
+          )}
         </p>
         {/* Lease detail when present — surfaced 2026-05-27 once we
             verified the actual ds3135 schema includes Lessee +

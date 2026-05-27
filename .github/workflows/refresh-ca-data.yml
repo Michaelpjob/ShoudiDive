@@ -133,6 +133,15 @@ jobs:
         timeout-minutes: 5
         run: python pipeline/fetch_kelp.py
 
+      - name: Fetch CDFW observed kelp canopy (BIO_CA_Kelp2016)
+        # Aerial-survey canopy polygons — actual observed kelp forest
+        # extent (vs the admin-bed rectangles above). 2016 statewide
+        # survey, ~155 features. Drives the main Kelp toggle on both
+        # the wide map AND the Spot Detail view.
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_kelp_canopy.py
+
       - name: Build Spot Detail bundles (idempotent, ~30-day TTL)
         # Per-spot pre-computed bathy + contours + clipped overlays for
         # the Spot Detail view (Phase 1B — docs/spot-detail-handover.md).

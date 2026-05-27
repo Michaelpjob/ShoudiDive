@@ -791,9 +791,16 @@ def build_spot(spot_id: str, *, force: bool) -> bool:
         },
     }
     region_data_dir = REGION.data_output_dir(REPO_ROOT)
+    # Layer source mapping. Note `kelp` now sources from
+    # kelp-canopy.geojson (observed aerial-survey canopy from
+    # BIO_CA_Kelp2016) rather than kelp-beds.geojson (admin lease
+    # boundaries). User QA flagged the admin-bed rectangles as
+    # non-useful; canopy polygons are the actual kelp forest extent.
+    # The admin-bed data still lives at kelp-beds.geojson for
+    # cross-reference / management use cases.
     for layer_key, src_name in [
         ("coastline", "coastline.geojson"),
-        ("kelp",      "kelp-beds.geojson"),
+        ("kelp",      "kelp-canopy.geojson"),
         ("mpa",       "mpa-boundaries.geojson"),
     ]:
         src_path = region_data_dir / src_name
@@ -897,7 +904,7 @@ def build_spot(spot_id: str, *, force: bool) -> bool:
         "sources": {
             "bathy":     "GMRT high-resolution GridServer (NetCDF, ~100 m near coast)",
             "coastline": "OSM natural=coastline via Overpass (clipped)",
-            "kelp":      "CDFW Administrative Kelp Beds ds3135 (clipped)",
+            "kelp":      "CDFW BIO_CA_Kelp2016 observed aerial-survey canopy (clipped)",
             "mpa":       "CDFW MPA ds582 (clipped)",
             "landmarks": "Curated per-spot dive-site / harbor labels",
             "soundings": "Depth soundings sampled from GMRT bathy on a 24x24 lattice",
