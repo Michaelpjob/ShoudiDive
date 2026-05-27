@@ -78,7 +78,11 @@ SPOT_CENTRES = {
 # rationale as SPOT_CENTRES above.
 SPOT_RADIUS_KM = {
     "lajolla":  4,
-    "catalina": 8,
+    # 2026-05-27: bumped 8 → 12 km. Centre (-118.450, 33.389) at 8 km
+    # cut Avalon Harbor (-118.327, 33.342) just outside the bbox.
+    # 12 km spans Two Harbors → Avalon end-to-end, the full diver-
+    # relevant coast of Catalina.
+    "catalina": 12,
     "monterey": 6,
 }
 
@@ -93,37 +97,46 @@ SPOT_RADIUS_KM = {
 # for navigation but accurate to ~50 m. Add new spots here as the
 # pilot expands.
 SPOT_LANDMARKS = {
+    # All coords verified against OSM nodes / OpenSeaMap waypoints
+    # 2026-05-27. Previous values were eyeballed and drifted 100-300 m
+    # off the actual landmark (user QA: "landmarks don't line up with
+    # coast").
     "lajolla": [
-        (-117.2727, 32.8530, "La Jolla Cove",         "marquee"),
-        (-117.2580, 32.8662, "Children's Pool",       "minor"),
-        (-117.2734, 32.8527, "La Jolla Caves",        "minor"),
-        (-117.2543, 32.8662, "Scripps Pier",          "major"),
-        (-117.2780, 32.8550, "Boomer Beach",          "minor"),
-        (-117.2540, 32.8400, "Windansea",             "minor"),
-        (-117.2630, 32.8870, "Black's Beach",         "minor"),
-        (-117.2890, 32.8600, "La Jolla Canyon",       "major"),
+        (-117.2735, 32.8505, "La Jolla Cove",         "marquee"),
+        (-117.2790, 32.8475, "Children's Pool",       "minor"),
+        (-117.2745, 32.8520, "La Jolla Caves",        "minor"),
+        (-117.2545, 32.8665, "Scripps Pier",          "major"),
+        (-117.2725, 32.8515, "Boomer Beach",          "minor"),
+        (-117.2810, 32.8320, "Windansea",             "minor"),
+        (-117.2535, 32.8870, "Black's Beach",         "minor"),
+        (-117.2895, 32.8600, "La Jolla Canyon",       "major"),
     ],
     "catalina": [
-        (-118.3275, 33.3450, "Avalon Harbor",         "marquee"),
-        (-118.3214, 33.3441, "Casino Point",          "major"),
-        (-118.4974, 33.4426, "Two Harbors",           "marquee"),
-        (-118.4979, 33.4493, "Isthmus Cove",          "major"),
+        # 12 km radius now includes Avalon — added it back as marquee.
+        # Centre stays at (-118.450, 33.389); landmarks span Two
+        # Harbors (NW) → Avalon (SE), the full diver-relevant arc.
+        (-118.3270, 33.3420, "Avalon Harbor",         "marquee"),
+        (-118.3247, 33.3458, "Casino Point",          "major"),
+        (-118.4995, 33.4430, "Two Harbors",           "marquee"),
+        (-118.5020, 33.4475, "Isthmus Cove",          "major"),
         (-118.3950, 33.4060, "Ship Rock",             "major"),
-        (-118.4280, 33.4150, "Italian Gardens",       "minor"),
-        (-118.4790, 33.4380, "Big Geiger Cove",       "minor"),
-        (-118.4520, 33.4690, "Bird Rock",             "minor"),
-        (-118.4147, 33.3858, "Long Point",            "minor"),
+        (-118.4180, 33.4140, "Italian Gardens",       "minor"),
+        (-118.4815, 33.4395, "Big Geiger Cove",       "minor"),
+        (-118.4490, 33.4530, "Bird Rock",             "minor"),
+        (-118.4145, 33.3860, "Long Point",            "minor"),
     ],
     "monterey": [
-        (-121.9000, 36.6200, "Monterey Harbor",       "marquee"),
-        (-121.9000, 36.6160, "Coast Guard Pier",      "major"),
-        (-121.9090, 36.6177, "Lover's Point",         "major"),
-        (-121.9430, 36.6210, "Asilomar Beach",        "minor"),
+        (-121.8940, 36.6055, "Monterey Harbor",       "marquee"),
+        (-121.8910, 36.6048, "Coast Guard Pier",      "major"),
+        (-121.9160, 36.6240, "Lover's Point",         "major"),
         (-121.9460, 36.6330, "Point Pinos",           "major"),
-        (-121.8530, 36.6470, "Stillwater Cove",       "minor"),
+        (-121.9420, 36.6220, "Asilomar Beach",        "minor"),
         (-121.9530, 36.6210, "Pinnacles (Pt. Pinos)", "minor"),
-        (-121.9011, 36.6166, "San Carlos Beach",      "major"),
-        (-121.8945, 36.6149, "Breakwater Cove",       "marquee"),
+        (-121.8950, 36.6055, "San Carlos Beach",      "major"),
+        (-121.8920, 36.6045, "Breakwater Cove",       "marquee"),
+        # Stillwater Cove (Pebble Beach) at the south end of the
+        # bbox. The previous coord was 100s of metres off.
+        (-121.9450, 36.5640, "Stillwater Cove",       "minor"),
     ],
 }
 
