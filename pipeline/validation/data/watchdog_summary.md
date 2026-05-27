@@ -1,4 +1,4 @@
-# Validation watchdog — 2026-05-27T15:45Z
+# Validation watchdog — 2026-05-27T16:09Z
 
 **2 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
@@ -20,7 +20,7 @@ Freshness/completeness failures: wave:layer_date_stale, precip:layer_date_stale.
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_nearshore` | 4 | 9.35 | -0.79 | 100% | -0.69 |
+| `bight_nearshore` | 4 | 9.35 | -0.80 | 100% | -0.69 |
 | `central_nearshore` | 1 | 1.18 | -1.18 | 100% | — |
 
 ## Per-source bias (informational)
@@ -28,8 +28,8 @@ Freshness/completeness failures: wave:layer_date_stale, precip:layer_date_stale.
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
 | `cencoos` | 1 | -1.18 ft |
-| `dive-shop-diveviz` | 1 | -14.13 ft |
-| `dive-shop-justgetwet` | 3 | +3.66 ft |
+| `dive-shop-diveviz` | 1 | -14.15 ft |
+| `dive-shop-justgetwet` | 3 | +3.65 ft |
 
 ## How to act on this issue
 
