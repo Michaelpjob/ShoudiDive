@@ -900,8 +900,13 @@ export default function SpotDetailView({ spot, onClose }) {
                   inland  — gray square + gray label (nav reference)
                   marine  — italic blue label only (underwater feature) */}
             {layers.landmarks && landmarkPts.map((lm) => {
-              if (lm.importance === "minor" && zoomLevel < 3) return null;
-              if (lm.importance === "major" && zoomLevel < 1.5) return null;
+              // 2026-05-27: dropped major/minor thresholds so divers
+              // see chart-style label density at default zoom. NOAA
+              // charts show every named feature at any zoom; we
+              // follow the same convention. minor still gates above
+              // 2x so the densest features (every reef, every cove)
+              // don't crush the overview.
+              if (lm.importance === "minor" && zoomLevel < 2) return null;
               const fontSize = lm.importance === "marquee" ? 11.5 : 10;
               const weight = lm.importance === "marquee" ? 700 : 600;
               const labelDx = 8 / zoomLevel;
