@@ -1,10 +1,10 @@
-# Validation watchdog — 2026-05-27T04:03Z
+# Validation watchdog — 2026-05-27T04:10Z
 
-**3 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
+**4 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
-### 🔴 1. Only 9 observations in the last 24h (floor: 50)
+### 🔴 1. Only 7 observations in the last 24h (floor: 50)
 
 Multiple scrapers may be silently broken.
 
@@ -16,7 +16,13 @@ Expected `cdip-buoy` to contribute at least one observation per cron. None seen 
 
 **Suggested action:** Inspect `pipeline/validation/ingest/cdip.py` and the latest ingest cron's log.
 
-### 🔴 3. Published-data freshness gate found 2 issue(s)
+### 🔴 3. Required source `ndbc-buoy` has been silent for >24h
+
+Expected `ndbc-buoy` to contribute at least one observation per cron. None seen in the recent window.
+
+**Suggested action:** Inspect `pipeline/validation/ingest/ndbc.py` and the latest ingest cron's log.
+
+### 🔴 4. Published-data freshness gate found 2 issue(s)
 
 Freshness/completeness failures: wave:layer_date_stale, precip:layer_date_stale.
 
