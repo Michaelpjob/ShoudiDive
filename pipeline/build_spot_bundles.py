@@ -163,6 +163,19 @@ FRESHNESS_DAYS = 30
 
 GMRT_URL = "https://www.gmrt.org/services/GridServer"
 
+# Per-spot Overpass coastline fetch (PR Spot-K). The wide-map land.geojson
+# is simplified to ~10 m for whole-CA viewport rendering — fine at 8×
+# zoom max, but at the spot view's 16× zoom the simplification eats
+# harbor jetties, breakwaters, and inlet geometry. Per-spot Overpass
+# pulls go straight against the OSM coastline ways at native resolution
+# (sub-metre vertices), then we round to 5 decimals (~1 m) and store
+# in the bundle. ~4-8 km bbox per spot keeps the fetch tiny.
+OVERPASS_ENDPOINTS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.osm.ch/api/interpreter",
+]
+
 
 # ---------------------------------------------------------------------------
 # Geometry helpers
@@ -666,6 +679,119 @@ def clip_geojson_to_bbox(src_path: Path, bbox: dict) -> dict | None:
     return {"type": "FeatureCollection", "features": keep}
 
 
+def fetch_overpass_coastline_for_bbox(bbox: dict) -> dict | None:
+    """Pull native-resolution OSM coastline ways for a single spot bbox.
+
+    Uses the same Overpass query shape fetch_coastline.py uses but
+    without the simplify pass — at 4-8 km the raw vertex count is
+    well under any reasonable budget (typical CA spot bbox has 1-3k
+    coastline vertices), and the user explicitly asked for "true
+    coastal view" at deep zoom.
+
+    Returns a GeoJSON FeatureCollection with Polygon features (closed
+    via the buffered bbox box like fetch_coastline.py) or None if all
+    Overpass mirrors fail.
+    """
+    import time as _time
+    try:
+        from shapely.geometry import box as _box, mapping as _mapping
+        from shapely.ops import polygonize as _polygonize, unary_union as _unary_union
+        from shapely.geometry import LineString as _LineString
+    except ImportError:
+        print("    [coastline] shapely missing — skipping per-spot fetch")
+        return None
+
+    pad = 0.005  # ~500 m padding so coastline ways straddling the
+                 # spot's edge close cleanly
+    q_bbox = {
+        "lat_min": bbox["lat_min"] - pad,
+        "lat_max": bbox["lat_max"] + pad,
+        "lng_min": bbox["lng_min"] - pad,
+        "lng_max": bbox["lng_max"] + pad,
+    }
+    q = (
+        f'[out:json][timeout:60];'
+        f'way["natural"="coastline"]'
+        f'({q_bbox["lat_min"]},{q_bbox["lng_min"]},'
+        f'{q_bbox["lat_max"]},{q_bbox["lng_max"]});'
+        f'out geom;'
+    )
+    last_err = None
+    data = None
+    for url in OVERPASS_ENDPOINTS:
+        try:
+            r = requests.post(url, data={"data": q}, timeout=90,
+                              headers={"User-Agent": "shouldidive/0.1 spot-bundle"})
+            r.raise_for_status()
+            data = r.json()
+            break
+        except Exception as e:
+            last_err = e
+            print(f"    [coastline] {url} failed — {e!s}")
+            _time.sleep(2)
+    if data is None:
+        print(f"    [coastline] all Overpass mirrors failed: {last_err!s}")
+        return None
+
+    # Collect LineStrings
+    lines = []
+    for el in data.get("elements", []):
+        if el.get("type") != "way": continue
+        geom = el.get("geometry") or []
+        if len(geom) < 2: continue
+        lines.append(_LineString([(p["lon"], p["lat"]) for p in geom]))
+    if not lines:
+        # No coastline at this spot — open ocean (e.g. far offshore).
+        # Return an empty FC so the bundle still tracks the layer.
+        return {"type": "FeatureCollection", "features": []}
+
+    # Close into polygons via the buffered bbox boundary
+    box_ring = _box(q_bbox["lng_min"], q_bbox["lat_min"],
+                    q_bbox["lng_max"], q_bbox["lat_max"]).boundary
+    merged = _unary_union(lines + [box_ring])
+    polys = list(_polygonize(merged))
+
+    # Land seed: spot centre is offshore by design (we're on a dive
+    # spot!), so we can't seed from the centre. Instead identify the
+    # ocean polygon (the one whose centroid is farthest from any
+    # coastline vertex) and keep everything else as land.
+    if not polys:
+        return {"type": "FeatureCollection", "features": []}
+    # Strategy: the ocean polygon is typically by FAR the largest in
+    # area among the polygonize outputs for an offshore-centred spot
+    # bbox. Drop the largest and keep the rest. Works because the
+    # ocean spans the whole bbox while each land piece is a fragment.
+    polys_sorted = sorted(polys, key=lambda p: p.area, reverse=True)
+    if len(polys_sorted) == 1:
+        # Only one polygon — no land at this spot (true open ocean)
+        return {"type": "FeatureCollection", "features": []}
+    # Drop the open-ocean polygon (largest); everything else is land
+    land_polys = polys_sorted[1:]
+    feats = []
+    for poly in land_polys:
+        # Skip below 1e-7 deg² (~1 m²) — sub-pixel rocks
+        if poly.area < 1e-7:
+            continue
+        feats.append({
+            "type": "Feature",
+            "geometry": {
+                **_mapping(poly),
+                "coordinates": _round_geom_coords(_mapping(poly)["coordinates"], 5),
+            },
+            "properties": {},
+        })
+    return {"type": "FeatureCollection", "features": feats}
+
+
+def _round_geom_coords(coords, decimals):
+    """Recursively round coordinate arrays (supports Polygon +
+    MultiPolygon nesting depth)."""
+    if not coords: return coords
+    if isinstance(coords[0], (int, float)):
+        return [round(coords[0], decimals), round(coords[1], decimals)]
+    return [_round_geom_coords(c, decimals) for c in coords]
+
+
 def _geometry_bounds(geom):
     """Compute the lng/lat bounding box of a GeoJSON geometry.
     Supports Polygon, MultiPolygon, LineString, MultiLineString.
@@ -791,15 +917,44 @@ def build_spot(spot_id: str, *, force: bool) -> bool:
         },
     }
     region_data_dir = REGION.data_output_dir(REPO_ROOT)
-    # Layer source mapping. Note `kelp` now sources from
-    # kelp-canopy.geojson (observed aerial-survey canopy from
-    # BIO_CA_Kelp2016) rather than kelp-beds.geojson (admin lease
-    # boundaries). User QA flagged the admin-bed rectangles as
-    # non-useful; canopy polygons are the actual kelp forest extent.
-    # The admin-bed data still lives at kelp-beds.geojson for
-    # cross-reference / management use cases.
+
+    # Coastline gets a per-spot Overpass fetch at native resolution
+    # (Spot-K, 2026-05-27). The wide-map land.geojson is simplified
+    # to ~10 m for whole-CA rendering — fine at 8× max zoom but eats
+    # harbor jetties + inlet detail at the spot view's 16× ceiling.
+    # User asked for "true coastal view" — Overpass-direct gives
+    # sub-metre vertices, ~1-3k of them per spot bbox.
+    print(f"  fetching native-resolution coastline from Overpass…")
+    coast_fc = fetch_overpass_coastline_for_bbox(bbox)
+    if coast_fc is not None and coast_fc.get("features"):
+        out_path = bundle_dir / "coastline.geojson"
+        out_path.write_text(json.dumps(coast_fc, separators=(",", ":")))
+        layers_meta["coastline"] = {
+            "url": "coastline.geojson",
+            "features": len(coast_fc["features"]),
+        }
+        print(f"    [coastline] {len(coast_fc['features'])} features (Overpass native)")
+    else:
+        # Fallback: clip the wide-map land.geojson. Lower fidelity but
+        # better than no coastline.
+        print(f"    [coastline] Overpass returned empty — falling back to land.geojson clip")
+        clipped = clip_geojson_to_bbox(region_data_dir / "land.geojson", bbox)
+        if clipped is not None:
+            out_path = bundle_dir / "coastline.geojson"
+            out_path.write_text(json.dumps(clipped, separators=(",", ":")))
+            layers_meta["coastline"] = {
+                "url": "coastline.geojson",
+                "features": len(clipped["features"]),
+            }
+            print(f"    [coastline] {len(clipped['features'])} features (fallback clip)")
+
+    # Layer source mapping for the remaining layers (kelp + MPA both
+    # have statewide curated polygons that already match spot-detail
+    # fidelity — bbox clip is enough). `kelp` reads kelp-canopy.geojson
+    # (observed aerial-survey polygons from BIO_CA_Kelp2016) rather
+    # than kelp-beds.geojson (admin lease rectangles, not useful for
+    # divers).
     for layer_key, src_name in [
-        ("coastline", "coastline.geojson"),
         ("kelp",      "kelp-canopy.geojson"),
         ("mpa",       "mpa-boundaries.geojson"),
     ]:
@@ -903,7 +1058,7 @@ def build_spot(spot_id: str, *, force: bool) -> bool:
         "layers": layers_meta,
         "sources": {
             "bathy":     "GMRT high-resolution GridServer (NetCDF, ~100 m near coast)",
-            "coastline": "OSM natural=coastline via Overpass (clipped)",
+            "coastline": "OSM natural=coastline via Overpass — native resolution per spot bbox (~1 m vertices)",
             "kelp":      "CDFW BIO_CA_Kelp2016 observed aerial-survey canopy (clipped)",
             "mpa":       "CDFW MPA ds582 (clipped)",
             "landmarks": "Curated per-spot dive-site / harbor labels",

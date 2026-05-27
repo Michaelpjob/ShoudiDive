@@ -202,36 +202,73 @@ def _get_with_retry(url, params, *, max_attempts=4):
     raise requests.HTTPError(f"exhausted retries; last={last_err}")
 
 
+def _arcgis_to_geojson_feature(feat: dict) -> dict | None:
+    """Convert an ArcGIS f=json feature to a GeoJSON feature.
+
+    Used when we fall back from f=geojson (which 504s on the kelp-2016
+    service node) to f=json (lighter serialization). ArcGIS f=json
+    polygons carry geometry.rings: [[[x,y], ...], ...] where each ring
+    is x-y and outer rings are CW, inner rings (holes) CCW. GeoJSON
+    Polygons use the opposite winding but our consumers don't care
+    about winding (no point-in-poly tests here), so we just pass the
+    rings through as Polygon coordinates.
+    """
+    g = feat.get("geometry") or {}
+    attrs = feat.get("attributes") or {}
+    rings = g.get("rings")
+    if not rings:
+        return None
+    return {
+        "type": "Feature",
+        "geometry": {"type": "Polygon", "coordinates": rings},
+        "properties": attrs,
+    }
+
+
 def fetch_all_features() -> list[dict]:
     """Page through the FeatureServer query endpoint with retries.
 
-    The kelp-2016 service is heavier than the admin-bed service —
-    each polygon has 100s-1000s of vertices, and the service node
-    routinely 504s on default page sizes. We use a smaller page size
-    (300) + retry-with-backoff (in _get_with_retry) to ride out the
-    flakiness.
+    Tries f=geojson first (saves us a format conversion), falls back
+    to f=json when the GeoJSON serializer node 504s — which it does
+    routinely on this service. ArcGIS native (f=json) is faster on
+    the server because it doesn't run the GeoJSON wrapper conversion.
     """
     features: list[dict] = []
     offset = 0
-    # 2026-05-27: page_size 1000 → 300 → 100. First refresh's 504s
-    # showed the service node can't reliably serialize 300 high-
-    # vertex polygons inside the 60-90s soft cap. 100 lands in <10s
-    # on a healthy node, ~30s on a slow one. 155 total features →
-    # 2 pages plus the empty closer.
+    # 2026-05-27: page_size 1000 → 300 → 100. The service node
+    # 504s under load on big pages. 100 lands in <10s on a healthy
+    # node. 155 total features → 2 pages.
     page_size = 100
+    fmt = "geojson"  # bumped to "json" on first 504 (see below)
     while True:
         params = {
             "where": "1=1",
             "outFields": "*",
             "outSR": "4326",
-            "f": "geojson",
+            "f": fmt,
             "resultOffset": offset,
             "resultRecordCount": page_size,
         }
-        print(f"GET BIO_CA_Kelp2016?resultOffset={offset}&resultRecordCount={page_size}")
-        r = _get_with_retry(BASE_URL, params)
+        print(f"GET BIO_CA_Kelp2016?f={fmt}&offset={offset}&count={page_size}")
+        try:
+            r = _get_with_retry(BASE_URL, params)
+        except requests.HTTPError as e:
+            if fmt == "geojson":
+                # Fall back to f=json, retry from same offset
+                print(f"  f=geojson failed ({e}) — falling back to f=json")
+                fmt = "json"
+                continue
+            raise
         page = r.json()
-        page_feats = page.get("features", []) or []
+        if fmt == "json":
+            # ArcGIS native — convert each feature to GeoJSON shape
+            page_feats = []
+            for f in page.get("features", []) or []:
+                gf = _arcgis_to_geojson_feature(f)
+                if gf:
+                    page_feats.append(gf)
+        else:
+            page_feats = page.get("features", []) or []
         features.extend(page_feats)
         more = bool(
             page.get("exceededTransferLimit")
