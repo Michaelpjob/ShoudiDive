@@ -1,6 +1,6 @@
-# Validation watchdog — 2026-05-27T13:47Z
+# Validation watchdog — 2026-05-27T14:22Z
 
-**4 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
+**2 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
@@ -10,21 +10,9 @@ Multiple scrapers may be silently broken.
 
 **Suggested action:** Open the latest hourly ingest workflow run; look for `FAILED` lines per scraper.
 
-### 🔴 2. 1 critical external feed(s) are red
+### 🔴 2. Published-data freshness gate found 2 issue(s)
 
-A required upstream data source failed the latest feed-health probe.
-
-**Suggested action:** Inspect `pipeline/validation/data/feed_health.json`, then retry the affected fetch workflow after confirming the upstream feed recovered.
-
-### ⚠️ 3. 1 non-critical external feed(s) are red
-
-Red feeds: chl_climo_modis_pfeg. Fallbacks may keep the model running, but redundancy is degraded.
-
-**Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
-
-### 🔴 4. Published-data freshness gate found 3 issue(s)
-
-Freshness/completeness failures: wave:layer_date_stale, precip:layer_date_stale, sst:sst_source_query_failed.
+Freshness/completeness failures: wave:layer_date_stale, precip:layer_date_stale.
 
 **Suggested action:** Open `pipeline/validation/data/freshness_health.json`; fix the failing fetcher or rerun the matching workflow before trusting the deploy.
 
@@ -32,16 +20,16 @@ Freshness/completeness failures: wave:layer_date_stale, precip:layer_date_stale,
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_nearshore` | 4 | 9.44 | -0.65 | 100% | -0.69 |
-| `central_nearshore` | 1 | 1.45 | -1.45 | 100% | — |
+| `bight_nearshore` | 4 | 9.35 | -0.78 | 100% | -0.69 |
+| `central_nearshore` | 1 | 1.18 | -1.18 | 100% | — |
 
 ## Per-source bias (informational)
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `cencoos` | 1 | -1.45 ft |
-| `dive-shop-diveviz` | 1 | -14.09 ft |
-| `dive-shop-justgetwet` | 3 | +3.83 ft |
+| `cencoos` | 1 | -1.18 ft |
+| `dive-shop-diveviz` | 1 | -14.12 ft |
+| `dive-shop-justgetwet` | 3 | +3.67 ft |
 
 ## How to act on this issue
 
