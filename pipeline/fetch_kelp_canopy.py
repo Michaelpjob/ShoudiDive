@@ -226,60 +226,58 @@ def _arcgis_to_geojson_feature(feat: dict) -> dict | None:
 
 
 def fetch_all_features() -> list[dict]:
-    """Page through the FeatureServer query endpoint with retries.
+    """Fetch all kelp canopy features by iterating per KelpBed number.
 
-    Tries f=geojson first (saves us a format conversion), falls back
-    to f=json when the GeoJSON serializer node 504s — which it does
-    routinely on this service. ArcGIS native (f=json) is faster on
-    the server because it doesn't run the GeoJSON wrapper conversion.
+    The bulk query `where=1=1` on this service routinely 504s — the
+    server can't serialize the full ~155 high-vertex polygon set in
+    one go (or even in 100-feature pages — we confirmed externally
+    with curl: a `returnCountOnly=true` against `where=1=1` returns
+    instantly while a real-features query 504s after 60s).
+
+    Single-bed queries (`where=KelpBed=N`) return in <1s though. So
+    we walk bed numbers 1..90 (covers the documented bed range);
+    a missing bed simply returns 0 features. Total request count
+    is ~90, total wall time ~90 s on a healthy day, ~5 min worst
+    case with retries — still inside the 15-min step budget.
+
+    Tries f=geojson first per bed, falls back to f=json on failure
+    just for THAT bed so we don't lose the whole haul to a single
+    bad polygon.
     """
     features: list[dict] = []
-    offset = 0
-    # 2026-05-27: page_size 1000 → 300 → 100. The service node
-    # 504s under load on big pages. 100 lands in <10s on a healthy
-    # node. 155 total features → 2 pages.
-    page_size = 100
-    fmt = "geojson"  # bumped to "json" on first 504 (see below)
-    while True:
-        params = {
-            "where": "1=1",
-            "outFields": "*",
-            "outSR": "4326",
-            "f": fmt,
-            "resultOffset": offset,
-            "resultRecordCount": page_size,
-        }
-        print(f"GET BIO_CA_Kelp2016?f={fmt}&offset={offset}&count={page_size}")
-        try:
-            r = _get_with_retry(BASE_URL, params)
-        except requests.HTTPError as e:
-            if fmt == "geojson":
-                # Fall back to f=json, retry from same offset
-                print(f"  f=geojson failed ({e}) — falling back to f=json")
-                fmt = "json"
+    # Bed-number range from BED_NAMES above + the unnamed ones up to ~90.
+    # Beds with no record at this year return an empty features list
+    # — that's the expected behavior for any bed that wasn't observed
+    # in the 2016 survey (kelp absence is real signal too).
+    bed_range = range(1, 91)
+    for bed_num in bed_range:
+        for fmt in ("geojson", "json"):
+            params = {
+                "where": f"KelpBed={bed_num}",
+                "outFields": "*",
+                "outSR": "4326",
+                "f": fmt,
+            }
+            try:
+                r = _get_with_retry(BASE_URL, params, max_attempts=2)
+            except requests.HTTPError:
+                continue  # try the other format
+            try:
+                page = r.json()
+            except ValueError:
                 continue
-            raise
-        page = r.json()
-        if fmt == "json":
-            # ArcGIS native — convert each feature to GeoJSON shape
-            page_feats = []
-            for f in page.get("features", []) or []:
-                gf = _arcgis_to_geojson_feature(f)
-                if gf:
-                    page_feats.append(gf)
-        else:
-            page_feats = page.get("features", []) or []
-        features.extend(page_feats)
-        more = bool(
-            page.get("exceededTransferLimit")
-            or (page.get("properties") or {}).get("exceededTransferLimit")
-        )
-        if not more or not page_feats:
-            break
-        offset += len(page_feats)
-        if offset > 100_000:
-            print(f"WARN: aborting pagination at offset={offset}")
-            break
+            if fmt == "json":
+                bed_feats = []
+                for f in page.get("features", []) or []:
+                    gf = _arcgis_to_geojson_feature(f)
+                    if gf:
+                        bed_feats.append(gf)
+            else:
+                bed_feats = page.get("features", []) or []
+            if bed_feats:
+                print(f"  bed {bed_num}: {len(bed_feats)} features (f={fmt})")
+                features.extend(bed_feats)
+            break  # success — don't try the other format
     return features
 
 
