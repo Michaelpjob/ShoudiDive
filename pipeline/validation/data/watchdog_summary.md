@@ -1,10 +1,10 @@
-# Validation watchdog — 2026-05-27T04:15Z
+# Validation watchdog — 2026-05-27T05:20Z
 
 **4 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
-### 🔴 1. Only 7 observations in the last 24h (floor: 50)
+### 🔴 1. Only 3 observations in the last 24h (floor: 50)
 
 Multiple scrapers may be silently broken.
 
