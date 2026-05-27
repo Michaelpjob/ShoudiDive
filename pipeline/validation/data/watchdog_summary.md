@@ -1,6 +1,6 @@
-# Validation watchdog — 2026-05-27T14:22Z
+# Validation watchdog — 2026-05-27T14:36Z
 
-**2 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
+**3 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
@@ -10,7 +10,13 @@ Multiple scrapers may be silently broken.
 
 **Suggested action:** Open the latest hourly ingest workflow run; look for `FAILED` lines per scraper.
 
-### 🔴 2. Published-data freshness gate found 2 issue(s)
+### ⚠️ 2. 1 non-critical external feed(s) are red
+
+Red feeds: gmrt_bathy. Fallbacks may keep the model running, but redundancy is degraded.
+
+**Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
+
+### 🔴 3. Published-data freshness gate found 2 issue(s)
 
 Freshness/completeness failures: wave:layer_date_stale, precip:layer_date_stale.
 
