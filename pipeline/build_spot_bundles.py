@@ -701,6 +701,66 @@ def clip_geojson_to_bbox(src_path: Path, bbox: dict) -> dict | None:
     return {"type": "FeatureCollection", "features": keep}
 
 
+def _mask_depth_by_land(depth_grid, bbox, land_path):
+    """Set bathy pixels to NaN wherever the OSM land polygon says
+    "land". After this, the bathy PNG's transparency boundary
+    matches the OSM coastline exactly — no secondary GMRT coastline
+    artefact.
+
+    Implementation: load all land features intersecting the spot
+    bbox, union them once, build a prepared geometry for fast
+    contains() tests, then walk the grid pixel-centre by pixel-centre.
+    480 × 480 = 230k points; a prepared shapely poly with ~1k
+    vertices runs each contains() in microseconds → whole pass is
+    under 5 s per spot.
+    """
+    try:
+        import json as _json
+        from shapely.geometry import shape as _shape, Point as _Point, box as _box
+        from shapely.ops import unary_union as _unary_union
+        from shapely.prepared import prep as _prep
+    except ImportError:
+        print("    [mask] shapely missing — skipping OSM coastline burn-in")
+        return depth_grid
+
+    with land_path.open("r", encoding="utf-8") as f:
+        fc = _json.load(f)
+    features = fc.get("features", []) or []
+    spot_box = _box(bbox["lng_min"], bbox["lat_min"],
+                    bbox["lng_max"], bbox["lat_max"])
+    geoms = []
+    for feat in features:
+        try:
+            g = _shape(feat["geometry"])
+            if g.is_empty or not g.is_valid:
+                continue
+            if g.intersects(spot_box):
+                geoms.append(g)
+        except Exception:
+            continue
+    if not geoms:
+        return depth_grid  # spot is entirely offshore — nothing to mask
+    land_union = _unary_union(geoms)
+    prepared = _prep(land_union)
+
+    h, w = depth_grid.shape
+    masked = depth_grid.copy()
+    # Pixel centre coords (top-left origin, north-up)
+    lngs = bbox["lng_min"] + (np.arange(w) + 0.5) / w * (bbox["lng_max"] - bbox["lng_min"])
+    lats = bbox["lat_max"] - (np.arange(h) + 0.5) / h * (bbox["lat_max"] - bbox["lat_min"])
+    land_count = 0
+    for j in range(h):
+        lat = float(lats[j])
+        for i in range(w):
+            lng = float(lngs[i])
+            if prepared.contains(_Point(lng, lat)):
+                masked[j, i] = np.nan
+                land_count += 1
+    print(f"    [mask] burned OSM coastline into bathy: "
+          f"{land_count} land pixels masked ({land_count * 100.0 / (w * h):.1f}%)")
+    return masked
+
+
 def fetch_overpass_coastline_for_bbox(bbox: dict) -> dict | None:
     """Pull native-resolution OSM coastline ways for a single spot bbox.
 
@@ -898,6 +958,18 @@ def build_spot(spot_id: str, *, force: bool) -> bool:
         depth, src_lats, src_lons = parse_gmrt_netcdf(nc_bytes)
         depth_grid = resample_to_bbox(depth, src_lats, src_lons, bbox,
                                        BATHY_SIZE, BATHY_SIZE)
+        # Burn the OSM coastline into the bathy grid: any pixel whose
+        # centre falls inside an OSM land polygon becomes NaN.
+        # Without this, the bathy PNG carries the GMRT coastline as a
+        # transparency boundary AND the OSM coastline shows as the tan
+        # land polygon — divers see two coastlines (user QA: "you have
+        # two coastal views, one is correct the other is an artifact").
+        # Burning ensures the bathy transparency edge EXACTLY matches
+        # the visible OSM coastline → only one coastline rendered.
+        region_data_dir = REGION.data_output_dir(REPO_ROOT)
+        land_path = region_data_dir / "land.geojson"
+        if land_path.exists():
+            depth_grid = _mask_depth_by_land(depth_grid, bbox, land_path)
         depth_range_m = SPOT_DEPTH_RANGES_M.get(spot_id, DEFAULT_DEPTH_RANGE_M)
         bathy_path = bundle_dir / "bathy.png"
         encode_depth_png(depth_grid, depth_range_m, bathy_path)
