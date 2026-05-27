@@ -256,7 +256,16 @@ export default function SpotDetailView({ spot, onClose }) {
   const [bundle, setBundle] = useState(null);
   const [error, setError] = useState(null);
   const [layers, setLayers] = useState({
-    bathy: true,
+    // 2026-05-27: bathy default OFF. Even with OSM-burn-in mask + SVG
+    // clipPath, the bathy PNG's transparency boundary doesn't align
+    // exactly with the SVG-rendered tan OSM polygon — rasterized 480
+    // × 480 mask against a giant CA-spanning polygon-with-holes
+    // doesn't match what SVG's fill-rule="evenodd" interprets. User
+    // QA: "you have two coastal views, one is correct the other is
+    // an artifact". Depth reads great via contours + soundings +
+    // cursor readout, so the bathy heat map is now opt-in via the
+    // layer toggle.
+    bathy: false,
     contours: true,
     coastline: true,
     kelp: true,
