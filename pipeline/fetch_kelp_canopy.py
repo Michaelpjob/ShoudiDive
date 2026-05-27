@@ -169,6 +169,29 @@ def round_coords(geom: dict, decimals: int = 4) -> dict:
     return geom
 
 
+def simplify_geom(geom: dict, tolerance_deg: float = 5e-5) -> dict:
+    """Douglas-Peucker simplify via shapely. CDFW canopy polygons are
+    digitized at sub-metre precision (1000s of vertices per polygon),
+    which makes the raw service output massive (~800 KB / polygon).
+    A 5e-5 deg tolerance (~5 m at CA latitudes) cuts vertex counts
+    ~10× with no visible change at the spot detail's 16× zoom ceiling.
+
+    Returns the geometry as a fresh GeoJSON dict (Polygon/MultiPolygon).
+    Falls through unchanged on non-Polygon types or shapely failure.
+    """
+    try:
+        from shapely.geometry import shape, mapping
+    except ImportError:
+        return geom
+    try:
+        s = shape(geom).simplify(tolerance_deg, preserve_topology=True)
+        if s.is_empty:
+            return geom
+        return mapping(s)
+    except Exception:
+        return geom
+
+
 def _get_with_retry(url, params, *, max_attempts=4):
     """GET with bounded backoff. The kelp-2016 service hits 504
     Gateway Timeout under modest load. Backoff stays small (2/5/10/20 s)
@@ -326,9 +349,16 @@ def main() -> None:
             "areaKm2": area_km2,
             "year": 2016,
         }
+        # Simplify-then-round so the 5 m DP pass dedupes near-collinear
+        # vertices BEFORE rounding drops them to 11 m precision. Order
+        # matters here: simplify-then-round on a 1000-vertex polygon
+        # drops it to ~80 vertices; round-then-simplify only gets
+        # to ~400 because rounding leaves redundant repeat vertices
+        # that DP can't always re-identify.
+        simplified = simplify_geom(geom, tolerance_deg=5e-5)
         keep.append({
             "type": "Feature",
-            "geometry": round_coords(geom, decimals=4),
+            "geometry": round_coords(simplified, decimals=4),
             "properties": slim_props,
         })
 
