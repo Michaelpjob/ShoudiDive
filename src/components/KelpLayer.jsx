@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { project } from "../lib/mapData.js";
 import { dataPath } from "../lib/region.js";
+import { simplifyGeometry, toleranceForZoom } from "../lib/vectorSimplify.js";
 
 // Color/style by lease status, per kelp-MVP handover.
 // CDFW Administrative Kelp Beds publish a STATUS field with values like
@@ -28,7 +29,8 @@ function loadKelpBeds() {
   // serving a permanently-pinned copy from disk.
   kelpPromise = fetch(dataPath("/data/kelp-beds.geojson"))
     .then((r) => (r.ok ? r.json() : null))
-    .catch(() => null);
+    .catch(() => null)
+    .then(rememberKelpFc);
   return kelpPromise;
 }
 
@@ -44,6 +46,85 @@ function ringToPath(ring, w, h) {
   return d + "Z";
 }
 
+// PR-K2-3 helpers: lng/lat-space geometry queries that don't depend on
+// the projected (width, height) canvas. Used by the popup "Zoom to bed"
+// action and by the saved-spot connector-line proximity check.
+
+/**
+ * Compute the lng/lat bounding box of a GeoJSON Polygon or MultiPolygon.
+ * Returns { lngMin, lngMax, latMin, latMax } or null if geom is empty/unknown.
+ */
+export function geometryBounds(geom) {
+  if (!geom || !geom.coordinates) return null;
+  let lngMin = Infinity, lngMax = -Infinity, latMin = Infinity, latMax = -Infinity;
+  const visit = (pt) => {
+    const [lng, lat] = pt;
+    if (lng < lngMin) lngMin = lng;
+    if (lng > lngMax) lngMax = lng;
+    if (lat < latMin) latMin = lat;
+    if (lat > latMax) latMax = lat;
+  };
+  if (geom.type === "Polygon") {
+    for (const ring of geom.coordinates) for (const pt of ring) visit(pt);
+  } else if (geom.type === "MultiPolygon") {
+    for (const poly of geom.coordinates) for (const ring of poly) for (const pt of ring) visit(pt);
+  } else {
+    return null;
+  }
+  if (!Number.isFinite(lngMin)) return null;
+  return { lngMin, lngMax, latMin, latMax };
+}
+
+/**
+ * Find the nearest kelp-bed feature to a (lng, lat) point and the
+ * approximate nearest-vertex on its ring. Used by the saved-spot
+ * connector line. Distance is squared-degrees for ranking (no sqrt);
+ * returns null if no features are loaded or the nearest is past
+ * `maxDegrees` (~0.2° ≈ 22 km at 36°N latitude).
+ */
+export function nearestKelpEdge(features, lng, lat, maxDegrees = 0.2) {
+  if (!features || !features.length || !Number.isFinite(lng) || !Number.isFinite(lat)) {
+    return null;
+  }
+  const maxSq = maxDegrees * maxDegrees;
+  let best = null;
+  for (const f of features) {
+    const geom = f.geometry;
+    if (!geom || !geom.coordinates) continue;
+    const rings =
+      geom.type === "Polygon" ? geom.coordinates :
+      geom.type === "MultiPolygon" ? geom.coordinates.flat() :
+      [];
+    for (const ring of rings) {
+      for (const pt of ring) {
+        const dx = pt[0] - lng;
+        const dy = pt[1] - lat;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < maxSq && (best === null || d2 < best.d2)) {
+          best = { d2, lng: pt[0], lat: pt[1], feature: f };
+        }
+      }
+    }
+  }
+  return best;
+}
+
+/**
+ * Synchronously return the cached kelp-bed FeatureCollection if the
+ * fetch has already resolved, otherwise null. Used by the spot-pin
+ * connector line — we don't want to trigger a fetch just to draw a
+ * hint line; if the layer is off we silently skip the hint.
+ */
+let cachedKelpFc = null;
+export function getCachedKelpFc() {
+  return cachedKelpFc;
+}
+// Capture the resolved fc so synchronous consumers can read it.
+function rememberKelpFc(fc) {
+  if (fc) cachedKelpFc = fc;
+  return fc;
+}
+
 function geometryToPath(geom, w, h) {
   if (!geom) return "";
   if (geom.type === "Polygon") {
@@ -57,7 +138,7 @@ function geometryToPath(geom, w, h) {
   return "";
 }
 
-export default function KelpLayer({ width, height, active, onSelect }) {
+export default function KelpLayer({ width, height, active, zoomLevel, onSelect }) {
   const [features, setFeatures] = useState(null);
 
   useEffect(() => {
@@ -72,19 +153,38 @@ export default function KelpLayer({ width, height, active, onSelect }) {
     };
   }, [active]);
 
-  // Pre-project everything once per (width, height, features) — avoids
-  // re-projecting on every viewBox change since viewBox handles zoom for us.
+  // Pre-project everything once per (width, height, features, tolerance).
+  // PR-K2-3: include geometry in the row so onSelect can hand it back to
+  // MapShell's zoomToFeature without re-walking the FeatureCollection.
+  // PR-K3-2: simplify geometry by zoom tolerance before path building.
+  // Memo key includes `tolerance` so we re-run simplification only when
+  // zoom crosses a band boundary (12×/8×/4×/2×/1×). For the 87 admin
+  // beds this is near-no-op since the vertex counts are already low —
+  // the win is for the kelp canopy layer (Phase 3) which uses this
+  // same simplifier against ~10k-vertex survey polygons.
+  const tolerance = toleranceForZoom(zoomLevel);
   const paths = useMemo(() => {
     if (!features) return [];
-    return features.map((f) => ({
-      id: f.properties.id,
-      props: f.properties,
-      d: geometryToPath(f.geometry, width, height),
-      style: styleForStatus(f.properties.status),
-    }));
-  }, [features, width, height]);
+    return features.map((f) => {
+      const simplified = simplifyGeometry(f.geometry, tolerance);
+      return {
+        id: f.properties.id,
+        props: f.properties,
+        geometry: f.geometry, // unsimplified — kept for zoom-to-bed bounds calc
+        d: geometryToPath(simplified, width, height),
+        style: styleForStatus(f.properties.status),
+      };
+    });
+  }, [features, width, height, tolerance]);
 
   if (!active || !paths.length) return null;
+
+  // PR-K2-2: zoom-aware stroke + fill. Same math as MpaLayer so the
+  // two overlays scale identically and don't visually diverge at high
+  // zoom. See docs/kelp-roadmap.md § "Phase 2".
+  const z = Number.isFinite(zoomLevel) && zoomLevel > 0 ? zoomLevel : 1;
+  const strokeW = Math.max(0.4, 1.6 / Math.min(z, 4));
+  const fillOpacityFactor = z <= 4 ? 1 : Math.max(0.35, 4 / z);
 
   return (
     <g className="kelp-layer">
@@ -93,8 +193,9 @@ export default function KelpLayer({ width, height, active, onSelect }) {
           key={p.id}
           d={p.d}
           fill={p.style.fill}
+          fillOpacity={fillOpacityFactor}
           stroke={p.style.stroke}
-          strokeWidth="1.6"
+          strokeWidth={strokeW}
           strokeOpacity="0.85"
           style={{ cursor: "pointer", pointerEvents: "visiblePainted" }}
           onMouseDown={(e) => e.stopPropagation()}
@@ -103,7 +204,10 @@ export default function KelpLayer({ width, height, active, onSelect }) {
           onTouchEnd={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
-            onSelect?.(p.props);
+            // Pass props + a non-enumerable-ish handle to geometry so the
+            // popup can request a "zoom to bed" jump (PR-K2-3) without us
+            // having to pipe a second arg through React's onClick prop.
+            onSelect?.({ ...p.props, _geometry: p.geometry });
           }}
         >
           <title>{p.props.name}{p.props.status ? ` — ${p.props.status}` : ""}</title>

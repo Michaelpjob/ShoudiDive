@@ -31,7 +31,7 @@ import { SeaBasemap, LandBasemap, OceanMaskDefs, PLACE_LABELS } from "./Basemap.
 import DataOverlay from "./DataOverlay.jsx";
 import WindParticles from "./WindParticles.jsx";
 import MpaLayer from "./MpaLayer.jsx";
-import KelpLayer from "./KelpLayer.jsx";
+import KelpLayer, { geometryBounds, getCachedKelpFc, nearestKelpEdge } from "./KelpLayer.jsx";
 import BathyLayer, {
   visibleBathyFeatures,
   bathyLabels,
@@ -312,6 +312,31 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
 
   function resetView() {
     setVb({ x: 0, y: 0, w: size.w, h: size.h });
+  }
+
+  // PR-K2-3: jump-zoom the viewBox to fit a GeoJSON feature's bounds.
+  // Used by KelpPopup's "Zoom to bed" action. 30% padding so the bed
+  // doesn't sit flush against the viewport edge. clampVb keeps us
+  // inside the bbox even on tiny beds that would otherwise blow past
+  // MAX_ZOOM (and then the clamp brings them back, which feels OK
+  // for a one-shot jump). See docs/kelp-roadmap.md § "Phase 2".
+  function zoomToFeature(feature) {
+    const bounds = geometryBounds(feature?.geometry);
+    if (!bounds) return;
+    const [x0, y0] = project(bounds.lngMin, bounds.latMax, size.w, size.h);
+    const [x1, y1] = project(bounds.lngMax, bounds.latMin, size.w, size.h);
+    const featW = Math.abs(x1 - x0);
+    const featH = Math.abs(y1 - y0);
+    // Fit the longer axis with 30% padding; mirror it to the other axis.
+    const pad = 1.3;
+    const aspect = size.h / size.w;
+    let w = Math.max(featW * pad, (featH * pad) / aspect);
+    // Don't allow zoom past the clamp ceiling (size.w / MAX_ZOOM).
+    w = Math.max(size.w / 16, Math.min(size.w, w));
+    const h = w * aspect;
+    const cx = (x0 + x1) / 2;
+    const cy = (y0 + y1) / 2;
+    setVb(clampVb({ x: cx - w / 2, y: cy - h / 2, w, h }));
   }
 
   // ---- Touch handlers: 1-finger pan, 2-finger pinch zoom, tap-to-pin ----
@@ -621,6 +646,7 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
           width={size.w}
           height={size.h}
           active={mpaOn}
+          zoomLevel={zoomLevel}
           onSelect={(mpa) => {
             track("popup_open", { kind: "mpa", type: mpa?.type || "unknown" });
             setSelectedMpa(mpa);
@@ -631,6 +657,7 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
           width={size.w}
           height={size.h}
           active={kelpOn && kelpAvailable}
+          zoomLevel={zoomLevel}
           onSelect={(kelp) => {
             track("popup_open", { kind: "kelp", status: kelp?.status || "unknown" });
             setSelectedKelp(kelp);
@@ -658,12 +685,42 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
             // (vector-effect: non-scaling-stroke handles the outline width.)
             const r = (isActive ? 11 : 7) / zoomLevel;
             const inner = 4 / zoomLevel;
+
+            // PR-K2-3: at zoom > 8, draw a thin connector line to the
+            // nearest kelp-bed edge if the spot is inside ~0.05° (~5 km).
+            // Skipped when kelpOn is off, no kelp features cached, or the
+            // active region doesn't have kelp data. The connector is a
+            // hint, not a hard relationship — divers see "this spot is
+            // *in* this bed" without crowding the map at low zoom.
+            let connector = null;
+            if (kelpOn && kelpAvailable && zoomLevel > 8) {
+              const fc = getCachedKelpFc();
+              const nearest = nearestKelpEdge(fc?.features, s.lng, s.lat, 0.05);
+              if (nearest) {
+                const [nx, ny] = project(nearest.lng, nearest.lat, size.w, size.h);
+                connector = (
+                  <line
+                    x1={x}
+                    y1={y}
+                    x2={nx}
+                    y2={ny}
+                    stroke="#2e7d32"
+                    strokeWidth={0.6 / zoomLevel}
+                    strokeOpacity="0.55"
+                    strokeDasharray={`${2 / zoomLevel} ${2 / zoomLevel}`}
+                    pointerEvents="none"
+                  />
+                );
+              }
+            }
+
             return (
               <g
                 key={s.id}
                 style={{ cursor: "pointer" }}
                 onClick={() => setActiveSpot(s.id)}
               >
+                {connector}
                 <circle
                   cx={x}
                   cy={y}
@@ -792,7 +849,11 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
       )}
 
       {selectedKelp && (
-        <KelpPopup kelp={selectedKelp} onClose={() => setSelectedKelp(null)} />
+        <KelpPopup
+          kelp={selectedKelp}
+          onClose={() => setSelectedKelp(null)}
+          onZoomTo={(geom) => zoomToFeature({ geometry: geom })}
+        />
       )}
 
       {selectedBathy && (

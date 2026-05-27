@@ -187,6 +187,29 @@
   outline: none;
 }
 
+/* PR-K2-3: secondary popup action (KelpPopup "Zoom to bed"). Styled
+   lighter than mpa-popup-done so the primary close action still
+   dominates visually. */
+.mpa-popup-zoom {
+  width: 100%;
+  min-height: 40px;
+  margin-top: 8px;
+  appearance: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mpa-popup-zoom:hover,
+.mpa-popup-zoom:focus-visible {
+  background: var(--bg-panel);
+  outline: none;
+}
+
 /* ---------- Settings popover (replaces iframe-protocol Tweaks panel) ---------- */
 
 .settings-pop {

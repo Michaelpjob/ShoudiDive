@@ -20,7 +20,7 @@ function labelForStatus(status) {
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
-export default function KelpPopup({ kelp, onClose }) {
+export default function KelpPopup({ kelp, onClose, onZoomTo }) {
   const style = styleForStatus(kelp.status);
   const officialUrl =
     "https://wildlife.ca.gov/Conservation/Marine/Kelp";
@@ -86,6 +86,21 @@ export default function KelpPopup({ kelp, onClose }) {
           Kelp bed zones are management / reference boundaries and may
           not represent current kelp canopy.
         </p>
+        {/* PR-K2-3: "Zoom to bed" action — jumps the viewBox to fit
+            the bed polygon with padding. Hidden when onZoomTo isn't
+            wired so the popup stays usable in test/storybook contexts. */}
+        {onZoomTo && kelp._geometry && (
+          <button
+            type="button"
+            className="mpa-popup-zoom"
+            onClick={() => {
+              onZoomTo(kelp._geometry);
+              onClose();
+            }}
+          >
+            ⤢ Zoom to bed
+          </button>
+        )}
         <button
           type="button"
           className="mpa-popup-done"
