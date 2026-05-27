@@ -1,5 +1,5 @@
 {
-  "computed_at": "2026-05-27T16:09:14Z",
+  "computed_at": "2026-05-27T17:34:26Z",
   "manifest": "public/data/manifest.json",
   "layers_checked": [
     "sst",
@@ -12,7 +12,7 @@
     "precip"
   ],
   "summary": {
-    "total_findings": 2,
+    "total_findings": 3,
     "healthy": false
   },
   "findings": [
@@ -29,6 +29,13 @@
       "title": "Layer precip is 9.7d old",
       "layer": "precip",
       "detail": "threshold=3d window=now"
+    },
+    {
+      "severity": "medium",
+      "code": "sst_source_query_failed",
+      "title": "Could not query latest MUR SST source time",
+      "layer": "sst",
+      "detail": "ConnectionError: ('Connection aborted.', ConnectionResetError(104, 'Connection reset by peer'))"
     }
   ]
 }
