@@ -54,84 +54,121 @@ PAGE_SIZE = 1000
 ROOT = Path(__file__).resolve().parents[1]
 OUT_PATH = active_region().data_output_dir(ROOT) / "kelp-canopy.geojson"
 
-# Curated names for well-known established kelp forests. Lookup by
-# CDFW kelp-bed number (matches admin beds ds3135 numbering). Beds
-# without a curated name fall back to "Bed <N>".
+# Geographic name table for "established beds" — keyed by approximate
+# centroid (lng, lat). Each entry covers a radius in km; if a fetched
+# canopy polygon's centroid falls within ANY entry's radius, that
+# polygon gets the named label. Otherwise it's labelled "Bed <N>".
 #
-# Numbers verified against the CDFW Administrative Kelp Beds map
-# (Pacific Fishery Management Council appendix). Bed 1 is Coronado
-# (Mexico border); numbering runs north up the SoCal coast then
-# jumps to the Channel Islands and Central California.
-BED_NAMES = {
-    1:  "Coronado",
-    2:  "Imperial Beach",
-    3:  "Point Loma",
-    4:  "La Jolla",
-    5:  "Del Mar",
-    6:  "Solana Beach / Cardiff",
-    7:  "Carlsbad",
-    8:  "Oceanside",
-    9:  "Camp Pendleton",
-    10: "San Onofre",
-    11: "San Clemente",
-    12: "Dana Point / Salt Creek",
-    13: "Laguna Beach",
-    14: "Newport Beach",
-    15: "Huntington / Bolsa Chica",
-    16: "Long Beach / San Pedro",
-    17: "Palos Verdes - South",
-    18: "Palos Verdes - West",
-    19: "Palos Verdes - North",
-    20: "Santa Monica Bay",
-    21: "Malibu",
-    22: "Point Dume",
-    23: "Point Mugu",
-    24: "Ventura - Pierpont",
-    25: "Carpinteria",
-    26: "Santa Barbara - East",
-    27: "Santa Barbara - Mesa",
-    28: "Goleta / Ellwood",
-    29: "Refugio",
-    30: "Gaviota / Tajiguas",
-    31: "Point Conception - East",
-    32: "Point Conception - West",
-    33: "Cojo / Government Point",
-    34: "Vandenberg South",
-    35: "Vandenberg North",
-    40: "San Miguel Island - South",
-    41: "San Miguel Island - North",
-    42: "Santa Rosa Island - South",
-    43: "Santa Rosa Island - North",
-    44: "Santa Cruz Island - West",
-    45: "Santa Cruz Island - South",
-    46: "Santa Cruz Island - North",
-    47: "Santa Cruz Island - East",
-    48: "Anacapa Island",
-    49: "Santa Barbara Island",
-    50: "San Nicolas Island",
-    51: "Catalina Island - West End",
-    52: "Catalina Island - North",
-    53: "Catalina Island - Avalon",
-    54: "Catalina Island - South",
-    55: "San Clemente Island - West",
-    56: "San Clemente Island - South",
-    57: "San Clemente Island - East",
-    58: "San Clemente Island - North",
-    66: "Point Estero",
-    67: "Cambria",
-    68: "San Simeon",
-    69: "Big Sur - South",
-    70: "Big Sur - Central",
-    71: "Big Sur - North",
-    72: "Carmel Bay",
-    73: "Monterey Peninsula",
-    74: "Pacific Grove / Lover's Point",
-    75: "Monterey Bay - South",
-    76: "Santa Cruz County",
-    77: "San Mateo Coast",
-    78: "Half Moon Bay",
-    79: "Pillar Point",
-}
+# This replaces an earlier KelpBed-keyed lookup table that was based
+# on the CDFW Administrative Kelp Beds (ds3135) numbering — turns out
+# the BIO_CA_Kelp2016 service uses a completely different numbering
+# system (Catalina is bed 105 here, not 51; Monterey is 218-221, not
+# 73-75). Spatial mapping via centroid is more robust to schema
+# differences and lets us name beds correctly regardless of the
+# upstream service's internal IDs.
+#
+# Coordinates are approximate centroids of the named feature pulled
+# from OSM / NOAA chart references. The radius is generous enough
+# to absorb a typical bed's extent. Order matters when regions
+# overlap — earlier entries win.
+NAMED_AREAS = [
+    # SoCal mainland north → south
+    ("Coronado / Imperial Beach",     -117.18, 32.60, 8),
+    ("Point Loma",                    -117.27, 32.69, 7),
+    ("La Jolla",                      -117.27, 32.85, 5),
+    ("Del Mar / Cardiff",             -117.28, 32.97, 7),
+    ("Carlsbad / Oceanside",          -117.32, 33.15, 8),
+    ("Camp Pendleton / San Onofre",   -117.43, 33.31, 6),
+    ("San Clemente",                  -117.55, 33.39, 5),
+    ("Dana Point / Laguna",           -117.75, 33.51, 7),
+    ("Newport / Crystal Cove",        -117.85, 33.59, 5),
+    ("Huntington / Long Beach",       -118.10, 33.69, 9),
+    ("Palos Verdes",                  -118.40, 33.74, 8),
+    ("Santa Monica Bay",              -118.55, 33.95, 8),
+    ("Malibu",                        -118.74, 34.02, 7),
+    ("Point Dume / Mugu",             -119.00, 34.07, 8),
+    ("Ventura / Carpinteria",         -119.60, 34.36, 12),
+    ("Santa Barbara / Goleta",        -119.85, 34.42, 8),
+    ("Refugio / Gaviota",             -120.10, 34.46, 6),
+    ("Point Conception",              -120.47, 34.45, 7),
+    ("Vandenberg Coast",              -120.65, 34.65, 12),
+    # Channel Islands
+    ("San Miguel Island",             -120.37, 34.04, 8),
+    ("Santa Rosa Island",             -120.10, 33.97, 10),
+    ("Santa Cruz Island",             -119.75, 33.99, 12),
+    ("Anacapa Island",                -119.40, 34.00, 5),
+    ("Santa Barbara Island",          -119.03, 33.48, 3),
+    ("San Nicolas Island",            -119.50, 33.25, 6),
+    ("Catalina Island",               -118.45, 33.39, 14),
+    ("San Clemente Island",           -118.50, 32.90, 12),
+    # Central CA coast
+    ("Point Estero / Cayucos",        -120.95, 35.47, 10),
+    ("Cambria",                       -121.10, 35.55, 6),
+    ("San Simeon",                    -121.20, 35.65, 6),
+    ("Big Sur (South)",               -121.45, 36.00, 18),
+    ("Big Sur (Central)",             -121.75, 36.20, 18),
+    ("Big Sur (North) / Pt Lobos",    -121.95, 36.50, 10),
+    ("Carmel Bay",                    -121.93, 36.55, 5),
+    ("Monterey Peninsula",            -121.93, 36.62, 7),
+    ("Pacific Grove / Lover's Point", -121.92, 36.63, 4),
+    ("Santa Cruz County",             -122.00, 36.95, 14),
+    ("Half Moon Bay / Pillar Point",  -122.45, 37.50, 12),
+    # NorCal
+    ("Sonoma / Mendocino Coast",      -123.55, 38.75, 35),
+    ("Humboldt Coast",                -124.10, 41.00, 35),
+]
+
+
+def _km_to_deg(km, lat):
+    """Quick metric → degrees conversion for radius checks."""
+    import math
+    return km / 111.0, km / (111.0 * max(math.cos(math.radians(lat)), 0.05))
+
+
+def name_for_centroid(lng, lat):
+    """Return the friendly name for a polygon centroid, or None.
+
+    Walks NAMED_AREAS in declared order; returns the first match
+    (named regions are roughly mutually-exclusive geographically).
+    """
+    if not (Number_is_finite_like(lng) and Number_is_finite_like(lat)):
+        return None
+    import math
+    for (name, c_lng, c_lat, r_km) in NAMED_AREAS:
+        d_lat, d_lng = _km_to_deg(r_km, c_lat)
+        if abs(lat - c_lat) <= d_lat and abs(lng - c_lng) <= d_lng:
+            return name
+    return None
+
+
+def Number_is_finite_like(x):
+    """Compat helper — we don't have Number.isFinite in Python; emulate."""
+    try:
+        return x is not None and not (x != x)  # NaN check
+    except TypeError:
+        return False
+
+
+def polygon_centroid(geom: dict) -> tuple[float, float] | None:
+    """Naive vertex-mean centroid. Fine for naming — we just need
+    "where in CA is this bed?" precision."""
+    coords = geom.get("coordinates")
+    if not coords: return None
+    pts = []
+    t = geom.get("type")
+    if t == "Polygon":
+        for ring in coords:
+            pts.extend(ring)
+    elif t == "MultiPolygon":
+        for poly in coords:
+            for ring in poly:
+                pts.extend(ring)
+    else:
+        return None
+    if not pts: return None
+    xs = sum(p[0] for p in pts) / len(pts)
+    ys = sum(p[1] for p in pts) / len(pts)
+    return (xs, ys)
 
 
 def slugify(name: str) -> str:
@@ -292,11 +329,13 @@ def fetch_all_features() -> list[dict]:
     bad polygon.
     """
     features: list[dict] = []
-    # Bed-number range from BED_NAMES above + the unnamed ones up to ~90.
-    # Beds with no record at this year return an empty features list
-    # — that's the expected behavior for any bed that wasn't observed
-    # in the 2016 survey (kelp absence is real signal too).
-    bed_range = range(1, 91)
+    # The BIO_CA_Kelp2016 service uses its own internal KelpBed numbering
+    # — NOT the CDFW Administrative Kelp Beds (ds3135) scheme. Catalina
+    # turns up as bed 105, Monterey Peninsula as 218–221. Confirmed by
+    # spatial bbox query on 2026-05-27. Verified externally that beds
+    # > 300 return 0 features, so 1..300 covers the published range
+    # with headroom.
+    bed_range = range(1, 301)
     for bed_num in bed_range:
         for fmt in ("geojson", "json"):
             params = {
@@ -355,15 +394,26 @@ def main() -> None:
             except (TypeError, ValueError):
                 area_km2 = None
 
-        name = BED_NAMES.get(bed_number) if isinstance(bed_number, int) else None
+        # Spatial naming — compute the polygon's centroid and look up
+        # the nearest named area. Falls back to "Bed <N>" when no
+        # named area matches (true for the SCSR-only beds or rural
+        # stretches not in NAMED_AREAS).
+        centroid = polygon_centroid(geom)
+        name = None
+        if centroid:
+            name = name_for_centroid(centroid[0], centroid[1])
         if not name and bed_number is not None:
             name = f"Bed {bed_number}"
         if not name:
-            # Anonymous feature — skip rather than emit a junk id
-            continue
+            continue  # genuinely anonymous — skip
         canopy_id = slugify(name)
         if class_name == "Kelp Subsurface":
             canopy_id += "-subsurface"
+        # Add bed number suffix when multiple polygons share the same
+        # named area (e.g. Monterey's 218/219/220/221 all map to
+        # "Monterey Peninsula"). Otherwise the slugified ids collide.
+        if bed_number is not None:
+            canopy_id = f"{canopy_id}-{bed_number}"
 
         slim_props = {
             "id": canopy_id,
