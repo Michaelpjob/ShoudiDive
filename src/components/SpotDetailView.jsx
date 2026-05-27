@@ -531,6 +531,11 @@ export default function SpotDetailView({ spot, onClose }) {
   // Landmark points in canvas coords, ready for rendering. Importance
   // drives marker + label size at zoom 1× and visibility threshold:
   // 'marquee' always shown; 'major' from zoom ≥ 1.5; 'minor' from ≥ 3.
+  // Category drives icon + label styling:
+  //   dive    — yellow anchor (key dive sites)
+  //   coastal — small dot (beaches, points along shore)
+  //   inland  — gray square (nav reference on land)
+  //   marine  — italicised label only (named underwater features)
   const landmarkPts = useMemo(() => {
     if (!bbox || !bundle?.landmarks) return [];
     return (bundle.landmarks.features || []).map((f) => {
@@ -541,6 +546,7 @@ export default function SpotDetailView({ spot, onClose }) {
         x, y, lng, lat,
         name: f.properties.name,
         importance: f.properties.importance || "minor",
+        category: f.properties.category || "coastal",
       };
     });
   }, [bundle, bbox]);
@@ -872,11 +878,13 @@ export default function SpotDetailView({ spot, onClose }) {
               );
             })()}
 
-            {/* 5b. Landmark markers + labels (above polygons,
-                under the centre pin). Importance gates visibility:
-                marquee always shown; major from zoom ≥ 1.5; minor
-                from zoom ≥ 3. Marquee landmarks get chart-style
-                anchor icons; minors get a simple magenta dot. */}
+            {/* 5b. Landmark markers + labels (NOAA-chart styled).
+                Category drives marker + label palette; importance
+                gates visibility.
+                  dive    — orange anchor + dark-orange label
+                  coastal — small dark dot + dark label (shore features)
+                  inland  — gray square + gray label (nav reference)
+                  marine  — italic blue label only (underwater feature) */}
             {layers.landmarks && landmarkPts.map((lm) => {
               if (lm.importance === "minor" && zoomLevel < 3) return null;
               if (lm.importance === "major" && zoomLevel < 1.5) return null;
@@ -884,48 +892,72 @@ export default function SpotDetailView({ spot, onClose }) {
               const weight = lm.importance === "marquee" ? 700 : 600;
               const labelDx = 8 / zoomLevel;
               const labelDy = -5 / zoomLevel;
+              const isMarine = lm.category === "marine";
+              const isDive = lm.category === "dive";
+              const isInland = lm.category === "inland";
+              const fontStyle = isMarine ? "italic" : "normal";
+              const labelFill = isMarine ? "#1e3a8a"
+                : isDive ? "#7c2d12"
+                : isInland ? "#374151"
+                : "#1f2937";
               return (
                 <g key={lm.key} style={{ pointerEvents: "none" }}>
-                  {lm.importance === "marquee" ? (
-                    // Anchor glyph at harbors (NOAA chart symbol).
-                    // Single-character render — scaled by zoom.
+                  {/* Marker — depends on category */}
+                  {isDive && (
+                    // Anchor glyph for dive sites
                     <text
                       x={lm.x} y={lm.y}
-                      fill="#9333ea"
-                      fontSize={18 / zoomLevel}
+                      fill="#d97706"
+                      fontSize={16 / zoomLevel}
                       textAnchor="middle"
                       dominantBaseline="central"
-                      stroke="#fff"
-                      strokeWidth={(18 / zoomLevel) * 0.12}
+                      stroke="#fffbeb"
+                      strokeWidth={(16 / zoomLevel) * 0.18}
                       style={{ paintOrder: "stroke" }}
                     >⚓</text>
-                  ) : (
+                  )}
+                  {lm.category === "coastal" && (
                     <circle
                       cx={lm.x} cy={lm.y}
-                      r={3.4 / zoomLevel}
-                      fill="#c026d3"
+                      r={2.4 / zoomLevel}
+                      fill="#1f2937"
                       stroke="#fff"
-                      strokeWidth={0.8 / zoomLevel}
+                      strokeWidth={0.6 / zoomLevel}
                     />
                   )}
+                  {isInland && (
+                    <rect
+                      x={lm.x - 2.5 / zoomLevel}
+                      y={lm.y - 2.5 / zoomLevel}
+                      width={5 / zoomLevel}
+                      height={5 / zoomLevel}
+                      fill="#6b7280"
+                      stroke="#fff"
+                      strokeWidth={0.6 / zoomLevel}
+                    />
+                  )}
+                  {/* Marine features get no marker — just italic label */}
+
                   {/* Label with halo for legibility on any backdrop */}
                   <text
                     x={lm.x + labelDx}
                     y={lm.y + labelDy}
-                    fill="#1e1b4b"
-                    stroke="#fff"
-                    strokeWidth={2.6 / zoomLevel}
+                    fill="#ffffff"
+                    stroke="#ffffff"
+                    strokeWidth={2.8 / zoomLevel}
                     strokeOpacity="0.92"
                     fontSize={fontSize / zoomLevel}
                     fontWeight={weight}
+                    fontStyle={fontStyle}
                     style={{ paintOrder: "stroke" }}
                   >{lm.name}</text>
                   <text
                     x={lm.x + labelDx}
                     y={lm.y + labelDy}
-                    fill="#4a044e"
+                    fill={labelFill}
                     fontSize={fontSize / zoomLevel}
                     fontWeight={weight}
+                    fontStyle={fontStyle}
                   >{lm.name}</text>
                 </g>
               );

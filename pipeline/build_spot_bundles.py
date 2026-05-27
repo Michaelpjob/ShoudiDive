@@ -98,21 +98,44 @@ SPOT_RADIUS_KM = {
 # pilot expands.
 SPOT_LANDMARKS = {
     # All coords verified against OSM nodes / OpenSeaMap waypoints
-    # 2026-05-27. Previous values were eyeballed and drifted 100-300 m
-    # off the actual landmark (user QA: "landmarks don't line up with
-    # coast").
+    # 2026-05-27. Each entry: (lng, lat, label, importance[, category]).
+    # Categories drive marker style in SpotDetailView:
+    #   "dive"    — yellow anchor (key dive sites, mooring buoys)
+    #   "coastal" — small dot (beaches, points along shore)
+    #   "inland"  — gray dot (landmarks visible from the water for
+    #               navigation reference: piers, buildings, peaks)
+    #   "marine"  — italicised label, no dot (underwater features —
+    #               canyons, banks, named kelp beds)
+    # Default category is "coastal" for backwards-compat with old entries.
     "lajolla": [
-        (-117.2735, 32.8505, "La Jolla Cove",         "marquee"),
-        (-117.2790, 32.8475, "Children's Pool",       "minor"),
-        (-117.2745, 32.8520, "La Jolla Caves",        "minor"),
-        (-117.2545, 32.8665, "Scripps Pier",          "major"),
-        # Boomer Beach sits IMMEDIATELY south of La Jolla Cove (between
-        # Cove and Wipeout Beach). Earlier coord put it NE of the Cove
-        # — visibly wrong in user QA screenshot.
-        (-117.2738, 32.8495, "Boomer Beach",          "minor"),
-        (-117.2810, 32.8320, "Windansea",             "minor"),
-        (-117.2535, 32.8870, "Black's Beach",         "minor"),
-        (-117.2895, 32.8600, "La Jolla Canyon",       "major"),
+        # Key dive sites — mooring + dive flag icons in render
+        (-117.2735, 32.8505, "La Jolla Cove",          "marquee", "dive"),
+        (-117.2745, 32.8520, "La Jolla Caves",         "major",   "dive"),
+        (-117.2738, 32.8495, "Boomer Beach",           "minor",   "dive"),
+        (-117.2790, 32.8475, "Children's Pool",        "major",   "dive"),
+        (-117.2540, 32.8580, "Marine Room",            "minor",   "dive"),
+        (-117.2580, 32.8595, "Vallecitos",             "minor",   "dive"),
+        (-117.2545, 32.8500, "Hospital Reef",          "minor",   "dive"),
+        # Coastal landmarks (beaches, points)
+        (-117.2780, 32.8520, "Point La Jolla",         "major",   "coastal"),
+        (-117.2535, 32.8870, "Black's Beach",          "major",   "coastal"),
+        (-117.2810, 32.8320, "Windansea",              "minor",   "coastal"),
+        (-117.2500, 32.8650, "La Jolla Shores Beach",  "major",   "coastal"),
+        (-117.2580, 32.8740, "Scripps Beach",          "minor",   "coastal"),
+        # Inland nav reference (visible from water — chart-style labels)
+        (-117.2540, 32.8665, "Scripps Pier",           "major",   "inland"),
+        (-117.2550, 32.8657, "Birch Aquarium",         "major",   "inland"),
+        (-117.2530, 32.8690, "Scripps Inst.",          "minor",   "inland"),
+        (-117.2380, 32.8675, "Revelle Coll.",          "minor",   "inland"),
+        (-117.2655, 32.8470, "Village of La Jolla",    "major",   "inland"),
+        (-117.2435, 32.8400, "Mt Soledad",             "major",   "inland"),
+        (-117.2500, 32.8540, "La Jolla Shores",        "major",   "inland"),
+        # Underwater features (italic label only — no marker)
+        (-117.2895, 32.8600, "La Jolla Canyon",        "marquee", "marine"),
+        (-117.2700, 32.8590, "Mushroom Bch Reef",      "minor",   "marine"),
+        (-117.2820, 32.8430, "Yellowtail Hole",        "minor",   "marine"),
+        (-117.2660, 32.8520, "Vallecitos Bank",        "minor",   "marine"),
+        (-117.2730, 32.8560, "La Jolla Kelp Bed",      "major",   "marine"),
     ],
     "catalina": [
         # 12 km radius now includes Avalon — added it back as marquee.
@@ -1119,14 +1142,21 @@ def build_spot(spot_id: str, *, force: bool) -> bool:
     # break, point, named reef). Filtered to those inside the spot
     # bbox so the labels don't escape the visible canvas.
     landmark_features = []
-    for (lng, lat, label, importance) in SPOT_LANDMARKS.get(spot_id, []):
+    for entry in SPOT_LANDMARKS.get(spot_id, []):
+        # Support both 4-tuple (legacy) and 5-tuple (with category)
+        if len(entry) == 5:
+            lng, lat, label, importance, category = entry
+        else:
+            lng, lat, label, importance = entry
+            category = "coastal"  # default for legacy entries
         if (lng < bbox["lng_min"] or lng > bbox["lng_max"] or
             lat < bbox["lat_min"] or lat > bbox["lat_max"]):
             continue
         landmark_features.append({
             "type": "Feature",
             "geometry": {"type": "Point", "coordinates": [lng, lat]},
-            "properties": {"name": label, "importance": importance},
+            "properties": {"name": label, "importance": importance,
+                           "category": category},
         })
     if landmark_features:
         landmarks_path = bundle_dir / "landmarks.geojson"
