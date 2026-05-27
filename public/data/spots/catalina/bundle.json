@@ -1,0 +1,51 @@
+{
+  "id": "catalina",
+  "name": "Catalina",
+  "centre": {
+    "lng": -118.45,
+    "lat": 33.389
+  },
+  "bbox": {
+    "lng_min": -118.53631866236714,
+    "lng_max": -118.36368133763287,
+    "lat_min": 33.31692792792793,
+    "lat_max": 33.46107207207208
+  },
+  "generated_at": "2026-05-27T04:02:49Z",
+  "layers": {
+    "bathy": {
+      "url": "bathy.png",
+      "width": 480,
+      "height": 480,
+      "depth_range_m": [
+        0,
+        800
+      ],
+      "encoding": "linear_8bit_0nan"
+    },
+    "contours": {
+      "url": "contours.geojson",
+      "intervals_m": [
+        1,
+        5,
+        25,
+        100
+      ],
+      "levels": 84
+    },
+    "kelp": {
+      "url": "kelp.geojson",
+      "features": 1
+    },
+    "mpa": {
+      "url": "mpa.geojson",
+      "features": 7
+    }
+  },
+  "sources": {
+    "bathy": "GMRT high-resolution GridServer (NetCDF, ~100 m near coast)",
+    "coastline": "OSM natural=coastline via Overpass (clipped)",
+    "kelp": "CDFW Administrative Kelp Beds ds3135 (clipped)",
+    "mpa": "CDFW MPA ds582 (clipped)"
+  }
+}

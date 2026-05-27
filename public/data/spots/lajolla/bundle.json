@@ -1,0 +1,51 @@
+{
+  "id": "lajolla",
+  "name": "La Jolla",
+  "centre": {
+    "lng": -117.275,
+    "lat": 32.854
+  },
+  "bbox": {
+    "lng_min": -117.31789719931169,
+    "lng_max": -117.23210280068832,
+    "lat_min": 32.81796396396396,
+    "lat_max": 32.89003603603604
+  },
+  "generated_at": "2026-05-27T04:02:33Z",
+  "layers": {
+    "bathy": {
+      "url": "bathy.png",
+      "width": 480,
+      "height": 480,
+      "depth_range_m": [
+        0,
+        500
+      ],
+      "encoding": "linear_8bit_0nan"
+    },
+    "contours": {
+      "url": "contours.geojson",
+      "intervals_m": [
+        1,
+        5,
+        25,
+        100
+      ],
+      "levels": 84
+    },
+    "kelp": {
+      "url": "kelp.geojson",
+      "features": 2
+    },
+    "mpa": {
+      "url": "mpa.geojson",
+      "features": 4
+    }
+  },
+  "sources": {
+    "bathy": "GMRT high-resolution GridServer (NetCDF, ~100 m near coast)",
+    "coastline": "OSM natural=coastline via Overpass (clipped)",
+    "kelp": "CDFW Administrative Kelp Beds ds3135 (clipped)",
+    "mpa": "CDFW MPA ds582 (clipped)"
+  }
+}

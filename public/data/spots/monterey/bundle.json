@@ -1,0 +1,51 @@
+{
+  "id": "monterey",
+  "name": "Monterey",
+  "centre": {
+    "lng": -121.92,
+    "lat": 36.62
+  },
+  "bbox": {
+    "lng_min": -121.9873479035792,
+    "lng_max": -121.8526520964208,
+    "lat_min": 36.56594594594594,
+    "lat_max": 36.674054054054054
+  },
+  "generated_at": "2026-05-27T04:03:04Z",
+  "layers": {
+    "bathy": {
+      "url": "bathy.png",
+      "width": 480,
+      "height": 480,
+      "depth_range_m": [
+        0,
+        1200
+      ],
+      "encoding": "linear_8bit_0nan"
+    },
+    "contours": {
+      "url": "contours.geojson",
+      "intervals_m": [
+        1,
+        5,
+        25,
+        100
+      ],
+      "levels": 84
+    },
+    "kelp": {
+      "url": "kelp.geojson",
+      "features": 3
+    },
+    "mpa": {
+      "url": "mpa.geojson",
+      "features": 5
+    }
+  },
+  "sources": {
+    "bathy": "GMRT high-resolution GridServer (NetCDF, ~100 m near coast)",
+    "coastline": "OSM natural=coastline via Overpass (clipped)",
+    "kelp": "CDFW Administrative Kelp Beds ds3135 (clipped)",
+    "mpa": "CDFW MPA ds582 (clipped)"
+  }
+}
