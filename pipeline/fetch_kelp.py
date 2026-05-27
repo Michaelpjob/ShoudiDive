@@ -147,7 +147,24 @@ def main() -> None:
             continue
 
         props = feat.get("properties", {}) or {}
-        # Bed name — common ArcGIS field variants.
+        # 2026-05-27: verified the actual CDFW ds3135 schema. The keys
+        # are `KelpBed` (int — the bed number; no separate name field
+        # exists), `Status`, `Lessee`, `TermEnds`, `Shape__Area` (TWO
+        # underscores), `Shape__Length`. Earlier fallback-chain
+        # speculation about BED_NAME/BedNumber/etc. was wrong and
+        # caused every feature to be skipped as "anonymous," writing
+        # an empty FeatureCollection.
+        bed_number = (
+            props.get("KelpBed")
+            or props.get("BED_NUMBER")     # legacy fallbacks (kept for
+            or props.get("BedNumber")      # other CDFW services that
+            or props.get("Bed_Number")     # may surface a similar layer
+            or props.get("BED_NO")
+            or props.get("KelpBedNo")
+        )
+        # No name field in ds3135 — beds are identified by number only.
+        # Fall back to the generic "Kelp Bed N" label if a future
+        # service version adds names.
         name = (
             props.get("BED_NAME")
             or props.get("BedName")
@@ -155,30 +172,35 @@ def main() -> None:
             or props.get("Name")
             or props.get("KELP_BED_NAME")
         )
-        # Bed number — try the documented variants.
-        bed_number = (
-            props.get("BED_NUMBER")
-            or props.get("BedNumber")
-            or props.get("Bed_Number")
-            or props.get("BED_NO")
-            or props.get("KelpBedNo")
-        )
         # Status — open / closed / leasable / leased.
         status_raw = (
-            props.get("STATUS")
-            or props.get("Status")
+            props.get("Status")
+            or props.get("STATUS")
             or props.get("BED_STATUS")
             or props.get("BedStatus")
             or props.get("LEASE_STATUS")
         )
         status = str(status_raw).strip().lower() if status_raw else None
 
+        # Lessee + lease term — present on ds3135. Worth keeping for
+        # the popup since "leased to <lessee> until <year>" is more
+        # useful than a bare "leased" label.
+        lessee = props.get("Lessee") or props.get("LESSEE")
+        term_ends_raw = props.get("TermEnds") or props.get("TERM_ENDS")
+        term_ends = str(term_ends_raw) if term_ends_raw else None
+
         area_km2 = None
-        if props.get("Shape_Area") is not None:
+        # Try Shape__Area (two underscores, ds3135 actual) first, then
+        # the legacy single-underscore variant for other services.
+        area_raw = props.get("Shape__Area") or props.get("Shape_Area")
+        if area_raw is not None:
             try:
-                # Shape_Area on ArcGIS Online (WGS84) is in m² when the
-                # service is configured with a geometric area calc.
-                area_km2 = round(float(props["Shape_Area"]) / 1e6, 3)
+                # Shape area on ds3135 is in *square meters* despite
+                # the outSR=4326 setting (ArcGIS computes geometric
+                # area in the projected service CRS, not lng/lat).
+                # 62.5M m² ≈ 62.5 km² which matches the published
+                # bed sizes — sanity check passes.
+                area_km2 = round(float(area_raw) / 1e6, 3)
             except (TypeError, ValueError):
                 area_km2 = None
 
@@ -196,6 +218,8 @@ def main() -> None:
             "name": name or f"Kelp Bed {bed_number}",
             "bedNumber": bed_number,
             "status": status,
+            "lessee": lessee,
+            "termEnds": term_ends,
             "areaKm2": area_km2,
         }
 

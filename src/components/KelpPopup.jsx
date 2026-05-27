@@ -114,6 +114,18 @@ export default function KelpPopup({ kelp, onClose, onZoomTo }) {
           bed is open to harvest, available for lease, currently leased,
           or closed.
         </p>
+        {/* Lease detail when present — surfaced 2026-05-27 once we
+            verified the actual ds3135 schema includes Lessee +
+            TermEnds. Not every bed has these (open beds have neither;
+            leasable beds have neither either; leased beds usually
+            have both). */}
+        {(kelp.lessee || kelp.termEnds) && (
+          <p className="mpa-popup-meta">
+            {kelp.lessee && <>Lessee: <strong>{kelp.lessee}</strong></>}
+            {kelp.lessee && kelp.termEnds && " · "}
+            {kelp.termEnds && <>Lease ends: <strong>{kelp.termEnds}</strong></>}
+          </p>
+        )}
         <p className="mpa-popup-meta mono">
           {kelp.areaKm2 ? `${kelp.areaKm2} km²` : ""}
         </p>
