@@ -20,6 +20,11 @@ on:
         required: false
         default: "main"
         type: string
+      force_spot_bundles:
+        description: "Rebuild Spot Detail bundles even if fresh (skip the 30-day TTL)"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: refresh-ca-data
@@ -135,9 +140,18 @@ jobs:
         # script self-skips bundles fresher than 30 days, so the daily
         # cron does real work ~once a month. The Commit refreshed data
         # step below picks up public/data/spots/ automatically.
+        #
+        # The force_spot_bundles workflow_dispatch input maps to --force,
+        # used to invalidate the on-disk cache when the builder itself
+        # has changed (contour sizing, encoding, etc.).
         continue-on-error: true
         timeout-minutes: 15
-        run: python pipeline/build_spot_bundles.py
+        run: |
+          if [ "${{ inputs.force_spot_bundles }}" = "true" ]; then
+            python pipeline/build_spot_bundles.py --force
+          else
+            python pipeline/build_spot_bundles.py
+          fi
 
       - name: Compute kelp storm-strip risk
         # PR-K5-3 of kelp roadmap. Reads the 5-day swell summary and
