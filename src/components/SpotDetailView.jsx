@@ -40,6 +40,51 @@ import { track } from "../lib/analytics.js";
 // Bundle fetch — single-promise cache per spot id so toggling the
 // view open/closed doesn't refetch. Mirrors loadMpaBoundaries.
 const bundleCache = new Map();
+
+// Decode the bathy PNG into a Uint8ClampedArray (one channel — the
+// PNG is mode='L' grayscale, but canvas always returns RGBA so we
+// just read the R channel). Cached per bathy URL so we only load
+// + decode once per spot.
+const bathyPixelCache = new Map();
+function loadBathyPixels(url, width, height) {
+  if (bathyPixelCache.has(url)) return bathyPixelCache.get(url);
+  const p = new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const w = width || img.naturalWidth;
+        const h = height || img.naturalHeight;
+        const cv = document.createElement("canvas");
+        cv.width = w;
+        cv.height = h;
+        const ctx = cv.getContext("2d", { willReadFrequently: true });
+        ctx.drawImage(img, 0, 0, w, h);
+        const data = ctx.getImageData(0, 0, w, h).data;
+        // Extract just the R channel (PNG is grayscale; R = G = B).
+        const gray = new Uint8ClampedArray(w * h);
+        for (let i = 0, j = 0; i < data.length; i += 4, j++) gray[j] = data[i];
+        resolve({ gray, w, h });
+      } catch (e) {
+        reject(e);
+      }
+    };
+    img.onerror = (e) => reject(e);
+    img.src = url;
+  }).catch(() => null);
+  bathyPixelCache.set(url, p);
+  return p;
+}
+
+// Decode an 8-bit bathy pixel to depth_m using the encoding contract:
+//   0 = NaN/land
+//   1..255 = linear over depth_range_m
+function pixelToDepthM(pixel, depthRangeM) {
+  if (!pixel) return null;  // 0 = land/NaN
+  const [d_min, d_max] = depthRangeM || [0, 500];
+  const t = (pixel - 1) / 254;
+  return d_min + t * (d_max - d_min);
+}
 function loadBundle(spotId) {
   if (bundleCache.has(spotId)) return bundleCache.get(spotId);
   const p = (async () => {
@@ -176,6 +221,9 @@ export default function SpotDetailView({ spot, onClose }) {
   // on mouseMove / touch tap. Lets the user see exact coordinates over
   // any point on the spot detail map (nav-quality QA feedback).
   const [cursor, setCursor] = useState(null);
+  // Decoded bathy pixel grid for cursor depth lookup — populated
+  // once per bundle. null until the PNG decodes.
+  const [bathyPixels, setBathyPixels] = useState(null);
   const { prefs } = usePrefs();
   const { units } = prefs;
 
@@ -204,6 +252,20 @@ export default function SpotDetailView({ spot, onClose }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  // Decode the bathy PNG so we can sample depth at the cursor's
+  // lng/lat. Runs once per bundle. Width/height come from
+  // bundle.manifest.layers.bathy so we don't have to guess.
+  useEffect(() => {
+    if (!bundle?.bathyUrl) return;
+    const w = bundle.manifest?.layers?.bathy?.width;
+    const h = bundle.manifest?.layers?.bathy?.height;
+    let cancelled = false;
+    loadBathyPixels(bundle.bathyUrl, w, h).then((px) => {
+      if (!cancelled) setBathyPixels(px);
+    });
+    return () => { cancelled = true; };
+  }, [bundle]);
 
   function toggleLayer(key) {
     setLayers((prev) => {
@@ -484,6 +546,36 @@ export default function SpotDetailView({ spot, onClose }) {
     ? new Date(bundle.manifest.generated_at).toISOString().slice(0, 10)
     : null;
 
+  // Cursor depth — sampled from the decoded bathy PNG at the cursor's
+  // (lng, lat). Returns { depthM, depthFt, onLand } or null when the
+  // PNG isn't loaded yet / cursor is idle / outside the grid.
+  function depthAt(lng, lat) {
+    if (!bathyPixels || !bbox) return null;
+    if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
+    // Map (lng, lat) → pixel cell index, north-up.
+    const fx = (lng - bbox.lng_min) / (bbox.lng_max - bbox.lng_min);
+    const fy = (bbox.lat_max - lat) / (bbox.lat_max - bbox.lat_min);
+    if (fx < 0 || fx > 1 || fy < 0 || fy > 1) return null;
+    const { gray, w, h } = bathyPixels;
+    const px = Math.max(0, Math.min(w - 1, Math.floor(fx * w)));
+    const py = Math.max(0, Math.min(h - 1, Math.floor(fy * h)));
+    const pixel = gray[py * w + px];
+    if (pixel === 0) return { onLand: true, depthM: null, depthFt: null };
+    const dr = bundle?.manifest?.layers?.bathy?.depth_range_m || [0, 500];
+    const dM = pixelToDepthM(pixel, dr);
+    if (dM == null) return null;
+    return { onLand: false, depthM: dM, depthFt: dM * 3.28084 };
+  }
+
+  const cursorDepth = cursor
+    ? depthAt(cursor.lng, cursor.lat)
+    : depthAt(spot.lng, spot.lat);
+  const depthLabel = cursorDepth == null
+    ? "—"
+    : cursorDepth.onLand
+      ? "land"
+      : `${Math.round(cursorDepth.depthFt)} ft · ${cursorDepth.depthM.toFixed(0)} m`;
+
   return (
     <div className="spot-detail-overlay" role="dialog" aria-modal="true" aria-label={`${spot.name} detail map`}>
       <div className="spot-detail-header">
@@ -743,6 +835,15 @@ export default function SpotDetailView({ spot, onClose }) {
           <strong>
             {(cursor?.lat ?? spot.lat).toFixed(4)}°N {Math.abs(cursor?.lng ?? spot.lng).toFixed(4)}°W
           </strong>
+        </div>
+        {/* Depth at the cursor sampled from the bathy PNG. Falls
+            back to "—" until the PNG decodes, "land" when the
+            cursor is over a NaN cell (above-water). The two units
+            side-by-side because divers think in feet but the data
+            is metric. */}
+        <div className="sdc-row sdc-coord">
+          <span>Depth</span>
+          <strong>{depthLabel}</strong>
         </div>
         <div className="sdc-row"><span>SST</span><strong>{conditions.sstStr}</strong></div>
         <div className="sdc-row"><span>Wind</span><strong>{conditions.windStr}</strong></div>
