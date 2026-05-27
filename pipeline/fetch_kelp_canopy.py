@@ -332,11 +332,41 @@ def fetch_all_features() -> list[dict]:
     # The BIO_CA_Kelp2016 service uses its own internal KelpBed numbering
     # — NOT the CDFW Administrative Kelp Beds (ds3135) scheme. Catalina
     # turns up as bed 105, Monterey Peninsula as 218–221. Confirmed by
-    # spatial bbox query on 2026-05-27. Verified externally that beds
-    # > 300 return 0 features, so 1..300 covers the published range
-    # with headroom.
-    bed_range = range(1, 301)
-    for bed_num in bed_range:
+    # spatial bbox query on 2026-05-27.
+    #
+    # Two-pass strategy because the service routinely 504s on real
+    # feature queries (geometry serialization is heavy) but is reliable
+    # on count-only queries (no geometry → no serialization cost):
+    #   1. Count-only pass: hit each bed 1..300 to see if it has any
+    #      features. ~250-300 ms each on a healthy day, so the whole
+    #      pre-flight takes ~1-2 min.
+    #   2. Real fetch only for beds where count > 0 — typically 50-80
+    #      of the 300 candidates. Saves us the ~5x cost of pulling
+    #      retries against beds we don't need.
+
+    # ---- Pass 1: count-only pre-flight ----
+    print("\n[pre-flight] discovering beds with data via count-only queries…")
+    populated_beds = []
+    for bed_num in range(1, 301):
+        params = {
+            "where": f"KelpBed={bed_num}",
+            "returnCountOnly": "true",
+            "f": "json",
+        }
+        try:
+            r = _get_with_retry(BASE_URL, params, max_attempts=2)
+            count = (r.json() or {}).get("count", 0)
+            if count > 0:
+                populated_beds.append(bed_num)
+        except Exception:
+            # On count-only failure assume the bed might have data and
+            # try it in pass 2 anyway
+            populated_beds.append(bed_num)
+    print(f"[pre-flight] {len(populated_beds)} beds with data: "
+          f"{populated_beds[:8]}{'…' if len(populated_beds) > 8 else ''}")
+
+    # ---- Pass 2: real fetch for populated beds only ----
+    for bed_num in populated_beds:
         for fmt in ("geojson", "json"):
             params = {
                 "where": f"KelpBed={bed_num}",
