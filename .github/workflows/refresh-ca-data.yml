@@ -128,6 +128,18 @@ jobs:
         timeout-minutes: 5
         run: python pipeline/fetch_kelp.py
 
+      - name: Compute kelp storm-strip risk
+        # PR-K5-3 of kelp roadmap. Reads the 5-day swell summary and
+        # writes kelp-storm-risk.json flagging if Hs > 8 ft anywhere
+        # in the next 5 days (canopy-detachment threshold). Frontend
+        # banner in KelpPopup reads this. Runs AFTER fetch_swell_5day
+        # (which is in refresh-ca-wind.yml) — if the wind workflow
+        # hasn't run since the last swell publish, this just writes
+        # "no risk" until the next cycle.
+        continue-on-error: true
+        timeout-minutes: 2
+        run: python pipeline/check_kelp_storm_risk.py
+
       - name: Probe all external feeds
         continue-on-error: true
         timeout-minutes: 5

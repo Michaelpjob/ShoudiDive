@@ -206,19 +206,48 @@ not 10 m).
 
 ### Features
 
-#### PR-K3-1 — Data ingest + storage shape decision (~250 LOC)
+#### PR-K3-1 — Data ingest + storage shape decision (~250 LOC) — BLOCKED
+
+**2026-05-27 finding (during execution):** CDFW Aerial Kelp Surveys are
+NOT published as a public FeatureServer. The CDFW Open Data portal
+(`data-cdfw.opendata.arcgis.com`) returns only Administrative Beds
+(ds3135, already shipped) + Persistence raster (ds3151, Phase 4) +
+PISCO fish-density datasets. The historical aerial surveys were
+published as PDF reports / static GIS shapefiles attached to those
+reports, not via a queryable API. Without a public vector endpoint,
+the Phase 3 plan of "clone admin-bed pattern for canopy" doesn't
+work directly.
 
 Two candidate sources, evaluated against the same diagnostic harness:
 
-| Source | Type | Cadence | Coverage |
-|---|---|---|---|
-| CDFW Aerial Kelp Surveys | Vector polygons | Annual (mostly) | CA coast, gaps in war / fire years |
-| KelpWatch (Bell et al. / Landsat) | Raster → vector conversion | Seasonal | Global Macrocystis, 30 m resolution |
+| Source | Type | Cadence | Coverage | Public API? |
+|---|---|---|---|---|
+| CDFW Aerial Kelp Surveys | Vector polygons (intended) | Annual | CA coast | ❌ Not surfaced on data-cdfw portal |
+| KelpWatch (Bell et al. / Landsat) | Raster (netCDF, 30 m) | Quarterly | Global Macrocystis | ✅ via Dryad DOI / Google Earth Engine |
+| KelpWatch derived vector | Raster → polygonized | Quarterly | CA only after clip | Requires per-quarter raster ingest + polygonize |
 
-**Decision needed before PR-K3-1 starts:** which source is canonical
-v1? Recommend Aerial Surveys for the **vector workflow simplicity**;
-KelpWatch becomes a Phase 4 raster overlay (it's already raster, no
-sense converting). The roadmap below assumes Aerial Surveys.
+**Pivot decision needed from user before PR-K3-1 resumes:**
+
+- **Option A** — Ship Phase 3 as a raster overlay too (folds into
+  Phase 4 infra timeline). KelpWatch netCDF → tile pyramid via the
+  same path as persistence raster. Loses some of the "vector LOD
+  shows the win" framing but is the only path that actually works
+  with public data. **Recommended.**
+- **Option B** — File a CDFW data request for the aerial-survey
+  shapefiles + republish them ourselves. Adds a ~4-week loop on a
+  human agency and creates an attribution/license question. Not
+  recommended.
+- **Option C** — Polygonize KelpWatch raster at ingest time inside
+  the pipeline (`rasterio.features.shapes`). Keeps the "vector"
+  framing but requires the same netCDF ingest as Option A + an extra
+  polygonization step. Worth doing only if the simplified raster
+  rasterizes to a useful vector that survives DP simplification
+  cleanly.
+
+Until the user picks A / B / C, PR-K3-1 is **parked**. PR-K3-2
+(vector LOD) shipped independently and is ready to consume whichever
+vector source lands. PR-K3-3 + PR-K3-4 (timeline + popup) are
+likewise ready, paused on the data shape decision.
 
 Implementation:
 - `pipeline/fetch_kelp_canopy.py` — pulls per-survey-year GeoJSON
@@ -345,7 +374,29 @@ on a single small geographic footprint before going wide.
 
 ### Features
 
-#### PR-K4-1 — Storage decision + R2 bucket provisioning (~50 LOC + ops)
+#### PR-K4-1 — Storage decision + R2 bucket provisioning (~50 LOC + ops) — USER-BLOCKED
+
+**Cannot ship autonomously.** This PR requires the user to:
+
+1. Provision the R2 bucket `shouldidive-tiles` in their Cloudflare
+   account (or pick an alternate name)
+2. Generate R2 access keys and add them to the repo's secrets as
+   `R2_ACCESS_KEY_ID` + `R2_SECRET_ACCESS_KEY`
+3. Decide on the tile subdomain (`tiles.shouldidive.com` requires
+   DNS + Worker route binding) or accept `*.pages.dev` for v1
+4. Approve the cost model — R2 is pay-per-egress; expected ≈ $1–5/mo
+   for the CA-only kelp footprint, but burgers if Phase 5 adds
+   bathy + other layers
+
+Once those four are settled, the PR itself is small (provisioning
+config + secrets wiring). Until then, every downstream Phase 4 PR
+(K4-2 through K4-5) is parked.
+
+**Why no agent-side workaround:** Cloudflare account provisioning
+requires the account-owner's login. There's no per-repo R2 path that
+sidesteps this. The MVP-friendly fallback is "keep persistence
+raster out of v1" — but that's exactly what Phase 4 exists to ship,
+so the right move is to wait for the user.
 
 Decision matrix (need explicit user go-ahead before this PR):
 

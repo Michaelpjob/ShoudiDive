@@ -187,6 +187,38 @@
   outline: none;
 }
 
+/* PR-K5-3: storm-strip warning banner inside KelpPopup. Yellow/amber
+   to match the "sketchy" Hs band in the swell legend so divers
+   recognize the tone consistently across the app. */
+.kelp-storm-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 8px 10px;
+  background: rgba(234, 179, 8, 0.12);
+  border: 1px solid rgba(234, 179, 8, 0.45);
+  border-radius: var(--r-2);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink);
+}
+.kelp-storm-banner-icon {
+  font-size: 14px;
+  line-height: 1.4;
+  color: #ca8a04;
+  flex-shrink: 0;
+}
+.kelp-storm-banner-text {
+  flex: 1;
+}
+.kelp-storm-banner-meta {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-3);
+  font-size: 11px;
+}
+
 /* PR-K2-3: secondary popup action (KelpPopup "Zoom to bed"). Styled
    lighter than mpa-popup-done so the primary close action still
    dominates visually. */
