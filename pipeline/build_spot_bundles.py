@@ -296,11 +296,16 @@ def encode_depth_png(depth_grid, depth_range_m, out_path: Path):
     """
     d_min, d_max = depth_range_m
     span = max(d_max - d_min, 1.0)
-    normalized = np.clip((depth_grid - d_min) / span, 0.0, 1.0)
-    # 1..255 ramp for valid depths, 0 reserved for NaN.
-    encoded = (1 + np.round(normalized * 254.0)).astype(np.uint8)
-    nan_mask = ~np.isfinite(depth_grid)
-    encoded[nan_mask] = 0
+    # Pre-build a 0-initialised output (NaN cells stay 0 by construction)
+    # then fill only valid depths. Avoids the
+    #   RuntimeWarning: invalid value encountered in cast
+    # that np.round(NaN).astype(uint8) emits — and skips the throwaway
+    # mask-write afterwards.
+    valid = np.isfinite(depth_grid)
+    encoded = np.zeros(depth_grid.shape, dtype=np.uint8)
+    if valid.any():
+        normalized = np.clip((depth_grid[valid] - d_min) / span, 0.0, 1.0)
+        encoded[valid] = (1 + np.round(normalized * 254.0)).astype(np.uint8)
     img = Image.fromarray(encoded, mode="L")
     img.save(out_path, format="PNG", optimize=True)
 
@@ -422,10 +427,14 @@ def generate_contours(depth_grid, bbox) -> dict:
             segments = _trace_contours_at_level(depth_grid, level, bbox)
             if not segments:
                 continue
+            # Cast to Python float — segments come back as numpy float32
+            # (depth grid is float32), and json.dumps refuses to serialize
+            # numpy scalars. Round happens after the cast so the wire
+            # output is still 5-decimal trimmed.
             coords = [
                 [
-                    [round(p1[0], 5), round(p1[1], 5)],
-                    [round(p2[0], 5), round(p2[1], 5)],
+                    [round(float(p1[0]), 5), round(float(p1[1]), 5)],
+                    [round(float(p2[0]), 5), round(float(p2[1]), 5)],
                 ]
                 for (p1, p2) in segments
             ]
@@ -710,5 +719,34 @@ def main() -> int:
     return 1 if (failed and not built) else 0
 
 
+def _self_test():
+    """Lightweight self-test that runs without network access — pinned
+    against the JSON-serialization + NaN-cast traps that hit prod
+    on the first refresh-ca-data run.
+
+    Triggers via `python pipeline/build_spot_bundles.py --self-test`
+    so dev-checks can include a smoke run that doesn't need GMRT.
+    """
+    # 1. Encode-PNG path must not warn or fail on a NaN-heavy grid.
+    grid = np.full((8, 8), np.nan, dtype=np.float32)
+    grid[3:5, 3:5] = 100.0
+    import io as _io
+    encode_depth_png(grid, (0, 500), Path("_test_bathy.png"))
+    Path("_test_bathy.png").unlink(missing_ok=True)
+
+    # 2. Contours must JSON-serialize without TypeError on float32 input.
+    #    Mock a 6×6 grid with a depth ramp that crosses the 5 m contour.
+    ramp = np.tile(np.linspace(0.0, 30.0, 6, dtype=np.float32), (6, 1))
+    bbox = {"lng_min": -117.3, "lng_max": -117.2,
+            "lat_min":   32.8, "lat_max":   32.9}
+    fc = generate_contours(ramp, bbox)
+    json.dumps(fc)  # would raise on float32 leakage
+
+    print("self-test OK")
+
+
 if __name__ == "__main__":
+    if "--self-test" in sys.argv:
+        _self_test()
+        sys.exit(0)
     sys.exit(main())
