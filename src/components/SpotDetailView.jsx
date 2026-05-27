@@ -89,6 +89,49 @@ function pixelToDepthM(pixel, depthRangeM) {
   const t = (pixel - 1) / 254;
   return d_min + t * (d_max - d_min);
 }
+
+// Point-in-polygon test (ray-casting) for a single Polygon ring.
+// Used to filter soundings + bathy clipPath so depth annotations
+// don't bleed onto land where GMRT (depth source) and OSM (coastline
+// source) disagree about where land is. OSM is the ground truth for
+// what's visually "land" — anything inside an OSM coastline polygon
+// is land regardless of what GMRT thinks.
+function pointInRing(lng, lat, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1];
+    const xj = ring[j][0], yj = ring[j][1];
+    const intersect = ((yi > lat) !== (yj > lat)) &&
+      (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+// Test against a full Polygon (outer + holes) or MultiPolygon.
+function pointInGeometry(lng, lat, geom) {
+  if (!geom?.coordinates) return false;
+  if (geom.type === "Polygon") {
+    // First ring is outer boundary, rest are holes — inside outer
+    // AND not inside any hole = inside polygon.
+    if (!pointInRing(lng, lat, geom.coordinates[0])) return false;
+    for (let i = 1; i < geom.coordinates.length; i++) {
+      if (pointInRing(lng, lat, geom.coordinates[i])) return false;
+    }
+    return true;
+  }
+  if (geom.type === "MultiPolygon") {
+    for (const poly of geom.coordinates) {
+      if (!pointInRing(lng, lat, poly[0])) continue;
+      let inHole = false;
+      for (let i = 1; i < poly.length; i++) {
+        if (pointInRing(lng, lat, poly[i])) { inHole = true; break; }
+      }
+      if (!inHole) return true;
+    }
+  }
+  return false;
+}
 function loadBundle(spotId) {
   if (bundleCache.has(spotId)) return bundleCache.get(spotId);
   const p = (async () => {
@@ -493,22 +536,29 @@ export default function SpotDetailView({ spot, onClose }) {
     });
   }, [bundle, bbox]);
   // Depth soundings sampled from the bathy grid. Each carries
-  // depth_ft (rounded) and depth_m. Frontend filters by zoom so the
-  // overview shows ~30 well-spaced labels and zoom 4× shows all of
-  // them (matches a NOAA chart's "more detail when you zoom in"
-  // hierarchy). The stride pattern visits every Nth point on each
-  // zoom band, which decorrelates which points are shown.
+  // depth_ft (rounded) and depth_m. Frontend filters two things:
+  //   1. Drop soundings inside any OSM coastline polygon — GMRT
+  //      and OSM disagree about where land starts and OSM is the
+  //      ground truth for "visually land". This kills the user-QA'd
+  //      "depths overrunning onto land" issue.
+  //   2. Stride-thin by zoom so overview shows ~30 labels, zoom 4×+
+  //      shows them all. NOAA-chart "more detail when zoomed" pattern.
   const soundingPts = useMemo(() => {
     if (!bbox || !bundle?.soundings) return [];
-    return (bundle.soundings.features || []).map((f) => {
-      const [lng, lat] = f.geometry.coordinates;
-      const [x, y] = projectInBbox(bbox, lng, lat, CANVAS_W, CANVAS_H);
-      return {
-        key: `${lng}-${lat}`,
-        x, y,
-        depth_ft: f.properties.depth_ft,
-      };
-    });
+    const landGeoms = (bundle?.coastline?.features || []).map((f) => f.geometry);
+    return (bundle.soundings.features || [])
+      .map((f) => {
+        const [lng, lat] = f.geometry.coordinates;
+        // Drop the sounding if it's inside an OSM land polygon
+        if (landGeoms.some((g) => pointInGeometry(lng, lat, g))) return null;
+        const [x, y] = projectInBbox(bbox, lng, lat, CANVAS_W, CANVAS_H);
+        return {
+          key: `${lng}-${lat}`,
+          x, y,
+          depth_ft: f.properties.depth_ft,
+        };
+      })
+      .filter(Boolean);
   }, [bundle, bbox]);
 
   // Centre pin in canvas coords
@@ -633,13 +683,27 @@ export default function SpotDetailView({ spot, onClose }) {
             viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
             preserveAspectRatio="xMidYMid meet"
           >
+            {/* Defs: clipPath that constrains the bathy image to
+                OSM-water area only. Built as a single big path with
+                the canvas rect (outer) PLUS each land polygon as a
+                hole (CCW winding via reverse). evenodd fill-rule
+                means a point inside both the canvas rect AND a land
+                polygon counts as OUTSIDE the clip — so land cells
+                show the cyan background, not bathy. */}
+            <defs>
+              <clipPath id="spot-water-clip" clipPathUnits="userSpaceOnUse">
+                <path
+                  fillRule="evenodd"
+                  d={`M0 0 H${CANVAS_W} V${CANVAS_H} H0 Z ${coastlinePaths.map((c) => c.d).join(" ")}`}
+                />
+              </clipPath>
+            </defs>
+
             {/* 1. Chart-style bathy backdrop. NOAA nautical charts use
                 light-cyan water with darker tints at depth — gives
                 depth contours, soundings, and aids-to-nav room to read
                 as overlays. We lay down a cyan base, then render the
-                bathy PNG at reduced opacity for depth gradient context
-                (not as the primary depth signal — that's the contours
-                + soundings). */}
+                bathy PNG (clipped to OSM water) at reduced opacity. */}
             <rect x="0" y="0" width={CANVAS_W} height={CANVAS_H} fill="#cfe8f1" />
             {layers.bathy && bundle.bathyUrl && (
               <image
@@ -648,13 +712,19 @@ export default function SpotDetailView({ spot, onClose }) {
                 width={CANVAS_W} height={CANVAS_H}
                 preserveAspectRatio="none"
                 opacity="0.40"
+                clipPath="url(#spot-water-clip)"
                 style={{ imageRendering: "auto", mixBlendMode: "multiply" }}
               />
             )}
 
-            {/* 2. Depth contours */}
+            {/* 2. Depth contours — clipped to water area for the same
+                GMRT-vs-OSM mismatch reason as bathy. */}
             {layers.contours && (
-              <g className="spot-detail-contours" style={{ pointerEvents: "none" }}>
+              <g
+                className="spot-detail-contours"
+                style={{ pointerEvents: "none" }}
+                clipPath="url(#spot-water-clip)"
+              >
                 {contourPaths.map((c) => (
                   <path
                     key={c.key}

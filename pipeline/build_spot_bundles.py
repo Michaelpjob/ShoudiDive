@@ -106,7 +106,10 @@ SPOT_LANDMARKS = {
         (-117.2790, 32.8475, "Children's Pool",       "minor"),
         (-117.2745, 32.8520, "La Jolla Caves",        "minor"),
         (-117.2545, 32.8665, "Scripps Pier",          "major"),
-        (-117.2725, 32.8515, "Boomer Beach",          "minor"),
+        # Boomer Beach sits IMMEDIATELY south of La Jolla Cove (between
+        # Cove and Wipeout Beach). Earlier coord put it NE of the Cove
+        # — visibly wrong in user QA screenshot.
+        (-117.2738, 32.8495, "Boomer Beach",          "minor"),
         (-117.2810, 32.8320, "Windansea",             "minor"),
         (-117.2535, 32.8870, "Black's Beach",         "minor"),
         (-117.2895, 32.8600, "La Jolla Canyon",       "major"),
