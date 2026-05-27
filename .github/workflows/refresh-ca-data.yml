@@ -138,8 +138,14 @@ jobs:
         # extent (vs the admin-bed rectangles above). 2016 statewide
         # survey, ~155 features. Drives the main Kelp toggle on both
         # the wide map AND the Spot Detail view.
+        #
+        # 15-min budget vs the 5-min default elsewhere: the kelp-2016
+        # service node serializes high-vertex polygons slowly + 504s
+        # under load, so the fetcher walks a 4-attempt retry curve
+        # with up to 90 s per request. Worst case fully retried fetch
+        # at 100-feat pages = ~7 min; 15 min gives 2× headroom.
         continue-on-error: true
-        timeout-minutes: 5
+        timeout-minutes: 15
         run: python pipeline/fetch_kelp_canopy.py
 
       - name: Build Spot Detail bundles (idempotent, ~30-day TTL)

@@ -170,39 +170,32 @@ def round_coords(geom: dict, decimals: int = 4) -> dict:
 
 
 def _get_with_retry(url, params, *, max_attempts=4):
-    """GET with exponential backoff. The kelp-2016 service hits 504
-    Gateway Timeout under modest load — needs retries to stay reliable
-    on the daily refresh. Backoff: 4s, 16s, 64s, 256s for a total
-    cap ~5 min on a fully-degraded service.
+    """GET with bounded backoff. The kelp-2016 service hits 504
+    Gateway Timeout under modest load. Backoff stays small (2/5/10/20 s)
+    so the total worst-case for a single call sits at ~37 s of waits
+    + 4 × 90 s requests = ~7 min, comfortably inside the 15-min step
+    timeout the workflow now grants this step.
     """
     import time
     last_err = None
+    delays = [2, 5, 10, 20]
     for attempt in range(max_attempts):
         try:
-            r = requests.get(url, params=params, timeout=180)
-            # Retry on 5xx + 429; raise on 4xx.
+            r = requests.get(url, params=params, timeout=90)
             if r.status_code in (429, 500, 502, 503, 504):
                 last_err = f"HTTP {r.status_code}"
                 if attempt < max_attempts - 1:
-                    delay = 4 ** (attempt + 1)
+                    delay = delays[attempt]
                     print(f"  {last_err} — retry {attempt + 1}/{max_attempts} in {delay}s")
                     time.sleep(delay)
                     continue
             r.raise_for_status()
             return r
-        except requests.exceptions.Timeout as e:
-            last_err = f"timeout: {e}"
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+            last_err = type(e).__name__
             if attempt < max_attempts - 1:
-                delay = 4 ** (attempt + 1)
-                print(f"  {last_err} — retry {attempt + 1}/{max_attempts} in {delay}s")
-                time.sleep(delay)
-                continue
-            raise
-        except requests.exceptions.ConnectionError as e:
-            last_err = f"connection: {e}"
-            if attempt < max_attempts - 1:
-                delay = 4 ** (attempt + 1)
-                print(f"  {last_err} — retry {attempt + 1}/{max_attempts} in {delay}s")
+                delay = delays[attempt]
+                print(f"  {last_err}: {e} — retry {attempt + 1}/{max_attempts} in {delay}s")
                 time.sleep(delay)
                 continue
             raise
@@ -220,8 +213,12 @@ def fetch_all_features() -> list[dict]:
     """
     features: list[dict] = []
     offset = 0
-    page_size = 300  # smaller than admin-bed PAGE_SIZE — fits in the
-                     # service's tighter per-request budget
+    # 2026-05-27: page_size 1000 → 300 → 100. First refresh's 504s
+    # showed the service node can't reliably serialize 300 high-
+    # vertex polygons inside the 60-90s soft cap. 100 lands in <10s
+    # on a healthy node, ~30s on a slow one. 155 total features →
+    # 2 pages plus the empty closer.
+    page_size = 100
     while True:
         params = {
             "where": "1=1",
