@@ -125,6 +125,40 @@ test("Current, swell, wind, and mobile overlay features remain wired", () => {
   assert.match(styles, /\.mpa-popup-done/);
 });
 
+test("Spot Detail view: component exists, MapShell wires it, analytics allowlisted", () => {
+  // Phase 1B (docs/spot-detail-handover.md): a per-spot breakout view
+  // with high-res CUDEM bathy + contours + clipped overlays. This
+  // contract pins the wiring so a future refactor that drops the
+  // SpotDetailView import or breaks the launch path trips here.
+  const spotDetailSrc = read("src/components/SpotDetailView.jsx");
+  const mapShellSrc = read("src/components/MapShell.jsx");
+  const mapDataSrc = read("src/lib/mapData.js");
+  const analyticsSrc = read("functions/api/analytics/event.js");
+  const desktopLayoutSrc = read("src/components/DesktopLayout.jsx");
+  const mobileSheetSrc = read("src/components/MobileSheet.jsx");
+
+  // Component exports default + the projectInBbox helper it depends on.
+  assert.match(spotDetailSrc, /export default function SpotDetailView/);
+  assert.match(mapDataSrc, /export function projectInBbox/);
+  assert.match(mapDataSrc, /export const SPOT_BUNDLE_RADIUS_KM/);
+
+  // MapShell imports the view + fetches the index + threads handlers.
+  assert.match(mapShellSrc, /import SpotDetailView from "\.\/SpotDetailView\.jsx"/);
+  assert.match(mapShellSrc, /spotDetailFor/);
+  assert.match(mapShellSrc, /bundledSpots/);
+  assert.match(mapShellSrc, /\/data\/spots\/index\.json/);
+
+  // Both desktop + mobile expose the launch button.
+  assert.match(desktopLayoutSrc, /spot-detail-open/);
+  assert.match(mobileSheetSrc, /spot-detail-open/);
+
+  // Server-side analytics allowlist — without these the events get
+  // silently dropped (defense in depth against client-side bugs).
+  assert.match(analyticsSrc, /spot_detail_open/);
+  assert.match(analyticsSrc, /spot_detail_close/);
+  assert.match(analyticsSrc, /spot_detail_layer_toggle/);
+});
+
 test("CI runs frontend and data feature contracts before publishing", () => {
   const pkg = JSON.parse(read("package.json"));
   const refreshWorkflow = read(".github/workflows/refresh-ca-data.yml");

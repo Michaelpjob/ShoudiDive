@@ -66,6 +66,12 @@ const ALLOWED_NAMES = new Set([
   "zoom",
   "share_click",
   "tip_click",
+  // Phase 1B Spot Detail view (docs/spot-detail-handover.md). Fired
+  // when the user opens / closes the breakout view, and when they
+  // toggle a layer inside it.
+  "spot_detail_open",
+  "spot_detail_close",
+  "spot_detail_layer_toggle",
 ]);
 
 function jsonResponse(body, init) {

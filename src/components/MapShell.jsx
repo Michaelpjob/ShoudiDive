@@ -41,6 +41,7 @@ import MobileSheet from "./MobileSheet.jsx";
 import BathyPopup from "./BathyPopup.jsx";
 import MpaPopup from "./MpaPopup.jsx";
 import KelpPopup from "./KelpPopup.jsx";
+import SpotDetailView from "./SpotDetailView.jsx";
 import CoronadosBanner from "./CoronadosBanner.jsx";
 import { selToSlotKey } from "./WindDayGrid.jsx";
 import WindTimeline from "./WindTimeline.jsx";
@@ -66,7 +67,7 @@ import {
   getCurrent5dSummary,
   getSwell5dSummary,
 } from "../lib/dataSource.js";
-import { activeRegion } from "../lib/region.js";
+import { activeRegion, dataPath } from "../lib/region.js";
 import {
   isMapGestureChildTarget,
   shouldPinMapTap,
@@ -232,6 +233,29 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
   useEffect(() => {
     setHover(null);
   }, [layer]);
+
+  // Spot Detail launch state (Phase 1B). bundledSpots is the set of
+  // spot ids that have a /data/spots/<id>/bundle.json available;
+  // sourced from the pipeline-written index.json at boot. When
+  // setSpotDetailFor receives a spot object, SpotDetailView mounts as
+  // a full-screen overlay above everything else on the page.
+  const [bundledSpots, setBundledSpots] = useState(new Set());
+  const [spotDetailFor, setSpotDetailFor] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(dataPath("/data/spots/index.json"))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((idx) => {
+        if (cancelled || !idx?.spots) return;
+        setBundledSpots(new Set(idx.spots));
+      })
+      .catch(() => { /* no bundles in this region — graceful no-op */ });
+    return () => { cancelled = true; };
+  }, []);
+  function openSpotDetail(spotId) {
+    const s = SAVED_SPOTS.find((x) => x.id === spotId);
+    if (s) setSpotDetailFor(s);
+  }
 
   function onWheel(e) {
     // No preventDefault — body has overflow:hidden so there's nothing to
@@ -834,6 +858,8 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
         size={size} zoomAt={zoomAt} resetView={resetView}
         dataState={dataState}
         isMobile={isMobile}
+        bundledSpots={bundledSpots}
+        openSpotDetail={openSpotDetail}
       />
 
       {/* Coronados / CONANP disclaimer is CA-specific (the Coronados sit in
@@ -864,6 +890,15 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
         leave room for the peek strip on phones (without the strip
         overlapping the bottom of the bbox). On desktop this branch
         doesn't mount at all. */}
+    {/* SpotDetailView mounts as a fixed-position overlay above the
+        rest of the app when a saved spot with a bundle is opened.
+        Renders OUTSIDE .map-stage so the wide map keeps its layout. */}
+    {spotDetailFor && (
+      <SpotDetailView
+        spot={spotDetailFor}
+        onClose={() => setSpotDetailFor(null)}
+      />
+    )}
     {isMobile && (
       <MobileSheet
         layer={layer} setLayer={setLayer}
@@ -883,6 +918,8 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
         setBathyOn={updateBathyOn}
         setKelpOn={updateKelpOn}
         kelpAvailable={kelpAvailable}
+        bundledSpots={bundledSpots}
+        openSpotDetail={openSpotDetail}
         activeSpot={activeSpot} setActiveSpot={setActiveSpot}
         timeOpts={timeOpts}
         compositeText={compositeText}

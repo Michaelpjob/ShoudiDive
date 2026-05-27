@@ -128,6 +128,8 @@ export default function MobileShell({
   setBathyOn,
   setKelpOn,
   kelpAvailable,
+  bundledSpots,
+  openSpotDetail,
   activeSpot, setActiveSpot,
   timeOpts,
   compositeText,
@@ -295,6 +297,8 @@ export default function MobileShell({
               units={units}
               activeSpot={activeSpot}
               setActiveSpot={setActiveSpot}
+              bundledSpots={bundledSpots}
+              openSpotDetail={openSpotDetail}
             />
           </section>
 
@@ -449,7 +453,7 @@ function layerNameFor(layer) {
 
 // ---- Saved spots list (used inside the open sheet) ------------------------
 
-function SpotsList({ layer, composite, units, activeSpot, setActiveSpot }) {
+function SpotsList({ layer, composite, units, activeSpot, setActiveSpot, bundledSpots, openSpotDetail }) {
   return (
     <div className="ms-spots">
       {SAVED_SPOTS.map((s) => {
@@ -496,24 +500,42 @@ function SpotsList({ layer, composite, units, activeSpot, setActiveSpot }) {
           unit = "ft";
           col = "var(--ink-2)";
         }
+        const isBundled = bundledSpots?.has(s.id);
+        const isActive = activeSpot === s.id;
         return (
-          <button
-            key={s.id}
-            className={"ms-spot" + (activeSpot === s.id ? " active" : "")}
-            onClick={() => setActiveSpot(s.id)}
-          >
-            <span className="ms-spot-pin" style={{ color: col }}></span>
-            <span className="ms-spot-name">{s.name}</span>
-            {/* SST mobile rows get the trend chip inline so direction
-                reads at a glance without crowding. Sparkline omitted on
-                mobile — too small to be readable in this row height. */}
-            {layer === "sst" && (
-              <SstTrendChip lng={s.lng} lat={s.lat} units={units} />
+          <div key={s.id} className="ms-spot-row">
+            <button
+              className={"ms-spot" + (isActive ? " active" : "")}
+              onClick={() => setActiveSpot(s.id)}
+            >
+              <span className="ms-spot-pin" style={{ color: col }}></span>
+              <span className="ms-spot-name">{s.name}</span>
+              {/* SST mobile rows get the trend chip inline so direction
+                  reads at a glance without crowding. Sparkline omitted on
+                  mobile — too small to be readable in this row height. */}
+              {layer === "sst" && (
+                <SstTrendChip lng={s.lng} lat={s.lat} units={units} />
+              )}
+              <span className="ms-spot-val mono">
+                {valTxt}<span className="unit">{unit}</span>
+              </span>
+            </button>
+            {/* Spot Detail launch — mobile mirror of the desktop
+                button. Shows only for the active row to keep the
+                list compact on small screens. */}
+            {isBundled && isActive && (
+              <button
+                type="button"
+                className="spot-detail-open"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openSpotDetail?.(s.id);
+                }}
+              >
+                View detailed map →
+              </button>
             )}
-            <span className="ms-spot-val mono">
-              {valTxt}<span className="unit">{unit}</span>
-            </span>
-          </button>
+          </div>
         );
       })}
     </div>

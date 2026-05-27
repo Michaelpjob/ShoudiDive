@@ -149,6 +149,10 @@ export default function DesktopLayout({
   mpaOn, bathyOn, kelpOn, updateMpaOn, updateBathyOn, updateKelpOn,
   // Kelp Bed Zones are CA-only today; hide the chip in beta regions.
   kelpAvailable,
+  // Phase 1B Spot Detail: bundledSpots is Set of ids that have a
+  // /data/spots/<id>/bundle.json; openSpotDetail(id) mounts the
+  // SpotDetailView overlay in MapShell.
+  bundledSpots, openSpotDetail,
   // Map viewport (zoom +/− buttons + recenter)
   size, zoomAt, resetView,
   // Manifest data state (legend "no data" indicator)
@@ -777,6 +781,22 @@ export default function DesktopLayout({
                         <SstTrendChip lng={s.lng} lat={s.lat} units={units} />
                         <SstSparkline lng={s.lng} lat={s.lat} units={units} />
                       </div>
+                    )}
+                    {/* Spot Detail launch — only renders when the
+                        active spot has a pre-computed bundle on the
+                        pipeline side. Shows on the active spot only
+                        to avoid cluttering the list. */}
+                    {bundledSpots?.has(s.id) && activeSpot === s.id && (
+                      <button
+                        type="button"
+                        className="spot-detail-open"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openSpotDetail?.(s.id);
+                        }}
+                      >
+                        View detailed map →
+                      </button>
                     )}
                   </div>
                   <div className="spot-val mono">
