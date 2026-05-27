@@ -318,6 +318,34 @@
 }
 .spot-detail-error { color: #fb7185; }
 
+/* Cursor-follow tooltip — sticks to the mouse with lat/lng + depth.
+   Absolute-positioned, ignores pointer events so it doesn't block
+   the underlying map. Two lines: coords on top, depth below. */
+.spot-detail-cursor-tip {
+  position: absolute;
+  z-index: 10;
+  pointer-events: none;
+  background: rgba(11, 18, 32, 0.92);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-family: JetBrains Mono, ui-monospace, monospace;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--ink);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+}
+.sdct-coord {
+  font-weight: 500;
+  color: var(--ink);
+}
+.sdct-depth {
+  font-weight: 700;
+  color: #67e8f9;
+  margin-top: 1px;
+}
+
 /* Conditions readout panel — bottom-left, fixed */
 .spot-detail-conditions {
   position: absolute;

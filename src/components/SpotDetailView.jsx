@@ -225,6 +225,11 @@ export default function SpotDetailView({ spot, onClose }) {
   // on mouseMove / touch tap. Lets the user see exact coordinates over
   // any point on the spot detail map (nav-quality QA feedback).
   const [cursor, setCursor] = useState(null);
+  // Screen-space cursor position (px from the stage's top-left). Used
+  // by the follow-the-cursor tooltip. Kept separate from `cursor`
+  // (which is in lng/lat space) because the tooltip layer is rendered
+  // outside the SVG — needs screen coords for absolute positioning.
+  const [cursorPx, setCursorPx] = useState(null);
   // Decoded bathy pixel grid for cursor depth lookup — populated
   // once per bundle. null until the PNG decodes.
   const [bathyPixels, setBathyPixels] = useState(null);
@@ -336,11 +341,13 @@ export default function SpotDetailView({ spot, onClose }) {
     const lng = bbox.lng_min + (vbX / CANVAS_W) * (bbox.lng_max - bbox.lng_min);
     const lat = bbox.lat_max - (vbY / CANVAS_H) * (bbox.lat_max - bbox.lat_min);
     setCursor({ lng, lat });
+    setCursorPx({ x: sx, y: sy });
   }
   function onMouseUp() { panStateRef.current = null; }
   function onMouseLeave() {
     panStateRef.current = null;
     setCursor(null);
+    setCursorPx(null);
   }
 
   function onTouchStart(e) {
@@ -700,23 +707,58 @@ export default function SpotDetailView({ spot, onClose }) {
               </g>
             )}
 
-            {/* 5. Kelp polygons */}
+            {/* 5. Kelp polygons — chart-style with diagonal hatch
+                fill so surface canopy reads as "actual kelp forest"
+                vs. plain green water. Subsurface gets a dot pattern
+                to distinguish from surface at a glance. */}
             {layers.kelp && (
-              <g className="spot-detail-kelp">
-                {kelpPaths.map((p) => (
-                  <path
-                    key={p.key}
-                    d={p.d}
-                    fill={p.style.fill}
-                    stroke={p.style.stroke}
-                    strokeWidth={1.4 * strokeScale}
-                    strokeOpacity="0.9"
-                    vectorEffect="non-scaling-stroke"
+              <>
+                <defs>
+                  <pattern
+                    id="kelp-canopy-hatch"
+                    width="6" height="6"
+                    patternUnits="userSpaceOnUse"
+                    patternTransform="rotate(45)"
                   >
-                    <title>{p.props?.name}{p.props?.status ? ` — ${p.props.status}` : ""}</title>
-                  </path>
-                ))}
-              </g>
+                    <rect width="6" height="6" fill="rgba(27, 94, 32, 0.42)" />
+                    <line x1="0" y1="0" x2="0" y2="6"
+                          stroke="#0a3a14" strokeWidth="1.4" />
+                  </pattern>
+                  <pattern
+                    id="kelp-subsurface-dots"
+                    width="5" height="5"
+                    patternUnits="userSpaceOnUse"
+                  >
+                    <rect width="5" height="5" fill="rgba(56, 142, 60, 0.26)" />
+                    <circle cx="2.5" cy="2.5" r="0.9" fill="#2e7d32" />
+                  </pattern>
+                </defs>
+                <g className="spot-detail-kelp">
+                  {kelpPaths.map((p) => {
+                    const isCanopy = (p.props?.className || "").toLowerCase() === "kelp canopy";
+                    const isSubsurface = (p.props?.className || "").toLowerCase() === "kelp subsurface";
+                    const fill = isCanopy
+                      ? "url(#kelp-canopy-hatch)"
+                      : isSubsurface
+                        ? "url(#kelp-subsurface-dots)"
+                        : p.style.fill;
+                    const stroke = isCanopy ? "#0a3a14" : p.style.stroke;
+                    return (
+                      <path
+                        key={p.key}
+                        d={p.d}
+                        fill={fill}
+                        stroke={stroke}
+                        strokeWidth={2.0 * strokeScale}
+                        strokeOpacity="0.95"
+                        vectorEffect="non-scaling-stroke"
+                      >
+                        <title>{p.props?.name}{p.props?.className ? ` — ${p.props.className}` : ""}</title>
+                      </path>
+                    );
+                  })}
+                </g>
+              </>
             )}
 
             {/* 5a. Depth soundings — small black numerals at sampled
@@ -828,6 +870,26 @@ export default function SpotDetailView({ spot, onClose }) {
           </svg>
         )}
       </div>
+
+      {/* Cursor-follow tooltip — sits absolutely positioned just to
+          the right of the cursor with the lat/lng + depth at that
+          point. Mirrors NOAA-chart-style coordinate readouts. */}
+      {cursor && cursorPx && cursorDepth != null && (
+        <div
+          className="spot-detail-cursor-tip"
+          style={{
+            left: `${cursorPx.x + 14}px`,
+            top: `${cursorPx.y + 14}px`,
+          }}
+        >
+          <div className="sdct-coord mono">
+            {cursor.lat.toFixed(4)}°N {Math.abs(cursor.lng).toFixed(4)}°W
+          </div>
+          <div className="sdct-depth mono">
+            {cursorDepth.onLand ? "land" : `${Math.round(cursorDepth.depthFt)} ft · ${cursorDepth.depthM.toFixed(0)} m`}
+          </div>
+        </div>
+      )}
 
       {/* Floating conditions panel — bottom-left */}
       <div className="spot-detail-conditions">
