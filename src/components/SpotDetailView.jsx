@@ -219,19 +219,28 @@ function lineToPath(line, bbox, w, h, closed) {
 // blue-cyan ramp where everything stays readable against the lighter
 // chart-style bathy backdrop.
 function contourColor(depth_m) {
+  // 2026-05-27: lightened the deep-water palette. La Jolla Canyon
+  // hits 300+ m just offshore, and the previous palette mapped that
+  // band to #0f172a (slate-900, near-black). Result on the spot
+  // detail view: a heavy 1.4 px near-black 200 m contour traced
+  // right along the coast and read as a "second coastline" — user
+  // QA called it out twice. Capping deep colors at slate-700/sky-800
+  // keeps depth visible without ever rendering near-black.
   if (depth_m <= 5)   return "#0891b2";  // cyan-600
   if (depth_m <= 10)  return "#0e7490";  // cyan-700
   if (depth_m <= 20)  return "#155e75";  // cyan-800
   if (depth_m <= 30)  return "#164e63";  // cyan-900
-  if (depth_m <= 50)  return "#1e3a8a";  // blue-900
-  if (depth_m <= 100) return "#1e293b";
-  return "#0f172a";
+  if (depth_m <= 50)  return "#0c4a6e";  // sky-900
+  if (depth_m <= 100) return "#1e3a8a";  // blue-900
+  if (depth_m <= 200) return "#1e40af";  // blue-800
+  return "#3730a3";                       // indigo-800 (still readable, not black)
 }
 
 // Stroke weight by depth — every 10 m gets a heavier line, every
-// 50 m the heaviest. Recreational dive depth (≤30 m) and OW limit
-// (40 m) are visually obvious.
+// 50 m the heaviest. Cap deep contours at 0.9 so they never compete
+// with the coastline visually.
 function contourStrokeWidth(depth_m) {
+  if (depth_m > 100) return 0.7;             // deep — light, not heavy
   if (depth_m % 50 === 0) return 1.6;
   if (depth_m === 30)    return 1.4;  // OW dive limit — emphasised
   if (depth_m % 10 === 0) return 1.1;
@@ -269,7 +278,12 @@ export default function SpotDetailView({ spot, onClose }) {
     contours: true,
     coastline: true,
     kelp: true,
-    mpa: true,
+    // MPA default OFF — the rectangular state-regulatory polygons
+    // (Matlahuayl SMR, SD-Scripps SMCA, etc.) have axis-aligned
+    // boundaries that look like staircased coastlines at deep zoom
+    // and visually compete with the actual OSM coastline. Available
+    // via the layer toggle when divers want regulatory context.
+    mpa: false,
     landmarks: true,
     soundings: true,
   });
