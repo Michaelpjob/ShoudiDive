@@ -345,26 +345,32 @@ def resample_to_bbox(depth, src_lats, src_lons, bbox, out_w, out_h):
 
 
 def encode_depth_png(depth_grid, depth_range_m, out_path: Path):
-    """Encode the depth grid as 8-bit grayscale PNG.
+    """Encode the depth grid as 8-bit grayscale+alpha PNG.
 
-    0 = NaN/land (consumer treats as transparent or land mask).
-    1..255 = linear over depth_range_m. Values outside the range
-    clamp to the endpoints so the visualisation stays useful even
-    where the actual depth exceeds the per-spot scale.
+    Channels:
+      L (luminance) = depth pixel: 0..255 linear over depth_range_m
+      A (alpha)     = 0 for NaN/land cells, 255 for valid depths
+
+    Why two channels: a plain grayscale PNG renders NaN cells as black,
+    which produces a visible black strip wherever the GMRT bathy data
+    disagrees with the OSM coastline polygon (OSM water + GMRT land =
+    bathy renders black, coastline doesn't cover it).
+
+    Using an alpha channel makes those NaN cells transparent so the
+    chart-style cyan background shows through cleanly. The valid pixel
+    encoding stays linear 1..255 across depth_range_m so the
+    pixelToDepthM consumer in SpotDetailView keeps working unchanged.
     """
     d_min, d_max = depth_range_m
     span = max(d_max - d_min, 1.0)
-    # Pre-build a 0-initialised output (NaN cells stay 0 by construction)
-    # then fill only valid depths. Avoids the
-    #   RuntimeWarning: invalid value encountered in cast
-    # that np.round(NaN).astype(uint8) emits — and skips the throwaway
-    # mask-write afterwards.
     valid = np.isfinite(depth_grid)
-    encoded = np.zeros(depth_grid.shape, dtype=np.uint8)
+    h, w = depth_grid.shape
+    la = np.zeros((h, w, 2), dtype=np.uint8)  # [L, A]
     if valid.any():
         normalized = np.clip((depth_grid[valid] - d_min) / span, 0.0, 1.0)
-        encoded[valid] = (1 + np.round(normalized * 254.0)).astype(np.uint8)
-    img = Image.fromarray(encoded, mode="L")
+        la[..., 0][valid] = (1 + np.round(normalized * 254.0)).astype(np.uint8)
+        la[..., 1][valid] = 255
+    img = Image.fromarray(la, mode="LA")
     img.save(out_path, format="PNG", optimize=True)
 
 

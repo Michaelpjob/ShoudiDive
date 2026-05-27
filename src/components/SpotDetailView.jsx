@@ -61,9 +61,13 @@ function loadBathyPixels(url, width, height) {
         const ctx = cv.getContext("2d", { willReadFrequently: true });
         ctx.drawImage(img, 0, 0, w, h);
         const data = ctx.getImageData(0, 0, w, h).data;
-        // Extract just the R channel (PNG is grayscale; R = G = B).
+        // PNG is mode LA (luminance + alpha) — the canvas decodes to
+        // RGBA where R=G=B=L and A=A. For cursor depth lookup we want
+        // 0 (NaN) where alpha=0, otherwise the L channel value.
         const gray = new Uint8ClampedArray(w * h);
-        for (let i = 0, j = 0; i < data.length; i += 4, j++) gray[j] = data[i];
+        for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+          gray[j] = data[i + 3] === 0 ? 0 : data[i];
+        }
         resolve({ gray, w, h });
       } catch (e) {
         reject(e);
