@@ -169,24 +169,48 @@ def round_coords(geom: dict, decimals: int = 4) -> dict:
     return geom
 
 
-def simplify_geom(geom: dict, tolerance_deg: float = 5e-5) -> dict:
-    """Douglas-Peucker simplify via shapely. CDFW canopy polygons are
-    digitized at sub-metre precision (1000s of vertices per polygon),
-    which makes the raw service output massive (~800 KB / polygon).
-    A 5e-5 deg tolerance (~5 m at CA latitudes) cuts vertex counts
-    ~10× with no visible change at the spot detail's 16× zoom ceiling.
+def simplify_geom(
+    geom: dict,
+    tolerance_deg: float = 1e-4,
+    min_part_area_deg2: float = 1e-7,
+) -> dict | None:
+    """Douglas-Peucker simplify + degenerate-part filter.
 
-    Returns the geometry as a fresh GeoJSON dict (Polygon/MultiPolygon).
-    Falls through unchanged on non-Polygon types or shapely failure.
+    CDFW canopy polygons are MultiPolygons with hundreds of tiny
+    sub-patches each. Raw output is ~800 KB per feature. Two passes
+    crush that:
+
+    1. shapely.simplify(tolerance_deg, preserve_topology=True). At
+       1e-4 deg (~11 m at CA latitudes) — half the bathy pixel pitch
+       at the spot view's 16× zoom — this drops ~90% of vertices.
+    2. Drop MultiPolygon parts with area < min_part_area_deg2
+       (~1e-7 deg² ≈ 10 m²). Without this filter, rounding to 4
+       decimals collapses small parts into degenerate 4-identical-
+       vertex "polygons" that bloat the JSON without rendering.
+
+    Returns None if simplification produced an empty geometry —
+    caller should skip those features entirely.
     """
     try:
-        from shapely.geometry import shape, mapping
+        from shapely.geometry import shape, mapping, Polygon, MultiPolygon
     except ImportError:
         return geom
     try:
         s = shape(geom).simplify(tolerance_deg, preserve_topology=True)
         if s.is_empty:
-            return geom
+            return None
+        # Filter degenerate parts
+        if s.geom_type == "MultiPolygon":
+            parts = [p for p in s.geoms if p.area >= min_part_area_deg2]
+            if not parts:
+                return None
+            if len(parts) == 1:
+                s = parts[0]
+            else:
+                s = MultiPolygon(parts)
+        elif s.geom_type == "Polygon":
+            if s.area < min_part_area_deg2:
+                return None
         return mapping(s)
     except Exception:
         return geom
@@ -349,13 +373,11 @@ def main() -> None:
             "areaKm2": area_km2,
             "year": 2016,
         }
-        # Simplify-then-round so the 5 m DP pass dedupes near-collinear
-        # vertices BEFORE rounding drops them to 11 m precision. Order
-        # matters here: simplify-then-round on a 1000-vertex polygon
-        # drops it to ~80 vertices; round-then-simplify only gets
-        # to ~400 because rounding leaves redundant repeat vertices
-        # that DP can't always re-identify.
-        simplified = simplify_geom(geom, tolerance_deg=5e-5)
+        # Simplify with degenerate-part filter, then round. Two-pass
+        # crushes the 40 MB raw output to ~1 MB.
+        simplified = simplify_geom(geom, tolerance_deg=1e-4, min_part_area_deg2=1e-7)
+        if simplified is None:
+            continue  # entire feature collapsed to noise
         keep.append({
             "type": "Feature",
             "geometry": round_coords(simplified, decimals=4),
