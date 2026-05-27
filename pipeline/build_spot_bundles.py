@@ -82,6 +82,51 @@ SPOT_RADIUS_KM = {
     "monterey": 6,
 }
 
+# Curated landmark labels per spot — dive-relevant rather than general
+# place names. Each entry is (lng, lat, label, importance) where
+# importance is "marquee" (always shown, larger) | "major" | "minor"
+# (visible at high zoom only). The frontend renders these as
+# screen-space text labels with collision detection, so the list is
+# kept small (5-10 per spot) to avoid clutter.
+#
+# Coordinates picked from OSM + NOAA chart references; not authoritative
+# for navigation but accurate to ~50 m. Add new spots here as the
+# pilot expands.
+SPOT_LANDMARKS = {
+    "lajolla": [
+        (-117.2727, 32.8530, "La Jolla Cove",         "marquee"),
+        (-117.2580, 32.8662, "Children's Pool",       "minor"),
+        (-117.2734, 32.8527, "La Jolla Caves",        "minor"),
+        (-117.2543, 32.8662, "Scripps Pier",          "major"),
+        (-117.2780, 32.8550, "Boomer Beach",          "minor"),
+        (-117.2540, 32.8400, "Windansea",             "minor"),
+        (-117.2630, 32.8870, "Black's Beach",         "minor"),
+        (-117.2890, 32.8600, "La Jolla Canyon",       "major"),
+    ],
+    "catalina": [
+        (-118.3275, 33.3450, "Avalon Harbor",         "marquee"),
+        (-118.3214, 33.3441, "Casino Point",          "major"),
+        (-118.4974, 33.4426, "Two Harbors",           "marquee"),
+        (-118.4979, 33.4493, "Isthmus Cove",          "major"),
+        (-118.3950, 33.4060, "Ship Rock",             "major"),
+        (-118.4280, 33.4150, "Italian Gardens",       "minor"),
+        (-118.4790, 33.4380, "Big Geiger Cove",       "minor"),
+        (-118.4520, 33.4690, "Bird Rock",             "minor"),
+        (-118.4147, 33.3858, "Long Point",            "minor"),
+    ],
+    "monterey": [
+        (-121.9000, 36.6200, "Monterey Harbor",       "marquee"),
+        (-121.9000, 36.6160, "Coast Guard Pier",      "major"),
+        (-121.9090, 36.6177, "Lover's Point",         "major"),
+        (-121.9430, 36.6210, "Asilomar Beach",        "minor"),
+        (-121.9460, 36.6330, "Point Pinos",           "major"),
+        (-121.8530, 36.6470, "Stillwater Cove",       "minor"),
+        (-121.9530, 36.6210, "Pinnacles (Pt. Pinos)", "minor"),
+        (-121.9011, 36.6166, "San Carlos Beach",      "major"),
+        (-121.8945, 36.6149, "Breakwater Cove",       "marquee"),
+    ],
+}
+
 # Pixel size for the spot's bathy PNG. 480 × 480 keeps each bundle tiny
 # (~120-180 KB encoded) while delivering above-display-resolution detail
 # at the 4-8 km radius (one pixel ≈ 17-33 m on the ground).
@@ -765,6 +810,31 @@ def build_spot(spot_id: str, *, force: bool) -> bool:
         }
         print(f"    [{layer_key}] {feature_count} features → {out_path.name}")
 
+    # Curated landmarks — dive-relevant local place names (harbor,
+    # break, point, named reef). Filtered to those inside the spot
+    # bbox so the labels don't escape the visible canvas.
+    landmark_features = []
+    for (lng, lat, label, importance) in SPOT_LANDMARKS.get(spot_id, []):
+        if (lng < bbox["lng_min"] or lng > bbox["lng_max"] or
+            lat < bbox["lat_min"] or lat > bbox["lat_max"]):
+            continue
+        landmark_features.append({
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [lng, lat]},
+            "properties": {"name": label, "importance": importance},
+        })
+    if landmark_features:
+        landmarks_path = bundle_dir / "landmarks.geojson"
+        landmarks_path.write_text(json.dumps(
+            {"type": "FeatureCollection", "features": landmark_features},
+            separators=(",", ":"),
+        ))
+        layers_meta["landmarks"] = {
+            "url": "landmarks.geojson",
+            "features": len(landmark_features),
+        }
+        print(f"    [landmarks] {len(landmark_features)} features → landmarks.geojson")
+
     # 4. Bundle manifest
     manifest = {
         "id": spot_id,
@@ -778,6 +848,7 @@ def build_spot(spot_id: str, *, force: bool) -> bool:
             "coastline": "OSM natural=coastline via Overpass (clipped)",
             "kelp":      "CDFW Administrative Kelp Beds ds3135 (clipped)",
             "mpa":       "CDFW MPA ds582 (clipped)",
+            "landmarks": "Curated per-spot dive-site / harbor labels",
         },
     }
     manifest_path = bundle_dir / "bundle.json"

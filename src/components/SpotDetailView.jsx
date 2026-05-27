@@ -61,13 +61,14 @@ function loadBundle(spotId) {
         return null;
       }
     };
-    const [contours, coastline, kelp, mpa] = await Promise.all([
+    const [contours, coastline, kelp, mpa, landmarks] = await Promise.all([
       fetchGeojson("contours"),
       fetchGeojson("coastline"),
       fetchGeojson("kelp"),
       fetchGeojson("mpa"),
+      fetchGeojson("landmarks"),
     ]);
-    return { manifest, bathyUrl: `${base}/${layers.bathy?.url}`, contours, coastline, kelp, mpa };
+    return { manifest, bathyUrl: `${base}/${layers.bathy?.url}`, contours, coastline, kelp, mpa, landmarks };
   })().catch((err) => {
     bundleCache.delete(spotId);  // allow retry on transient failure
     throw err;
@@ -163,7 +164,12 @@ export default function SpotDetailView({ spot, onClose }) {
     coastline: true,
     kelp: true,
     mpa: true,
+    landmarks: true,
   });
+  // Cursor lng/lat readout — null when the cursor is off-stage. Updated
+  // on mouseMove / touch tap. Lets the user see exact coordinates over
+  // any point on the spot detail map (nav-quality QA feedback).
+  const [cursor, setCursor] = useState(null);
   const { prefs } = usePrefs();
   const { units } = prefs;
 
@@ -233,19 +239,37 @@ export default function SpotDetailView({ spot, onClose }) {
     };
   }
   function onMouseMove(e) {
-    const ps = panStateRef.current;
-    if (!ps) return;
     const r = stageRef.current.getBoundingClientRect();
-    const dx = (e.clientX - r.left - ps.startX) / r.width * ps.startVb.w;
-    const dy = (e.clientY - r.top - ps.startY) / r.height * ps.startVb.h;
-    setVb(clampVb({
-      x: ps.startVb.x - dx,
-      y: ps.startVb.y - dy,
-      w: ps.startVb.w,
-      h: ps.startVb.h,
-    }, CANVAS_W, CANVAS_H));
+    const ps = panStateRef.current;
+    if (ps) {
+      // Active pan — don't track cursor as a readout
+      const dx = (e.clientX - r.left - ps.startX) / r.width * ps.startVb.w;
+      const dy = (e.clientY - r.top - ps.startY) / r.height * ps.startVb.h;
+      setVb(clampVb({
+        x: ps.startVb.x - dx,
+        y: ps.startVb.y - dy,
+        w: ps.startVb.w,
+        h: ps.startVb.h,
+      }, CANVAS_W, CANVAS_H));
+      return;
+    }
+    // Idle cursor — project screen px through viewBox into bundle
+    // bbox lng/lat for the readout. Cheap; runs on every mousemove
+    // but the math is just a couple multiplies.
+    if (!bbox) return;
+    const sx = e.clientX - r.left;
+    const sy = e.clientY - r.top;
+    const vbX = vb.x + (sx / r.width) * vb.w;
+    const vbY = vb.y + (sy / r.height) * vb.h;
+    const lng = bbox.lng_min + (vbX / CANVAS_W) * (bbox.lng_max - bbox.lng_min);
+    const lat = bbox.lat_max - (vbY / CANVAS_H) * (bbox.lat_max - bbox.lat_min);
+    setCursor({ lng, lat });
   }
   function onMouseUp() { panStateRef.current = null; }
+  function onMouseLeave() {
+    panStateRef.current = null;
+    setCursor(null);
+  }
 
   function onTouchStart(e) {
     const r = stageRef.current.getBoundingClientRect();
@@ -297,6 +321,28 @@ export default function SpotDetailView({ spot, onClose }) {
   }
   function onTouchEnd(e) {
     if (e.touches.length === 0) {
+      // If this was a quick tap (no pan), set cursor to the tap point
+      // so the lat/lng readout works on mobile too. We don't have a
+      // hover state on touch devices, so this is the only way users
+      // see coordinates.
+      const ps = panStateRef.current;
+      if (ps && bbox) {
+        const r = stageRef.current?.getBoundingClientRect();
+        if (r) {
+          const ct = e.changedTouches[0];
+          const sx = (ct?.clientX ?? 0) - r.left;
+          const sy = (ct?.clientY ?? 0) - r.top;
+          const dragDist = Math.hypot(sx - ps.startX, sy - ps.startY);
+          if (dragDist < 8) {
+            // Treat as a tap — drop a pin on the cursor readout
+            const vbX = vb.x + (sx / r.width) * vb.w;
+            const vbY = vb.y + (sy / r.height) * vb.h;
+            const lng = bbox.lng_min + (vbX / CANVAS_W) * (bbox.lng_max - bbox.lng_min);
+            const lat = bbox.lat_max - (vbY / CANVAS_H) * (bbox.lat_max - bbox.lat_min);
+            setCursor({ lng, lat });
+          }
+        }
+      }
       panStateRef.current = null;
       pinchStateRef.current = null;
     } else if (e.touches.length === 1 && pinchStateRef.current) {
@@ -350,6 +396,22 @@ export default function SpotDetailView({ spot, onClose }) {
       d: geometryToPath(f.geometry, bbox, CANVAS_W, CANVAS_H, true),
       style: styleForStatus(f.properties?.status),
     }));
+  }, [bundle, bbox]);
+  // Landmark points in canvas coords, ready for rendering. Importance
+  // drives marker + label size at zoom 1× and visibility threshold:
+  // 'marquee' always shown; 'major' from zoom ≥ 1.5; 'minor' from ≥ 3.
+  const landmarkPts = useMemo(() => {
+    if (!bbox || !bundle?.landmarks) return [];
+    return (bundle.landmarks.features || []).map((f) => {
+      const [lng, lat] = f.geometry.coordinates;
+      const [x, y] = projectInBbox(bbox, lng, lat, CANVAS_W, CANVAS_H);
+      return {
+        key: f.properties.name,
+        x, y, lng, lat,
+        name: f.properties.name,
+        importance: f.properties.importance || "minor",
+      };
+    });
   }, [bundle, bbox]);
 
   // Centre pin in canvas coords
@@ -424,7 +486,7 @@ export default function SpotDetailView({ spot, onClose }) {
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
-        onMouseLeave={onMouseUp}
+        onMouseLeave={onMouseLeave}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
@@ -530,6 +592,49 @@ export default function SpotDetailView({ spot, onClose }) {
               </g>
             )}
 
+            {/* 5b. Landmark markers + labels (above polygons,
+                under the centre pin). Importance gates visibility:
+                marquee always shown; major from zoom ≥ 1.5; minor
+                from zoom ≥ 3. Labels are SVG <text> with a small
+                white halo so they read against bathy at any depth. */}
+            {layers.landmarks && landmarkPts.map((lm) => {
+              if (lm.importance === "minor" && zoomLevel < 3) return null;
+              if (lm.importance === "major" && zoomLevel < 1.5) return null;
+              const dotR = lm.importance === "marquee" ? 4.2 : 3.2;
+              const fontSize = lm.importance === "marquee" ? 11 : 10;
+              const weight = lm.importance === "marquee" ? 600 : 500;
+              return (
+                <g key={lm.key} style={{ pointerEvents: "none" }}>
+                  <circle
+                    cx={lm.x} cy={lm.y}
+                    r={dotR / zoomLevel}
+                    fill="#fbbf24"
+                    stroke="#000"
+                    strokeWidth={0.8 / zoomLevel}
+                  />
+                  {/* Halo (drawn behind by being first) for legibility */}
+                  <text
+                    x={lm.x + 7 / zoomLevel}
+                    y={lm.y - 4 / zoomLevel}
+                    fill="#000"
+                    stroke="#000"
+                    strokeWidth={2.4 / zoomLevel}
+                    strokeOpacity="0.65"
+                    fontSize={fontSize / zoomLevel}
+                    fontWeight={weight}
+                    style={{ paintOrder: "stroke" }}
+                  >{lm.name}</text>
+                  <text
+                    x={lm.x + 7 / zoomLevel}
+                    y={lm.y - 4 / zoomLevel}
+                    fill="#fef3c7"
+                    fontSize={fontSize / zoomLevel}
+                    fontWeight={weight}
+                  >{lm.name}</text>
+                </g>
+              );
+            })}
+
             {/* 6. Centre pin */}
             <g className="spot-detail-pin">
               <circle
@@ -551,6 +656,15 @@ export default function SpotDetailView({ spot, onClose }) {
 
       {/* Floating conditions panel — bottom-left */}
       <div className="spot-detail-conditions">
+        {/* Cursor lng/lat readout — visible when the mouse is over
+            the map. Falls back to the spot centre when idle so the
+            field is always populated (nav-quality QA requirement). */}
+        <div className="sdc-row sdc-coord">
+          <span>{cursor ? "Cursor" : "Centre"}</span>
+          <strong>
+            {(cursor?.lat ?? spot.lat).toFixed(4)}°N {Math.abs(cursor?.lng ?? spot.lng).toFixed(4)}°W
+          </strong>
+        </div>
         <div className="sdc-row"><span>SST</span><strong>{conditions.sstStr}</strong></div>
         <div className="sdc-row"><span>Wind</span><strong>{conditions.windStr}</strong></div>
         <div className="sdc-row"><span>Swell</span><strong>{conditions.swellStr}</strong></div>
@@ -566,6 +680,7 @@ export default function SpotDetailView({ spot, onClose }) {
           ["coastline", "Coast"],
           ["mpa",       "MPA"],
           ["kelp",      "Kelp"],
+          ["landmarks", "Labels"],
         ].map(([key, label]) => (
           <button
             key={key}

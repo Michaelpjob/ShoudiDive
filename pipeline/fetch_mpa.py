@@ -59,8 +59,18 @@ def feature_bounds(geom: dict) -> tuple[float, float, float, float]:
     return (min(xs), min(ys), max(xs), max(ys))
 
 
-def round_coords(geom: dict, decimals: int = 3) -> dict:
-    """Round all coordinates in-place to keep JSON small."""
+def round_coords(geom: dict, decimals: int = 4) -> dict:
+    """Round all coordinates in-place to keep JSON small.
+
+    2026-05-27: bumped from 3 → 4 decimals (~110 m → ~11 m). At the
+    wide-map zoom (8× max), 3-decimal precision was indistinguishable
+    from 4-decimal because each pixel covered ~10-50 m anyway. But
+    the new Spot Detail view (Phase 1B) zooms to 16× over 4-8 km
+    bboxes — at that scale, 3-decimal polygons looked visibly
+    staircased ("CAD outline" effect — the user QA flagged it as
+    'rectangles' on Catalina MPAs). 4 decimals adds ~12% to the
+    file size but makes edges smooth at deep zoom.
+    """
 
     def r(p):
         return [round(p[0], decimals), round(p[1], decimals)]

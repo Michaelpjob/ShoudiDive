@@ -342,6 +342,15 @@
 .sdc-row span { color: var(--ink-3); }
 .sdc-row strong { font-weight: 600; font-family: JetBrains Mono, monospace; font-size: 11.5px; }
 .sdc-faint { opacity: 0.6; }
+/* Lat/lng coord row gets a slightly heavier divider below so it
+   visually anchors the readout — "where am I" is the first thing
+   the user wants when navigating a deep-zoom detail view. */
+.sdc-coord {
+  padding-bottom: 5px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+}
+.sdc-coord strong { font-size: 11px; letter-spacing: 0.02em; }
 
 /* Layer toggle row — bottom-right, fixed */
 .spot-detail-layers {
