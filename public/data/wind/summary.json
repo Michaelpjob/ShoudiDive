@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-30T20:40:22Z",
+  "generated_at": "2026-05-30T21:15:15Z",
   "tz": "America/Los_Angeles",
   "anchor_date": "2026-05-30",
   "hrrr_cycle": "2026-05-30T18:00:00Z",
@@ -364,7 +364,39 @@
       "label": "+5",
       "weekday": "Thursday",
       "confidence": "low",
-      "buckets": [],
+      "buckets": [
+        {
+          "day": 5,
+          "bucket": "predawn",
+          "hours": [
+            4,
+            5
+          ],
+          "mean_kt": 16.2,
+          "min_kt": 16.2,
+          "max_kt": 16.3,
+          "mean_dir_deg": 327.0,
+          "uv_url": "/data/wind/buckets/d5_predawn_uv.png",
+          "sources": [
+            "gfs"
+          ]
+        },
+        {
+          "day": 5,
+          "bucket": "morning",
+          "hours": [
+            8
+          ],
+          "mean_kt": 16.2,
+          "min_kt": 16.2,
+          "max_kt": 16.2,
+          "mean_dir_deg": 332.0,
+          "uv_url": "/data/wind/buckets/d5_morning_uv.png",
+          "sources": [
+            "gfs"
+          ]
+        }
+      ],
       "hourly_url_template": "/data/wind/hourly/d5_h{HH}_uv.png"
     },
     {
@@ -379,8 +411,8 @@
   ],
   "best_window": {
     "day": 3,
-    "bucket": "predawn",
-    "mean_kt": 15.3
+    "bucket": "midday",
+    "mean_kt": 14.3
   },
   "speed_range": [
     0.0,
