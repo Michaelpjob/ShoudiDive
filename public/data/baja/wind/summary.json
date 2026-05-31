@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-05-31T15:15:16Z",
+  "generated_at": "2026-05-31T17:00:28Z",
   "tz": "America/Los_Angeles",
   "anchor_date": "2026-05-31",
   "hrrr_cycle": "2026-05-31T12:00:00Z",
-  "gfs_cycle": "2026-05-31T06:00:00Z",
+  "gfs_cycle": "2026-05-31T12:00:00Z",
   "buckets_def": [
     {
       "name": "predawn",
@@ -43,16 +43,14 @@
           "day": 0,
           "bucket": "predawn",
           "hours": [
-            4,
             5
           ],
-          "mean_kt": 13.7,
+          "mean_kt": 13.5,
           "min_kt": 13.5,
-          "max_kt": 13.9,
-          "mean_dir_deg": 338.0,
+          "max_kt": 13.5,
+          "mean_dir_deg": 342.0,
           "uv_url": "/data/wind/buckets/d0_predawn_uv.png",
           "sources": [
-            "gfs",
             "hrrr+gfs"
           ]
         },
@@ -65,7 +63,7 @@
             8,
             9
           ],
-          "mean_kt": 12.2,
+          "mean_kt": 12.4,
           "min_kt": 11.6,
           "max_kt": 13.0,
           "mean_dir_deg": 343.0,
@@ -260,7 +258,23 @@
       "label": "+3",
       "weekday": "Wednesday",
       "confidence": "medium",
-      "buckets": [],
+      "buckets": [
+        {
+          "day": 3,
+          "bucket": "predawn",
+          "hours": [
+            5
+          ],
+          "mean_kt": 12.2,
+          "min_kt": 12.2,
+          "max_kt": 12.2,
+          "mean_dir_deg": 327.0,
+          "uv_url": "/data/wind/buckets/d3_predawn_uv.png",
+          "sources": [
+            "gfs"
+          ]
+        }
+      ],
       "hourly_url_template": "/data/wind/hourly/d3_h{HH}_uv.png"
     },
     {
