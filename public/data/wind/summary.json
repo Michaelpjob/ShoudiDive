@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-06-02T14:40:42Z",
+  "generated_at": "2026-06-02T16:55:01Z",
   "tz": "America/Los_Angeles",
   "anchor_date": "2026-06-02",
   "hrrr_cycle": "2026-06-02T12:00:00Z",
-  "gfs_cycle": "2026-06-02T06:00:00Z",
+  "gfs_cycle": "2026-06-02T12:00:00Z",
   "buckets_def": [
     {
       "name": "predawn",
@@ -157,67 +157,13 @@
           "hours": [
             6,
             7,
-            8,
-            9
+            8
           ],
           "mean_kt": 15.8,
           "min_kt": 15.8,
           "max_kt": 15.9,
-          "mean_dir_deg": 347.0,
+          "mean_dir_deg": 346.0,
           "uv_url": "/data/wind/buckets/d1_morning_uv.png",
-          "sources": [
-            "hrrr"
-          ]
-        },
-        {
-          "day": 1,
-          "bucket": "midday",
-          "hours": [
-            10,
-            11,
-            12,
-            13
-          ],
-          "mean_kt": 16.3,
-          "min_kt": 15.9,
-          "max_kt": 16.9,
-          "mean_dir_deg": 348.0,
-          "uv_url": "/data/wind/buckets/d1_midday_uv.png",
-          "sources": [
-            "hrrr"
-          ]
-        },
-        {
-          "day": 1,
-          "bucket": "afternoon",
-          "hours": [
-            14,
-            15,
-            16,
-            17,
-            18
-          ],
-          "mean_kt": 18.4,
-          "min_kt": 17.4,
-          "max_kt": 19.4,
-          "mean_dir_deg": 349.0,
-          "uv_url": "/data/wind/buckets/d1_afternoon_uv.png",
-          "sources": [
-            "hrrr"
-          ]
-        },
-        {
-          "day": 1,
-          "bucket": "evening",
-          "hours": [
-            19,
-            20
-          ],
-          "mean_kt": 20.0,
-          "min_kt": 19.8,
-          "max_kt": 20.2,
-          "mean_dir_deg": 353.0,
-          "uv_url": "/data/wind/buckets/d1_evening_uv.png",
           "sources": [
             "hrrr"
           ]
@@ -240,7 +186,23 @@
       "label": "+3",
       "weekday": "Friday",
       "confidence": "medium",
-      "buckets": [],
+      "buckets": [
+        {
+          "day": 3,
+          "bucket": "predawn",
+          "hours": [
+            5
+          ],
+          "mean_kt": 20.6,
+          "min_kt": 20.6,
+          "max_kt": 20.6,
+          "mean_dir_deg": 339.0,
+          "uv_url": "/data/wind/buckets/d3_predawn_uv.png",
+          "sources": [
+            "gfs"
+          ]
+        }
+      ],
       "hourly_url_template": "/data/wind/hourly/d3_h{HH}_uv.png"
     },
     {
