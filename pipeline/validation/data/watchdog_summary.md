@@ -1,30 +1,30 @@
-# Validation watchdog — 2026-06-02T22:28Z
+# Validation watchdog — 2026-06-04T04:47Z
 
 **4 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
-### 🔴 1. Only 20 observations in the last 24h (floor: 50)
+### 🔴 1. Only 5 observations in the last 24h (floor: 50)
 
 Multiple scrapers may be silently broken.
 
 **Suggested action:** Open the latest hourly ingest workflow run; look for `FAILED` lines per scraper.
 
-### 🔴 2. 1 critical external feed(s) are red
+### 🔴 2. Required source `cdip-buoy` has been silent for >24h
 
-A required upstream data source failed the latest feed-health probe.
+Expected `cdip-buoy` to contribute at least one observation per cron. None seen in the recent window.
 
-**Suggested action:** Inspect `pipeline/validation/data/feed_health.json`, then retry the affected fetch workflow after confirming the upstream feed recovered.
+**Suggested action:** Inspect `pipeline/validation/ingest/cdip.py` and the latest ingest cron's log.
 
-### ⚠️ 3. 1 non-critical external feed(s) are red
+### 🔴 3. Required source `ndbc-buoy` has been silent for >24h
 
-Red feeds: chl_climo_modis_pfeg. Fallbacks may keep the model running, but redundancy is degraded.
+Expected `ndbc-buoy` to contribute at least one observation per cron. None seen in the recent window.
 
-**Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
+**Suggested action:** Inspect `pipeline/validation/ingest/ndbc.py` and the latest ingest cron's log.
 
-### 🔴 4. Published-data freshness gate found 2 issue(s)
+### 🔴 4. Published-data freshness gate found 1 issue(s)
 
-Freshness/completeness failures: wave:layer_date_stale, sst:sst_source_query_failed.
+Freshness/completeness failures: wave:layer_date_stale.
 
 **Suggested action:** Open `pipeline/validation/data/freshness_health.json`; fix the failing fetcher or rerun the matching workflow before trusting the deploy.
 
@@ -32,14 +32,14 @@ Freshness/completeness failures: wave:layer_date_stale, sst:sst_source_query_fai
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_nearshore` | 4 | 6.14 | -3.80 | 75% | 1.00 |
+| `bight_nearshore` | 4 | 7.32 | -4.98 | 75% | 1.00 |
 
 ## Per-source bias (informational)
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `dive-shop-diveviz` | 1 | -12.15 ft |
-| `dive-shop-justgetwet` | 3 | -1.02 ft |
+| `dive-shop-diveviz` | 1 | -14.28 ft |
+| `dive-shop-justgetwet` | 3 | -1.89 ft |
 
 ## How to act on this issue
 
