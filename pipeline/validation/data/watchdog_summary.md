@@ -1,46 +1,33 @@
-# Validation watchdog — 2026-06-05T04:57Z
+# Validation watchdog — 2026-06-06T08:34Z
 
-**5 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
+**2 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
-### 🔴 1. Only 1 observations in the last 24h (floor: 50)
+### 🔴 1. Only 20 observations in the last 24h (floor: 50)
 
 Multiple scrapers may be silently broken.
 
 **Suggested action:** Open the latest hourly ingest workflow run; look for `FAILED` lines per scraper.
 
-### 🔴 2. Required source `cdip-buoy` has been silent for >24h
+### 🔴 2. Published-data freshness gate found 1 issue(s)
 
-Expected `cdip-buoy` to contribute at least one observation per cron. None seen in the recent window.
-
-**Suggested action:** Inspect `pipeline/validation/ingest/cdip.py` and the latest ingest cron's log.
-
-### 🔴 3. Required source `ndbc-buoy` has been silent for >24h
-
-Expected `ndbc-buoy` to contribute at least one observation per cron. None seen in the recent window.
-
-**Suggested action:** Inspect `pipeline/validation/ingest/ndbc.py` and the latest ingest cron's log.
-
-### ⚠️ 4. 4 non-critical external feed(s) are red
-
-Red feeds: chl_dineof_nrt_4km, chl_dineof_sci_2km, kd490_dineof_2km, cdip. Fallbacks may keep the model running, but redundancy is degraded.
-
-**Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
-
-### 🔴 5. Published-data freshness gate found 2 issue(s)
-
-Freshness/completeness failures: wave:layer_date_stale, precip:layer_date_stale.
+Freshness/completeness failures: wave:layer_date_stale.
 
 **Suggested action:** Open `pipeline/validation/data/freshness_health.json`; fix the failing fetcher or rerun the matching workflow before trusting the deploy.
 
 ## Per-zone metrics
 
-_(no zones with observations yet — first signals expected within the first week of ingest)_
+| Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
+|---|---|---|---|---|---|
+| `bight_nearshore` | 4 | 7.74 | -5.03 | 75% | -0.98 |
 
 ## Per-source bias (informational)
 
-_(no scored residuals yet — needs at least one source with `observed_secchi_ft` populated)_
+| Source | n | Mean residual (predicted − observed) |
+|---|---|---|
+| `dive-shop-diveviz` | 1 | -15.07 ft |
+| `dive-shop-justgetwet` | 3 | -1.68 ft |
 
 ## How to act on this issue
 
