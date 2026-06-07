@@ -1,10 +1,10 @@
-# Validation watchdog — 2026-06-06T08:34Z
+# Validation watchdog — 2026-06-07T08:56Z
 
 **2 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
-### 🔴 1. Only 20 observations in the last 24h (floor: 50)
+### 🔴 1. Only 19 observations in the last 24h (floor: 50)
 
 Multiple scrapers may be silently broken.
 
@@ -20,14 +20,14 @@ Freshness/completeness failures: wave:layer_date_stale.
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_nearshore` | 4 | 7.74 | -5.03 | 75% | -0.98 |
+| `bight_nearshore` | 4 | 8.66 | -5.98 | 100% | -0.99 |
 
 ## Per-source bias (informational)
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `dive-shop-diveviz` | 1 | -15.07 ft |
-| `dive-shop-justgetwet` | 3 | -1.68 ft |
+| `dive-shop-diveviz` | 1 | -16.68 ft |
+| `dive-shop-justgetwet` | 3 | -2.42 ft |
 
 ## How to act on this issue
 
