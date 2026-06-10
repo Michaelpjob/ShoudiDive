@@ -362,20 +362,27 @@ def resample_to_bbox(depth, src_lats, src_lons, bbox, out_w, out_h):
     wx = fx - x0
     wy = fy - y0
 
-    src_h, _src_w = depth.shape
-    # depth is laid out (lat_idx, lng_idx) but src_lats may be S→N
-    # while depth's row 0 is original orientation. We normalized above
-    # so src_lats is now S→N AND depth rows match — but out_lat is
-    # N→S, so the y indices need flipping.
-    y0f = (src_h - 1) - y0
-    y1f = (src_h - 1) - y1
-
+    # 2026-05-27 ROOT-CAUSE FIX for the "false land section" /
+    # "phantom coastline cutting the bay" QA reports: this function
+    # used to re-flip the y indices (`y0f = (src_h - 1) - y0`) on the
+    # theory that out_lat being N→S required it. It doesn't —
+    # np.interp(out_lat, src_lats, arange) ALREADY returns the correct
+    # fractional row index into the S→N-ordered depth array for every
+    # output latitude, whatever order out_lat is in. The extra flip
+    # vertically MIRRORED every spot's bathy (north↔south): La Jolla's
+    # headland bathymetry rendered up in the Shores bay as a flat
+    # "2 m plateau"/false land, the real shelf rendered down south.
+    # Verified against GMRT esriascii truth: the shipped PNG's
+    # transect at lng −117.262 matched GMRT at MIRRORED latitudes
+    # exactly (PNG 2.0/3.9/9.8/11.8 m ↔ truth −1.96/−3.07/−8.74/
+    # −11.65 m at the mirror points). Contours + soundings derive
+    # from this grid, so the one fix repairs all three layers.
     out = np.full((out_h, out_w), np.nan, dtype=np.float32)
     for j in range(out_h):
-        v00 = depth[y0f[j], x0]
-        v01 = depth[y0f[j], x1]
-        v10 = depth[y1f[j], x0]
-        v11 = depth[y1f[j], x1]
+        v00 = depth[y0[j], x0]
+        v01 = depth[y0[j], x1]
+        v10 = depth[y1[j], x0]
+        v11 = depth[y1[j], x1]
         wy_j = wy[j]
         top = v00 * (1 - wx) + v01 * wx
         bot = v10 * (1 - wx) + v11 * wx
