@@ -20,14 +20,33 @@ the per-spot bundle on demand when the user clicks the affordance.
 
 Design choices vs. the handover (`docs/spot-detail-handover.md`):
 
-  * DEM source: GMRT high-resolution mode rather than NOAA CUDEM. GMRT
-    high mode gives ~100 m native near the coast, which is plenty for
-    a 480 × 480 spot view (one screen pixel ≈ 16-30 m on the ground at
-    4-8 km radius). CUDEM 1/9 arc-sec (~3 m) would be sharper but
-    requires THREDDS subsetting + a tile-stitching pass; GMRT is one
-    HTTP call with bbox params and is already proven in fetch_bathy.py.
-    Documented in bundle.json["sources"]["bathy"] so the next refresh
-    knows what it's pulling.
+  * DEM source: NOAA NCEI "DEM global mosaic" ImageServer first, GMRT
+    GridServer as hole-fill + fallback.
+
+    2026-06-10 QA found the La Jolla chart showing a flat ~2 m-deep
+    plateau across the whole La Jolla Shores shelf (real depths
+    6-25 m) with stair-step edges. Root cause: GMRT has no measured
+    swath data on the SoCal nearshore shelf, so it serves its coarse
+    predicted-bathymetry background there (~2-5 m over the Shores,
+    La Jolla Canyon head diluted to -10 m where reality is -137 m).
+    Direct GridServer probes confirmed resolution=max and
+    layer=topo-mask return byte-identical grids to resolution=high
+    for these bboxes — no GMRT knob fixes it; the synthesis simply
+    lacks nearshore source data here.
+
+    The NCEI mosaic (gis.ngdc.noaa.gov DEM_mosaics/DEM_global_mosaic)
+    serves the best-available tiled DEM per pixel — CUDEM 1/9 arc-sec
+    (~3 m) at Monterey, the 1/3 arc-sec (~10 m) SoCal coastal DEMs at
+    La Jolla + Catalina — and blends to coarser sources offshore
+    server-side, exactly the "CUDEM nearshore + something offshore"
+    blend the handover wanted, in one exportImage call. Probe points
+    on the Shores shelf: NCEI -22 m / Scripps Canyon arm -54 m /
+    La Jolla Canyon head -137 m, all matching charted depths; GMRT
+    said -4.5 / -30 / -10.5 m at the same points. Any pixels the
+    mosaic lacks (and the whole spot, if the fetch fails) fall back
+    to GMRT, blended in elevation space so NCEI land can't be
+    backfilled with phantom GMRT water. The source actually used is
+    recorded in bundle.json["sources"]["bathy"].
   * Contours: numpy + custom marching-squares (no scikit-image dep —
     keeps requirements.txt thin). Contour intervals are 1 m / 5 m /
     25 m piecewise, which matches diver-relevant depth bands.
@@ -202,6 +221,14 @@ FRESHNESS_DAYS = 30
 
 GMRT_URL = "https://www.gmrt.org/services/GridServer"
 
+# NOAA NCEI best-available DEM mosaic (CUDEM ninth/third arc-sec tiles
+# nearshore, coarser global sources offshore, blended per pixel on the
+# server). exportImage with an EPSG:4326 bbox returns an F32 GeoTIFF —
+# one HTTP round-trip per spot, no tile stitching. See module docstring
+# for why this replaced GMRT as the primary spot-bundle source.
+NCEI_MOSAIC_URL = ("https://gis.ngdc.noaa.gov/arcgis/rest/services/"
+                   "DEM_mosaics/DEM_global_mosaic/ImageServer/exportImage")
+
 # Per-spot Overpass coastline fetch (PR Spot-K). The wide-map land.geojson
 # is simplified to ~10 m for whole-CA viewport rendering — fine at 8×
 # zoom max, but at the spot view's 16× zoom the simplification eats
@@ -251,16 +278,84 @@ def spot_bbox(centre_lng: float, centre_lat: float, radius_km: float) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# GMRT bathymetry fetch + parse
+# NCEI bathymetry fetch (primary source)
+# ---------------------------------------------------------------------------
+
+def fetch_ncei_dem(bbox: dict, px: int = 960):
+    """Pull the NOAA NCEI best-available DEM mosaic for the spot bbox.
+
+    Returns (elev_z_m, lats_south_to_north, lons_west_to_east) where
+    elev_z_m is metres relative to the DEM datum (negative = below sea
+    level, NaN = mosaic nodata) — same contract parse_gmrt_netcdf
+    returns, so resample_to_bbox consumes either source unchanged.
+
+    Two-step fetch: exportImage with f=json first (the response's
+    `extent` is authoritative — the server EXPANDS the requested bbox
+    to make square-degree pixels, so georeferencing the raster off the
+    requested bbox would shift everything south by ~700 m), then the
+    returned href for the actual F32 GeoTIFF, which PIL reads natively
+    (mode "F"; uncompressed tiled, no rasterio/GDAL needed).
+
+    px=960 (2× the 480 output) keeps ≥1 source row per output row over
+    the spot bbox after the server's extent expansion, and gives the
+    local bilinear resample headroom; at the 24 km Catalina bbox that
+    is ~25 m/px, still well above the chart's effective resolution.
+    """
+    params = {
+        "bbox": (f"{bbox['lng_min']},{bbox['lat_min']},"
+                 f"{bbox['lng_max']},{bbox['lat_max']}"),
+        "bboxSR": "4326",
+        "imageSR": "4326",
+        "size": f"{px},{px}",
+        "format": "tiff",
+        "pixelType": "F32",
+        "interpolation": "RSP_BilinearInterpolation",
+        "f": "json",
+    }
+    print(f"  GET NCEI DEM mosaic {bbox['lng_min']:.4f},{bbox['lat_min']:.4f} → "
+          f"{bbox['lng_max']:.4f},{bbox['lat_max']:.4f} @ {px}px")
+    r = requests.get(NCEI_MOSAIC_URL, params=params, timeout=180)
+    r.raise_for_status()
+    meta = r.json()
+    if "error" in meta:
+        raise RuntimeError(f"NCEI exportImage error: {meta['error']}")
+    ext = meta["extent"]
+    w, h = int(meta["width"]), int(meta["height"])
+
+    r2 = requests.get(meta["href"], timeout=180)
+    r2.raise_for_status()
+    img = Image.open(io.BytesIO(r2.content))
+    z = np.asarray(img, dtype=np.float32)
+    if z.shape != (h, w):
+        raise ValueError(f"NCEI TIFF shape {z.shape} != metadata {(h, w)}")
+    # ArcGIS marks nodata with ±3.4e38 in F32 exports (no alpha band).
+    z = np.where(np.abs(z) > 1e10, np.nan, z)
+
+    # Pixel-centre coordinates from the (adjusted) extent. TIFF row 0
+    # is the north edge; flip to S→N to match resample_to_bbox's
+    # ascending-lats contract.
+    ps_x = (ext["xmax"] - ext["xmin"]) / w
+    ps_y = (ext["ymax"] - ext["ymin"]) / h
+    lons = ext["xmin"] + (np.arange(w) + 0.5) * ps_x
+    lats = ext["ymin"] + (np.arange(h) + 0.5) * ps_y
+    z = z[::-1, :]
+    return z, lats, lons
+
+
+# ---------------------------------------------------------------------------
+# GMRT bathymetry fetch + parse (hole-fill + fallback source)
 # ---------------------------------------------------------------------------
 
 def fetch_gmrt_dem(bbox: dict) -> bytes:
     """Pull GMRT high-resolution NetCDF for the spot bbox.
 
     Same endpoint fetch_bathy.py uses, with resolution=high instead
-    of med. High mode gives ~100 m near the coast — small enough that
-    a 480 × 480 PNG over a 4-8 km bbox is the limiting resolution,
-    not the source.
+    of med (~61 m grid at spot-bbox scale; resolution=max and
+    layer=topo-mask return byte-identical grids here — probed
+    2026-06-10). Where GMRT has no measured nearshore data it serves
+    its smooth predicted background, which is why this is now the
+    fill/fallback source rather than the primary (see module
+    docstring).
     """
     params = {
         "north":      bbox["lat_max"],
@@ -278,8 +373,10 @@ def fetch_gmrt_dem(bbox: dict) -> bytes:
 
 
 def parse_gmrt_netcdf(nc_bytes: bytes):
-    """Extract (depth_m, lats_north_to_south, lons_west_to_east) from
-    a GMRT NetCDF response.
+    """Extract (elev_z_m, lats_south_to_north, lons_west_to_east) from
+    a GMRT NetCDF response. elev_z_m is metres, negative below sea
+    level — depth conversion happens in build_spot AFTER the NCEI/GMRT
+    blend, so land stays distinguishable from nodata during the blend.
 
     GMRT serves the GMT-style flat grid format (x_range / y_range /
     z_range / dimension / z[nx*ny]) rather than CF-compliant per-
@@ -340,8 +437,7 @@ def parse_gmrt_netcdf(nc_bytes: bytes):
         lons = lons[::-1]
         z = z[:, ::-1]
 
-    depth = np.where(z < 0, -z, np.nan).astype(np.float32)
-    return depth, lats, lons
+    return z.astype(np.float32), lats, lons
 
 
 def resample_to_bbox(depth, src_lats, src_lons, bbox, out_w, out_h):
@@ -798,6 +894,7 @@ def _mask_depth_by_land(depth_grid, bbox, land_path):
         from shapely.geometry import shape as _shape, Point as _Point, box as _box
         from shapely.ops import unary_union as _unary_union
         from shapely.prepared import prep as _prep
+        from shapely.validation import make_valid as _make_valid
     except ImportError:
         print("    [mask] shapely missing — skipping OSM coastline burn-in")
         return depth_grid
@@ -811,8 +908,17 @@ def _mask_depth_by_land(depth_grid, bbox, land_path):
     for feat in features:
         try:
             g = _shape(feat["geometry"])
-            if g.is_empty or not g.is_valid:
+            if g.is_empty:
                 continue
+            if not g.is_valid:
+                # The CA mainland polygon (~60k vertices) carries a
+                # self-intersection; skipping it here silently left
+                # every mainland spot without the coastline burn-in
+                # (caught 2026-06-10 — La Jolla's mask pass was a
+                # no-op while island spots masked fine).
+                g = _make_valid(g)
+                if g.is_empty:
+                    continue
             if g.intersects(spot_box):
                 geoms.append(g)
         except Exception:
@@ -1030,13 +1136,57 @@ def build_spot(spot_id: str, *, force: bool) -> bool:
     bbox = spot_bbox(centre["lng"], centre["lat"], radius_km)
     bundle_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1. Bathy DEM
-    print(f"  fetching GMRT high-res DEM…")
+    # 1. Bathy DEM — NCEI mosaic primary, GMRT hole-fill / fallback.
+    # Both sources are resampled onto the output grid in ELEVATION
+    # space (z, negative underwater) and only converted to depth after
+    # the blend: blending depth grids directly would conflate "NaN
+    # because land" with "NaN because no coverage" and let GMRT paint
+    # phantom water over cells the better source says are land.
+    print(f"  fetching bathy DEM (NCEI mosaic, GMRT fallback)…")
+    z_grid = None
+    bathy_source = None
     try:
-        nc_bytes = fetch_gmrt_dem(bbox)
-        depth, src_lats, src_lons = parse_gmrt_netcdf(nc_bytes)
-        depth_grid = resample_to_bbox(depth, src_lats, src_lons, bbox,
-                                       BATHY_SIZE, BATHY_SIZE)
+        z, src_lats, src_lons = fetch_ncei_dem(bbox)
+        z_grid = resample_to_bbox(z, src_lats, src_lons, bbox,
+                                  BATHY_SIZE, BATHY_SIZE)
+        bathy_source = ("NOAA NCEI DEM global mosaic exportImage "
+                        "(CUDEM/coastal DEMs nearshore, best-available blend)")
+    except Exception as e:
+        print(f"    NCEI mosaic fetch failed ({e!r}) — falling back to GMRT")
+
+    # GMRT pass runs only when needed: NCEI down entirely, or the
+    # mosaic returned nodata holes inside the bbox (possible for
+    # offshore-heavy future spots — today's three CA spots are fully
+    # covered, so this is normally skipped).
+    hole_frac = (float(np.mean(~np.isfinite(z_grid)))
+                 if z_grid is not None else 1.0)
+    if hole_frac > 0.0:
+        try:
+            nc_bytes = fetch_gmrt_dem(bbox)
+            gz, g_lats, g_lons = parse_gmrt_netcdf(nc_bytes)
+            g_grid = resample_to_bbox(gz, g_lats, g_lons, bbox,
+                                      BATHY_SIZE, BATHY_SIZE)
+            if z_grid is None:
+                z_grid = g_grid
+                bathy_source = ("GMRT high-resolution GridServer "
+                                "(NetCDF; NCEI mosaic unavailable)")
+            else:
+                fill = ~np.isfinite(z_grid) & np.isfinite(g_grid)
+                if fill.any():
+                    z_grid[fill] = g_grid[fill]
+                    pct = 100.0 * float(fill.mean())
+                    bathy_source += f" + GMRT offshore fill ({pct:.1f}% px)"
+                    print(f"    [blend] filled {int(fill.sum())} px "
+                          f"({pct:.1f}%) from GMRT")
+        except Exception as e:
+            if z_grid is None:
+                print(f"  ERROR: NCEI and GMRT bathy fetches both failed: {e!r}")
+                return False
+            print(f"    [blend] GMRT fill unavailable ({e!r}) — "
+                  f"{hole_frac * 100.0:.1f}% px stay transparent")
+
+    try:
+        depth_grid = np.where(z_grid < 0, -z_grid, np.nan).astype(np.float32)
         # Burn the OSM coastline into the bathy grid: any pixel whose
         # centre falls inside an OSM land polygon becomes NaN.
         # Without this, the bathy PNG carries the GMRT coastline as a
@@ -1237,12 +1387,12 @@ def build_spot(spot_id: str, *, force: bool) -> bool:
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "layers": layers_meta,
         "sources": {
-            "bathy":     "GMRT high-resolution GridServer (NetCDF, ~100 m near coast)",
+            "bathy":     bathy_source,
             "coastline": "OSM natural=coastline via fetch_coastline.py — clipped from global land.geojson",
             "kelp":      "CDFW BIO_CA_Kelp2016 observed aerial-survey canopy (clipped)",
             "mpa":       "CDFW MPA ds582 (clipped)",
             "landmarks": "Curated per-spot dive-site / harbor labels",
-            "soundings": "Depth soundings sampled from GMRT bathy on a 24x24 lattice",
+            "soundings": "Depth soundings sampled from the spot DEM on a 24x24 lattice",
         },
     }
     manifest_path = bundle_dir / "bundle.json"
