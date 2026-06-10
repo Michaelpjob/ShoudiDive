@@ -422,18 +422,20 @@ export default function SpotDetailView({ spot, onClose }) {
     if (!el) return;
     const onWheel = (e) => {
       e.preventDefault();
-      const r = el.getBoundingClientRect();
-      const x = e.clientX - r.left;
-      const y = e.clientY - r.top;
       const factor = e.deltaY < 0 ? 1 / 1.25 : 1.25;
       setVb((prev) => {
+        const m = stageMetrics(prev);
+        if (!m) return prev;
+        // Canvas point under the pointer stays fixed through the zoom.
+        const cx = prev.x + (e.clientX - m.left) / m.scale;
+        const cy = prev.y + (e.clientY - m.top) / m.scale;
+        const fx = (cx - prev.x) / prev.w;
+        const fy = (cy - prev.y) / prev.h;
         const newW = prev.w * factor;
-        const cx = prev.x + (x / r.width) * prev.w;
-        const cy = prev.y + (y / r.height) * prev.h;
         const newH = newW * (CANVAS_H / CANVAS_W);
         return clampVb({
-          x: cx - (x / r.width) * newW,
-          y: cy - (y / r.height) * newH,
+          x: cx - fx * newW,
+          y: cy - fy * newH,
           w: newW, h: newH,
         }, CANVAS_W, CANVAS_H);
       });
@@ -466,28 +468,55 @@ export default function SpotDetailView({ spot, onClose }) {
     });
   }
 
+  // The SVG renders with preserveAspectRatio="xMidYMid meet": the
+  // square viewBox is uniformly scaled to FIT the stage and centred,
+  // leaving letterbox gutters on the stage's long axis. Screen↔canvas
+  // conversions must therefore map over the rendered CONTENT rect,
+  // not the raw stage rect — the old stage-rect mapping stretched the
+  // short axis, so the crosshair, dropped marks, and pan/zoom anchors
+  // drifted away from the pointer the further it sat from the stage
+  // centre (QA 2026-06-10: "cursor is off center vs the gps cord" —
+  // hovering the spot-centre pin read coords ~300 m off).
+  function stageMetrics(vbCur) {
+    const r = stageRef.current?.getBoundingClientRect();
+    if (!r || !r.width || !r.height) return null;
+    const scale = Math.min(r.width / vbCur.w, r.height / vbCur.h);
+    return {
+      rect: r,
+      scale, // screen px per canvas unit (uniform, both axes)
+      left: r.left + (r.width - vbCur.w * scale) / 2,
+      top: r.top + (r.height - vbCur.h * scale) / 2,
+    };
+  }
+
   // Screen px → { lng, lat, canvasX, canvasY }
   function screenToGeo(clientX, clientY) {
-    const r = stageRef.current?.getBoundingClientRect();
     const bb = bboxRef.current;
-    if (!r || !bb) return null;
-    const sx = clientX - r.left;
-    const sy = clientY - r.top;
+    if (!bb) return null;
     const v = vbRef.current;
-    const cx = v.x + (sx / r.width) * v.w;
-    const cy = v.y + (sy / r.height) * v.h;
+    const m = stageMetrics(v);
+    if (!m) return null;
+    const cx = v.x + (clientX - m.left) / m.scale;
+    const cy = v.y + (clientY - m.top) / m.scale;
     const lng = bb.lng_min + (cx / CANVAS_W) * (bb.lng_max - bb.lng_min);
     const lat = bb.lat_max - (cy / CANVAS_H) * (bb.lat_max - bb.lat_min);
-    return { lng, lat, canvasX: cx, canvasY: cy, screenX: sx, screenY: sy };
+    // screenX/screenY stay stage-relative — they position the HTML
+    // cursor tooltip, which floats in the stage div, not the SVG.
+    return { lng, lat, canvasX: cx, canvasY: cy,
+             screenX: clientX - m.rect.left, screenY: clientY - m.rect.top };
   }
 
   // ---- Mouse: pan, hover readout, click-to-mark ---------------------------
   function onMouseDown(e) {
-    const r = stageRef.current.getBoundingClientRect();
+    const m = stageMetrics(vb);
+    if (!m) return;
     panStateRef.current = {
-      startX: e.clientX - r.left,
-      startY: e.clientY - r.top,
+      startX: e.clientX - m.rect.left,
+      startY: e.clientY - m.rect.top,
       startVb: vb,
+      // px-per-canvas-unit is constant while panning (vb.w fixed), so
+      // capture it once — deltas below divide by it to track 1:1.
+      scale: m.scale,
       moved: false,
     };
   }
@@ -500,11 +529,9 @@ export default function SpotDetailView({ spot, onClose }) {
       const dyPx = e.clientY - r.top - ps.startY;
       if (Math.abs(dxPx) + Math.abs(dyPx) > 4) ps.moved = true;
       if (ps.moved) {
-        const dx = (dxPx / r.width) * ps.startVb.w;
-        const dy = (dyPx / r.height) * ps.startVb.h;
         setVb(clampVb({
-          x: ps.startVb.x - dx,
-          y: ps.startVb.y - dy,
+          x: ps.startVb.x - dxPx / ps.scale,
+          y: ps.startVb.y - dyPx / ps.scale,
           w: ps.startVb.w,
           h: ps.startVb.h,
         }, CANVAS_W, CANVAS_H));
@@ -535,20 +562,29 @@ export default function SpotDetailView({ spot, onClose }) {
 
   // ---- Touch: pan, pinch, tap-to-mark -------------------------------------
   function onTouchStart(e) {
-    const r = stageRef.current.getBoundingClientRect();
+    const m = stageMetrics(vb);
+    if (!m) return;
     if (e.touches.length === 1) {
       const t = e.touches[0];
       panStateRef.current = {
-        startX: t.clientX - r.left,
-        startY: t.clientY - r.top,
+        startX: t.clientX - m.rect.left,
+        startY: t.clientY - m.rect.top,
         startVb: vb,
+        scale: m.scale,
         moved: false,
       };
     } else if (e.touches.length === 2) {
       const a = e.touches[0], b = e.touches[1];
+      const midX = (a.clientX + b.clientX) / 2;
+      const midY = (a.clientY + b.clientY) / 2;
+      // Canvas-space pinch anchor + its fraction of the start viewBox
+      // — the anchor stays put as the viewBox rescales around it.
+      const anchorCx = vb.x + (midX - m.left) / m.scale;
+      const anchorCy = vb.y + (midY - m.top) / m.scale;
       pinchStateRef.current = {
-        cx: (a.clientX + b.clientX) / 2 - r.left,
-        cy: (a.clientY + b.clientY) / 2 - r.top,
+        anchorCx, anchorCy,
+        fx: (anchorCx - vb.x) / vb.w,
+        fy: (anchorCy - vb.y) / vb.h,
         startDist: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
         startVb: vb,
       };
@@ -565,11 +601,9 @@ export default function SpotDetailView({ spot, onClose }) {
       const dyPx = t.clientY - r.top - ps.startY;
       if (Math.abs(dxPx) + Math.abs(dyPx) > 8) ps.moved = true;
       if (!ps.moved) return;
-      const dx = (dxPx / r.width) * ps.startVb.w;
-      const dy = (dyPx / r.height) * ps.startVb.h;
       setVb(clampVb({
-        x: ps.startVb.x - dx,
-        y: ps.startVb.y - dy,
+        x: ps.startVb.x - dxPx / ps.scale,
+        y: ps.startVb.y - dyPx / ps.scale,
         w: ps.startVb.w,
         h: ps.startVb.h,
       }, CANVAS_W, CANVAS_H));
@@ -581,11 +615,9 @@ export default function SpotDetailView({ spot, onClose }) {
       const factor = ps.startDist / dist;
       const newW = ps.startVb.w * factor;
       const newH = newW * (CANVAS_H / CANVAS_W);
-      const cx = ps.startVb.x + (ps.cx / r.width) * ps.startVb.w;
-      const cy = ps.startVb.y + (ps.cy / r.height) * ps.startVb.h;
       setVb(clampVb({
-        x: cx - (ps.cx / r.width) * newW,
-        y: cy - (ps.cy / r.height) * newH,
+        x: ps.anchorCx - ps.fx * newW,
+        y: ps.anchorCy - ps.fy * newH,
         w: newW, h: newH,
       }, CANVAS_W, CANVAS_H));
     }
@@ -605,13 +637,15 @@ export default function SpotDetailView({ spot, onClose }) {
       panStateRef.current = null;
       pinchStateRef.current = null;
     } else if (e.touches.length === 1 && pinchStateRef.current) {
-      const r = stageRef.current.getBoundingClientRect();
+      const m = stageMetrics(vbRef.current);
       const t = e.touches[0];
       pinchStateRef.current = null;
+      if (!m) { panStateRef.current = null; return; }
       panStateRef.current = {
-        startX: t.clientX - r.left,
-        startY: t.clientY - r.top,
+        startX: t.clientX - m.rect.left,
+        startY: t.clientY - m.rect.top,
         startVb: vbRef.current,
+        scale: m.scale,
         moved: true, // post-pinch settle shouldn't drop a mark
       };
     }
@@ -1259,10 +1293,14 @@ export default function SpotDetailView({ spot, onClose }) {
         )}
       </div>
 
-      {/* Sources footer */}
+      {/* Sources footer — bathy attribution follows what the bundle
+          actually used (NCEI mosaic normally; GMRT only as fallback,
+          see pipeline/build_spot_bundles.py). */}
       <div className="spot-detail-footer">
         <span className="spot-detail-sources">
-          Bathy: GMRT · Coast: OSM · Kelp: CDFW 2016 aerial survey · Soundings: GMRT-derived
+          Bathy: {bundle?.manifest?.sources?.bathy?.includes("NCEI")
+            ? "NOAA NCEI DEM mosaic"
+            : "GMRT"} · Coast: OSM · Kelp: CDFW 2016 aerial survey · Soundings: DEM-derived
         </span>
         {bundleDate && (
           <span className="spot-detail-fresh mono">chart {bundleDate}</span>
