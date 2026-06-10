@@ -912,8 +912,17 @@ export default function SpotDetailView({ spot, onClose }) {
             </defs>
 
             {/* 1. Deep-water background — any uncovered sliver reads as
-                open water, never a hole. */}
-            <rect x="0" y="0" width={CANVAS_W} height={CANVAS_H} fill={DEEP_BG} />
+                open water, never a hole. Extends well past the canvas
+                so the letterbox gutters (preserveAspectRatio="meet" on
+                a non-square stage) read as open ocean too — without
+                this the chart floats as a square between dark voids
+                and the bbox edge looks like a hard clip (QA
+                2026-06-10: "catalina is clipped on the edges"). */}
+            <rect
+              x={-2 * CANVAS_W} y={-2 * CANVAS_H}
+              width={5 * CANVAS_W} height={5 * CANVAS_H}
+              fill={DEEP_BG}
+            />
 
             {/* 2. Depth-band tint. BFS-filled so it extends UNDER the
                 land polygon — no transparency edge of its own. */}

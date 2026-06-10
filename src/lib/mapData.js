@@ -290,7 +290,7 @@ export const SAVED_SPOTS =
 // schema needs to handle before we extend to the rest of REGION_SAVED_SPOTS.
 export const SPOT_BUNDLE_RADIUS_KM = {
   lajolla:  4,
-  catalina: 8,
+  catalina: 16, // whole island, Land's End → East End (2026-06-10)
   monterey: 6,
 };
 

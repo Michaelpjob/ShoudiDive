@@ -97,11 +97,16 @@ SPOT_CENTRES = {
 # rationale as SPOT_CENTRES above.
 SPOT_RADIUS_KM = {
     "lajolla":  4,
-    # 2026-05-27: bumped 8 → 12 km. Centre (-118.450, 33.389) at 8 km
-    # cut Avalon Harbor (-118.327, 33.342) just outside the bbox.
-    # 12 km spans Two Harbors → Avalon end-to-end, the full diver-
-    # relevant coast of Catalina.
-    "catalina": 12,
+    # 2026-05-27: bumped 8 → 12 km (8 km cut Avalon out of the bbox).
+    # 2026-06-10: bumped 12 → 16 km after user QA "the map of catalina
+    # is clipped on the edges": the island itself spans ~28 km tip to
+    # tip, so 12 km still cut Land's End (-118.6056) and East End
+    # (-118.3034) mid-island. 16 km covers the whole island with
+    # ~1.6-2.4 km of water past each tip. Pixel pitch at 480 px is
+    # ~67 m — coarser than the other spots but still well under the
+    # NCEI source artefact scale, and whole-island context matters
+    # more for an offshore island than the last metre of sharpness.
+    "catalina": 16,
     "monterey": 6,
 }
 
@@ -112,12 +117,22 @@ SPOT_RADIUS_KM = {
 # screen-space text labels with collision detection, so the list is
 # kept small (5-10 per spot) to avoid clutter.
 #
-# Coordinates picked from OSM + NOAA chart references; not authoritative
-# for navigation but accurate to ~50 m. Add new spots here as the
+# Coordinates from OSM features cross-checked against the NCEI DEM
+# (see audit note inside); not authoritative for navigation but
+# accurate to roughly a DEM cell (~10-30 m). Add new spots here as the
 # pilot expands.
 SPOT_LANDMARKS = {
-    # All coords verified against OSM nodes / OpenSeaMap waypoints
-    # 2026-05-27. Each entry: (lng, lat, label, importance[, category]).
+    # Coords re-verified 2026-06-10 after user QA on the new 10 m
+    # chart ("marker points are not in the correct spots"): 16 of 42
+    # entries failed an elevation sanity audit against the NCEI DEM —
+    # dive anchors sampling on land, Catalina's Ship Rock 12 km off on
+    # a 339 m ridge, Bird Rock in 240 m mid-channel water. Every entry
+    # was re-checked against OSM features (Overpass) plus the NCEI DEM
+    # (dive/marine must sample underwater, inland on land, coastal
+    # near the waterline; water-area names like coves/harbors sit IN
+    # their water). If you add a spot, run the same audit — eyeballing
+    # coords off a small web map put markers hundreds of metres out.
+    # Each entry: (lng, lat, label, importance[, category]).
     # Categories drive marker style in SpotDetailView:
     #   "dive"    — yellow anchor (key dive sites, mooring buoys)
     #   "coastal" — small dot (beaches, points along shore)
@@ -127,23 +142,25 @@ SPOT_LANDMARKS = {
     #               canyons, banks, named kelp beds)
     # Default category is "coastal" for backwards-compat with old entries.
     "lajolla": [
-        # Key dive sites — mooring + dive flag icons in render
-        (-117.2735, 32.8505, "La Jolla Cove",          "marquee", "dive"),
-        (-117.2745, 32.8520, "La Jolla Caves",         "major",   "dive"),
-        (-117.2738, 32.8495, "Boomer Beach",           "minor",   "dive"),
-        (-117.2790, 32.8475, "Children's Pool",        "major",   "dive"),
-        (-117.2540, 32.8580, "Marine Room",            "minor",   "dive"),
+        # Key dive sites — anchors sit in the water at the entry/site
+        (-117.2722, 32.8512, "La Jolla Cove",          "marquee", "dive"),
+        (-117.2697, 32.8508, "La Jolla Caves",         "major",   "dive"),
+        (-117.2762, 32.8496, "Boomer Beach",           "minor",   "dive"),
+        (-117.2798, 32.8472, "Children's Pool",        "major",   "dive"),
+        (-117.2632, 32.8517, "Marine Room",            "minor",   "dive"),
         (-117.2580, 32.8595, "Vallecitos",             "minor",   "dive"),
-        (-117.2545, 32.8500, "Hospital Reef",          "minor",   "dive"),
+        (-117.2815, 32.8458, "Hospital Reef",          "minor",   "dive"),
         # Coastal landmarks (beaches, points)
-        (-117.2780, 32.8520, "Point La Jolla",         "major",   "coastal"),
+        (-117.2747, 32.8509, "Point La Jolla",         "major",   "coastal"),
         (-117.2535, 32.8870, "Black's Beach",          "major",   "coastal"),
         (-117.2810, 32.8320, "Windansea",              "minor",   "coastal"),
-        (-117.2500, 32.8650, "La Jolla Shores Beach",  "major",   "coastal"),
-        (-117.2580, 32.8740, "Scripps Beach",          "minor",   "coastal"),
-        # Inland nav reference (visible from water — chart-style labels)
-        (-117.2540, 32.8665, "Scripps Pier",           "major",   "inland"),
-        (-117.2550, 32.8657, "Birch Aquarium",         "major",   "inland"),
+        (-117.2556, 32.8614, "La Jolla Shores Beach",  "major",   "coastal"),
+        (-117.2542, 32.8700, "Scripps Beach",          "minor",   "coastal"),
+        # Inland nav reference (visible from water — chart-style labels).
+        # Scripps Pier intentionally samples water: the marker sits
+        # mid-pier, and the pier deck is over the surf line.
+        (-117.2572, 32.8666, "Scripps Pier",           "major",   "inland"),
+        (-117.2506, 32.8659, "Birch Aquarium",         "major",   "inland"),
         (-117.2530, 32.8690, "Scripps Inst.",          "minor",   "inland"),
         (-117.2380, 32.8675, "Revelle Coll.",          "minor",   "inland"),
         (-117.2655, 32.8470, "Village of La Jolla",    "major",   "inland"),
@@ -157,28 +174,28 @@ SPOT_LANDMARKS = {
         (-117.2730, 32.8560, "La Jolla Kelp Bed",      "major",   "marine"),
     ],
     "catalina": [
-        # 12 km radius now includes Avalon — added it back as marquee.
+        # 16 km radius covers the whole island, Land's End → East End.
         # Centre stays at (-118.450, 33.389); landmarks span Two
         # Harbors (NW) → Avalon (SE), the full diver-relevant arc.
-        (-118.3270, 33.3420, "Avalon Harbor",         "marquee"),
-        (-118.3247, 33.3458, "Casino Point",          "major"),
+        (-118.3232, 33.3450, "Avalon Harbor",         "marquee"),
+        (-118.3249, 33.3489, "Casino Point",          "major"),
         (-118.4995, 33.4430, "Two Harbors",           "marquee"),
-        (-118.5020, 33.4475, "Isthmus Cove",          "major"),
-        (-118.3950, 33.4060, "Ship Rock",             "major"),
-        (-118.4180, 33.4140, "Italian Gardens",       "minor"),
-        (-118.4815, 33.4395, "Big Geiger Cove",       "minor"),
-        (-118.4490, 33.4530, "Bird Rock",             "minor"),
-        (-118.4145, 33.3860, "Long Point",            "minor"),
+        (-118.4954, 33.4440, "Isthmus Cove",          "major"),
+        (-118.4917, 33.4631, "Ship Rock",             "major"),
+        (-118.3860, 33.4142, "Italian Gardens",       "minor"),
+        (-118.5178, 33.4594, "Big Geiger Cove",       "minor"),
+        (-118.4872, 33.4512, "Bird Rock",             "minor"),
+        (-118.3665, 33.4062, "Long Point",            "minor"),
     ],
     "monterey": [
-        (-121.8940, 36.6055, "Monterey Harbor",       "marquee"),
-        (-121.8910, 36.6048, "Coast Guard Pier",      "major"),
-        (-121.9160, 36.6240, "Lover's Point",         "major"),
-        (-121.9460, 36.6330, "Point Pinos",           "major"),
+        (-121.8930, 36.6072, "Monterey Harbor",       "marquee"),
+        (-121.8926, 36.6092, "Coast Guard Pier",      "major"),
+        (-121.9160, 36.6263, "Lover's Point",         "major"),
+        (-121.9360, 36.6377, "Point Pinos",           "major"),
         (-121.9420, 36.6220, "Asilomar Beach",        "minor"),
         (-121.9530, 36.6210, "Pinnacles (Pt. Pinos)", "minor"),
-        (-121.8950, 36.6055, "San Carlos Beach",      "major"),
-        (-121.8920, 36.6045, "Breakwater Cove",       "marquee"),
+        (-121.8955, 36.6101, "San Carlos Beach",      "major"),
+        (-121.8905, 36.6080, "Breakwater Cove",       "marquee"),
         # Stillwater Cove (Pebble Beach) at the south end of the
         # bbox. The previous coord was 100s of metres off.
         (-121.9450, 36.5640, "Stillwater Cove",       "minor"),
@@ -199,7 +216,10 @@ BATHY_SIZE = 480
 # detail (where divers actually go) gets the full 8-bit ramp.
 SPOT_DEPTH_RANGES_M = {
     "lajolla":  (0,  500),    # La Jolla Canyon rim drops fast
-    "catalina": (0,  800),    # Windward side dropoff
+    # 2026-06-10: 800 → 1300 with the 16 km radius — the wider bbox
+    # reaches the Catalina Basin south of the island (~1100+ m), which
+    # the old range clamped into a flat max-depth band.
+    "catalina": (0, 1300),
     "monterey": (0, 1200),    # Inner Monterey Canyon
 }
 DEFAULT_DEPTH_RANGE_M = (0, 500)
