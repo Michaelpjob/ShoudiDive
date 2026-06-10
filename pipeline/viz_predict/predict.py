@@ -81,7 +81,7 @@ def predict_all(
     if cloud_fraction_7d is None:
         cloud_fraction_7d = np.full_like(depth_m, 0.55, dtype=np.float64)
 
-    zone = zones.classify_zone(lat, dist_to_shore_km, dist_to_island_km, depth_m)
+    zone = zones.classify_zone(lat, dist_to_shore_km, dist_to_island_km, depth_m, lng=lng)
     isl_name, isl_dist, isl_side = zones.nearest_channel_island(lat, lng)
 
     drivers = features.assemble_features(

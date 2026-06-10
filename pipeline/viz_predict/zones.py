@@ -9,17 +9,28 @@ import numpy as np
 
 from .config import (
     LAT_ZONE_BOUNDS, NEARSHORE_DIST_KM, NEARSHORE_MAX_DEPTH_M, ISLANDS_DIST_KM,
-    CHANNEL_ISLAND_CENTROIDS,
+    CHANNEL_ISLAND_CENTROIDS, PACIFIC_SPLIT,
 )
 
 
-def classify_zone(lat, dist_to_shore_km, dist_to_island_km, depth_m):
+def classify_zone(lat, dist_to_shore_km, dist_to_island_km, depth_m,
+                  lng=None, pacific_split=PACIFIC_SPLIT):
     """Return per-pixel zone strings like 'central_nearshore'.
 
     Latitude band is determined by walking ``LAT_ZONE_BOUNDS`` from
     highest lower-bound downward and assigning the first match. This
     means adding a new band (e.g. PR-NC-1's `norcal` at 36.00..90)
     is a config-only change — no edits needed here.
+
+    ``lng`` + ``pacific_split`` enable the Baja Pacific-vs-Cortez
+    longitude reclassification (see config._BAJA_PACIFIC_SPLIT): cells
+    west of the peninsula spine whose latitude band is in the relabel
+    map get that band swapped (e.g. Pacific mid_baja → north_baja) so
+    the green upwelling shelf inherits the correct low-clarity
+    coefficients instead of the clear-Cortez ones. ``pacific_split``
+    is None for every non-Baja region, making the relabel a no-op.
+    Defaults to the region-resolved config value; tests may pass an
+    explicit split to exercise the path without env gymnastics.
     """
     lat = np.asarray(lat)
     dts = np.asarray(dist_to_shore_km)
@@ -47,6 +58,18 @@ def classify_zone(lat, dist_to_shore_km, dist_to_island_km, depth_m):
         match = (lat >= lo) & (~claimed)
         lat_label = np.where(match, name, lat_label)
         claimed = claimed | (lat >= lo)
+
+    # Pacific-vs-Cortez reclassification (Baja). West of the peninsula
+    # spine, mid_baja / south_baja are upwelling-green not Cortez-clear,
+    # so swap them to north_baja's correct low-clarity coefficients.
+    if pacific_split is not None and lng is not None:
+        lng_arr = np.asarray(lng)
+        we = pacific_split["west_edge"]
+        west_edge_lng = we["lng0"] + (lat - we["lat0"]) * we["slope"]
+        is_pacific = lng_arr < west_edge_lng
+        for src, dst in pacific_split["relabel"].items():
+            swap = is_pacific & (lat_label == src)
+            lat_label = np.where(swap, dst, lat_label)
 
     # Distance band: islands wins if within radius; else nearshore if close to
     # shore or shallow; else offshore.
