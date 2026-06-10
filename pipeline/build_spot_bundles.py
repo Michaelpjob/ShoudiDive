@@ -724,6 +724,55 @@ def clip_geojson_to_bbox(src_path: Path, bbox: dict) -> dict | None:
     return {"type": "FeatureCollection", "features": keep}
 
 
+def _clip_land_geometrically(land_path, bbox):
+    """Geometric intersection clip of land polygons to the spot bbox.
+
+    2026-05-27: the previous bbox-prefilter clip kept WHOLE features
+    whose bounds touched the spot bbox — for any mainland spot that
+    meant shipping the entire CA mainland polygon (~700 KB, ~60k
+    vertices) in every bundle. The giant <path> was both bundle bloat
+    and the main culprit behind multi-second first-paint stalls in
+    the spot view. A true shapely intersection with a slightly
+    buffered bbox keeps only the visible coastline; the straight cut
+    edges sit ~300 m outside the viewport so they're never seen.
+
+    Returns a FeatureCollection or None when land.geojson is missing.
+    """
+    if not land_path.exists():
+        return None
+    try:
+        from shapely.geometry import shape as _shape, box as _box, mapping as _mapping
+    except ImportError:
+        # Shapely unavailable — fall back to the whole-feature clip.
+        return clip_geojson_to_bbox(land_path, bbox)
+
+    with land_path.open("r", encoding="utf-8") as f:
+        fc = json.load(f)
+    pad = 0.003  # ~300 m past the viewport so cut edges stay offscreen
+    clip_box = _box(bbox["lng_min"] - pad, bbox["lat_min"] - pad,
+                    bbox["lng_max"] + pad, bbox["lat_max"] + pad)
+    keep = []
+    for feat in fc.get("features", []) or []:
+        geom = feat.get("geometry")
+        if not geom:
+            continue
+        try:
+            g = _shape(geom)
+            if not g.intersects(clip_box):
+                continue
+            cut = g.intersection(clip_box)
+            if cut.is_empty:
+                continue
+            keep.append({
+                "type": "Feature",
+                "geometry": _mapping(cut),
+                "properties": feat.get("properties", {}) or {},
+            })
+        except Exception:
+            continue
+    return {"type": "FeatureCollection", "features": keep}
+
+
 def _mask_depth_by_land(depth_grid, bbox, land_path):
     """Set bathy pixels to NaN wherever the OSM land polygon says
     "land". After this, the bathy PNG's transparency boundary
@@ -1051,7 +1100,7 @@ def build_spot(spot_id: str, *, force: bool) -> bool:
     # even at ~10 m simplification (which is still well below the
     # spot view's effective pixel size).
     print(f"  clipping coastline from global land.geojson…")
-    clipped = clip_geojson_to_bbox(region_data_dir / "land.geojson", bbox)
+    clipped = _clip_land_geometrically(region_data_dir / "land.geojson", bbox)
     if clipped is not None:
         out_path = bundle_dir / "coastline.geojson"
         out_path.write_text(json.dumps(clipped, separators=(",", ":")))
@@ -1059,7 +1108,9 @@ def build_spot(spot_id: str, *, force: bool) -> bool:
             "url": "coastline.geojson",
             "features": len(clipped["features"]),
         }
-        print(f"    [coastline] {len(clipped['features'])} features (global clip)")
+        size_kb = out_path.stat().st_size / 1024
+        print(f"    [coastline] {len(clipped['features'])} features, "
+              f"{size_kb:.0f} KB (geometric clip)")
     else:
         print(f"    [coastline] land.geojson not present — skipping")
 

@@ -208,8 +208,8 @@ def round_coords(geom: dict, decimals: int = 4) -> dict:
 
 def simplify_geom(
     geom: dict,
-    tolerance_deg: float = 1e-4,
-    min_part_area_deg2: float = 1e-7,
+    tolerance_deg: float = 4e-5,
+    min_part_area_deg2: float = 4e-9,
 ) -> dict | None:
     """Douglas-Peucker simplify + degenerate-part filter.
 
@@ -218,12 +218,19 @@ def simplify_geom(
     crush that:
 
     1. shapely.simplify(tolerance_deg, preserve_topology=True). At
-       1e-4 deg (~11 m at CA latitudes) — half the bathy pixel pitch
-       at the spot view's 16× zoom — this drops ~90% of vertices.
-    2. Drop MultiPolygon parts with area < min_part_area_deg2
-       (~1e-7 deg² ≈ 10 m²). Without this filter, rounding to 4
-       decimals collapses small parts into degenerate 4-identical-
-       vertex "polygons" that bloat the JSON without rendering.
+       4e-5 deg (~4.5 m at CA latitudes) this keeps patch shape
+       while dropping the sub-metre digitization noise.
+    2. Drop MultiPolygon parts with area < min_part_area_deg2.
+
+    2026-05-27 calibration fix: the first pass shipped with
+    min_part_area_deg2 = 1e-7. The comment claimed that was ~10 m²
+    — it's actually ~1000 m² (1 deg² ≈ 1.0e10 m² at 33°N), which
+    silently deleted nearly every real kelp patch. La Jolla's whole
+    bed came through as a single 0.0033 km² fragment. 4e-9 deg²
+    (~40 m²) keeps every patch big enough to matter to a diver
+    while still dropping the rounding-collapsed degenerate slivers.
+    Tolerance also tightened 1e-4 → 4e-5 (~11 m → ~4.5 m) since
+    the user's core ask is kelp "laid out exactly where it is".
 
     Returns None if simplification produced an empty geometry —
     caller should skip those features entirely.
@@ -453,14 +460,18 @@ def main() -> None:
             "areaKm2": area_km2,
             "year": 2016,
         }
-        # Simplify with degenerate-part filter, then round. Two-pass
-        # crushes the 40 MB raw output to ~1 MB.
-        simplified = simplify_geom(geom, tolerance_deg=1e-4, min_part_area_deg2=1e-7)
+        # Simplify with degenerate-part filter, then round. Thresholds
+        # live on simplify_geom's signature — see its docstring for the
+        # 2026-05-27 calibration fix (the old explicit 1e-7 floor here
+        # was ~1000 m², which deleted nearly all real kelp patches).
+        simplified = simplify_geom(geom)
         if simplified is None:
             continue  # entire feature collapsed to noise
         keep.append({
             "type": "Feature",
-            "geometry": round_coords(simplified, decimals=4),
+            # 5 decimals (~1.1 m) so rounding doesn't re-coarsen the
+            # 4.5 m simplify tolerance — kelp edges are the product.
+            "geometry": round_coords(simplified, decimals=5),
             "properties": slim_props,
         })
 

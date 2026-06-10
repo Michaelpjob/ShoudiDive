@@ -1,29 +1,40 @@
-// SpotDetailView — full-screen breakout view of a single saved spot.
+// SpotDetailView — full-screen chart-plotter view of a single saved spot.
 //
-// Built 2026-05-27 as Phase 1B (Spot Detail) per docs/spot-detail-handover.md.
-// Opens when the user clicks "View detailed map" on a saved-spot pin that
-// has a pre-computed bundle in public/data/spots/<id>/.
+// Rebuilt 2026-05-27 from scratch after the first iteration accumulated
+// layer-seam artifacts ("two coastlines"). The rebuild has ONE governing
+// rendering rule:
 //
-// Architecture: independent SVG with its own viewBox keyed to the
-// bundle's bbox. Uses projectInBbox (added to mapData.js) so the wide-
-// view project() stays locked to the regional BBOX. Pan + pinch-zoom
-// reuse the same math as MapShell but stripped to essentials since we
-// don't need the iOS Safari anti-stale dance here (the spot view doesn't
-// resize mid-render).
+//   THE LAND POLYGON IS THE ONLY COASTLINE.
 //
-// Layer z-order, bottom to top:
-//   1. Bathy PNG (depth gradient grayscale)
-//   2. Depth contour lines (color-graded by depth)
-//   3. Coastline polygons (land mask on top of bathy)
-//   4. MPA polygons (reuse styleForType)
-//   5. Kelp polygons (reuse styleForStatus)
-//   6. Centre pin (saved-spot style)
+//   Every water-domain layer (depth tint, contours) extends UNDER the
+//   land polygon, and land renders opaque on top of them. The depth
+//   tint is built client-side from the bathy pixels: quantized into
+//   NOAA-style depth bands and flood-filled (multi-source BFS) so the
+//   GMRT raster's own NaN coastline disappears entirely — any
+//   GMRT-vs-OSM disagreement about where land starts is hidden under
+//   the opaque land fill instead of leaking out as a phantom edge.
+//
+// Built for scouting fishing + diving locations and supplementing a
+// GPS unit:
+//   * NOAA-convention depth bands (shallow = saturated blue, deep =
+//     near-white) + contour lines + sounding numerals in feet
+//   * Cursor crosshair with GPS-style coordinates (degrees decimal
+//     minutes, the format fish-finders and handheld GPS units use)
+//     plus decimal degrees and live depth readout
+//   * Click to drop marks; copy coordinates to clipboard to punch
+//     into a GPS unit
+//   * Observed kelp canopy (CDFW 2016 aerial survey) as a hatch
+//     overlay — actual forest extent, not management rectangles
+//   * Reef / canyon / bank callouts in chart-italic labels
+//
+// Data: pre-computed bundle at public/data/spots/<id>/ (bathy.png,
+// contours.geojson, coastline.geojson, kelp.geojson, mpa.geojson,
+// landmarks.geojson, soundings.geojson + bundle.json manifest).
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { projectInBbox } from "../lib/mapData.js";
 import { dataPath } from "../lib/region.js";
 import { styleForType } from "./MpaLayer.jsx";
-import { styleForStatus } from "./KelpLayer.jsx";
 import {
   getSST,
   getChl,
@@ -37,101 +48,43 @@ import {
 import { usePrefs } from "../contexts/PrefsContext.jsx";
 import { track } from "../lib/analytics.js";
 
-// Bundle fetch — single-promise cache per spot id so toggling the
-// view open/closed doesn't refetch. Mirrors loadMpaBoundaries.
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const CANVAS_W = 960;
+const CANVAS_H = 960;
+const MAX_ZOOM = 16;
+const MAX_MARKS = 12;
+
+// NOAA chart convention: shallow water carries the most saturated blue,
+// deepening toward near-white. Instantly readable as "light = deep".
+// Thresholds in feet because that's how CA fishers + divers talk.
+const DEPTH_BANDS_FT = [
+  { maxFt: 10,       rgb: [142, 198, 222], label: "10" },
+  { maxFt: 20,       rgb: [168, 213, 232], label: "20" },
+  { maxFt: 30,       rgb: [192, 226, 241], label: "30" },
+  { maxFt: 60,       rgb: [213, 237, 247], label: "60" },
+  { maxFt: 120,      rgb: [229, 245, 251], label: "120" },
+  { maxFt: 300,      rgb: [240, 250, 253], label: "300" },
+  { maxFt: Infinity, rgb: [248, 252, 254], label: "300+" },
+];
+// Background under everything = the deepest band, so any sliver the
+// band image doesn't cover reads as deep open water, never as a hole.
+const DEEP_BG = "rgb(248, 252, 254)";
+
+function bandRgbForFt(ft) {
+  for (const b of DEPTH_BANDS_FT) {
+    if (ft <= b.maxFt) return b.rgb;
+  }
+  return DEPTH_BANDS_FT[DEPTH_BANDS_FT.length - 1].rgb;
+}
+
+// ---------------------------------------------------------------------------
+// Bundle loading (single shared promise per spot id)
+// ---------------------------------------------------------------------------
+
 const bundleCache = new Map();
-
-// Decode the bathy PNG into a Uint8ClampedArray (one channel — the
-// PNG is mode='L' grayscale, but canvas always returns RGBA so we
-// just read the R channel). Cached per bathy URL so we only load
-// + decode once per spot.
-const bathyPixelCache = new Map();
-function loadBathyPixels(url, width, height) {
-  if (bathyPixelCache.has(url)) return bathyPixelCache.get(url);
-  const p = new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      try {
-        const w = width || img.naturalWidth;
-        const h = height || img.naturalHeight;
-        const cv = document.createElement("canvas");
-        cv.width = w;
-        cv.height = h;
-        const ctx = cv.getContext("2d", { willReadFrequently: true });
-        ctx.drawImage(img, 0, 0, w, h);
-        const data = ctx.getImageData(0, 0, w, h).data;
-        // PNG is mode LA (luminance + alpha) — the canvas decodes to
-        // RGBA where R=G=B=L and A=A. For cursor depth lookup we want
-        // 0 (NaN) where alpha=0, otherwise the L channel value.
-        const gray = new Uint8ClampedArray(w * h);
-        for (let i = 0, j = 0; i < data.length; i += 4, j++) {
-          gray[j] = data[i + 3] === 0 ? 0 : data[i];
-        }
-        resolve({ gray, w, h });
-      } catch (e) {
-        reject(e);
-      }
-    };
-    img.onerror = (e) => reject(e);
-    img.src = url;
-  }).catch(() => null);
-  bathyPixelCache.set(url, p);
-  return p;
-}
-
-// Decode an 8-bit bathy pixel to depth_m using the encoding contract:
-//   0 = NaN/land
-//   1..255 = linear over depth_range_m
-function pixelToDepthM(pixel, depthRangeM) {
-  if (!pixel) return null;  // 0 = land/NaN
-  const [d_min, d_max] = depthRangeM || [0, 500];
-  const t = (pixel - 1) / 254;
-  return d_min + t * (d_max - d_min);
-}
-
-// Point-in-polygon test (ray-casting) for a single Polygon ring.
-// Used to filter soundings + bathy clipPath so depth annotations
-// don't bleed onto land where GMRT (depth source) and OSM (coastline
-// source) disagree about where land is. OSM is the ground truth for
-// what's visually "land" — anything inside an OSM coastline polygon
-// is land regardless of what GMRT thinks.
-function pointInRing(lng, lat, ring) {
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const xi = ring[i][0], yi = ring[i][1];
-    const xj = ring[j][0], yj = ring[j][1];
-    const intersect = ((yi > lat) !== (yj > lat)) &&
-      (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi);
-    if (intersect) inside = !inside;
-  }
-  return inside;
-}
-
-// Test against a full Polygon (outer + holes) or MultiPolygon.
-function pointInGeometry(lng, lat, geom) {
-  if (!geom?.coordinates) return false;
-  if (geom.type === "Polygon") {
-    // First ring is outer boundary, rest are holes — inside outer
-    // AND not inside any hole = inside polygon.
-    if (!pointInRing(lng, lat, geom.coordinates[0])) return false;
-    for (let i = 1; i < geom.coordinates.length; i++) {
-      if (pointInRing(lng, lat, geom.coordinates[i])) return false;
-    }
-    return true;
-  }
-  if (geom.type === "MultiPolygon") {
-    for (const poly of geom.coordinates) {
-      if (!pointInRing(lng, lat, poly[0])) continue;
-      let inHole = false;
-      for (let i = 1; i < poly.length; i++) {
-        if (pointInRing(lng, lat, poly[i])) { inHole = true; break; }
-      }
-      if (!inHole) return true;
-    }
-  }
-  return false;
-}
 function loadBundle(spotId) {
   if (bundleCache.has(spotId)) return bundleCache.get(spotId);
   const p = (async () => {
@@ -139,9 +92,6 @@ function loadBundle(spotId) {
     const manifestRes = await fetch(`${base}/bundle.json`);
     if (!manifestRes.ok) throw new Error(`bundle.json HTTP ${manifestRes.status}`);
     const manifest = await manifestRes.json();
-    // Fetch the referenced geojson layers in parallel. Bathy PNG is
-    // loaded by the browser via <image href> so it doesn't need an
-    // explicit fetch here.
     const layers = manifest.layers || {};
     const fetchGeojson = async (key) => {
       const url = layers[key]?.url;
@@ -161,18 +111,121 @@ function loadBundle(spotId) {
       fetchGeojson("landmarks"),
       fetchGeojson("soundings"),
     ]);
-    return { manifest, bathyUrl: `${base}/${layers.bathy?.url}`, contours, coastline, kelp, mpa, landmarks, soundings };
+    return {
+      manifest,
+      bathyUrl: layers.bathy?.url ? `${base}/${layers.bathy.url}` : null,
+      contours, coastline, kelp, mpa, landmarks, soundings,
+    };
   })().catch((err) => {
-    bundleCache.delete(spotId);  // allow retry on transient failure
+    bundleCache.delete(spotId);
     throw err;
   });
   bundleCache.set(spotId, p);
   return p;
 }
 
-// Convert a GeoJSON ring to an SVG path-string projected into the
-// bundle bbox + canvas dimensions. Mirrors MpaLayer's ringToPath but
-// uses projectInBbox so the math is local to this view.
+// ---------------------------------------------------------------------------
+// Bathy pixel decode + depth-band image synthesis
+// ---------------------------------------------------------------------------
+
+// Decode bathy.png (mode LA: L = depth 1..255, A = 0 on land/NaN) into a
+// single-channel array. 0 = no data. Cached per URL.
+const bathyPixelCache = new Map();
+function loadBathyPixels(url, width, height) {
+  if (bathyPixelCache.has(url)) return bathyPixelCache.get(url);
+  const p = new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const w = width || img.naturalWidth;
+        const h = height || img.naturalHeight;
+        const cv = document.createElement("canvas");
+        cv.width = w;
+        cv.height = h;
+        const ctx = cv.getContext("2d", { willReadFrequently: true });
+        ctx.drawImage(img, 0, 0, w, h);
+        const data = ctx.getImageData(0, 0, w, h).data;
+        const gray = new Uint8ClampedArray(w * h);
+        for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+          gray[j] = data[i + 3] === 0 ? 0 : data[i];
+        }
+        resolve({ gray, w, h });
+      } catch (e) {
+        reject(e);
+      }
+    };
+    img.onerror = (e) => reject(e);
+    img.src = url;
+  }).catch(() => null);
+  bathyPixelCache.set(url, p);
+  return p;
+}
+
+// pixel 1..255 → depth in meters (linear over the spot's depth range)
+function pixelToDepthM(pixel, depthRangeM) {
+  if (!pixel) return null;
+  const [dMin, dMax] = depthRangeM || [0, 500];
+  return dMin + ((pixel - 1) / 254) * (dMax - dMin);
+}
+
+// Build the depth-band tint image:
+//   1. Multi-source BFS fills every NaN cell with its nearest valid
+//      neighbour's value — the GMRT raster's own coastline vanishes,
+//      so the band field extends seamlessly under the land polygon.
+//   2. Quantize each cell's depth into DEPTH_BANDS_FT via a 256-entry
+//      LUT and write an opaque RGBA canvas.
+// Returns a dataURL, or null when the grid has no valid cells at all.
+function buildDepthBandImage(px, depthRangeM) {
+  const { gray, w, h } = px;
+  const n = w * h;
+  const filled = new Uint8ClampedArray(gray);
+  const queue = new Int32Array(n);
+  let qlen = 0;
+  for (let i = 0; i < n; i++) if (filled[i] !== 0) queue[qlen++] = i;
+  if (qlen === 0) return null;
+  let head = 0;
+  while (head < qlen) {
+    const i = queue[head++];
+    const v = filled[i];
+    const x = i % w;
+    const up = i - w;
+    const dn = i + w;
+    if (up >= 0 && filled[up] === 0)      { filled[up] = v;     queue[qlen++] = up; }
+    if (dn < n && filled[dn] === 0)       { filled[dn] = v;     queue[qlen++] = dn; }
+    if (x > 0 && filled[i - 1] === 0)     { filled[i - 1] = v;  queue[qlen++] = i - 1; }
+    if (x < w - 1 && filled[i + 1] === 0) { filled[i + 1] = v;  queue[qlen++] = i + 1; }
+  }
+
+  // LUT: pixel value → band rgb
+  const lut = new Uint8Array(256 * 3);
+  for (let p = 1; p < 256; p++) {
+    const dM = pixelToDepthM(p, depthRangeM);
+    const [r, g, b] = bandRgbForFt(dM * 3.28084);
+    lut[p * 3] = r; lut[p * 3 + 1] = g; lut[p * 3 + 2] = b;
+  }
+
+  const cv = document.createElement("canvas");
+  cv.width = w;
+  cv.height = h;
+  const ctx = cv.getContext("2d");
+  const img = ctx.createImageData(w, h);
+  const data = img.data;
+  for (let i = 0; i < n; i++) {
+    const p = filled[i];
+    data[i * 4]     = lut[p * 3];
+    data[i * 4 + 1] = lut[p * 3 + 1];
+    data[i * 4 + 2] = lut[p * 3 + 2];
+    data[i * 4 + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  return cv.toDataURL("image/png");
+}
+
+// ---------------------------------------------------------------------------
+// Geometry helpers
+// ---------------------------------------------------------------------------
+
 function ringToPath(ring, bbox, w, h) {
   if (!ring.length) return "";
   const [x0, y0] = projectInBbox(bbox, ring[0][0], ring[0][1], w, h);
@@ -184,25 +237,7 @@ function ringToPath(ring, bbox, w, h) {
   return d + "Z";
 }
 
-function geometryToPath(geom, bbox, w, h, closed = true) {
-  if (!geom) return "";
-  const t = geom.type;
-  if (t === "Polygon") {
-    return geom.coordinates.map((r) => ringToPath(r, bbox, w, h)).join(" ");
-  }
-  if (t === "MultiPolygon") {
-    return geom.coordinates.flatMap((p) => p.map((r) => ringToPath(r, bbox, w, h))).join(" ");
-  }
-  if (t === "LineString") {
-    return lineToPath(geom.coordinates, bbox, w, h, closed);
-  }
-  if (t === "MultiLineString") {
-    return geom.coordinates.map((l) => lineToPath(l, bbox, w, h, closed)).join(" ");
-  }
-  return "";
-}
-
-function lineToPath(line, bbox, w, h, closed) {
+function lineToPath(line, bbox, w, h) {
   if (!line.length) return "";
   const [x0, y0] = projectInBbox(bbox, line[0][0], line[0][1], w, h);
   let d = `M${x0.toFixed(2)} ${y0.toFixed(2)}`;
@@ -210,44 +245,90 @@ function lineToPath(line, bbox, w, h, closed) {
     const [x, y] = projectInBbox(bbox, line[i][0], line[i][1], w, h);
     d += `L${x.toFixed(2)} ${y.toFixed(2)}`;
   }
-  return closed ? d + "Z" : d;
+  return d;
 }
 
-// Contour color ramp — nautical-chart style. Real NOAA charts use
-// monochrome black-blue contours with cardinal bands ("safety contour"
-// at recreational dive depth, etc.). We approximate with a tight
-// blue-cyan ramp where everything stays readable against the lighter
-// chart-style bathy backdrop.
-function contourColor(depth_m) {
-  // 2026-05-27: lightened the deep-water palette. La Jolla Canyon
-  // hits 300+ m just offshore, and the previous palette mapped that
-  // band to #0f172a (slate-900, near-black). Result on the spot
-  // detail view: a heavy 1.4 px near-black 200 m contour traced
-  // right along the coast and read as a "second coastline" — user
-  // QA called it out twice. Capping deep colors at slate-700/sky-800
-  // keeps depth visible without ever rendering near-black.
-  if (depth_m <= 5)   return "#0891b2";  // cyan-600
-  if (depth_m <= 10)  return "#0e7490";  // cyan-700
-  if (depth_m <= 20)  return "#155e75";  // cyan-800
-  if (depth_m <= 30)  return "#164e63";  // cyan-900
-  if (depth_m <= 50)  return "#0c4a6e";  // sky-900
-  if (depth_m <= 100) return "#1e3a8a";  // blue-900
-  if (depth_m <= 200) return "#1e40af";  // blue-800
-  return "#3730a3";                       // indigo-800 (still readable, not black)
+function geometryToPath(geom, bbox, w, h) {
+  if (!geom) return "";
+  if (geom.type === "Polygon") {
+    return geom.coordinates.map((r) => ringToPath(r, bbox, w, h)).join(" ");
+  }
+  if (geom.type === "MultiPolygon") {
+    return geom.coordinates.flatMap((p) => p.map((r) => ringToPath(r, bbox, w, h))).join(" ");
+  }
+  if (geom.type === "LineString") {
+    return lineToPath(geom.coordinates, bbox, w, h);
+  }
+  if (geom.type === "MultiLineString") {
+    return geom.coordinates.map((l) => lineToPath(l, bbox, w, h)).join(" ");
+  }
+  return "";
 }
 
-// Stroke weight by depth — every 10 m gets a heavier line, every
-// 50 m the heaviest. Cap deep contours at 0.9 so they never compete
-// with the coastline visually.
-function contourStrokeWidth(depth_m) {
-  if (depth_m > 100) return 0.7;             // deep — light, not heavy
-  if (depth_m % 50 === 0) return 1.6;
-  if (depth_m === 30)    return 1.4;  // OW dive limit — emphasised
-  if (depth_m % 10 === 0) return 1.1;
-  return 0.6;
+// Ray-cast point-in-polygon. OSM land is the ground truth for "is this
+// land" — used to keep soundings off the land fill.
+function pointInRing(lng, lat, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1];
+    const xj = ring[j][0], yj = ring[j][1];
+    const intersect = ((yi > lat) !== (yj > lat)) &&
+      (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
 }
 
-const MAX_ZOOM = 16;
+function pointInGeometry(lng, lat, geom) {
+  if (!geom?.coordinates) return false;
+  if (geom.type === "Polygon") {
+    if (!pointInRing(lng, lat, geom.coordinates[0])) return false;
+    for (let i = 1; i < geom.coordinates.length; i++) {
+      if (pointInRing(lng, lat, geom.coordinates[i])) return false;
+    }
+    return true;
+  }
+  if (geom.type === "MultiPolygon") {
+    for (const poly of geom.coordinates) {
+      if (!pointInRing(lng, lat, poly[0])) continue;
+      let inHole = false;
+      for (let i = 1; i < poly.length; i++) {
+        if (pointInRing(lng, lat, poly[i])) { inHole = true; break; }
+      }
+      if (!inHole) return true;
+    }
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// GPS coordinate formatting
+// ---------------------------------------------------------------------------
+
+// Degrees decimal-minutes — the format GPS units + fish-finders use.
+// 32.8505 → 32°51.030'N
+function formatDDM(value, posHemi, negHemi) {
+  const hemi = value >= 0 ? posHemi : negHemi;
+  const abs = Math.abs(value);
+  const deg = Math.floor(abs);
+  const min = (abs - deg) * 60;
+  return `${deg}°${min.toFixed(3)}'${hemi}`;
+}
+
+function formatDecimal(lat, lng) {
+  return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+}
+
+// ---------------------------------------------------------------------------
+// Contour styling — one blue-gray family, never near-black. Index
+// contours (every 50 m) heavier; everything else whispers.
+// ---------------------------------------------------------------------------
+
+function contourStyle(depthM) {
+  if (depthM % 50 === 0) return { stroke: "#33627f", width: 1.2, opacity: 0.9 };
+  if (depthM % 10 === 0) return { stroke: "#4a7a99", width: 0.85, opacity: 0.8 };
+  return { stroke: "#739cb8", width: 0.5, opacity: 0.7 };
+}
 
 function clampVb(vb, baseW, baseH) {
   const minW = baseW / MAX_ZOOM;
@@ -258,57 +339,43 @@ function clampVb(vb, baseW, baseH) {
   return { x, y, w, h };
 }
 
-const CANVAS_W = 960;
-const CANVAS_H = 960;
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
 export default function SpotDetailView({ spot, onClose }) {
   const [bundle, setBundle] = useState(null);
   const [error, setError] = useState(null);
   const [layers, setLayers] = useState({
-    // 2026-05-27: bathy default OFF. Even with OSM-burn-in mask + SVG
-    // clipPath, the bathy PNG's transparency boundary doesn't align
-    // exactly with the SVG-rendered tan OSM polygon — rasterized 480
-    // × 480 mask against a giant CA-spanning polygon-with-holes
-    // doesn't match what SVG's fill-rule="evenodd" interprets. User
-    // QA: "you have two coastal views, one is correct the other is
-    // an artifact". Depth reads great via contours + soundings +
-    // cursor readout, so the bathy heat map is now opt-in via the
-    // layer toggle.
-    bathy: false,
+    bands: true,      // depth tint (NOAA-style bands)
     contours: true,
-    coastline: true,
-    kelp: true,
-    // MPA default OFF — the rectangular state-regulatory polygons
-    // (Matlahuayl SMR, SD-Scripps SMCA, etc.) have axis-aligned
-    // boundaries that look like staircased coastlines at deep zoom
-    // and visually compete with the actual OSM coastline. Available
-    // via the layer toggle when divers want regulatory context.
-    mpa: false,
-    landmarks: true,
     soundings: true,
+    kelp: true,
+    landmarks: true,  // reef callouts + place labels
+    mpa: false,       // regulatory rectangles — opt-in
   });
-  // Cursor lng/lat readout — null when the cursor is off-stage. Updated
-  // on mouseMove / touch tap. Lets the user see exact coordinates over
-  // any point on the spot detail map (nav-quality QA feedback).
+  // Cursor in lng/lat + canvas coords (for crosshair + tooltip).
   const [cursor, setCursor] = useState(null);
-  // Screen-space cursor position (px from the stage's top-left). Used
-  // by the follow-the-cursor tooltip. Kept separate from `cursor`
-  // (which is in lng/lat space) because the tooltip layer is rendered
-  // outside the SVG — needs screen coords for absolute positioning.
   const [cursorPx, setCursorPx] = useState(null);
-  // Decoded bathy pixel grid for cursor depth lookup — populated
-  // once per bundle. null until the PNG decodes.
+  // Dropped marks (click-to-mark for GPS handoff).
+  const [marks, setMarks] = useState([]);
+  const [copied, setCopied] = useState(false);
   const [bathyPixels, setBathyPixels] = useState(null);
   const { prefs } = usePrefs();
   const { units } = prefs;
 
   const stageRef = useRef(null);
   const [vb, setVb] = useState({ x: 0, y: 0, w: CANVAS_W, h: CANVAS_H });
+  const vbRef = useRef(vb);
+  vbRef.current = vb;
   const panStateRef = useRef(null);
   const pinchStateRef = useRef(null);
 
-  // Load the bundle on mount. Track open/close + layer toggles for
-  // analytics (allowlist updated in functions/api/analytics/event.js).
+  const bbox = bundle?.manifest?.bbox;
+  const bboxRef = useRef(null);
+  bboxRef.current = bbox;
+
+  // ---- Bundle load + analytics ------------------------------------------
   useEffect(() => {
     track("spot_detail_open", { id: spot.id });
     let cancelled = false;
@@ -321,16 +388,14 @@ export default function SpotDetailView({ spot, onClose }) {
     };
   }, [spot.id]);
 
-  // Escape to close — same affordance as MpaPopup
+  // Escape closes
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  // Decode the bathy PNG so we can sample depth at the cursor's
-  // lng/lat. Runs once per bundle. Width/height come from
-  // bundle.manifest.layers.bathy so we don't have to guess.
+  // Decode bathy pixels once per bundle (drives band image + cursor depth)
   useEffect(() => {
     if (!bundle?.bathyUrl) return;
     const w = bundle.manifest?.layers?.bathy?.width;
@@ -342,6 +407,57 @@ export default function SpotDetailView({ spot, onClose }) {
     return () => { cancelled = true; };
   }, [bundle]);
 
+  // Depth-band tint image (BFS-filled + quantized) — built once per bundle.
+  const bandImageUrl = useMemo(() => {
+    if (!bathyPixels) return null;
+    const dr = bundle?.manifest?.layers?.bathy?.depth_range_m || [0, 500];
+    return buildDepthBandImage(bathyPixels, dr);
+  }, [bathyPixels, bundle]);
+
+  // Wheel zoom — attached manually with passive:false so preventDefault
+  // actually stops the page scroll (React's synthetic wheel listener is
+  // passive at the root).
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const onWheel = (e) => {
+      e.preventDefault();
+      const r = el.getBoundingClientRect();
+      const x = e.clientX - r.left;
+      const y = e.clientY - r.top;
+      const factor = e.deltaY < 0 ? 1 / 1.25 : 1.25;
+      setVb((prev) => {
+        const newW = prev.w * factor;
+        const cx = prev.x + (x / r.width) * prev.w;
+        const cy = prev.y + (y / r.height) * prev.h;
+        const newH = newW * (CANVAS_H / CANVAS_W);
+        return clampVb({
+          x: cx - (x / r.width) * newW,
+          y: cy - (y / r.height) * newH,
+          w: newW, h: newH,
+        }, CANVAS_W, CANVAS_H);
+      });
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+
+  function zoomBy(factor) {
+    setVb((prev) => {
+      const newW = prev.w * factor;
+      const newH = newW * (CANVAS_H / CANVAS_W);
+      const cx = prev.x + prev.w / 2;
+      const cy = prev.y + prev.h / 2;
+      return clampVb({
+        x: cx - newW / 2, y: cy - newH / 2, w: newW, h: newH,
+      }, CANVAS_W, CANVAS_H);
+    });
+  }
+
+  function resetView() {
+    setVb({ x: 0, y: 0, w: CANVAS_W, h: CANVAS_H });
+  }
+
   function toggleLayer(key) {
     setLayers((prev) => {
       const next = { ...prev, [key]: !prev[key] };
@@ -350,72 +466,74 @@ export default function SpotDetailView({ spot, onClose }) {
     });
   }
 
-  // Pan + zoom handlers — stripped-down version of MapShell's, sized
-  // to the spot view's known-static canvas (CANVAS_W × CANVAS_H).
-  function onWheel(e) {
-    e.preventDefault();
+  // Screen px → { lng, lat, canvasX, canvasY }
+  function screenToGeo(clientX, clientY) {
     const r = stageRef.current?.getBoundingClientRect();
-    if (!r) return;
-    const x = e.clientX - r.left;
-    const y = e.clientY - r.top;
-    zoomAt(x, y, e.deltaY < 0 ? 1 / 1.2 : 1.2);
+    const bb = bboxRef.current;
+    if (!r || !bb) return null;
+    const sx = clientX - r.left;
+    const sy = clientY - r.top;
+    const v = vbRef.current;
+    const cx = v.x + (sx / r.width) * v.w;
+    const cy = v.y + (sy / r.height) * v.h;
+    const lng = bb.lng_min + (cx / CANVAS_W) * (bb.lng_max - bb.lng_min);
+    const lat = bb.lat_max - (cy / CANVAS_H) * (bb.lat_max - bb.lat_min);
+    return { lng, lat, canvasX: cx, canvasY: cy, screenX: sx, screenY: sy };
   }
-  function zoomAt(screenX, screenY, factor) {
-    const r = stageRef.current?.getBoundingClientRect();
-    if (!r) return;
-    setVb((prev) => {
-      const newW = prev.w * factor;
-      const cursorVbX = prev.x + (screenX / r.width) * prev.w;
-      const cursorVbY = prev.y + (screenY / r.height) * prev.h;
-      const newH = newW * (CANVAS_H / CANVAS_W);
-      const newX = cursorVbX - (screenX / r.width) * newW;
-      const newY = cursorVbY - (screenY / r.height) * newH;
-      return clampVb({ x: newX, y: newY, w: newW, h: newH }, CANVAS_W, CANVAS_H);
-    });
-  }
+
+  // ---- Mouse: pan, hover readout, click-to-mark ---------------------------
   function onMouseDown(e) {
     const r = stageRef.current.getBoundingClientRect();
     panStateRef.current = {
       startX: e.clientX - r.left,
       startY: e.clientY - r.top,
       startVb: vb,
+      moved: false,
     };
   }
+
   function onMouseMove(e) {
     const r = stageRef.current.getBoundingClientRect();
     const ps = panStateRef.current;
     if (ps) {
-      // Active pan — don't track cursor as a readout
-      const dx = (e.clientX - r.left - ps.startX) / r.width * ps.startVb.w;
-      const dy = (e.clientY - r.top - ps.startY) / r.height * ps.startVb.h;
-      setVb(clampVb({
-        x: ps.startVb.x - dx,
-        y: ps.startVb.y - dy,
-        w: ps.startVb.w,
-        h: ps.startVb.h,
-      }, CANVAS_W, CANVAS_H));
-      return;
+      const dxPx = e.clientX - r.left - ps.startX;
+      const dyPx = e.clientY - r.top - ps.startY;
+      if (Math.abs(dxPx) + Math.abs(dyPx) > 4) ps.moved = true;
+      if (ps.moved) {
+        const dx = (dxPx / r.width) * ps.startVb.w;
+        const dy = (dyPx / r.height) * ps.startVb.h;
+        setVb(clampVb({
+          x: ps.startVb.x - dx,
+          y: ps.startVb.y - dy,
+          w: ps.startVb.w,
+          h: ps.startVb.h,
+        }, CANVAS_W, CANVAS_H));
+        return;
+      }
     }
-    // Idle cursor — project screen px through viewBox into bundle
-    // bbox lng/lat for the readout. Cheap; runs on every mousemove
-    // but the math is just a couple multiplies.
-    if (!bbox) return;
-    const sx = e.clientX - r.left;
-    const sy = e.clientY - r.top;
-    const vbX = vb.x + (sx / r.width) * vb.w;
-    const vbY = vb.y + (sy / r.height) * vb.h;
-    const lng = bbox.lng_min + (vbX / CANVAS_W) * (bbox.lng_max - bbox.lng_min);
-    const lat = bbox.lat_max - (vbY / CANVAS_H) * (bbox.lat_max - bbox.lat_min);
-    setCursor({ lng, lat });
-    setCursorPx({ x: sx, y: sy });
+    const geo = screenToGeo(e.clientX, e.clientY);
+    if (!geo) return;
+    setCursor({ lng: geo.lng, lat: geo.lat, canvasX: geo.canvasX, canvasY: geo.canvasY });
+    setCursorPx({ x: geo.screenX, y: geo.screenY });
   }
-  function onMouseUp() { panStateRef.current = null; }
+
+  function onMouseUp(e) {
+    const ps = panStateRef.current;
+    panStateRef.current = null;
+    // Click (no drag) = drop a mark for GPS handoff.
+    if (ps && !ps.moved) {
+      const geo = screenToGeo(e.clientX, e.clientY);
+      if (geo) addMark(geo.lng, geo.lat);
+    }
+  }
+
   function onMouseLeave() {
     panStateRef.current = null;
     setCursor(null);
     setCursorPx(null);
   }
 
+  // ---- Touch: pan, pinch, tap-to-mark -------------------------------------
   function onTouchStart(e) {
     const r = stageRef.current.getBoundingClientRect();
     if (e.touches.length === 1) {
@@ -424,6 +542,7 @@ export default function SpotDetailView({ spot, onClose }) {
         startX: t.clientX - r.left,
         startY: t.clientY - r.top,
         startVb: vb,
+        moved: false,
       };
     } else if (e.touches.length === 2) {
       const a = e.touches[0], b = e.touches[1];
@@ -433,16 +552,21 @@ export default function SpotDetailView({ spot, onClose }) {
         startDist: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
         startVb: vb,
       };
+      panStateRef.current = null;
     }
   }
+
   function onTouchMove(e) {
-    e.preventDefault();
     const r = stageRef.current.getBoundingClientRect();
     if (e.touches.length === 1 && panStateRef.current) {
       const t = e.touches[0];
       const ps = panStateRef.current;
-      const dx = (t.clientX - r.left - ps.startX) / r.width * ps.startVb.w;
-      const dy = (t.clientY - r.top - ps.startY) / r.height * ps.startVb.h;
+      const dxPx = t.clientX - r.left - ps.startX;
+      const dyPx = t.clientY - r.top - ps.startY;
+      if (Math.abs(dxPx) + Math.abs(dyPx) > 8) ps.moved = true;
+      if (!ps.moved) return;
+      const dx = (dxPx / r.width) * ps.startVb.w;
+      const dy = (dyPx / r.height) * ps.startVb.h;
       setVb(clampVb({
         x: ps.startVb.x - dx,
         y: ps.startVb.y - dy,
@@ -457,35 +581,25 @@ export default function SpotDetailView({ spot, onClose }) {
       const factor = ps.startDist / dist;
       const newW = ps.startVb.w * factor;
       const newH = newW * (CANVAS_H / CANVAS_W);
-      const cursorVbX = ps.startVb.x + (ps.cx / r.width) * ps.startVb.w;
-      const cursorVbY = ps.startVb.y + (ps.cy / r.height) * ps.startVb.h;
-      const newX = cursorVbX - (ps.cx / r.width) * newW;
-      const newY = cursorVbY - (ps.cy / r.height) * newH;
-      setVb(clampVb({ x: newX, y: newY, w: newW, h: newH }, CANVAS_W, CANVAS_H));
+      const cx = ps.startVb.x + (ps.cx / r.width) * ps.startVb.w;
+      const cy = ps.startVb.y + (ps.cy / r.height) * ps.startVb.h;
+      setVb(clampVb({
+        x: cx - (ps.cx / r.width) * newW,
+        y: cy - (ps.cy / r.height) * newH,
+        w: newW, h: newH,
+      }, CANVAS_W, CANVAS_H));
     }
   }
+
   function onTouchEnd(e) {
     if (e.touches.length === 0) {
-      // If this was a quick tap (no pan), set cursor to the tap point
-      // so the lat/lng readout works on mobile too. We don't have a
-      // hover state on touch devices, so this is the only way users
-      // see coordinates.
       const ps = panStateRef.current;
-      if (ps && bbox) {
-        const r = stageRef.current?.getBoundingClientRect();
-        if (r) {
-          const ct = e.changedTouches[0];
-          const sx = (ct?.clientX ?? 0) - r.left;
-          const sy = (ct?.clientY ?? 0) - r.top;
-          const dragDist = Math.hypot(sx - ps.startX, sy - ps.startY);
-          if (dragDist < 8) {
-            // Treat as a tap — drop a pin on the cursor readout
-            const vbX = vb.x + (sx / r.width) * vb.w;
-            const vbY = vb.y + (sy / r.height) * vb.h;
-            const lng = bbox.lng_min + (vbX / CANVAS_W) * (bbox.lng_max - bbox.lng_min);
-            const lat = bbox.lat_max - (vbY / CANVAS_H) * (bbox.lat_max - bbox.lat_min);
-            setCursor({ lng, lat });
-          }
+      if (ps && !ps.moved && e.changedTouches[0]) {
+        const ct = e.changedTouches[0];
+        const geo = screenToGeo(ct.clientX, ct.clientY);
+        if (geo) {
+          setCursor({ lng: geo.lng, lat: geo.lat, canvasX: geo.canvasX, canvasY: geo.canvasY });
+          addMark(geo.lng, geo.lat);
         }
       }
       panStateRef.current = null;
@@ -497,154 +611,158 @@ export default function SpotDetailView({ spot, onClose }) {
       panStateRef.current = {
         startX: t.clientX - r.left,
         startY: t.clientY - r.top,
-        startVb: vb,
+        startVb: vbRef.current,
+        moved: true, // post-pinch settle shouldn't drop a mark
       };
     }
   }
 
-  function resetView() {
-    setVb({ x: 0, y: 0, w: CANVAS_W, h: CANVAS_H });
+  // ---- Marks ----------------------------------------------------------------
+  function addMark(lng, lat) {
+    const d = depthAt(lng, lat);
+    setMarks((prev) => {
+      const next = [...prev, {
+        lng, lat,
+        depthFt: d && !d.onLand ? Math.round(d.depthFt) : null,
+      }];
+      return next.slice(-MAX_MARKS);
+    });
   }
 
-  // Pre-project the geometry paths once per (bundle, layer set) so pan/
-  // zoom doesn't re-walk every ring (viewBox does the zoom for free).
-  const bbox = bundle?.manifest?.bbox;
-  const coastlinePaths = useMemo(() => {
+  function copyCoords(m) {
+    const txt = formatDecimal(m.lat, m.lng);
+    try {
+      navigator.clipboard?.writeText(txt);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch { /* clipboard unavailable — non-fatal */ }
+  }
+
+  // ---- Pre-projected geometry ----------------------------------------------
+  const landPaths = useMemo(() => {
     if (!bbox || !bundle?.coastline) return [];
     return (bundle.coastline.features || []).map((f, i) => ({
-      key: `coast-${i}`,
-      d: geometryToPath(f.geometry, bbox, CANVAS_W, CANVAS_H, true),
+      key: `land-${i}`,
+      d: geometryToPath(f.geometry, bbox, CANVAS_W, CANVAS_H),
     }));
   }, [bundle, bbox]);
+
   const contourPaths = useMemo(() => {
     if (!bbox || !bundle?.contours) return [];
     return (bundle.contours.features || []).map((f, i) => ({
       key: `c-${i}-${f.properties.depth_m}`,
       depth: f.properties.depth_m,
-      d: geometryToPath(f.geometry, bbox, CANVAS_W, CANVAS_H, false),
+      d: geometryToPath(f.geometry, bbox, CANVAS_W, CANVAS_H),
     }));
   }, [bundle, bbox]);
+
   const mpaPaths = useMemo(() => {
     if (!bbox || !bundle?.mpa) return [];
-    return (bundle.mpa.features || []).map((f) => ({
-      key: f.properties?.id || `mpa-${Math.random()}`,
+    return (bundle.mpa.features || []).map((f, i) => ({
+      key: f.properties?.id || `mpa-${i}`,
       props: f.properties,
-      d: geometryToPath(f.geometry, bbox, CANVAS_W, CANVAS_H, true),
+      d: geometryToPath(f.geometry, bbox, CANVAS_W, CANVAS_H),
       style: styleForType(f.properties?.type),
     }));
   }, [bundle, bbox]);
+
   const kelpPaths = useMemo(() => {
     if (!bbox || !bundle?.kelp) return [];
-    return (bundle.kelp.features || []).map((f) => ({
-      key: f.properties?.id || `kelp-${Math.random()}`,
+    return (bundle.kelp.features || []).map((f, i) => ({
+      key: f.properties?.id || `kelp-${i}`,
       props: f.properties,
-      d: geometryToPath(f.geometry, bbox, CANVAS_W, CANVAS_H, true),
-      style: styleForStatus(f.properties?.status),
+      surface: (f.properties?.className || "").toLowerCase() === "kelp canopy",
+      d: geometryToPath(f.geometry, bbox, CANVAS_W, CANVAS_H),
     }));
   }, [bundle, bbox]);
-  // Landmark points in canvas coords, ready for rendering. Importance
-  // drives marker + label size at zoom 1× and visibility threshold:
-  // 'marquee' always shown; 'major' from zoom ≥ 1.5; 'minor' from ≥ 3.
-  // Category drives icon + label styling:
-  //   dive    — yellow anchor (key dive sites)
-  //   coastal — small dot (beaches, points along shore)
-  //   inland  — gray square (nav reference on land)
-  //   marine  — italicised label only (named underwater features)
+
   const landmarkPts = useMemo(() => {
     if (!bbox || !bundle?.landmarks) return [];
-    return (bundle.landmarks.features || []).map((f) => {
+    const pts = (bundle.landmarks.features || []).map((f) => {
       const [lng, lat] = f.geometry.coordinates;
       const [x, y] = projectInBbox(bbox, lng, lat, CANVAS_W, CANVAS_H);
       return {
         key: f.properties.name,
-        x, y, lng, lat,
+        x, y,
         name: f.properties.name,
         importance: f.properties.importance || "minor",
         category: f.properties.category || "coastal",
+        flip: false, // label side: false = right of marker, true = left
       };
     });
+    // Collision pass: when two markers sit close together (e.g.
+    // Point La Jolla + La Jolla Caves, ~300 m apart), fan the labels
+    // OUTWARD by geography — the western marker's label goes left,
+    // the eastern one's goes right — so the texts grow away from
+    // each other instead of overprinting in the gap between markers.
+    // Overview-zoom decluttering, chart-convention: within any tight
+    // cluster (markers < 34 canvas px ≈ a few hundred metres apart),
+    // only the most important name renders below 2× zoom; the rest
+    // fade in as the user zooms and the labels physically separate
+    // (font scales 1/zoom). Greedy pass in importance-rank order —
+    // a point is suppressed if a kept point already sits within the
+    // cluster radius. Also fan close *kept* pairs apart by geography
+    // (west label extends left, east extends right).
+    const rank = { marquee: 0, major: 1, minor: 2 };
+    const byRank = [...pts].sort(
+      (a, b) => (rank[a.importance] ?? 2) - (rank[b.importance] ?? 2)
+    );
+    const kept = [];
+    for (const p of byRank) {
+      const clash = kept.find((k) => {
+        const dx = p.x - k.x, dy = p.y - k.y;
+        return dx * dx + dy * dy < 34 * 34;
+      });
+      if (clash) {
+        p.suppressLow = true; // hidden below 2× zoom
+        // Pre-fan for when it appears: extend away from its neighbour
+        p.flip = p.x < clash.x;
+      } else {
+        kept.push(p);
+      }
+    }
+    for (let i = 0; i < kept.length; i++) {
+      for (let j = 0; j < i; j++) {
+        const dx = kept[i].x - kept[j].x;
+        const dy = kept[i].y - kept[j].y;
+        if (dx * dx + dy * dy < 60 * 60) {
+          const west = kept[i].x < kept[j].x ? kept[i] : kept[j];
+          const east = west === kept[i] ? kept[j] : kept[i];
+          west.flip = true;
+          east.flip = false;
+        }
+      }
+    }
+    return pts;
   }, [bundle, bbox]);
-  // Depth soundings sampled from the bathy grid. Each carries
-  // depth_ft (rounded) and depth_m. Frontend filters two things:
-  //   1. Drop soundings inside any OSM coastline polygon — GMRT
-  //      and OSM disagree about where land starts and OSM is the
-  //      ground truth for "visually land". This kills the user-QA'd
-  //      "depths overrunning onto land" issue.
-  //   2. Stride-thin by zoom so overview shows ~30 labels, zoom 4×+
-  //      shows them all. NOAA-chart "more detail when zoomed" pattern.
+
+  // Soundings, filtered to OSM-water (PIP against land polygons).
   const soundingPts = useMemo(() => {
     if (!bbox || !bundle?.soundings) return [];
     const landGeoms = (bundle?.coastline?.features || []).map((f) => f.geometry);
     return (bundle.soundings.features || [])
       .map((f) => {
         const [lng, lat] = f.geometry.coordinates;
-        // Drop the sounding if it's inside an OSM land polygon
         if (landGeoms.some((g) => pointInGeometry(lng, lat, g))) return null;
         const [x, y] = projectInBbox(bbox, lng, lat, CANVAS_W, CANVAS_H);
-        return {
-          key: `${lng}-${lat}`,
-          x, y,
-          depth_ft: f.properties.depth_ft,
-        };
+        return { key: `${lng}-${lat}`, x, y, depth_ft: f.properties.depth_ft };
       })
       .filter(Boolean);
   }, [bundle, bbox]);
 
-  // Centre pin in canvas coords
   const pinXY = useMemo(() => {
     if (!bbox) return [CANVAS_W / 2, CANVAS_H / 2];
     return projectInBbox(bbox, spot.lng, spot.lat, CANVAS_W, CANVAS_H);
   }, [bbox, spot]);
 
-  // Current zoom level (derived) — drives readability tweaks like
-  // stroke scaling on overlays at deep zoom.
   const zoomLevel = CANVAS_W / vb.w;
-  const strokeScale = 1 / Math.min(zoomLevel, 4);
 
-  // ---- Conditions readout sampled at the spot centre ----------------------
-  // Lightweight read-only summary so divers see "at this point" values
-  // without needing the full timeline UX inside this view.
-  const conditions = useMemo(() => {
-    const sstC = getSST(spot.lng, spot.lat, 1);
-    const sstStr = Number.isFinite(sstC)
-      ? (units === "F"
-          ? `${(sstC * 9 / 5 + 32).toFixed(1)}°F`
-          : `${sstC.toFixed(1)}°C`)
-      : "—";
-    const chlMg = getChl(spot.lng, spot.lat, 1);
-    const chlStr = Number.isFinite(chlMg) ? `${chlMg.toFixed(2)} mg/m³` : "—";
-    const windKt = getWindSpeed(spot.lng, spot.lat, 1);
-    let windStr = "—";
-    if (Number.isFinite(windKt)) {
-      const { u, v } = getWindUV(spot.lng, spot.lat, 1);
-      const dir = Number.isFinite(u) && Number.isFinite(v)
-        ? ` ${windCardinal(windCompass(u, v))}`
-        : "";
-      windStr = `${windKt.toFixed(0)} kt${dir}`;
-    }
-    const sw = getSwell5dStats(spot.lng, spot.lat, "d0_morning");
-    const swellStr = Number.isFinite(sw?.hs)
-      ? `${(sw.hs * 3.28084).toFixed(1)} ft${
-          Number.isFinite(sw.tp) ? ` · ${sw.tp.toFixed(0)} s` : ""}`
-      : "—";
-    const vizFt = getVizFt(spot.lng, spot.lat, 1);
-    const vizStr = Number.isFinite(vizFt) ? `~${Math.round(vizFt)} ft` : "—";
-    return { sstStr, chlStr, windStr, swellStr, vizStr };
-  }, [spot, units]);
-
-  const isFresh = bundle?.manifest?.generated_at
-    ? new Date(bundle.manifest.generated_at).toISOString().slice(0, 10)
-    : null;
-
-  // Cursor depth — sampled from the decoded bathy PNG at the cursor's
-  // (lng, lat). Returns { depthM, depthFt, onLand } or null when the
-  // PNG isn't loaded yet / cursor is idle / outside the grid.
+  // ---- Depth sampling --------------------------------------------------------
   function depthAt(lng, lat) {
-    if (!bathyPixels || !bbox) return null;
-    if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
-    // Map (lng, lat) → pixel cell index, north-up.
-    const fx = (lng - bbox.lng_min) / (bbox.lng_max - bbox.lng_min);
-    const fy = (bbox.lat_max - lat) / (bbox.lat_max - bbox.lat_min);
+    if (!bathyPixels || !bboxRef.current) return null;
+    const bb = bboxRef.current;
+    const fx = (lng - bb.lng_min) / (bb.lng_max - bb.lng_min);
+    const fy = (bb.lat_max - lat) / (bb.lat_max - bb.lat_min);
     if (fx < 0 || fx > 1 || fy < 0 || fy > 1) return null;
     const { gray, w, h } = bathyPixels;
     const px = Math.max(0, Math.min(w - 1, Math.floor(fx * w)));
@@ -653,42 +771,69 @@ export default function SpotDetailView({ spot, onClose }) {
     if (pixel === 0) return { onLand: true, depthM: null, depthFt: null };
     const dr = bundle?.manifest?.layers?.bathy?.depth_range_m || [0, 500];
     const dM = pixelToDepthM(pixel, dr);
-    if (dM == null) return null;
     return { onLand: false, depthM: dM, depthFt: dM * 3.28084 };
   }
 
-  const cursorDepth = cursor
-    ? depthAt(cursor.lng, cursor.lat)
-    : depthAt(spot.lng, spot.lat);
+  const cursorDepth = cursor ? depthAt(cursor.lng, cursor.lat) : null;
   const depthLabel = cursorDepth == null
     ? "—"
     : cursorDepth.onLand
       ? "land"
       : `${Math.round(cursorDepth.depthFt)} ft · ${cursorDepth.depthM.toFixed(0)} m`;
 
+  // ---- Conditions at the spot centre ----------------------------------------
+  const conditions = useMemo(() => {
+    const sstC = getSST(spot.lng, spot.lat, 1);
+    const sstStr = Number.isFinite(sstC)
+      ? (units === "F" ? `${(sstC * 9 / 5 + 32).toFixed(1)}°F` : `${sstC.toFixed(1)}°C`)
+      : "—";
+    const chlMg = getChl(spot.lng, spot.lat, 1);
+    const chlStr = Number.isFinite(chlMg) ? `${chlMg.toFixed(2)} mg/m³` : "—";
+    const windKt = getWindSpeed(spot.lng, spot.lat, 1);
+    let windStr = "—";
+    if (Number.isFinite(windKt)) {
+      const { u, v } = getWindUV(spot.lng, spot.lat, 1);
+      const dir = Number.isFinite(u) && Number.isFinite(v)
+        ? ` ${windCardinal(windCompass(u, v))}` : "";
+      windStr = `${windKt.toFixed(0)} kt${dir}`;
+    }
+    const sw = getSwell5dStats(spot.lng, spot.lat, "d0_morning");
+    const swellStr = Number.isFinite(sw?.hs)
+      ? `${(sw.hs * 3.28084).toFixed(1)} ft${Number.isFinite(sw.tp) ? ` · ${sw.tp.toFixed(0)} s` : ""}`
+      : "—";
+    const vizFt = getVizFt(spot.lng, spot.lat, 1);
+    const vizStr = Number.isFinite(vizFt) ? `~${Math.round(vizFt)} ft` : "—";
+    return { sstStr, chlStr, windStr, swellStr, vizStr };
+  }, [spot, units]);
+
+  const bundleDate = bundle?.manifest?.generated_at
+    ? new Date(bundle.manifest.generated_at).toISOString().slice(0, 10)
+    : null;
+
+  const lastMark = marks.length ? marks[marks.length - 1] : null;
+
+  // ---------------------------------------------------------------------------
   return (
-    <div className="spot-detail-overlay" role="dialog" aria-modal="true" aria-label={`${spot.name} detail map`}>
+    <div className="spot-detail-overlay" role="dialog" aria-modal="true" aria-label={`${spot.name} detail chart`}>
       <div className="spot-detail-header">
         <div className="spot-detail-title">
           <strong>{spot.name}</strong>
           <span className="spot-detail-sub">
-            {spot.lat.toFixed(3)}°N {Math.abs(spot.lng).toFixed(3)}°W
-            {bundle?.manifest?.bbox &&
-              ` · ${Math.round((bundle.manifest.bbox.lat_max - bundle.manifest.bbox.lat_min) * 111)} km square`}
+            {formatDDM(spot.lat, "N", "S")} {formatDDM(spot.lng, "E", "W")}
+            {bbox && ` · ${Math.round((bbox.lat_max - bbox.lat_min) * 111)} km chart`}
           </span>
         </div>
         <button
           type="button"
           className="spot-detail-close"
           onClick={onClose}
-          aria-label="Close detail view"
+          aria-label="Close detail chart"
         >×</button>
       </div>
 
       <div
         className="spot-detail-stage"
         ref={stageRef}
-        onWheel={onWheel}
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
@@ -699,12 +844,10 @@ export default function SpotDetailView({ spot, onClose }) {
         onTouchCancel={onTouchEnd}
       >
         {!bundle && !error && (
-          <div className="spot-detail-loading">Loading bundle…</div>
+          <div className="spot-detail-loading">Loading chart…</div>
         )}
         {error && (
-          <div className="spot-detail-error">
-            Bundle load failed: {error}
-          </div>
+          <div className="spot-detail-error">Chart load failed: {error}</div>
         )}
         {bundle && (
           <svg
@@ -712,92 +855,91 @@ export default function SpotDetailView({ spot, onClose }) {
             viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
             preserveAspectRatio="xMidYMid meet"
           >
-            {/* Defs: clipPath that constrains the bathy image to
-                OSM-water area only. Built as a single big path with
-                the canvas rect (outer) PLUS each land polygon as a
-                hole (CCW winding via reverse). evenodd fill-rule
-                means a point inside both the canvas rect AND a land
-                polygon counts as OUTSIDE the clip — so land cells
-                show the cyan background, not bathy. */}
             <defs>
-              <clipPath id="spot-water-clip" clipPathUnits="userSpaceOnUse">
-                <path
-                  fillRule="evenodd"
-                  d={`M0 0 H${CANVAS_W} V${CANVAS_H} H0 Z ${coastlinePaths.map((c) => c.d).join(" ")}`}
-                />
-              </clipPath>
+              {/* Kelp canopy — diagonal hatch (surface forest) */}
+              <pattern
+                id="kelp-canopy-hatch"
+                width="6" height="6"
+                patternUnits="userSpaceOnUse"
+                patternTransform="rotate(45)"
+              >
+                <rect width="6" height="6" fill="rgba(34, 110, 60, 0.40)" />
+                <line x1="0" y1="0" x2="0" y2="6" stroke="#14532d" strokeWidth="1.3" />
+              </pattern>
+              {/* Kelp subsurface — dot stipple */}
+              <pattern
+                id="kelp-subsurface-dots"
+                width="5" height="5"
+                patternUnits="userSpaceOnUse"
+              >
+                <rect width="5" height="5" fill="rgba(74, 160, 100, 0.22)" />
+                <circle cx="2.5" cy="2.5" r="0.9" fill="#15803d" />
+              </pattern>
             </defs>
 
-            {/* 1. Chart-style bathy backdrop. NOAA nautical charts use
-                light-cyan water with darker tints at depth — gives
-                depth contours, soundings, and aids-to-nav room to read
-                as overlays. We lay down a cyan base, then render the
-                bathy PNG (clipped to OSM water) at reduced opacity. */}
-            <rect x="0" y="0" width={CANVAS_W} height={CANVAS_H} fill="#cfe8f1" />
-            {layers.bathy && bundle.bathyUrl && (
+            {/* 1. Deep-water background — any uncovered sliver reads as
+                open water, never a hole. */}
+            <rect x="0" y="0" width={CANVAS_W} height={CANVAS_H} fill={DEEP_BG} />
+
+            {/* 2. Depth-band tint. BFS-filled so it extends UNDER the
+                land polygon — no transparency edge of its own. */}
+            {layers.bands && bandImageUrl && (
               <image
-                href={bundle.bathyUrl}
+                href={bandImageUrl}
                 x="0" y="0"
                 width={CANVAS_W} height={CANVAS_H}
                 preserveAspectRatio="none"
-                opacity="0.40"
-                clipPath="url(#spot-water-clip)"
-                style={{ imageRendering: "auto", mixBlendMode: "multiply" }}
               />
             )}
 
-            {/* 2. Depth contours — clipped to water area for the same
-                GMRT-vs-OSM mismatch reason as bathy. */}
+            {/* 3. Contour lines — drawn under land so any GMRT-side
+                overshoot is buried beneath the opaque land fill. */}
             {layers.contours && (
-              <g
-                className="spot-detail-contours"
-                style={{ pointerEvents: "none" }}
-                clipPath="url(#spot-water-clip)"
-              >
-                {contourPaths.map((c) => (
-                  <path
-                    key={c.key}
-                    d={c.d}
-                    fill="none"
-                    stroke={contourColor(c.depth)}
-                    strokeWidth={contourStrokeWidth(c.depth) * strokeScale}
-                    strokeOpacity="0.85"
-                    vectorEffect="non-scaling-stroke"
-                  />
-                ))}
+              <g style={{ pointerEvents: "none" }}>
+                {contourPaths.map((c) => {
+                  const s = contourStyle(c.depth);
+                  return (
+                    <path
+                      key={c.key}
+                      d={c.d}
+                      fill="none"
+                      stroke={s.stroke}
+                      strokeWidth={s.width}
+                      strokeOpacity={s.opacity}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  );
+                })}
               </g>
             )}
 
-            {/* 3. Coastline — chart-style tan land with a thin dark
-                outline (matches NOAA chart land tinting). Drawn AFTER
-                bathy so it masks the depth gradient cleanly on the
-                land side. */}
-            {layers.coastline && (
-              <g className="spot-detail-coast" style={{ pointerEvents: "none" }}>
-                {coastlinePaths.map((c) => (
-                  <path
-                    key={c.key}
-                    d={c.d}
-                    fill="#e8d8b8"
-                    stroke="#7c6a48"
-                    strokeWidth={0.8 * strokeScale}
-                    vectorEffect="non-scaling-stroke"
-                  />
-                ))}
-              </g>
-            )}
+            {/* 4. LAND — the one and only coastline. Opaque tan fill
+                covers everything beneath it. */}
+            <g style={{ pointerEvents: "none" }}>
+              {landPaths.map((c) => (
+                <path
+                  key={c.key}
+                  d={c.d}
+                  fill="#eee3c8"
+                  stroke="#8a7a56"
+                  strokeWidth={1.1}
+                  vectorEffect="non-scaling-stroke"
+                />
+              ))}
+            </g>
 
-            {/* 4. MPA polygons */}
+            {/* 5. MPA regulatory boundaries (opt-in) */}
             {layers.mpa && (
-              <g className="spot-detail-mpa">
+              <g>
                 {mpaPaths.map((p) => (
                   <path
                     key={p.key}
                     d={p.d}
                     fill={p.style.fill}
                     stroke={p.style.stroke}
-                    strokeWidth={1.4 * strokeScale}
-                    strokeOpacity="0.9"
+                    strokeWidth={1.2}
+                    strokeOpacity="0.85"
+                    strokeDasharray="6 3"
                     vectorEffect="non-scaling-stroke"
                   >
                     <title>{p.props?.name} — {p.props?.type}</title>
@@ -806,84 +948,47 @@ export default function SpotDetailView({ spot, onClose }) {
               </g>
             )}
 
-            {/* 5. Kelp polygons — chart-style with diagonal hatch
-                fill so surface canopy reads as "actual kelp forest"
-                vs. plain green water. Subsurface gets a dot pattern
-                to distinguish from surface at a glance. */}
+            {/* 6. Kelp canopy — observed forest extent, hatched. Drawn
+                above land so shoreline-hugging fronds never get cut. */}
             {layers.kelp && (
-              <>
-                <defs>
-                  <pattern
-                    id="kelp-canopy-hatch"
-                    width="6" height="6"
-                    patternUnits="userSpaceOnUse"
-                    patternTransform="rotate(45)"
+              <g>
+                {kelpPaths.map((p) => (
+                  <path
+                    key={p.key}
+                    d={p.d}
+                    fill={p.surface ? "url(#kelp-canopy-hatch)" : "url(#kelp-subsurface-dots)"}
+                    stroke={p.surface ? "#14532d" : "#15803d"}
+                    strokeWidth={p.surface ? 1.4 : 1.0}
+                    strokeOpacity="0.9"
+                    vectorEffect="non-scaling-stroke"
                   >
-                    <rect width="6" height="6" fill="rgba(27, 94, 32, 0.42)" />
-                    <line x1="0" y1="0" x2="0" y2="6"
-                          stroke="#0a3a14" strokeWidth="1.4" />
-                  </pattern>
-                  <pattern
-                    id="kelp-subsurface-dots"
-                    width="5" height="5"
-                    patternUnits="userSpaceOnUse"
-                  >
-                    <rect width="5" height="5" fill="rgba(56, 142, 60, 0.26)" />
-                    <circle cx="2.5" cy="2.5" r="0.9" fill="#2e7d32" />
-                  </pattern>
-                </defs>
-                <g className="spot-detail-kelp">
-                  {kelpPaths.map((p) => {
-                    const isCanopy = (p.props?.className || "").toLowerCase() === "kelp canopy";
-                    const isSubsurface = (p.props?.className || "").toLowerCase() === "kelp subsurface";
-                    const fill = isCanopy
-                      ? "url(#kelp-canopy-hatch)"
-                      : isSubsurface
-                        ? "url(#kelp-subsurface-dots)"
-                        : p.style.fill;
-                    const stroke = isCanopy ? "#0a3a14" : p.style.stroke;
-                    return (
-                      <path
-                        key={p.key}
-                        d={p.d}
-                        fill={fill}
-                        stroke={stroke}
-                        strokeWidth={2.0 * strokeScale}
-                        strokeOpacity="0.95"
-                        vectorEffect="non-scaling-stroke"
-                      >
-                        <title>{p.props?.name}{p.props?.className ? ` — ${p.props.className}` : ""}</title>
-                      </path>
-                    );
-                  })}
-                </g>
-              </>
+                    <title>
+                      {p.props?.name}
+                      {p.props?.className ? ` — ${p.props.className}` : ""}
+                      {p.props?.year ? ` (${p.props.year} survey)` : ""}
+                    </title>
+                  </path>
+                ))}
+              </g>
             )}
 
-            {/* 5a. Depth soundings — small black numerals at sampled
-                grid points showing depth in feet, NOAA chart style.
-                Thinned by zoom so the overview shows a clean spread
-                (every 3rd sample) and zoom 4×+ shows all of them.
-                Zoom-gated label size keeps numbers readable but not
-                domineering at any zoom. */}
+            {/* 7. Soundings — depth numerals in feet, PIP-filtered to
+                water. Thinned at low zoom, full density at 4×+. */}
             {layers.soundings && (() => {
               const stride = zoomLevel >= 4 ? 1 : zoomLevel >= 2 ? 2 : 3;
-              const fontPx = 9 / zoomLevel;
+              const fontPx = 9.5 / zoomLevel;
               return (
-                <g className="spot-detail-soundings" style={{ pointerEvents: "none" }}>
+                <g style={{ pointerEvents: "none" }}>
                   {soundingPts.filter((_, i) => i % stride === 0).map((s) => (
                     <text
                       key={s.key}
                       x={s.x} y={s.y}
-                      fill="#0b3a52"
+                      fill="#27566f"
                       fontSize={fontPx}
                       fontFamily="ui-sans-serif, system-ui, sans-serif"
                       fontWeight={500}
                       textAnchor="middle"
                       dominantBaseline="central"
-                      style={{ paintOrder: "stroke" }}
-                      stroke="#cfe8f1"
-                      strokeWidth={fontPx * 0.18}
                     >
                       {s.depth_ft}
                     </text>
@@ -892,46 +997,37 @@ export default function SpotDetailView({ spot, onClose }) {
               );
             })()}
 
-            {/* 5b. Landmark markers + labels (NOAA-chart styled).
-                Category drives marker + label palette; importance
-                gates visibility.
-                  dive    — orange anchor + dark-orange label
-                  coastal — small dark dot + dark label (shore features)
-                  inland  — gray square + gray label (nav reference)
-                  marine  — italic blue label only (underwater feature) */}
+            {/* 8. Landmarks + reef callouts. Category drives styling:
+                  dive    — anchor glyph, dark-orange label
+                  coastal — small dot, dark label
+                  inland  — gray square, gray label (nav reference)
+                  marine  — italic blue label (reefs, canyons, banks) */}
             {layers.landmarks && landmarkPts.map((lm) => {
-              // 2026-05-27: dropped major/minor thresholds so divers
-              // see chart-style label density at default zoom. NOAA
-              // charts show every named feature at any zoom; we
-              // follow the same convention. minor still gates above
-              // 2x so the densest features (every reef, every cove)
-              // don't crush the overview.
               if (lm.importance === "minor" && zoomLevel < 2) return null;
-              const fontSize = lm.importance === "marquee" ? 11.5 : 10;
+              if (lm.suppressLow && zoomLevel < 2) return null;
+              const fontSize = (lm.importance === "marquee" ? 11.5 : 10) / zoomLevel;
               const weight = lm.importance === "marquee" ? 700 : 600;
-              const labelDx = 8 / zoomLevel;
-              const labelDy = -5 / zoomLevel;
+              const dx = (lm.flip ? -8 : 8) / zoomLevel;
+              const dy = -5 / zoomLevel;
+              const anchor = lm.flip ? "end" : "start";
               const isMarine = lm.category === "marine";
               const isDive = lm.category === "dive";
               const isInland = lm.category === "inland";
-              const fontStyle = isMarine ? "italic" : "normal";
               const labelFill = isMarine ? "#1e3a8a"
                 : isDive ? "#7c2d12"
-                : isInland ? "#374151"
+                : isInland ? "#4b5563"
                 : "#1f2937";
               return (
                 <g key={lm.key} style={{ pointerEvents: "none" }}>
-                  {/* Marker — depends on category */}
                   {isDive && (
-                    // Anchor glyph for dive sites
                     <text
                       x={lm.x} y={lm.y}
-                      fill="#d97706"
-                      fontSize={16 / zoomLevel}
+                      fill="#c2620a"
+                      fontSize={15 / zoomLevel}
                       textAnchor="middle"
                       dominantBaseline="central"
                       stroke="#fffbeb"
-                      strokeWidth={(16 / zoomLevel) * 0.18}
+                      strokeWidth={(15 / zoomLevel) * 0.16}
                       style={{ paintOrder: "stroke" }}
                     >⚓</text>
                   )}
@@ -946,101 +1042,174 @@ export default function SpotDetailView({ spot, onClose }) {
                   )}
                   {isInland && (
                     <rect
-                      x={lm.x - 2.5 / zoomLevel}
-                      y={lm.y - 2.5 / zoomLevel}
-                      width={5 / zoomLevel}
-                      height={5 / zoomLevel}
+                      x={lm.x - 2.4 / zoomLevel}
+                      y={lm.y - 2.4 / zoomLevel}
+                      width={4.8 / zoomLevel}
+                      height={4.8 / zoomLevel}
                       fill="#6b7280"
                       stroke="#fff"
                       strokeWidth={0.6 / zoomLevel}
                     />
                   )}
-                  {/* Marine features get no marker — just italic label */}
-
-                  {/* Label with halo for legibility on any backdrop */}
+                  {isMarine && /reef|rock|pinnacle|bank|hole/i.test(lm.name) && (
+                    <text
+                      x={lm.x} y={lm.y}
+                      fill="#1e3a8a"
+                      fontSize={11 / zoomLevel}
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      fontWeight={700}
+                    >+</text>
+                  )}
                   <text
-                    x={lm.x + labelDx}
-                    y={lm.y + labelDy}
+                    x={lm.x + dx} y={lm.y + dy}
+                    textAnchor={anchor}
                     fill="#ffffff"
                     stroke="#ffffff"
                     strokeWidth={2.8 / zoomLevel}
-                    strokeOpacity="0.92"
-                    fontSize={fontSize / zoomLevel}
+                    strokeOpacity="0.9"
+                    fontSize={fontSize}
                     fontWeight={weight}
-                    fontStyle={fontStyle}
+                    fontStyle={isMarine ? "italic" : "normal"}
                     style={{ paintOrder: "stroke" }}
                   >{lm.name}</text>
                   <text
-                    x={lm.x + labelDx}
-                    y={lm.y + labelDy}
+                    x={lm.x + dx} y={lm.y + dy}
+                    textAnchor={anchor}
                     fill={labelFill}
-                    fontSize={fontSize / zoomLevel}
+                    fontSize={fontSize}
                     fontWeight={weight}
-                    fontStyle={fontStyle}
+                    fontStyle={isMarine ? "italic" : "normal"}
                   >{lm.name}</text>
                 </g>
               );
             })}
 
-            {/* 6. Centre pin */}
-            <g className="spot-detail-pin">
+            {/* 9. Dropped marks — chart-plotter diamonds with index. */}
+            {marks.map((m, i) => {
+              const [x, y] = projectInBbox(bbox, m.lng, m.lat, CANVAS_W, CANVAS_H);
+              const s = 6 / zoomLevel;
+              return (
+                <g key={`mark-${i}`} style={{ pointerEvents: "none" }}>
+                  <path
+                    d={`M${x} ${y - s} L${x + s} ${y} L${x} ${y + s} L${x - s} ${y} Z`}
+                    fill="#e879f9"
+                    stroke="#86198f"
+                    strokeWidth={1.2 / zoomLevel}
+                  />
+                  <text
+                    x={x} y={y}
+                    fill="#4a044e"
+                    fontSize={7 / zoomLevel}
+                    fontWeight={700}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                  >{i + 1}</text>
+                </g>
+              );
+            })}
+
+            {/* 10. Cursor crosshair — full-span plotter-style lines. */}
+            {cursor && (
+              <g style={{ pointerEvents: "none" }}>
+                <line
+                  x1={0} x2={CANVAS_W}
+                  y1={cursor.canvasY} y2={cursor.canvasY}
+                  stroke="#0e7490"
+                  strokeWidth={0.8}
+                  strokeOpacity="0.45"
+                  strokeDasharray="5 4"
+                  vectorEffect="non-scaling-stroke"
+                />
+                <line
+                  x1={cursor.canvasX} x2={cursor.canvasX}
+                  y1={0} y2={CANVAS_H}
+                  stroke="#0e7490"
+                  strokeWidth={0.8}
+                  strokeOpacity="0.45"
+                  strokeDasharray="5 4"
+                  vectorEffect="non-scaling-stroke"
+                />
+              </g>
+            )}
+
+            {/* 11. Spot centre pin */}
+            <g style={{ pointerEvents: "none" }}>
               <circle
                 cx={pinXY[0]} cy={pinXY[1]}
-                r={11 / zoomLevel}
-                fill="var(--bg-panel-solid, #fff)"
-                stroke="var(--ink, #111)"
-                strokeWidth={2.2 / zoomLevel}
+                r={10 / zoomLevel}
+                fill="#ffffff"
+                stroke="#111827"
+                strokeWidth={2 / zoomLevel}
               />
               <circle
                 cx={pinXY[0]} cy={pinXY[1]}
-                r={4 / zoomLevel}
-                fill="var(--ink, #111)"
+                r={3.6 / zoomLevel}
+                fill="#111827"
               />
             </g>
           </svg>
         )}
       </div>
 
-      {/* Cursor-follow tooltip — sits absolutely positioned just to
-          the right of the cursor with the lat/lng + depth at that
-          point. Mirrors NOAA-chart-style coordinate readouts. */}
-      {cursor && cursorPx && cursorDepth != null && (
+      {/* Cursor-follow tooltip — GPS-style DDM + decimal + depth */}
+      {cursor && cursorPx && (
         <div
           className="spot-detail-cursor-tip"
-          style={{
-            left: `${cursorPx.x + 14}px`,
-            top: `${cursorPx.y + 14}px`,
-          }}
+          style={{ left: `${cursorPx.x + 16}px`, top: `${cursorPx.y + 16}px` }}
         >
           <div className="sdct-coord mono">
-            {cursor.lat.toFixed(4)}°N {Math.abs(cursor.lng).toFixed(4)}°W
+            {formatDDM(cursor.lat, "N", "S")}  {formatDDM(cursor.lng, "E", "W")}
           </div>
-          <div className="sdct-depth mono">
-            {cursorDepth.onLand ? "land" : `${Math.round(cursorDepth.depthFt)} ft · ${cursorDepth.depthM.toFixed(0)} m`}
+          <div className="sdct-coord-dec mono">
+            {formatDecimal(cursor.lat, cursor.lng)}
           </div>
+          <div className="sdct-depth mono">{depthLabel}</div>
         </div>
       )}
 
-      {/* Floating conditions panel — bottom-left */}
+      {/* Depth-band legend — bottom centre */}
+      {layers.bands && (
+        <div className="spot-detail-legend" aria-label="Depth bands in feet">
+          <span className="sdl-title">DEPTH&nbsp;FT</span>
+          {DEPTH_BANDS_FT.map((b) => (
+            <span key={b.label} className="sdl-band">
+              <i style={{ background: `rgb(${b.rgb.join(",")})` }} />
+              {b.label}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Conditions + mark panel — bottom-left */}
       <div className="spot-detail-conditions">
-        {/* Cursor lng/lat readout — visible when the mouse is over
-            the map. Falls back to the spot centre when idle so the
-            field is always populated (nav-quality QA requirement). */}
         <div className="sdc-row sdc-coord">
           <span>{cursor ? "Cursor" : "Centre"}</span>
           <strong>
-            {(cursor?.lat ?? spot.lat).toFixed(4)}°N {Math.abs(cursor?.lng ?? spot.lng).toFixed(4)}°W
+            {formatDDM(cursor?.lat ?? spot.lat, "N", "S")} {formatDDM(cursor?.lng ?? spot.lng, "E", "W")}
           </strong>
         </div>
-        {/* Depth at the cursor sampled from the bathy PNG. Falls
-            back to "—" until the PNG decodes, "land" when the
-            cursor is over a NaN cell (above-water). The two units
-            side-by-side because divers think in feet but the data
-            is metric. */}
         <div className="sdc-row sdc-coord">
           <span>Depth</span>
-          <strong>{depthLabel}</strong>
+          <strong>{cursor ? depthLabel : (() => {
+            const d = depthAt(spot.lng, spot.lat);
+            return d && !d.onLand ? `${Math.round(d.depthFt)} ft · ${d.depthM.toFixed(0)} m` : "—";
+          })()}</strong>
         </div>
+        {lastMark && (
+          <div className="sdc-row sdc-mark">
+            <span>Mark {marks.length}</span>
+            <strong className="mono">{formatDecimal(lastMark.lat, lastMark.lng)}</strong>
+            <button
+              type="button"
+              className="sdc-copy-btn"
+              onClick={() => copyCoords(lastMark)}
+              title="Copy decimal coordinates for GPS entry"
+            >
+              {copied ? "✓" : "Copy"}
+            </button>
+          </div>
+        )}
         <div className="sdc-row"><span>SST</span><strong>{conditions.sstStr}</strong></div>
         <div className="sdc-row"><span>Wind</span><strong>{conditions.windStr}</strong></div>
         <div className="sdc-row"><span>Swell</span><strong>{conditions.swellStr}</strong></div>
@@ -1048,16 +1217,15 @@ export default function SpotDetailView({ spot, onClose }) {
         <div className="sdc-row sdc-faint"><span>Chl</span><strong>{conditions.chlStr}</strong></div>
       </div>
 
-      {/* Floating layer toggles — bottom-right */}
+      {/* Layer toggles + view controls — bottom-right */}
       <div className="spot-detail-layers">
         {[
-          ["bathy",     "Bathy"],
+          ["bands",     "Depth tint"],
           ["contours",  "Contours"],
           ["soundings", "Soundings"],
-          ["coastline", "Coast"],
-          ["mpa",       "MPA"],
           ["kelp",      "Kelp"],
           ["landmarks", "Labels"],
+          ["mpa",       "MPA"],
         ].map(([key, label]) => (
           <button
             key={key}
@@ -1069,31 +1237,38 @@ export default function SpotDetailView({ spot, onClose }) {
             {label}
           </button>
         ))}
+        <div className="spot-detail-viewctl">
+          <button type="button" className="spot-detail-layer-btn" onClick={() => zoomBy(1 / 1.5)} title="Zoom in">+</button>
+          <button type="button" className="spot-detail-layer-btn" onClick={() => zoomBy(1.5)} title="Zoom out">−</button>
+        </div>
         <button
           type="button"
           className="spot-detail-layer-btn spot-detail-reset"
           onClick={resetView}
-          title="Reset zoom"
         >
           Reset
         </button>
+        {marks.length > 0 && (
+          <button
+            type="button"
+            className="spot-detail-layer-btn spot-detail-reset"
+            onClick={() => setMarks([])}
+          >
+            Clear marks ({marks.length})
+          </button>
+        )}
       </div>
 
       {/* Sources footer */}
       <div className="spot-detail-footer">
-        {bundle?.manifest?.sources && (
-          <span className="spot-detail-sources">
-            Sources: {Object.entries(bundle.manifest.sources)
-              .filter(([k]) => layers[k] !== false)
-              .map(([k, v]) => `${k}: ${v.split(" ")[0]}`)
-              .join(" · ")}
-          </span>
-        )}
-        {isFresh && (
-          <span className="spot-detail-fresh mono">bundle {isFresh}</span>
+        <span className="spot-detail-sources">
+          Bathy: GMRT · Coast: OSM · Kelp: CDFW 2016 aerial survey · Soundings: GMRT-derived
+        </span>
+        {bundleDate && (
+          <span className="spot-detail-fresh mono">chart {bundleDate}</span>
         )}
         <span className="spot-detail-disclaimer">
-          Kelp polygons are management boundaries — not observed canopy.
+          Not for navigation. Kelp canopy varies seasonally; verify on site.
         </span>
       </div>
     </div>

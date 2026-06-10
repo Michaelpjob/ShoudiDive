@@ -337,13 +337,86 @@
   white-space: nowrap;
 }
 .sdct-coord {
-  font-weight: 500;
-  color: var(--ink);
+  font-weight: 600;
+  color: #f1f5f9; /* hardcoded — tooltip bg is hardcoded dark */
+}
+.sdct-coord-dec {
+  font-weight: 400;
+  font-size: 10px;
+  color: #9aa6b2;
 }
 .sdct-depth {
   font-weight: 700;
   color: #67e8f9;
   margin-top: 1px;
+}
+
+/* Depth-band legend — bottom centre, chart-style swatch strip */
+.spot-detail-legend {
+  position: absolute;
+  bottom: 34px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  background: rgba(11, 18, 32, 0.82);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 10px;
+  color: #e2e8f0; /* hardcoded — legend bg is hardcoded dark */
+  backdrop-filter: blur(8px);
+  white-space: nowrap;
+}
+.sdl-title {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+  font-size: 9px;
+}
+.sdl-band {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: JetBrains Mono, ui-monospace, monospace;
+}
+.sdl-band i {
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  border-radius: 2px;
+}
+
+/* Mark row + copy-to-clipboard button (GPS handoff) */
+.sdc-mark strong { font-size: 10.5px; }
+.sdc-copy-btn {
+  appearance: none;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border: 1px solid var(--accent, #38bdf8);
+  border-radius: 3px;
+  background: rgba(56, 189, 248, 0.10);
+  color: var(--accent, #38bdf8);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sdc-copy-btn:hover { background: rgba(56, 189, 248, 0.22); }
+
+/* Zoom +/- pair inside the layer-toggle stack */
+.spot-detail-viewctl {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+.spot-detail-viewctl .spot-detail-layer-btn {
+  min-width: 38px;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1;
 }
 
 /* Conditions readout panel — bottom-left, fixed */
@@ -367,8 +440,10 @@
   justify-content: space-between;
   gap: 12px;
 }
-.sdc-row span { color: var(--ink-3); }
-.sdc-row strong { font-weight: 600; font-family: JetBrains Mono, monospace; font-size: 11.5px; }
+/* Panel bg is hardcoded dark, so text colors must be hardcoded light —
+   theme vars (--ink) flip dark in light mode and vanish against it. */
+.sdc-row span { color: #9aa6b2; }
+.sdc-row strong { font-weight: 600; font-family: JetBrains Mono, monospace; font-size: 11.5px; color: #f1f5f9; }
 .sdc-faint { opacity: 0.6; }
 /* Lat/lng coord row gets a slightly heavier divider below so it
    visually anchors the readout — "where am I" is the first thing
