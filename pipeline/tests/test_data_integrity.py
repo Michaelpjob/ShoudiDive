@@ -32,6 +32,7 @@ metadata, not the pixel data.
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -48,6 +49,27 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_ROOT = REPO_ROOT / "public" / "data"
 
 REGIONS = ("ca", "pnw", "tropical")
+
+# Regions hidden on production (beta). Their data is refreshed on `dev`, not
+# `main`, so it legitimately lags on main between dev→main promotions (the
+# refresh-{pnw,tropical}-data crons commit to dev). A PR that *targets main*
+# therefore must not hard-fail freshness for these — otherwise an isolated
+# branch off main (e.g. a pipeline hotfix) can never go green, since it doesn't
+# carry dev's fresh beta data. The freshness contract is still fully enforced
+# on dev pushes and for prod-visible regions (ca / baja). GitHub sets
+# GITHUB_BASE_REF to the PR's target branch on pull_request events; it is empty
+# on push events, so this skip is scoped precisely to PRs aimed at main.
+BETA_REGIONS = ("pnw", "tropical")
+
+
+def _skip_beta_freshness_on_main(region: str) -> None:
+    """Skip a freshness assertion for a beta region when the PR targets main."""
+    if region in BETA_REGIONS and os.environ.get("GITHUB_BASE_REF") == "main":
+        pytest.skip(
+            f"{region}: beta region (hidden on prod) is refreshed on dev, not "
+            "main — freshness is enforced on dev pushes + prod regions, so it "
+            "is not asserted on PRs targeting main."
+        )
 
 
 def _region_dir(region: str) -> Path | None:
@@ -470,6 +492,7 @@ def test_top_level_manifest_freshness(region):
     development cycle (cron runs daily). 48h is the realistic ceiling
     before something's genuinely broken.
     """
+    _skip_beta_freshness_on_main(region)
     m = _manifest(region)
     if m is None:
         pytest.skip(f"no data for {region}")
@@ -536,6 +559,7 @@ def test_sst_not_silently_stuck(region):
     on `test_top_level_manifest_freshness` so the two tests don't
     generate split-brain signals.
     """
+    _skip_beta_freshness_on_main(region)
     m = _manifest(region)
     if m is None:
         pytest.skip(f"no data for {region}")
