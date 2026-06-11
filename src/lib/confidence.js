@@ -135,6 +135,22 @@ function dynamicModulation(layer, manifest) {
   return { delta, reasons };
 }
 
+// Coverage-driven UPGRADE (Field Reports engine). The STATIC_CONFIDENCE
+// score is an honest FLOOR. Where real ground-truth coverage exists —
+// computed in pipeline/validation/coverage.py and published as
+// manifest.coverage — a layer earns a positive tier bump. tier_delta is 0
+// until the coverage + calibration thresholds are met, so the dot can rise
+// above "Modeled" only when the data backs it, and can never overstate.
+function coverageUpgrade(layer, manifest) {
+  const cov = manifest?.coverage?.[layer];
+  if (!cov) return { delta: 0, reason: null };
+  const delta = Math.max(0, Number(cov.tier_delta) || 0);
+  if (delta <= 0) return { delta: 0, reason: null };
+  const cal = cov.calibration_pct;
+  const pct = cal != null ? `, ${Math.round(cal * 100)}% in-band` : "";
+  return { delta, reason: `+${delta} from ${cov.n_recent} recent ground-truth obs${pct}` };
+}
+
 export function getLayerConfidence(layer, opts = {}) {
   const r = activeRegion();
   const base = STATIC_CONFIDENCE[r]?.[layer];
@@ -142,9 +158,11 @@ export function getLayerConfidence(layer, opts = {}) {
   const manifest = getDataState()?.manifest;
   const { delta: dynDelta, reasons: dynReasons } = dynamicModulation(layer, manifest);
   const { delta: horDelta, reason: horReason } = horizonDecay(layer, opts.horizonDays);
+  const { delta: covDelta, reason: covReason } = coverageUpgrade(layer, manifest);
   const reasons = [...dynReasons];
   if (horReason) reasons.push(horReason);
-  const score = Math.max(1, Math.min(5, base.score + dynDelta + horDelta));
+  if (covReason) reasons.push(covReason);
+  const score = Math.max(1, Math.min(5, base.score + dynDelta + horDelta + covDelta));
   const label = CONFIDENCE_LABELS[score];
   return {
     score,

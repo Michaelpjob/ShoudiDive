@@ -153,3 +153,13 @@ test("no region claims SST is Validated (5) — no SST residuals are published",
     );
   }
 });
+
+// --- PR-2: coverage-driven upgrade (honest floor + earned bump) ---
+test("confidence applies a coverage-driven UPGRADE from manifest.coverage", () => {
+  const src = read("src/lib/confidence.js");
+  assert.match(src, /function coverageUpgrade/);
+  // reads the published coverage block keyed by layer...
+  assert.match(src, /manifest\?\.coverage\?\.\[layer\]/);
+  // ...and folds the earned delta into the final score.
+  assert.match(src, /base\.score \+ dynDelta \+ horDelta \+ covDelta/);
+});

@@ -172,6 +172,10 @@ jobs:
         continue-on-error: true
         run: python -m pipeline.validation.score
 
+      - name: Compute ground-truth coverage
+        continue-on-error: true
+        run: python -m pipeline.validation.coverage
+
       - name: Regression guard
         run: python -m pipeline.validation.check_regression
 
