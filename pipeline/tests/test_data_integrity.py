@@ -32,6 +32,7 @@ metadata, not the pixel data.
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -48,6 +49,41 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_ROOT = REPO_ROOT / "public" / "data"
 
 REGIONS = ("ca", "pnw", "tropical")
+
+# Regions visible on the production domain (shouldidive.com). Mirror of
+# PROD_REGIONS in src/lib/region.js — keep the two in sync. PNW + tropical
+# are dev-only beta regions whose data is refreshed on the `dev` branch;
+# on `main` their committed data legitimately lags between dev→main merges
+# (the per-region refresh crons target dev, and main only picks their data
+# up when a merge carries it). So holding them to the strict freshness
+# ceiling below is a false positive *when a change is being promoted to
+# main* — the beta data isn't broken, it's just not main's job to keep it
+# fresh. We still enforce freshness on dev pushes (where those regions are
+# user-visible on the *-beta previews), so coverage isn't lost — only the
+# main-promotion false positive is suppressed.
+PROD_REGIONS = ("ca", "baja")
+
+
+def _promoting_to_main() -> bool:
+    """True when this gate run is evaluating a change destined for `main`
+    (the production branch). On GitHub Actions a `pull_request → main`
+    sets GITHUB_BASE_REF=main; pushes to `dev` and local runs leave it
+    empty. Used to exempt dev-only beta regions from the freshness ceiling
+    when — and only when — promoting to prod, where their committed data
+    legitimately lags. See PROD_REGIONS above.
+    """
+    return os.environ.get("GITHUB_BASE_REF", "") == "main"
+
+
+def _skip_if_beta_on_main_promotion(region: str) -> None:
+    """Skip the calling freshness test for a dev-only beta region when the
+    run is a PR to main. No-op for prod regions and for dev/local runs."""
+    if region not in PROD_REGIONS and _promoting_to_main():
+        pytest.skip(
+            f"{region}: dev-only beta region (refreshed on dev); its data "
+            f"legitimately lags on main between merges, so freshness is not "
+            f"gated on PRs to main. Still enforced on dev pushes."
+        )
 
 
 def _region_dir(region: str) -> Path | None:
@@ -473,6 +509,7 @@ def test_top_level_manifest_freshness(region):
     m = _manifest(region)
     if m is None:
         pytest.skip(f"no data for {region}")
+    _skip_if_beta_on_main_promotion(region)
     raw = m.get("generated_at")
     if not raw:
         pytest.fail(f"{region}: manifest has no generated_at")
@@ -539,6 +576,7 @@ def test_sst_not_silently_stuck(region):
     m = _manifest(region)
     if m is None:
         pytest.skip(f"no data for {region}")
+    _skip_if_beta_on_main_promotion(region)
 
     info = (m.get("layers") or {}).get("sst")
     if not isinstance(info, dict):
