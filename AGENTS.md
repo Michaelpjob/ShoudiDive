@@ -58,7 +58,8 @@ The dev gate is fast (~90 seconds end-to-end) so the cost is small.
    git fetch origin
    git switch -c feat/<slug> origin/main
    ```
-   Add a row to [`docs/FEATURES.md`](docs/FEATURES.md) with `status: wip`.
+   First run `bash scripts/feature-status.sh` to confirm no other fork is
+   already building it (concurrent-fork claim check).
 
 2. **Make your change. Commit normally** (do not skip hooks).
    - **Dark-launch when you can:** if it's gateable UI, you may merge it to
@@ -84,22 +85,43 @@ The dev gate is fast (~90 seconds end-to-end) so the cost is small.
    `dev` and use `https://dev.shouldidive.pages.dev` — `dev` is a throwaway
    preview, never the promotion source.
 
-6. **Set the ledger row to `status: ready`. Wait for the human to review +
+6. **Add the `status:ready` label (or mark the PR ready-for-review). Wait for the human to review +
    merge.** Do not auto-merge.
 
 ## Feature tracking + the `dev` preview
 
-- **[`docs/FEATURES.md`](docs/FEATURES.md)** is the source of truth for what
-  each in-flight feature is, which branch carries it, and its status. Update
-  it when you start (`wip`), finish (`ready`), block (`blocked`), or ship a
-  feature. `bash scripts/feature-status.sh` prints the mechanical reality
-  (every `feat/*`/`fix/*` branch's ahead/behind vs `main`, open PR, checks)
-  — when it disagrees with the ledger, the script is right.
+The source of truth is **git branches + GitHub PRs + `status:*` labels** — GitHub
+serializes those, so concurrent forks never conflict on them. Per-feature intent
+(why / dependencies) lives in each **PR's description**, not in a shared file.
 
-- **`dev` is a disposable preview, not a promotion lane.** Its only job is to
-  let you eyeball several in-flight features together at
-  `dev.shouldidive.pages.dev`. Because nothing is ever promoted *from* `dev`,
-  a half-finished feature sitting on it blocks nothing.
+- **`bash scripts/feature-status.sh`** prints the live picture: every
+  `feat/*`/`fix/*` branch's ahead/behind vs `main`, its open PR, derived status,
+  and check rollup. **[`docs/FEATURES.md`](docs/FEATURES.md) is a _generated_
+  snapshot — never hand-edit it; run `scripts/feature-status.sh --write` to
+  refresh.** Status is derived: a `status:wip|ready|blocked` label wins, else a
+  draft PR = `wip`, a green open PR = `ready`, a failing/no-PR one = `wip`.
+
+- **`dev` is a disposable preview, not a promotion lane.** Its only job is to let
+  you eyeball several in-flight features together at `dev.shouldidive.pages.dev`.
+  Because nothing is ever promoted *from* `dev`, a half-finished feature on it
+  blocks nothing.
+
+### Working alongside concurrent forks
+
+Multiple Claude Code forks (and possibly other agents) commit to this repo at the
+same time. To avoid stepping on each other:
+
+- **Claim before you start.** Run `scripts/feature-status.sh` (or `gh pr list` +
+  `git branch -r`) first. If a `feat/<slug>` already exists for what you're about
+  to build, don't duplicate it — pick a different slice or coordinate.
+- **Open a draft PR early** — it's your visible claim and the per-feature record.
+  Set its `status:*` label and put the intent + any cross-feature dependency
+  (e.g. "blocked on #136 merging first") in the body.
+- **Touch only your own branch.** Never rename, reset, force-push, or commit to a
+  branch another fork created, and don't rebuild `dev` (below) while another fork
+  may be previewing on it.
+- **Don't hand-edit the generated ledger.** Two forks editing `docs/FEATURES.md`
+  is the exact conflict this design removes — let the script regenerate it.
 
 ### Rebuilding the `dev` preview
 

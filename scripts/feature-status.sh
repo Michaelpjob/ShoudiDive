@@ -1,55 +1,102 @@
 #!/usr/bin/env bash
-# scripts/feature-status.sh — mechanical ground-truth for in-flight feature branches.
+# feature-status.sh — ground-truth view of in-flight features, safe for concurrent forks.
 #
-# Complements docs/FEATURES.md (which records intent) with reality derived from git
-# + GitHub: every feat/* and fix/* branch, how far it is ahead/behind main, whether
-# it has an open PR, and that PR's check rollup. When the ledger and this disagree,
-# this wins.
+# The source of truth is git branches + GitHub PRs + status:* labels. GitHub serializes
+# those, so concurrent Claude Code forks (or other agents) never conflict on them — unlike
+# a hand-edited file. This script only READS that state.
 #
-# Usage:  bash scripts/feature-status.sh
-# Needs:  git, and (optionally) gh for the PR + checks columns.
+#   bash scripts/feature-status.sh            # print the live table to the console
+#   bash scripts/feature-status.sh --write    # regenerate docs/FEATURES.md from it
+#
+# docs/FEATURES.md is GENERATED — never hand-edit it; rerun this with --write. Per-feature
+# intent (why / dependencies / owner) lives in each PR's description, not here.
+#
+# Status is derived per branch:
+#   status:* label wins  →  blocked | ready | wip
+#   else draft PR        →  wip
+#   else PR with failing checks → wip
+#   else open PR, checks ok      → ready
+#   else no PR           →  wip   (open a draft PR to claim it so other forks see it)
 
 set -u
-
 BASE="origin/main"
+LEDGER="docs/FEATURES.md"
+WRITE=0
+[ "${1:-}" = "--write" ] && WRITE=1
 
-echo "Fetching origin..." >&2
-git fetch origin --quiet 2>/dev/null || echo "  (fetch failed — showing cached refs)" >&2
-
+git fetch origin --quiet 2>/dev/null || true
 HAVE_GH=0
-if command -v gh >/dev/null 2>&1; then HAVE_GH=1; fi
+command -v gh >/dev/null 2>&1 && HAVE_GH=1
 
-printf "\n%-34s %6s %7s %-6s %-16s %s\n" "BRANCH" "AHEAD" "BEHIND" "PR" "CHECKS" "LAST COMMIT"
-printf "%-34s %6s %7s %-6s %-16s %s\n" "------" "-----" "------" "--" "------" "-----------"
+# Emit one TAB-separated row per feature branch: branch status pr ahead behind checks last
+collect() {
+  for ref in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin \
+                | grep -E '^origin/(feat|fix)/' | sort); do
+    br="${ref#origin/}"
+    ahead="$(git rev-list --count "${BASE}..${ref}" 2>/dev/null || echo '?')"
+    behind="$(git rev-list --count "${ref}..${BASE}" 2>/dev/null || echo '?')"
+    last="$(git log -1 --format='%cr — %s' "$ref" 2>/dev/null | tr '\t' ' ' | cut -c1-44)"
 
-# All remote feature/fix branches, minus dev/main/HEAD and dependabot noise.
-for ref in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin \
-              | grep -E '^origin/(feat|fix)' | sort); do
-  br="${ref#origin/}"
-  ahead="$(git rev-list --count "${BASE}..${ref}" 2>/dev/null || echo '?')"
-  behind="$(git rev-list --count "${ref}..${BASE}" 2>/dev/null || echo '?')"
-  last="$(git log -1 --format='%cr — %s' "$ref" 2>/dev/null | cut -c1-46)"
-
-  pr="-"; checks="-"
-  if [ "$HAVE_GH" -eq 1 ]; then
-    num="$(gh pr list --head "$br" --state open --json number --jq '.[0].number // empty' 2>/dev/null)"
-    if [ -n "$num" ]; then
-      pr="#${num}"
-      # Roll up the PR's check states into e.g. "SUCCESS:9" / "FAILURE:1".
-      checks="$(gh pr checks "$num" --json state --jq '
-        [.[].state] | group_by(.) | map("\(.[0]):\(length)") | join(",")' 2>/dev/null \
-        | cut -c1-16)"
-      [ -z "$checks" ] && checks="(none)"
+    pr="-"; status="wip"; checks="-"
+    if [ "$HAVE_GH" -eq 1 ]; then
+      # gh has a built-in jq (--jq); we deliberately avoid a standalone jq dependency.
+      num="$(gh pr list --head "$br" --state open --json number --jq '.[0].number // empty' 2>/dev/null)"
+      if [ -n "$num" ]; then
+        pr="#$num"
+        draft="$(gh pr view "$num" --json isDraft --jq '.isDraft' 2>/dev/null)"
+        labels=" $(gh pr view "$num" --json labels --jq '.labels[].name' 2>/dev/null | tr '\n' ' ') "
+        checks="$(gh pr checks "$num" --json state \
+                  --jq '[.[].state]|group_by(.)|map("\(.[0]|ascii_downcase):\(length)")|join(" ")' \
+                  2>/dev/null | cut -c1-22)"
+        [ -z "$checks" ] && checks="-"
+        case "$labels" in
+          *" status:blocked "*) status="blocked" ;;
+          *" status:ready "*)   status="ready" ;;
+          *" status:wip "*)     status="wip" ;;
+          *) if [ "$draft" = "true" ]; then status="wip"
+             elif printf '%s' "$checks" | grep -qiE 'failure|error'; then status="wip"
+             else status="ready"; fi ;;
+        esac
+      else
+        pr="-"; status="wip"; checks="(no PR)"
+      fi
     fi
-  fi
+    flag=""
+    case "$behind" in ''|*[!0-9]*) : ;; *) [ "$behind" -gt 200 ] && flag=" ⚠far-behind" ;; esac
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s%s\n' "$br" "$status" "$pr" "$ahead" "$behind" "$checks" "$last" "$flag"
+  done
+}
 
-  # Stale marker: far behind main → likely drifting.
-  flag=""
-  case "$behind" in ''|*[!0-9]*) : ;; *) [ "$behind" -gt 200 ] && flag="  ⚠ far behind";; esac
+ROWS="$(collect)"
 
-  printf "%-34s %6s %7s %-6s %-16s %s%s\n" "$br" "$ahead" "$behind" "$pr" "$checks" "$last" "$flag"
-done
-
-echo
-echo "Ledger: docs/FEATURES.md   |   ⚠ far behind = rebase on main or it'll drift."
-[ "$HAVE_GH" -eq 0 ] && echo "(install gh for the PR + CHECKS columns)"
+if [ "$WRITE" -eq 1 ]; then
+  {
+    echo "# Feature ledger (generated)"
+    echo
+    echo "> **Generated by \`scripts/feature-status.sh --write\` — do not hand-edit.**"
+    echo "> Source of truth is git branches + GitHub PRs + \`status:*\` labels, which GitHub"
+    echo "> serializes so concurrent forks never conflict. Per-feature intent lives in each"
+    echo "> PR's description. The workflow + rules live in [\`CLAUDE.md\`](../CLAUDE.md)."
+    echo ">"
+    echo "> Refresh: \`bash scripts/feature-status.sh --write\`"
+    echo
+    echo "| Feature (branch) | Status | PR | Ahead | Behind | Checks | Last commit |"
+    echo "|---|---|---|---:|---:|---|---|"
+    if [ -n "$ROWS" ]; then
+      printf '%s\n' "$ROWS" | while IFS=$'\t' read -r br status pr ahead behind checks last; do
+        echo "| \`$br\` | $status | $pr | $ahead | $behind | $checks | $last |"
+      done
+    fi
+    echo
+  } > "$LEDGER"
+  echo "wrote $LEDGER ($(printf '%s\n' "$ROWS" | grep -c . ) feature branches)"
+else
+  printf "\n%-32s %-9s %-5s %5s %6s  %-18s %s\n" BRANCH STATUS PR AHEAD BEHIND CHECKS LAST
+  printf "%-32s %-9s %-5s %5s %6s  %-18s %s\n" "------" "------" "--" "-----" "------" "------" "----"
+  printf '%s\n' "$ROWS" | while IFS=$'\t' read -r br status pr ahead behind checks last; do
+    printf "%-32s %-9s %-5s %5s %6s  %-18s %s\n" "$br" "$status" "$pr" "$ahead" "$behind" "$checks" "$last"
+  done
+  echo
+  echo "docs/FEATURES.md is generated — refresh with: bash scripts/feature-status.sh --write"
+  [ "$HAVE_GH" -eq 0 ] && echo "(install gh for the PR / STATUS / CHECKS columns)"
+fi
