@@ -119,3 +119,37 @@ test("TopBar passes horizonDays into getLayerConfidence", () => {
   const src = read("src/components/TopBar.jsx");
   assert.match(src, /getLayerConfidence\(layer,\s*\{\s*horizonDays\s*\}\)/);
 });
+
+// --- Ground Truth Engine PR-1: honest confidence floors ---
+// The dots must label data as what it is. viz is a prediction (not
+// "Observed/Calibrated"), swell is a forecast model, and SST is an L4
+// analysis + buoy nudge with no published residuals (not "Validated").
+
+test("CA viz floor is Modeled (3), not Observed, and claims no calibration", () => {
+  const src = read("src/lib/confidence.js");
+  const caBlock = src.split("ca: {")[1]?.split(/^\s{0,4}\}/m)[0];
+  assert.ok(caBlock, "couldn't find ca block");
+  assert.match(caBlock, /viz:\s*\{\s*score:\s*3/);
+  // The "Calibrated against ... ground-truth" claim is refuted by the
+  // validation residuals (0% interval coverage) — it must be gone.
+  assert.doesNotMatch(src, /Calibrated against/);
+});
+
+test("CA swell floor is Modeled (3) — it's a WaveWatch III forecast", () => {
+  const src = read("src/lib/confidence.js");
+  const caBlock = src.split("ca: {")[1]?.split(/^\s{0,4}\}/m)[0];
+  assert.match(caBlock, /swell:\s*\{\s*score:\s*3/);
+});
+
+test("no region claims SST is Validated (5) — no SST residuals are published", () => {
+  const src = read("src/lib/confidence.js");
+  for (const region of ["ca", "baja", "pnw", "tropical"]) {
+    const block = src.split(`${region}: {`)[1]?.split(/^\s{0,4}\}/m)[0];
+    assert.ok(block, `couldn't find ${region} block`);
+    assert.doesNotMatch(
+      block,
+      /sst:\s*\{\s*score:\s*5/,
+      `${region} sst should be Observed (4), not Validated (5)`,
+    );
+  }
+});
