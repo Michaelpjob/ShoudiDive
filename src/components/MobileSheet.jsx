@@ -126,6 +126,7 @@ export default function MobileShell({
   dataState,
   setMpaOn,
   setBathyOn,
+  setFieldReportsOn,
   activeSpot, setActiveSpot,
   timeOpts,
   compositeText,
@@ -139,7 +140,7 @@ export default function MobileShell({
   // wraps them with a popup-clearing side effect before passing them in
   // (see updateMpaOn/updateBathyOn there).
   const { prefs } = usePrefs();
-  const { units, mpaOn, bathyOn } = prefs;
+  const { units, mpaOn, bathyOn, fieldReportsOn } = prefs;
   // wind + swell + current use slot keys; sst uses history/forecast slots
   // when loaded; chl/viz use integer composites.
   //
@@ -257,6 +258,17 @@ export default function MobileShell({
               >
                 Bottom Detail
               </button>
+              <button
+                type="button"
+                className={"mpa-pill" + (fieldReportsOn ? " active" : "")}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setFieldReportsOn(!fieldReportsOn);
+                }}
+                aria-pressed={fieldReportsOn}
+              >
+                Reports
+              </button>
             </div>
           </section>
 
@@ -332,6 +344,17 @@ export default function MobileShell({
           aria-pressed={bathyOn}
         >
           Bottom
+        </button>
+        <button
+          type="button"
+          className={"mpa-pill" + (fieldReportsOn ? " active" : "")}
+          onClick={(e) => {
+            e.stopPropagation();
+            setFieldReportsOn(!fieldReportsOn);
+          }}
+          aria-pressed={fieldReportsOn}
+        >
+          Reports
         </button>
       </div>
 

@@ -147,6 +147,7 @@ export default function DesktopLayout({
   activeSpot, setActiveSpot,
   // MPA/bathy toggles (state owned by App, side-effect wrappers in MapShell)
   mpaOn, bathyOn, updateMpaOn, updateBathyOn,
+  fieldReportsOn, updateFieldReportsOn,
   // Map viewport (zoom +/− buttons + recenter)
   size, zoomAt, resetView,
   // Manifest data state (legend "no data" indicator)
@@ -198,6 +199,15 @@ export default function DesktopLayout({
               aria-pressed={bathyOn}
             >
               Bottom
+            </button>
+            <button
+              type="button"
+              className={"mpa-pill" + (fieldReportsOn ? " active" : "")}
+              onClick={(e) => { e.stopPropagation(); updateFieldReportsOn(!fieldReportsOn); }}
+              title={fieldReportsOn ? "Field reports visible · click to hide" : "Field reports hidden · click to show"}
+              aria-pressed={fieldReportsOn}
+            >
+              Reports
             </button>
             <Chevron open={controlsOpen} />
           </span>

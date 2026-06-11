@@ -38,6 +38,8 @@ import BathyLayer, {
 import MapLabels from "./MapLabels.jsx";
 import MobileSheet from "./MobileSheet.jsx";
 import BathyPopup from "./BathyPopup.jsx";
+import FieldReportsLayer from "./FieldReportsLayer.jsx";
+import FieldReportsPopup from "./FieldReportsPopup.jsx";
 import MpaPopup from "./MpaPopup.jsx";
 import CoronadosBanner from "./CoronadosBanner.jsx";
 import { selToSlotKey } from "./WindDayGrid.jsx";
@@ -135,9 +137,10 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
   // PrefsContext — extracted in Stage 5c (2026-05-23) so they no
   // longer have to be drilled through App → MapShell as props.
   const { prefs, setPref } = usePrefs();
-  const { opacity, units, mpaOn, bathyOn } = prefs;
+  const { opacity, units, mpaOn, bathyOn, fieldReportsOn } = prefs;
   const setMpaOn = (v) => setPref("mpaOn", v);
   const setBathyOn = (v) => setPref("bathyOn", v);
+  const setFieldReportsOn = (v) => setPref("fieldReportsOn", v);
   // Timeline layers use a slot-key string derived from their selection
   // state; helpers fall back to a valid slot if the requested one has no
   // data. Chl/viz keep the legacy integer composite.
@@ -207,6 +210,15 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
     const value = typeof next === "function" ? next(bathyOn) : next;
     if (!value) setSelectedBathy(null);
     setBathyOn(value);
+  };
+  // Field Reports popup state is local — the obs pins don't need the
+  // shared bathy lazy-load usePopupState manages. Same wrap-and-clear-
+  // on-off pattern as MPA/bathy.
+  const [selectedObservation, setSelectedObservation] = useState(null);
+  const updateFieldReportsOn = (next) => {
+    const value = typeof next === "function" ? next(fieldReportsOn) : next;
+    if (!value) setSelectedObservation(null);
+    setFieldReportsOn(value);
   };
 
   // Stale hover state from the previous layer carries an incompatible val
@@ -620,6 +632,17 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
           }}
         />
 
+        <FieldReportsLayer
+          width={size.w}
+          height={size.h}
+          active={fieldReportsOn}
+          zoomLevel={zoomLevel}
+          onSelect={(o) => {
+            track("popup_open", { kind: "field_report", class: o?.kind || "unknown" });
+            setSelectedObservation(o);
+          }}
+        />
+
         <g className="spot-pins">
           {SAVED_SPOTS.map((s) => {
             const [x, y] = project(s.lng, s.lat, size.w, size.h);
@@ -745,6 +768,7 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
         activeSpot={activeSpot} setActiveSpot={setActiveSpot}
         mpaOn={mpaOn} bathyOn={bathyOn}
         updateMpaOn={updateMpaOn} updateBathyOn={updateBathyOn}
+        fieldReportsOn={fieldReportsOn} updateFieldReportsOn={updateFieldReportsOn}
         size={size} zoomAt={zoomAt} resetView={resetView}
         dataState={dataState}
         isMobile={isMobile}
@@ -764,6 +788,13 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
 
       {selectedBathy && (
         <BathyPopup feature={selectedBathy} onClose={() => setSelectedBathy(null)} />
+      )}
+
+      {selectedObservation && (
+        <FieldReportsPopup
+          observation={selectedObservation}
+          onClose={() => setSelectedObservation(null)}
+        />
       )}
     </div>
     {/* MobileShell sits OUTSIDE .map-stage so the map can shrink to
@@ -787,6 +818,7 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
         dataState={dataState}
         setMpaOn={updateMpaOn}
         setBathyOn={updateBathyOn}
+        setFieldReportsOn={updateFieldReportsOn}
         activeSpot={activeSpot} setActiveSpot={setActiveSpot}
         timeOpts={timeOpts}
         compositeText={compositeText}

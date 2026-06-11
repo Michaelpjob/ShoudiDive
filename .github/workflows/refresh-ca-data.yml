@@ -176,6 +176,10 @@ jobs:
         continue-on-error: true
         run: python -m pipeline.validation.coverage
 
+      - name: Publish Field Reports observations
+        continue-on-error: true
+        run: python -m pipeline.validation.publish_field_reports
+
       - name: Regression guard
         run: python -m pipeline.validation.check_regression
 
