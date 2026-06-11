@@ -7,26 +7,34 @@ copy to the other.
 
 ## TL;DR — branching rules
 
+**One feature = one `feat/<slug>` branch off `main`, promoted on its own.**
+A finished feature must never wait on an unfinished one — so we never bundle
+everything through a single long-lived `dev` line.
+
 ```
-agent commits ──► push to dev ──► dev-checks.yml runs the test suite
+feat/<slug> off main ──► push ──► open PR: feat/<slug> → main
                                           │
                                           ▼
-                                  green (≈ 90 s)
-                                          │
-                                          ▼
-                                  open PR: dev → main
+                                  dev-checks.yml  (≈ 90 s)
                                           │
                                           ▼
                                   human reviews + merges
                                           │
                                           ▼
-                                  refresh-data.yml deploys to
-                                  production (shouldidive.com)
+                                  deploy to production (shouldidive.com)
+
+  (optional) merge feat/* into `dev` → combined preview at
+  dev.shouldidive.pages.dev — but NEVER promote FROM `dev`.
 ```
 
-**Never push directly to `main`.** Branch protection will reject the
-push, and you'll waste your turn fighting git rather than shipping.
-Push to `dev` first. Always.
+**Never push directly to `main`** (branch protection rejects it) and
+**never open a promotion PR from `dev`** — that drags every unfinished
+feature on `dev` into the PR, which is the exact trap this process exists
+to avoid. Each feature promotes via its own `feat/<slug> → main` PR.
+
+Track in-flight features in [`docs/FEATURES.md`](docs/FEATURES.md); see
+mechanical ground truth (ahead/behind, open PR, checks) with
+`bash scripts/feature-status.sh`.
 
 ## Why this exists
 
@@ -45,35 +53,71 @@ The dev gate is fast (~90 seconds end-to-end) so the cost is small.
 
 ## How to ship a change
 
-1. **Branch off `main`** (one-liner — Claude Code may auto-do this):
+1. **Branch off `main`, one branch per feature:**
    ```bash
    git fetch origin
-   git switch -c dev origin/main           # first time
-   # or
-   git switch dev && git pull --rebase origin dev   # subsequent times
+   git switch -c feat/<slug> origin/main
    ```
+   Add a row to [`docs/FEATURES.md`](docs/FEATURES.md) with `status: wip`.
 
 2. **Make your change. Commit normally** (do not skip hooks).
+   - **Dark-launch when you can:** if it's gateable UI, you may merge it to
+     `main` early *behind a flag* — `PROD_REGIONS` (`src/lib/region.js`), a
+     `PrefsContext` pref, or a `*-beta` subdomain — and flip it on when
+     ready, instead of holding a long-lived branch that drifts from `main`.
 
-3. **Push to `dev`:**
+3. **Push the feature branch:**
    ```bash
-   git push origin dev
+   git push -u origin feat/<slug>
    ```
 
-4. **Wait for `dev-checks.yml` to go green.**
-   - The dev preview at `https://dev.shouldidive.pages.dev` updates
-     automatically once checks pass — visit it to eyeball UI changes
-     before promoting.
-   - Use `gh run watch <run-id>` or `gh run list --branch dev` to
-     monitor.
-
-5. **Open a PR:**
+4. **Open the PR against `main` — from the feature branch, NOT `dev`:**
    ```bash
-   gh pr create --base main --head dev --title "<concise title>" \
+   gh pr create --base main --head feat/<slug> --title "<concise title>" \
      --body "<short summary>"
    ```
+   `dev-checks.yml` fires on `pull_request → main`, so a `feat/* → main` PR
+   gets the identical gate without routing through `dev`.
 
-6. **Wait for the human to review + merge.** Do not auto-merge.
+5. **Wait for `dev-checks.yml` to go green** (`gh pr checks <num>` or
+   `gh run watch <id>`). To eyeball UI before merge, merge the branch into
+   `dev` and use `https://dev.shouldidive.pages.dev` — `dev` is a throwaway
+   preview, never the promotion source.
+
+6. **Set the ledger row to `status: ready`. Wait for the human to review +
+   merge.** Do not auto-merge.
+
+## Feature tracking + the `dev` preview
+
+- **[`docs/FEATURES.md`](docs/FEATURES.md)** is the source of truth for what
+  each in-flight feature is, which branch carries it, and its status. Update
+  it when you start (`wip`), finish (`ready`), block (`blocked`), or ship a
+  feature. `bash scripts/feature-status.sh` prints the mechanical reality
+  (every `feat/*`/`fix/*` branch's ahead/behind vs `main`, open PR, checks)
+  — when it disagrees with the ledger, the script is right.
+
+- **`dev` is a disposable preview, not a promotion lane.** Its only job is to
+  let you eyeball several in-flight features together at
+  `dev.shouldidive.pages.dev`. Because nothing is ever promoted *from* `dev`,
+  a half-finished feature sitting on it blocks nothing.
+
+### Rebuilding the `dev` preview
+
+When `dev` drifts far from `main` (the `feature-status.sh` "far behind"
+marker), rebuild it as `main` + the active feature branches you want to
+preview. **This force-pushes `dev` — destructive; confirm with the human
+first**, and only after the real work on `dev` is preserved on its own
+`feat/*` branch:
+
+```bash
+git fetch origin
+git switch -C dev origin/main
+for b in feat/<a> feat/<b>; do git merge --no-edit "origin/$b"; done
+git push --force-with-lease origin dev
+```
+
+The data-refresh crons repopulate `dev`'s data on their next run, so the
+discarded data history is not a loss.
 
 ## What runs in `dev-checks.yml` (per-PR gate)
 
@@ -210,8 +254,13 @@ force-push to main to "undo" a merge.
 
 - ❌ `git push --force origin main` — protection rejects, but don't try.
 - ❌ Open a PR from `main` to `main` — pointless.
-- ❌ Branch off `dev` for a new feature — branch off `main` so dev
-   stays clean (small queue).
+- ❌ Open a promotion PR from `dev` → `main` — it bundles every
+   unfinished feature on `dev` into the PR. Promote per-feature:
+   `feat/<slug> → main`.
+- ❌ Branch off `dev` for a new feature — branch off `main` so each
+   feature is independently promotable.
+- ❌ Leave a `ready` feature stranded behind an unfinished one — that's
+   the trap [`docs/FEATURES.md`](docs/FEATURES.md) exists to prevent.
 - ❌ Push commits to `main` "just to skip CI" — they'll be rejected.
 - ❌ Merge a PR with red checks "because it's a small change" — every
    merge to main goes through the gate, no exceptions.

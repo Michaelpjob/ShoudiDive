@@ -189,6 +189,35 @@ def score_all_observations() -> list[dict]:
 
 # ---- Aggregation -----------------------------------------------------
 
+def _dedup_residuals(rows: list[dict]) -> list[dict]:
+    """Collapse residuals identical in (source, predicted_p50, observed).
+
+    One chatty source posting the same spot/day twice resolves to the same
+    prediction cell and the same observed value, producing byte-identical
+    residuals (seen in prod: justgetwet la-jolla-0 / la-jolla-2). Counting
+    both inflates ``n`` and makes Pearson r a meaningless +/-1.0 on what is
+    really one point. A genuinely different reading (different observed
+    value) keeps its own row; only exact duplicates are dropped.
+    """
+    seen: set[tuple] = set()
+    out: list[dict] = []
+    for r in rows:
+        try:
+            key = (
+                r.get("source"),
+                round(float(r["predicted_p50_ft"]), 1),
+                round(float(r["observed_ft"]), 1),
+            )
+        except (KeyError, TypeError, ValueError):
+            out.append(r)
+            continue
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(r)
+    return out
+
+
 def per_zone_metrics(residuals: list[dict]) -> dict:
     by_zone: dict[str, list[dict]] = defaultdict(list)
     for r in residuals:
@@ -197,6 +226,7 @@ def per_zone_metrics(residuals: list[dict]) -> dict:
 
     out: dict[str, dict] = {}
     for zone, rows in sorted(by_zone.items()):
+        rows = _dedup_residuals(rows)
         if not rows:
             continue
         weights = np.array([float(r.get("source_confidence", 0.5)) for r in rows])

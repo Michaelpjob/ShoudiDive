@@ -31,7 +31,7 @@ import pathlib
 import re
 from datetime import datetime, timezone
 
-from ._base import BaseScraper
+from ._base import BaseScraper, parse_visibility_ft
 
 
 SOURCE_ROOT = "https://justgetwet.com/blogs/dive-reports-and-conditions"
@@ -48,7 +48,7 @@ DEFAULT_NAME = "La Jolla"
 # spelling Just Get Wet uses.
 _VIS_RE = re.compile(
     r"vis(?:ibility)?\s*[:\-]?\s*"
-    r"(\d{1,3})(?:\s*[\-–to]\s*(\d{1,3}))?\s*(?:ft|feet|')",
+    r"(\d{1,3}(?:\s*(?:to|[\-–])\s*\d{1,3})?\s*(?:ft|feet|m|meters|'))",
     re.IGNORECASE,
 )
 _SWELL_RE = re.compile(
@@ -220,12 +220,11 @@ def _extract_visibility(text: str) -> float | None:
     m = _VIS_RE.search(text)
     if not m:
         return None
-    a = float(m.group(1))
-    b = m.group(2)
-    v = (a + float(b)) / 2 if b else a
-    if not (1 <= v <= 100):
-        return None
-    return round(v, 1)
+    # Route the matched "Vis: <value>" blob through the shared parser so
+    # ranges and metric units are handled one canonical way. The old
+    # per-source regex required 'ft' and silently dropped the occasional
+    # "Vis: 6-10 meters" report.
+    return parse_visibility_ft(m.group(1))
 
 
 def _extract_swell(text: str) -> tuple[float | None, float | None]:

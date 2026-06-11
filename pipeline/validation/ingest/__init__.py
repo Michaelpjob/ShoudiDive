@@ -108,6 +108,33 @@ OBS_PATH = DATA_DIR / "observations.jsonl"
 HEALTH_PATH = DATA_DIR / "ingest_health.json"
 
 
+# Tier A = structured / API feeds (buoys, ERDDAP, agency datasets) — a
+# zero return here is a real outage worth alarming on. Tier B = community
+# scrapes (dive shops, forums, Reddit) — flaky by nature, expected to
+# return 0 on any given day, never gating. Sources not listed default to
+# Tier B. This is the declarative seed of the Ground Truth source registry.
+STRUCTURED_SOURCES = frozenset({
+    "cdip-buoy", "ndbc-buoy", "cencoos", "rcca-mpa-baseline",
+})
+
+
+def _tier(source_id: str) -> str:
+    return "A_structured" if source_id in STRUCTURED_SOURCES else "B_community"
+
+
+def _source_status(observation_count: int, error: str | None) -> str:
+    """Classify a source's run outcome.
+
+    Distinguishes ``empty`` (ran clean but returned 0 rows — a silently
+    dead scraper) from ``ok`` (returned rows) and ``failed`` (raised). The
+    old code marked any non-raising run ``ok``, so 5 dead scrapers hid
+    behind ``ok: 10`` and only the aggregate obs-floor watchdog noticed.
+    """
+    if error is not None:
+        return "failed"
+    return "ok" if observation_count > 0 else "empty"
+
+
 def run_all() -> list[dict]:
     """Run every scraper, dedupe by obs_id, append new rows to JSONL.
 
@@ -125,19 +152,23 @@ def run_all() -> list[dict]:
     source_status: list[dict] = []
     for scraper in SCRAPERS:
         sid = getattr(scraper, "source_id", scraper.__class__.__name__)
+        tier = _tier(sid)
         try:
             obs = scraper.fetch()
-            print(f"  {sid}: {len(obs)} observations")
+            status = _source_status(len(obs), None)
+            print(f"  {sid}: {len(obs)} observations ({status})")
             new_obs.extend(obs)
             source_status.append({
                 "source_id": sid,
-                "status": "ok",
+                "tier": tier,
+                "status": status,
                 "observation_count": len(obs),
                 "error": None,
             })
         except Exception as exc:  # noqa: BLE001
             source_status.append({
                 "source_id": sid,
+                "tier": tier,
                 "status": "failed",
                 "observation_count": 0,
                 "error": f"{exc.__class__.__name__}: {exc}",
@@ -157,7 +188,17 @@ def run_all() -> list[dict]:
         "computed_at": started.isoformat(timespec="seconds").replace("+00:00", "Z"),
         "total_sources": len(source_status),
         "ok": sum(1 for s in source_status if s["status"] == "ok"),
+        "empty": sum(1 for s in source_status if s["status"] == "empty"),
         "failed": sum(1 for s in source_status if s["status"] == "failed"),
+        # Tier-A (structured/API) sources that returned nothing are the
+        # real alarm — a buoy/ERDDAP feed going silent is a genuine outage,
+        # whereas a Tier-B community scrape returning 0 is the expected
+        # steady state for a shoddy site. Named here so the watchdog can
+        # point at the dead feed instead of just the aggregate count.
+        "empty_structured": [
+            s["source_id"] for s in source_status
+            if s["status"] == "empty" and s.get("tier") == "A_structured"
+        ],
         "observations_fetched": len(new_obs),
         "observations_added": len(fresh),
         "sources": source_status,

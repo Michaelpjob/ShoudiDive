@@ -25,15 +25,15 @@ import { getDataState } from "./dataSource.js";
 
 const STATIC_CONFIDENCE = {
   ca: {
-    sst:     { score: 5, source: "MUR satellite",        reason: "Validated against pier sensors + ground-truth" },
+    sst:     { score: 4, source: "MUR satellite",        reason: "MUR L4 satellite analysis + NDBC buoy correction (no published residuals)" },
     chl:     { score: 4, source: "MODIS/VIIRS blend",    reason: "Multi-source NRT, NASA OB.DAAC" },
     wind:    { score: 5, source: "HRRR 3 km hourly",     reason: "NOAA operational forecast" },
-    swell:   { score: 4, source: "WW3 gfswave wcoast",   reason: "NOAA model, ~18 km grid" },
+    swell:   { score: 3, source: "WW3 gfswave wcoast",   reason: "NOAA WaveWatch III forecast model, ~18 km grid" },
     current: { score: 4, source: "HFRNet 6 km + tide/wind", reason: "Observed nearshore via HF radar; inferred offshore" },
-    viz:     { score: 4, source: "viz_predict model",    reason: "Calibrated against CA dive ground-truth ingestion" },
+    viz:     { score: 3, source: "viz_predict model",    reason: "chl-to-Secchi prediction; not yet calibrated to ground truth" },
   },
   baja: {
-    sst:     { score: 5, source: "MUR satellite",        reason: "Same satellite + algorithm as CA" },
+    sst:     { score: 4, source: "MUR satellite",        reason: "MUR L4 analysis + buoy correction, same as CA" },
     chl:     { score: 4, source: "MODIS/VIIRS blend",    reason: "Multi-source NRT, NASA OB.DAAC" },
     wind:    { score: 4, source: "HRRR + GFS",           reason: "HRRR (3 km) north of ~21°N; GFS (~12 km) south of CONUS" },
     swell:   { score: 3, source: "WW3 wcoast + SMB chop", reason: "WW3 covers Pacific; Sea of Cortez is wind-chop fetch-limited inference" },
@@ -41,15 +41,15 @@ const STATIC_CONFIDENCE = {
     viz:     { score: 3, source: "viz_predict model",    reason: "Coefficients ported from CA; not yet validated against Baja ground-truth" },
   },
   pnw: {
-    sst:     { score: 5, source: "MUR satellite",        reason: "Same satellite + algorithm as CA" },
+    sst:     { score: 4, source: "MUR satellite",        reason: "MUR L4 analysis + buoy correction, same as CA" },
     chl:     { score: 3, source: "MODIS/VIIRS",          reason: "Marine layer + fog frequently block satellite passes" },
     wind:    { score: 5, source: "HRRR 3 km hourly",     reason: "Full HRRR coverage" },
-    swell:   { score: 4, source: "WW3 gfswave wcoast",   reason: "NOAA model, ~18 km grid" },
+    swell:   { score: 3, source: "WW3 gfswave wcoast",   reason: "NOAA WaveWatch III forecast model, ~18 km grid" },
     current: { score: 4, source: "HFRNet + tide/wind",   reason: "Outer coast observed via HFRNet; Salish Sea is tide-inferred" },
     viz:     { score: 2, source: "viz_predict model",    reason: "Not calibrated to PNW ground-truth — beta" },
   },
   tropical: {
-    sst:     { score: 5, source: "MUR satellite",        reason: "Same satellite + algorithm as CA" },
+    sst:     { score: 4, source: "MUR satellite",        reason: "MUR L4 analysis + buoy correction, same as CA" },
     chl:     { score: 4, source: "MODIS/VIIRS",          reason: "Lower cloud cover than CA on average" },
     wind:    { score: 4, source: "HRRR Gulf + GFS",      reason: "HRRR covers Gulf coast; GFS for Caribbean and east FL" },
     swell:   { score: 3, source: "WW3 atlocn",           reason: "Atlantic basin model; known issues at small-island shelves" },
@@ -135,6 +135,22 @@ function dynamicModulation(layer, manifest) {
   return { delta, reasons };
 }
 
+// Coverage-driven UPGRADE (Field Reports engine). The STATIC_CONFIDENCE
+// score is an honest FLOOR. Where real ground-truth coverage exists —
+// computed in pipeline/validation/coverage.py and published as
+// manifest.coverage — a layer earns a positive tier bump. tier_delta is 0
+// until the coverage + calibration thresholds are met, so the dot can rise
+// above "Modeled" only when the data backs it, and can never overstate.
+function coverageUpgrade(layer, manifest) {
+  const cov = manifest?.coverage?.[layer];
+  if (!cov) return { delta: 0, reason: null };
+  const delta = Math.max(0, Number(cov.tier_delta) || 0);
+  if (delta <= 0) return { delta: 0, reason: null };
+  const cal = cov.calibration_pct;
+  const pct = cal != null ? `, ${Math.round(cal * 100)}% in-band` : "";
+  return { delta, reason: `+${delta} from ${cov.n_recent} recent ground-truth obs${pct}` };
+}
+
 export function getLayerConfidence(layer, opts = {}) {
   const r = activeRegion();
   const base = STATIC_CONFIDENCE[r]?.[layer];
@@ -142,9 +158,11 @@ export function getLayerConfidence(layer, opts = {}) {
   const manifest = getDataState()?.manifest;
   const { delta: dynDelta, reasons: dynReasons } = dynamicModulation(layer, manifest);
   const { delta: horDelta, reason: horReason } = horizonDecay(layer, opts.horizonDays);
+  const { delta: covDelta, reason: covReason } = coverageUpgrade(layer, manifest);
   const reasons = [...dynReasons];
   if (horReason) reasons.push(horReason);
-  const score = Math.max(1, Math.min(5, base.score + dynDelta + horDelta));
+  if (covReason) reasons.push(covReason);
+  const score = Math.max(1, Math.min(5, base.score + dynDelta + horDelta + covDelta));
   const label = CONFIDENCE_LABELS[score];
   return {
     score,

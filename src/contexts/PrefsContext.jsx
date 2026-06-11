@@ -21,7 +21,7 @@ import { track } from "../lib/analytics.js";
 
 const PREF_KEY = "ca-coast-conditions:prefs:v1";
 const OVERLAY_DEFAULTS_MIGRATION_KEY = "ca-coast-conditions:prefs:migrations:overlay-defaults-v1";
-const DEFAULT_PREFS = { theme: "light", opacity: 0.62, units: "F", mpaOn: true, bathyOn: true };
+const DEFAULT_PREFS = { theme: "light", opacity: 0.62, units: "F", mpaOn: true, bathyOn: true, fieldReportsOn: false };
 
 function loadPrefs() {
   try {
