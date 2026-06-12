@@ -58,7 +58,9 @@ import { track } from "../lib/analytics.js";
 const CANVAS_W = 960;
 const CANVAS_H = 960;
 const MAX_ZOOM = 16;
-const MAX_MARKS = 12;
+// One mark at a time: each chart click REPLACES it (it doubles as
+// the water-column pin). The original multi-waypoint behavior can
+// return behind shift-click if collecting GPS numbers comes back.
 
 // NOAA chart convention: shallow water carries the most saturated blue,
 // deepening toward near-white. Instantly readable as "light = deep".
@@ -657,13 +659,10 @@ export default function SpotDetailView({ spot, onClose }) {
   // ---- Marks ----------------------------------------------------------------
   function addMark(lng, lat) {
     const d = depthAt(lng, lat);
-    setMarks((prev) => {
-      const next = [...prev, {
-        lng, lat,
-        depthFt: d && !d.onLand ? Math.round(d.depthFt) : null,
-      }];
-      return next.slice(-MAX_MARKS);
-    });
+    setMarks([{
+      lng, lat,
+      depthFt: d && !d.onLand ? Math.round(d.depthFt) : null,
+    }]);
   }
 
   function copyCoords(m) {
@@ -1192,14 +1191,6 @@ export default function SpotDetailView({ spot, onClose }) {
                     stroke="#86198f"
                     strokeWidth={1.2 / zoomLevel}
                   />
-                  <text
-                    x={x} y={y}
-                    fill="#4a044e"
-                    fontSize={7 / zoomLevel}
-                    fontWeight={700}
-                    textAnchor="middle"
-                    dominantBaseline="central"
-                  >{i + 1}</text>
                 </g>
               );
             })}
@@ -1359,7 +1350,7 @@ export default function SpotDetailView({ spot, onClose }) {
             className="spot-detail-layer-btn spot-detail-reset"
             onClick={() => setMarks([])}
           >
-            Clear marks ({marks.length})
+            Clear mark
           </button>
         )}
       </div>
