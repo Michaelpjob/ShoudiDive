@@ -37,7 +37,7 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           # workflow_run runs on the default branch's HEAD by default;
           # explicitly check out the same SHA dev-checks ran against
