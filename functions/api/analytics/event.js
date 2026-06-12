@@ -66,6 +66,8 @@ const ALLOWED_NAMES = new Set([
   "zoom",
   "share_click",
   "tip_click",
+  "column_open",
+  "column_depth_set",
 ]);
 
 function jsonResponse(body, init) {
