@@ -41,10 +41,13 @@ import {
   getWindSpeed,
   getWindUV,
   getVizFt,
+  getColumnAt,
+  getColumnSpot,
   getSwell5dStats,
   windCompass,
   windCardinal,
 } from "../lib/dataSource.js";
+import WaterColumn from "./micro/WaterColumn.jsx";
 import { usePrefs } from "../contexts/PrefsContext.jsx";
 import { track } from "../lib/analytics.js";
 
@@ -815,6 +818,36 @@ export default function SpotDetailView({ spot, onClose }) {
       ? "land"
       : `${Math.round(cursorDepth.depthFt)} ft · ${cursorDepth.depthM.toFixed(0)} m`;
 
+  // ---- Water column at the cursor (PRD water-column V2, micro form) -------
+  // The regional column rasters give cliff/below vis; the bundle DEM
+  // overrides the coarse 10 km bottom depth with chart-resolution
+  // depth at the exact cursor point — so a shallow shelf correctly
+  // clips the murk layer and a wall shows the full descent. Idle
+  // cursor falls back to the spot centre, whose sidecar also carries
+  // the 24 h cliff series.
+  const waterColumn = (() => {
+    if (!prefs.waterColumnOn) return null;
+    const at = cursor || { lng: spot.lng, lat: spot.lat };
+    const d = cursor ? cursorDepth : depthAt(spot.lng, spot.lat);
+    if (d?.onLand) return null;
+    const col = getColumnAt(at.lng, at.lat);
+    if (!col) return null;
+    let out = col;
+    if (d && Number.isFinite(d.depthFt)) {
+      const bottom = Math.round(d.depthFt);
+      const noCliff = col.cliff_ft != null && bottom <= col.cliff_ft;
+      out = { ...col, bottom_ft: bottom, no_cliff: noCliff,
+              below_ft: noCliff ? col.surface_ft : col.below_ft };
+    }
+    // No diurnal strip when the bottom sits above the cliff — a
+    // "cliff swing" chart for water the cliff never enters reads as
+    // noise on a shallow cove.
+    const series = (cursor || out.no_cliff)
+      ? null
+      : (getColumnSpot(spot.id)?.cliff_series_ft || null);
+    return { col: out, title: cursor ? "At cursor" : spot.name, series };
+  })();
+
   // ---- Conditions at the spot centre ----------------------------------------
   const conditions = useMemo(() => {
     const sstC = getSST(spot.lng, spot.lat, 1);
@@ -1226,6 +1259,16 @@ export default function SpotDetailView({ spot, onClose }) {
 
       {/* Conditions + mark panel — bottom-left */}
       <div className="spot-detail-conditions">
+        {waterColumn && (
+          <div className="sdc-wc">
+            <WaterColumn
+              col={waterColumn.col}
+              title={waterColumn.title}
+              series={waterColumn.series}
+              compact
+            />
+          </div>
+        )}
         <div className="sdc-row sdc-coord">
           <span>{cursor ? "Cursor" : "Centre"}</span>
           <strong>

@@ -163,6 +163,10 @@ export default function DesktopLayout({
   dataState,
   // Mobile guard — Tooltip honors !isMobile inside this component
   isMobile,
+  // Phase 1B Spot Detail: bundledSpots is a Set of ids that have a
+  // /data/spots/<id>/bundle.json; openSpotDetail(id) mounts the
+  // SpotDetailView overlay in MapShell.
+  bundledSpots, openSpotDetail,
 }) {
   const [infoOpen, setInfoOpen] = useState(true);
   const [controlsOpen, setControlsOpen] = useState(true);
@@ -852,6 +856,22 @@ export default function DesktopLayout({
                         </div>
                       );
                     })()}
+                    {/* Spot Detail launch — only renders when the
+                        active spot has a pre-computed bundle on the
+                        pipeline side. Shows on the active spot only
+                        to avoid cluttering the list. */}
+                    {bundledSpots?.has(s.id) && activeSpot === s.id && (
+                      <button
+                        type="button"
+                        className="spot-detail-open"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openSpotDetail?.(s.id);
+                        }}
+                      >
+                        View detailed map →
+                      </button>
+                    )}
                   </div>
                   <div className="spot-val mono">
                     {valTxt}

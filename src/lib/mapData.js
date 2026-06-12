@@ -542,3 +542,34 @@ export function chlAt(lng, lat) {
   const mg = Math.pow(10, logv);
   return Math.max(0.05, Math.min(20, mg));
 }
+
+// Spot Detail bundle radii (km). Used by `pipeline/build_spot_bundles.py`
+// to define the per-spot bounding box around `(lng, lat)` for the
+// high-res CUDEM bathy + contour + clipped overlay generation.
+//
+// Authoritative list of *which* spots have a bundle is the pipeline's
+// emitted `public/data/spots/index.json` (read at runtime in MapShell).
+// This map exists so the Python builder doesn't have to import JS — it
+// keeps a small Python copy of the same constants in build_spot_bundles.py.
+//
+// Phase 1B picks three spots that span the variation we'd expect at
+// fan-out time:
+//   * lajolla  — mainland cove + La Jolla Canyon (steep nearshore drop)
+//   * catalina — Channel Island shelf (offshore, larger radius)
+//   * monterey — NorCal kelp-heavy coast + Monterey Canyon edge
+export const SPOT_BUNDLE_RADIUS_KM = {
+  lajolla:  4,
+  catalina: 16,
+  monterey: 6,
+};
+
+// Project a (lng, lat) point into pixel coordinates inside an arbitrary
+// bbox. Used by SpotDetailView so its independent viewBox can render
+// bundle content without coupling to the wide-view BBOX. Mirrors the
+// math in `project()` above but takes a bbox-as-argument rather than
+// reading the module-level CA/PNW/etc. constant.
+export function projectInBbox(bbox, lng, lat, w, h) {
+  const x = ((lng - bbox.lng_min) / (bbox.lng_max - bbox.lng_min)) * w;
+  const y = ((bbox.lat_max - lat) / (bbox.lat_max - bbox.lat_min)) * h;
+  return [x, y];
+}
