@@ -1,0 +1,61 @@
+{
+  "id": "pointloma",
+  "name": "Point Loma",
+  "centre": {
+    "lng": -117.27,
+    "lat": 32.685
+  },
+  "bbox": {
+    "lng_min": -117.32351978608722,
+    "lng_max": -117.21648021391277,
+    "lat_min": 32.63995495495496,
+    "lat_max": 32.730045045045046
+  },
+  "generated_at": "2026-06-12T23:45:59Z",
+  "layers": {
+    "bathy": {
+      "url": "bathy.png",
+      "width": 480,
+      "height": 480,
+      "depth_range_m": [
+        0,
+        500
+      ],
+      "encoding": "linear_8bit_0nan"
+    },
+    "contours": {
+      "url": "contours.geojson",
+      "intervals_m": [
+        1,
+        5,
+        25,
+        100
+      ],
+      "levels": 22
+    },
+    "coastline": {
+      "url": "coastline.geojson",
+      "features": 1
+    },
+    "kelp": {
+      "url": "kelp.geojson",
+      "features": 2
+    },
+    "mpa": {
+      "url": "mpa.geojson",
+      "features": 1
+    },
+    "soundings": {
+      "url": "soundings.geojson",
+      "features": 485
+    }
+  },
+  "sources": {
+    "bathy": "NOAA NCEI DEM global mosaic exportImage (CUDEM/coastal DEMs nearshore, best-available blend)",
+    "coastline": "OSM natural=coastline via fetch_coastline.py \u2014 clipped from global land.geojson",
+    "kelp": "CDFW BIO_CA_Kelp2016 observed aerial-survey canopy (clipped)",
+    "mpa": "CDFW MPA ds582 (clipped)",
+    "landmarks": "Curated per-spot dive-site / harbor labels",
+    "soundings": "Depth soundings sampled from the spot DEM on a 24x24 lattice"
+  }
+}
