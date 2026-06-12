@@ -15,6 +15,15 @@ name: Dev checks
 on:
   push:
     branches: [dev]
+    # Bot data commits (ca-beta refreshes pushing to dev hourly, the
+    # main→dev data syncs) must not burn dev-check runs — they were
+    # the bulk of #137's red noise. A push is skipped only when EVERY
+    # changed file matches; any code change still runs the gate.
+    # sync-dev.yml separately dispatches dev-checks when a sync brings
+    # code to dev (GITHUB_TOKEN pushes don't fire triggers).
+    paths-ignore:
+      - "public/data/**"
+      - "public/data-*/**"
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -40,8 +49,8 @@ jobs:
     name: pipeline-tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
@@ -64,8 +73,8 @@ jobs:
     name: web-build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: "20"
           cache: npm
@@ -83,7 +92,7 @@ jobs:
         # contents without having to clone + build locally.
         # Also consumed by the web-smoke job below so the smoke test
         # runs against the EXACT bytes web-build produced.
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: web-dist-${{ github.sha }}
           path: dist/
@@ -101,8 +110,8 @@ jobs:
     name: web-lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: "20"
           cache: npm
@@ -128,8 +137,8 @@ jobs:
     name: web-tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: "20"
           cache: npm
@@ -161,8 +170,8 @@ jobs:
     needs: web-build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: "20"
           cache: npm
@@ -173,7 +182,7 @@ jobs:
         # `npm ci`) until the lockfile is regenerated with puppeteer.
         run: npm install --no-audit --no-fund
       - name: Download dist artifact from web-build
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: web-dist-${{ github.sha }}
           path: dist/
@@ -198,15 +207,15 @@ jobs:
     needs: web-build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: "20"
           cache: npm
       - name: Install
         run: npm install --no-audit --no-fund
       - name: Download dist artifact from web-build
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: web-dist-${{ github.sha }}
           path: dist/
@@ -217,7 +226,7 @@ jobs:
         # reviewer download the artifact to spot-check what each
         # combination actually rendered.
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: visual-paint-${{ github.sha }}
           path: test-output/visual-paint/
@@ -240,8 +249,8 @@ jobs:
       run:
         working-directory: mobile
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: "20"
           cache: npm
@@ -271,7 +280,7 @@ jobs:
     name: secrets-scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Scan for committed secrets
         run: |
           set -e
@@ -326,7 +335,7 @@ jobs:
     name: workflow-lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install actionlint
         run: |
           curl -sL -o actionlint.tar.gz https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz
@@ -349,8 +358,8 @@ jobs:
     name: manifest-validate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - name: Validate committed manifest against LayerSpec contract
