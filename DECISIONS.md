@@ -55,6 +55,29 @@ guard + wiring only in refresh-ca-data.yml, per PRD §3 (other regions
 inherit the heuristic when their input sets are verified — wave/wind
 encodings differ per region overrides).
 
+**WC-D12 — v1.1 cross-shore + regional cliff structure (user review,
+2026-06-12).** The user flagged the offshore gradient: v1.0 applied
+the upwelling shoaling at every cell, but coastal upwelling lifts the
+pycnocline only within ~the baroclinic deformation radius (~10-30 km
+off CA), and winds strengthen offshore — so the model shoaled the
+cliff MORE offshore, a wrong-signed gradient (a 100 km-offshore point
+read 23 ft; the open CA Current summer thermocline is far deeper).
+Fixes: (a) upwelling shoaling now decays offshore over
+UPWELLING_DECAY_KM=25; (b) the cliff relaxes +OFFSHORE_DEEPEN_FT=20
+toward its open-ocean depth over OFFSHORE_DEEPEN_KM=40; (c) regional
+bands at the real regime boundaries — Pt. Conception 34.45°N (SoCal
+Bight: base table + upwelling damped ×0.6 for the E-W coast) and
+Pt. Arena 38.95°N (CenCal +15%, NorCal +30%) — replacing the flat
+36°N step that treated Big Sur like the Bight. Distance-to-shore via
+scipy EDT on the bathy land mask (10 km cells vs 25-40 km decay
+scales: adequate). Point Loma anchor unchanged (kelp line dts≈2 km →
+23.8 ft). Known coarseness, accepted: spot sidecar samples the
+10 km raster, so a coastal spot's cell can sit ~1 cell offshore and
+read ~3-4 ft deep vs the beach value — kept for hover↔sidecar
+consistency; C2's model MLD supersedes. June transect after the fix:
+La Jolla 24.7→44.5 ft (2→150 km), Monterey 27.3→48.3, NorCal
+30.7→52.0.
+
 ## Group S (2026-06-12)
 
 **D1 — "Fix the producer, not the probe" met two distinct failures; both fixed.**
