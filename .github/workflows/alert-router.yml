@@ -103,6 +103,25 @@ jobs:
             --json workflowName,databaseId,createdAt,event,headBranch \
             > successes.json
 
+          # Normalize workflow names. Runs that die before YAML parse
+          # (startup_failure) report workflowName as the FILE PATH
+          # (".github/workflows/foo.yml") instead of the display name.
+          # Without normalization those classify + open issues under
+          # the path, and close-on-green never matches them against
+          # the display-named successes — the issue then dangles open
+          # forever (that's how #95 got stuck). Map path → name via
+          # the workflows API and rewrite both lists.
+          gh api "repos/$REPO/actions/workflows" --paginate \
+            --jq '[.workflows[] | {path: .path, name: .name}]' \
+            > workflow-map.json || echo '[]' > workflow-map.json
+
+          for f in failures.json successes.json; do
+            jq --slurpfile wfmap workflow-map.json '
+              ($wfmap[0] | map({key: .path, value: .name}) | from_entries) as $byPath
+              | map(.workflowName = ($byPath[.workflowName] // .workflowName))
+            ' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+          done
+
           # Filter both lists to the 2-h window in jq + classify into
           # (workflow_class, severity) buckets.
           #
@@ -207,13 +226,16 @@ jobs:
 
             # Look for an existing issue with both the alert-router label
             # AND a title that contains this workflow's name.
-            existing=$(gh issue list --repo "$REPO" \
+            # `|| true` guards two failure modes under `set -euo pipefail`:
+            # a transient gh/API error, and head(1) SIGPIPE-ing gh when
+            # more than one issue matches.
+            existing=$({ gh issue list --repo "$REPO" \
               --label "system:alert-router" \
               --search "${workflow} in:title" \
               --state open \
               --json number,title \
               --jq ".[] | select(.title | contains(\"${workflow}\")) | .number" \
-              | head -1)
+              | head -1; } || true)
 
             if [ -n "$existing" ]; then
               echo "Updating issue #$existing for $workflow ($severity)"
@@ -250,6 +272,12 @@ jobs:
             workflow=$(echo "$issue_title" | sed -n 's/^\[[^]]*\] \(.*\): [0-9].*$/\1/p')
             if [ -z "$workflow" ]; then continue; fi
 
+            # Titles created before path→name normalization may carry
+            # the workflow FILE PATH — map it so the issue can close.
+            workflow=$(jq -r --arg w "$workflow" \
+              '(map({key: .path, value: .name}) | from_entries)[$w] // $w' \
+              workflow-map.json)
+
             fail_count=$(jq --arg w "$workflow" '
               [.[] | select(.workflow == $w)] | .[0].count // 0
             ' failures-by-workflow.json)
@@ -274,12 +302,16 @@ jobs:
           ts=$(date -u +%Y-%m-%dT%H:%MZ)
           # Single rolling heartbeat issue. If you stop seeing this
           # update, the router itself is dead.
+          # `|| true`: a transient gh/API failure here must not fail
+          # the router run under `set -e` — the heartbeat then simply
+          # updates on the next 15-min tick. (This exact line was the
+          # failing step in the 2026-05-26/31 router failures → #95.)
           existing=$(gh issue list --repo "$REPO" \
             --label "system:alert-router-heartbeat" \
             --state open \
             --limit 1 \
             --json number \
-            --jq '.[0].number // empty')
+            --jq '.[0].number // empty' || true)
 
           body=$(printf '%s\n' \
             "alert-router last completed: **${ts}**" \

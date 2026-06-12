@@ -50,39 +50,25 @@ DATA_ROOT = REPO_ROOT / "public" / "data"
 
 REGIONS = ("ca", "pnw", "tropical")
 
-# Regions visible on the production domain (shouldidive.com). Mirror of
-# PROD_REGIONS in src/lib/region.js — keep the two in sync. PNW + tropical
-# are dev-only beta regions whose data is refreshed on the `dev` branch;
-# on `main` their committed data legitimately lags between dev→main merges
-# (the per-region refresh crons target dev, and main only picks their data
-# up when a merge carries it). So holding them to the strict freshness
-# ceiling below is a false positive *when a change is being promoted to
-# main* — the beta data isn't broken, it's just not main's job to keep it
-# fresh. We still enforce freshness on dev pushes (where those regions are
-# user-visible on the *-beta previews), so coverage isn't lost — only the
-# main-promotion false positive is suppressed.
-PROD_REGIONS = ("ca", "baja")
+# Regions hidden on production (beta). Their data is refreshed on `dev`, not
+# `main`, so it legitimately lags on main between dev→main promotions (the
+# refresh-{pnw,tropical}-data crons commit to dev). A PR that *targets main*
+# therefore must not hard-fail freshness for these — otherwise an isolated
+# branch off main (e.g. a pipeline hotfix) can never go green, since it doesn't
+# carry dev's fresh beta data. The freshness contract is still fully enforced
+# on dev pushes and for prod-visible regions (ca / baja). GitHub sets
+# GITHUB_BASE_REF to the PR's target branch on pull_request events; it is empty
+# on push events, so this skip is scoped precisely to PRs aimed at main.
+BETA_REGIONS = ("pnw", "tropical")
 
 
-def _promoting_to_main() -> bool:
-    """True when this gate run is evaluating a change destined for `main`
-    (the production branch). On GitHub Actions a `pull_request → main`
-    sets GITHUB_BASE_REF=main; pushes to `dev` and local runs leave it
-    empty. Used to exempt dev-only beta regions from the freshness ceiling
-    when — and only when — promoting to prod, where their committed data
-    legitimately lags. See PROD_REGIONS above.
-    """
-    return os.environ.get("GITHUB_BASE_REF", "") == "main"
-
-
-def _skip_if_beta_on_main_promotion(region: str) -> None:
-    """Skip the calling freshness test for a dev-only beta region when the
-    run is a PR to main. No-op for prod regions and for dev/local runs."""
-    if region not in PROD_REGIONS and _promoting_to_main():
+def _skip_beta_freshness_on_main(region: str) -> None:
+    """Skip a freshness assertion for a beta region when the PR targets main."""
+    if region in BETA_REGIONS and os.environ.get("GITHUB_BASE_REF") == "main":
         pytest.skip(
-            f"{region}: dev-only beta region (refreshed on dev); its data "
-            f"legitimately lags on main between merges, so freshness is not "
-            f"gated on PRs to main. Still enforced on dev pushes."
+            f"{region}: beta region (hidden on prod) is refreshed on dev, not "
+            "main — freshness is enforced on dev pushes + prod regions, so it "
+            "is not asserted on PRs targeting main."
         )
 
 
@@ -506,10 +492,10 @@ def test_top_level_manifest_freshness(region):
     development cycle (cron runs daily). 48h is the realistic ceiling
     before something's genuinely broken.
     """
+    _skip_beta_freshness_on_main(region)
     m = _manifest(region)
     if m is None:
         pytest.skip(f"no data for {region}")
-    _skip_if_beta_on_main_promotion(region)
     raw = m.get("generated_at")
     if not raw:
         pytest.fail(f"{region}: manifest has no generated_at")
@@ -573,10 +559,10 @@ def test_sst_not_silently_stuck(region):
     on `test_top_level_manifest_freshness` so the two tests don't
     generate split-brain signals.
     """
+    _skip_beta_freshness_on_main(region)
     m = _manifest(region)
     if m is None:
         pytest.skip(f"no data for {region}")
-    _skip_if_beta_on_main_promotion(region)
 
     info = (m.get("layers") or {}).get("sst")
     if not isinstance(info, dict):

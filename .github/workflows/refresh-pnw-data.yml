@@ -40,12 +40,12 @@ jobs:
       actions: write   # for `gh workflow run deploy-pnw-beta.yml` at the end
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.branch || (github.event_name == 'schedule' && 'dev' || github.ref) }}
           token: ${{ secrets.BOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip

@@ -282,3 +282,167 @@ def test_http_get_raise_on_failure_with_http_error(monkeypatch):
 def test_http_get_rejects_zero_retries():
     with pytest.raises(ValueError):
         http_get("https://example.com/x", retries=0)
+
+
+# ---------------------------------------------------------------------------
+# Circuit breaker + connect-timeout split (2026-06-12, NASA outage hardening)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _isolated_breaker_state():
+    """Every test starts and ends with clean breaker state. Without this,
+    the transport-failure tests above (all on example.com) would trip the
+    breaker for every test that follows them."""
+    http_mod.reset_circuit_breakers()
+    yield
+    http_mod.reset_circuit_breakers()
+
+
+def _transport_boom(url, **kw):
+    raise requests.ConnectionError("no route to host")
+
+
+def test_breaker_opens_after_threshold_failed_calls(monkeypatch):
+    calls = []
+
+    def boom(url, **kw):
+        calls.append(url)
+        raise requests.ConnectionError("down")
+
+    monkeypatch.setattr(SESSION, "get", boom)
+    monkeypatch.setattr(http_mod, "_sleep", lambda s: None)
+
+    # Threshold is 2 fully-failed calls; each call makes `retries` attempts.
+    assert http_get("https://dead.example.net/a", retries=2) is None
+    assert http_get("https://dead.example.net/b", retries=2) is None
+    attempts_before_open = len(calls)
+
+    # Breaker now open — no further transport attempts are made.
+    assert http_get("https://dead.example.net/c", retries=2) is None
+    assert len(calls) == attempts_before_open
+
+
+def test_breaker_is_per_host(monkeypatch):
+    monkeypatch.setattr(SESSION, "get", _transport_boom)
+    monkeypatch.setattr(http_mod, "_sleep", lambda s: None)
+
+    assert http_get("https://dead-a.example.net/x", retries=1) is None
+    assert http_get("https://dead-a.example.net/x", retries=1) is None  # opens dead-a
+
+    calls = []
+
+    def alive(url, **kw):
+        calls.append(url)
+        return _make_response(200)
+
+    monkeypatch.setattr(SESSION, "get", alive)
+    # Different host is unaffected by dead-a's breaker.
+    r = http_get("https://alive.example.net/x", retries=1)
+    assert r is not None and r.status_code == 200
+    assert calls == ["https://alive.example.net/x"]
+
+
+def test_breaker_resets_on_any_http_response(monkeypatch):
+    """A 5xx is still a LIVE host — only transport failures count."""
+    monkeypatch.setattr(http_mod, "_sleep", lambda s: None)
+    monkeypatch.setattr(SESSION, "get", _transport_boom)
+    assert http_get("https://flaky.example.net/x", retries=1) is None  # 1 failure
+
+    monkeypatch.setattr(SESSION, "get", lambda url, **kw: _make_response(503))
+    assert http_get("https://flaky.example.net/x", retries=1).status_code == 503
+
+    # Counter was reset by the 503 response; one more transport failure
+    # must NOT open the breaker (threshold is 2 consecutive).
+    monkeypatch.setattr(SESSION, "get", _transport_boom)
+    calls = []
+
+    def boom_counting(url, **kw):
+        calls.append(url)
+        raise requests.ConnectionError("down")
+
+    monkeypatch.setattr(SESSION, "get", boom_counting)
+    assert http_get("https://flaky.example.net/x", retries=1) is None
+    assert http_get("https://flaky.example.net/x", retries=1) is None
+    assert len(calls) == 2  # both calls really attempted (breaker was closed)
+
+
+def test_breaker_half_opens_after_cooldown(monkeypatch):
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(http_mod, "_now", lambda: clock["t"])
+    monkeypatch.setattr(http_mod, "_sleep", lambda s: None)
+    monkeypatch.setattr(SESSION, "get", _transport_boom)
+
+    assert http_get("https://dead.example.net/x", retries=1) is None
+    assert http_get("https://dead.example.net/x", retries=1) is None  # opens
+
+    calls = []
+
+    def recovered(url, **kw):
+        calls.append(url)
+        return _make_response(200)
+
+    monkeypatch.setattr(SESSION, "get", recovered)
+
+    # Still inside cooldown — short-circuited.
+    assert http_get("https://dead.example.net/x", retries=1) is None
+    assert calls == []
+
+    # After cooldown the half-open probe goes through and resets the host.
+    clock["t"] += http_mod.CIRCUIT_BREAKER_COOLDOWN + 1
+    r = http_get("https://dead.example.net/x", retries=1)
+    assert r is not None and r.status_code == 200
+    assert len(calls) == 1
+
+
+def test_breaker_open_raises_under_raise_on_failure(monkeypatch):
+    monkeypatch.setattr(http_mod, "_sleep", lambda s: None)
+    monkeypatch.setattr(SESSION, "get", _transport_boom)
+    assert http_get("https://dead.example.net/x", retries=1) is None
+    assert http_get("https://dead.example.net/x", retries=1) is None  # opens
+
+    with pytest.raises(requests.ConnectionError):
+        http_get("https://dead.example.net/x", retries=1, raise_on_failure=True)
+
+
+def test_breaker_opt_out(monkeypatch):
+    """use_breaker=False callers neither consult nor feed breaker state."""
+    monkeypatch.setattr(http_mod, "_sleep", lambda s: None)
+    monkeypatch.setattr(SESSION, "get", _transport_boom)
+    assert http_get("https://dead.example.net/x", retries=1) is None
+    assert http_get("https://dead.example.net/x", retries=1) is None  # opens
+
+    calls = []
+
+    def boom_counting(url, **kw):
+        calls.append(url)
+        raise requests.ConnectionError("down")
+
+    monkeypatch.setattr(SESSION, "get", boom_counting)
+    # Opt-out call still really attempts despite the open breaker.
+    assert http_get("https://dead.example.net/x", retries=1, use_breaker=False) is None
+    assert len(calls) == 1
+
+
+def test_scalar_timeout_splits_connect_and_read(monkeypatch):
+    seen = {}
+
+    def fake_get(url, **kwargs):
+        seen["timeout"] = kwargs.get("timeout")
+        return _make_response(200)
+
+    monkeypatch.setattr(SESSION, "get", fake_get)
+    http_get("https://example.com/x", timeout=240)
+    assert seen["timeout"] == (http_mod.CONNECT_TIMEOUT, 240.0)
+
+
+def test_tuple_timeout_passes_through(monkeypatch):
+    seen = {}
+
+    def fake_get(url, **kwargs):
+        seen["timeout"] = kwargs.get("timeout")
+        return _make_response(200)
+
+    monkeypatch.setattr(SESSION, "get", fake_get)
+    http_get("https://example.com/x", timeout=(3.0, 60.0))
+    assert seen["timeout"] == (3.0, 60.0)
