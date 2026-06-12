@@ -290,21 +290,21 @@
         "now": {
           "speed_url": "/data/wind_speed_now.png",
           "uv_url": "/data/wind_uv_now.png",
-          "valid_at": "2026-06-12T12:00:00Z",
+          "valid_at": "2026-06-12T06:00:00Z",
           "fcst_hour": 0,
           "source": "HRRR"
         },
         "p6h": {
           "speed_url": "/data/wind_speed_p6h.png",
           "uv_url": "/data/wind_uv_p6h.png",
-          "valid_at": "2026-06-12T18:00:00Z",
+          "valid_at": "2026-06-12T12:00:00Z",
           "fcst_hour": 6,
           "source": "HRRR"
         },
         "p24h": {
           "speed_url": "/data/wind_speed_p24h.png",
           "uv_url": "/data/wind_uv_p24h.png",
-          "valid_at": "2026-06-13T12:00:00Z",
+          "valid_at": "2026-06-13T06:00:00Z",
           "fcst_hour": 24,
           "source": "HRRR"
         },
@@ -338,7 +338,7 @@
           "source": "GFS"
         }
       },
-      "generated_at": "2026-06-12T14:24:00Z"
+      "generated_at": "2026-06-12T12:30:30Z"
     },
     "viz": {
       "range_ft": [
@@ -432,7 +432,7 @@
         30.0
       ],
       "tz": "America/Los_Angeles",
-      "generated_at": "2026-06-12T14:24:50Z",
+      "generated_at": "2026-06-12T12:31:07Z",
       "best_window": {
         "day": 3,
         "bucket": "midday",
@@ -454,7 +454,7 @@
         25.0
       ],
       "tz": "America/Los_Angeles",
-      "generated_at": "2026-06-12T14:25:24Z"
+      "generated_at": "2026-06-12T12:31:44Z"
     },
     "kd490": {
       "range": [
@@ -509,11 +509,11 @@
       ],
       "unit": "kt",
       "vector_convention": "direction_to",
-      "generated_at": "2026-06-12T14:25:29Z",
+      "generated_at": "2026-06-12T12:31:48Z",
       "best_window": {
-        "day": 3,
+        "day": 2,
         "bucket": "midday",
-        "mean_kt": 0.55
+        "mean_kt": 0.6
       }
     },
     "sst7d": {
@@ -580,36 +580,6 @@
       "generated_at": "2026-06-12T10:45:51Z",
       "tz": "UTC",
       "beta": true
-    },
-    "viz_column": {
-      "range_ft": [
-        0.0,
-        80.0
-      ],
-      "cliff_range_ft": [
-        0.0,
-        100.0
-      ],
-      "scale": "linear",
-      "unit": "ft",
-      "grid": {
-        "width": 140,
-        "height": 110
-      },
-      "source": "viz_column v1 heuristic (DERIVED)",
-      "method": "two-layer column: existing surface vis above a seasonal-MLD cliff modulated by upwelling, with swell-resuspension + upwelling attenuation below; internal-tide swing phase-locked to CO-OPS tides",
-      "beta": true,
-      "beta_reason": "v1 heuristic \u2014 below-cliff estimate is modeled, uncalibrated until the C4 harness lands",
-      "swing_ft": 9.6,
-      "spots_url": "/data/viz_column_spots.json",
-      "generated_at": "2026-06-12T14:17:27Z",
-      "windows": {
-        "now": {
-          "url": "/data/viz_column_below_ft.png",
-          "cliff_url": "/data/viz_column_cliff_ft.png",
-          "valid_at": "2026-06-12T14:17:27Z"
-        }
-      }
     }
   }
 }
