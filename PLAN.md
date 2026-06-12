@@ -1,4 +1,4 @@
-# PLAN — Smooth Macro→Micro Zoom + Platform Stabilization
+# PLAN — Smooth Macro→Micro Zoom + Platform Stabilization + Water Column
 
 > Working artifact per the PRD (§7). One section per requirement group.
 > Kept current as the build progresses. See DECISIONS.md for judgment
@@ -100,3 +100,51 @@
 
 - [ ] R18 R2 bucket + tile worker; R19 publish_tiles.py; R20 XYZ in
   SVG stage. Blocked until the user provisions R2 (see QUESTIONS.md).
+
+---
+
+# Water Column PRD (depth-resolved vis) — `docs/PRD-water-column.md`
+
+## Group C — column model
+
+- [x] **C1 — v1 heuristic (PR `feat/water-column`).**
+  `pipeline/viz_column/` (pure model: Bakun/Ekman upwelling from wind
+  U/V; Hunt-dispersion near-bottom orbital velocity → resuspension;
+  seasonal-MLD cliff base shoaled by upwelling, NorCal-deepened;
+  M2 internal-tide swing phase-locked to CO-OPS high water; below-
+  cliff attenuation) + `pipeline/fetch_viz_column.py` (I/O, CA-only)
+  + `fetch_tides.py` now also publishes hi/lo events. Outputs:
+  `viz_column_below_ft.png` (0-80 ft, viz legend semantics),
+  `viz_column_cliff_ft.png` (0-100 ft), `viz_column_spots.json`
+  (10 spots, 24 h cliff series). Verified end-to-end locally against
+  committed data + live NOAA tides: La Jolla = surface 14.8 /
+  cliff 25.0 / below 5.4 ft. 19 unit tests incl. the Point Loma
+  acceptance anchor + encoder↔LayerSpec contract.
+- [ ] **C2 — stratification fetcher** (ROMS/HYCOM MLD + thermocline
+  rasters) → replaces the seasonal-climatology cliff base.
+- [ ] **C3 — below-cliff model upgrade** (stratification + subsurface-
+  chl proxy).
+- [ ] **C4 — calibration harness** (Spray glider Point Loma line,
+  Scripps Pier, CalCOFI, depth-stratified diver reports via #139).
+- [ ] **C5 — per-layer confidence** (extend src/lib/confidence.js).
+
+## Group V — visualization (after C1 merges + data publishes)
+
+- [ ] V1 WaterColumn.jsx widget → V2 tap-to-slice (bathy.png sampling
+  until smooth-zoom Z12 lands) → V3 planned-depth marker → V4 right
+  rail + saved-spots two-number rows + "surface" legend relabel →
+  V5 diurnal strip (cliff_series_ft) → V6 ground truth via #139.
+  Flip `frontend_renders` + add BETA pref (D2) in V4's PR.
+
+## Group D — contract + gating
+
+- [x] **D1a (in C1's PR):** LayerSpec `viz_column` entry; manifest
+  contract validated via `python -m pipeline.validate_manifest`
+  against a locally-built manifest; CHECKPOINTS.md row.
+- [ ] **D1b (follow-up after the first post-merge refresh publishes
+  the layer):** add `viz_column` to REQUIRED_LAYERS in
+  `tests/checkpoints/data-shape.test.js` + `tests/live-checkpoints/
+  live-manifest.mjs`. Adding it before the data exists in the
+  committed manifest would fail dev-checks/live probes — phased on
+  purpose.
+- [ ] **D2 — BETA flag** (PrefsContext pref + UI gating; lands with V4).
