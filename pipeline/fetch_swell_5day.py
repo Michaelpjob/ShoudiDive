@@ -456,7 +456,20 @@ def _blend_swell_chop(h_grid, p_grid, d_grid, u, v, is_land=None):
         land_frac = _path_land_fraction(indices[0], indices[1], is_land)
         swell_weight = (swell_weight * (1.0 - land_frac)).astype(np.float32)
 
-    h_wind = np.where(np.isfinite(chop_hs), chop_hs, 0.0).astype(np.float32)
+    # v7 (2026-06-11): wind-sea FILLS data-gap cells only — it must not be
+    # added on top of cells gfswave already resolves. gfswave's htsgw is
+    # ALREADY total significant wave height (wind sea + swell combined), so
+    # adding a second SMB wind-sea term at a valid cell double-counts the wind
+    # sea — a constant ~√2 (~41%) inflation wherever there's wind (measured:
+    # CA heatmap whole-grid mean 2.0 m raw → 2.87 m blended). Scale the wind
+    # term by the COMPLEMENT of the swell weight: at valid gfswave cells
+    # swell_weight≈1 → wind term →0 → reading is the un-inflated model Hs; deep
+    # in masked gaps (Sea of Cortez, enclosed water) swell_weight→0 → wind term
+    # → full chop. The boundary stays a smooth quadrature crossfade, preserving
+    # the v3–v6 anti-cliff decay.
+    h_wind = np.where(
+        np.isfinite(chop_hs), chop_hs * (1.0 - swell_weight), 0.0
+    ).astype(np.float32)
     h_total = np.sqrt(
         (h_swell_nn * swell_weight) ** 2 + h_wind ** 2,
     ).astype(np.float32)
