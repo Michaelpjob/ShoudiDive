@@ -111,19 +111,43 @@ def resuspension_index(hs_m: np.ndarray, period_s: float | np.ndarray,
 # ---- Cliff depth + diurnal swing -------------------------------------------
 
 def cliff_depth_ft(month: int, lat_deg: np.ndarray | float,
-                   upwelling: np.ndarray | float) -> np.ndarray:
-    """Cliff (thermocline proxy) depth in feet.
+                   upwelling: np.ndarray | float,
+                   dts_km: np.ndarray | float = 0.0) -> np.ndarray:
+    """Cliff (thermocline proxy) depth in feet (v1.1 cross-shore form).
 
-    Seasonal climatological base, shoaled by upwelling, deepened north
-    of NORCAL_LAT_DEG where stratification is weaker. Replaced by
-    C2's model-derived mixed-layer depth when that lands.
+    Structure (each term documented in config.py):
+      1. Seasonal climatological base (tuned to the SoCal Bight).
+      2. Regional band deepening at the real regime boundaries —
+         Pt. Conception (CenCal) and Pt. Arena (NorCal) — where the
+         mean state is colder/less stratified.
+      3. OFFSHORE relaxation: beyond the coastal band the seasonal
+         thermocline deepens toward its open-ocean depth
+         (+OFFSHORE_DEEPEN_FT saturating over OFFSHORE_DEEPEN_KM).
+      4. Upwelling shoaling — coastal-trapped: full strength at the
+         beach, decaying offshore over UPWELLING_DECAY_KM, and damped
+         inside the Bight where the E-W coast makes the prevailing
+         wind largely cross-shore.
+
+    `dts_km` is distance to shore; scalars or grids broadcast.
+    Replaced wholesale by C2's model-derived mixed-layer depth.
     """
     base = C.CLIFF_BASE_FT_BY_MONTH[int(month)]
     lat = np.asarray(lat_deg, dtype=float)
     up = np.asarray(upwelling, dtype=float)
-    cliff = np.full(np.broadcast(lat, up).shape, base, dtype=float)
-    cliff = cliff * (1.0 + C.NORCAL_CLIFF_DEEPEN_FRAC * (lat >= C.NORCAL_LAT_DEG))
-    cliff = cliff * (1.0 - C.UPWELLING_CLIFF_SHOALING_FRAC * up)
+    dts = np.maximum(np.asarray(dts_km, dtype=float), 0.0)
+
+    band_deepen = np.where(
+        lat >= C.PT_ARENA_LAT_DEG, C.NORCAL_CLIFF_DEEPEN_FRAC,
+        np.where(lat >= C.PT_CONCEPTION_LAT_DEG,
+                 C.CENCAL_CLIFF_DEEPEN_FRAC, 0.0))
+    cliff = base * (1.0 + band_deepen)
+    cliff = cliff + C.OFFSHORE_DEEPEN_FT * (1.0 - np.exp(-dts / C.OFFSHORE_DEEPEN_KM))
+
+    bight_damp = np.where(lat < C.PT_CONCEPTION_LAT_DEG,
+                          C.BIGHT_UPWELLING_DAMPING, 1.0)
+    shoal = (C.UPWELLING_CLIFF_SHOALING_FRAC * up * bight_damp
+             * np.exp(-dts / C.UPWELLING_DECAY_KM))
+    cliff = cliff * (1.0 - shoal)
     return np.clip(cliff, C.CLIFF_MIN_FT, C.CLIFF_MAX_FT)
 
 
@@ -175,19 +199,21 @@ def below_cliff_vis_ft(surface_vis_ft: np.ndarray, upwelling: np.ndarray,
 # ---- Column assembly ---------------------------------------------------------
 
 def column(surface_vis_ft, bottom_ft, month, lat_deg, u10, v10, hs_m,
-           period_s=C.DEFAULT_SWELL_PERIOD_S):
+           period_s=C.DEFAULT_SWELL_PERIOD_S, dts_km=0.0):
     """Assemble the full two-layer column for cells or a single point.
 
     Returns a dict of numpy arrays (or scalars in/scalars out via
     0-d arrays): cliff_ft, below_ft, swing_ft (peak-to-peak), no_cliff
     (bool — bottom shallower than the cliff: clear to the bottom,
     surface number applies; below_ft mirrors surface there).
+    `dts_km` (distance to shore) drives the v1.1 cross-shore cliff
+    structure; 0.0 reproduces nearshore behavior.
     """
     surface = np.asarray(surface_vis_ft, dtype=float)
     bottom = np.asarray(bottom_ft, dtype=float)
     up = upwelling_index(u10, v10)
     resus = resuspension_index(hs_m, period_s, bottom / C.FT_PER_M)
-    cliff = cliff_depth_ft(month, lat_deg, up)
+    cliff = cliff_depth_ft(month, lat_deg, up, dts_km)
     below = below_cliff_vis_ft(surface, up, resus)
     no_cliff = bottom <= cliff
     below = np.where(no_cliff, surface, below)

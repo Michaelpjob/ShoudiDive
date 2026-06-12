@@ -96,17 +96,57 @@ def test_cliff_seasonal_cycle():
     assert float(summer) < float(winter)
 
 
-def test_cliff_upwelling_shoals():
-    calm = model.cliff_depth_ft(6, 33.0, 0.0)
-    upwelled = model.cliff_depth_ft(6, 33.0, 1.0)
+def test_cliff_upwelling_shoals_full_strength_at_coast_cencal():
+    """In CenCal (full upwelling regime) at the beach, saturated
+    upwelling shoals the cliff by exactly the configured fraction."""
+    calm = model.cliff_depth_ft(6, 36.0, 0.0, dts_km=0.0)
+    upwelled = model.cliff_depth_ft(6, 36.0, 1.0, dts_km=0.0)
     assert float(upwelled) == pytest.approx(
         float(calm) * (1 - C.UPWELLING_CLIFF_SHOALING_FRAC), rel=1e-6)
 
 
-def test_cliff_norcal_deeper_than_socal():
-    socal = model.cliff_depth_ft(6, 33.0, 0.0)
-    norcal = model.cliff_depth_ft(6, 38.0, 0.0)
-    assert float(norcal) > float(socal)
+def test_cliff_regional_bands_order():
+    """Nearshore calm-state cliff deepens by regime band:
+    SoCal Bight (sharp, shallow) < CenCal (colder mean state) <
+    NorCal (weak, diffuse stratification)."""
+    socal = float(model.cliff_depth_ft(6, 33.0, 0.0))
+    cencal = float(model.cliff_depth_ft(6, 36.5, 0.0))
+    norcal = float(model.cliff_depth_ft(6, 40.0, 0.0))
+    assert socal < cencal < norcal
+
+
+def test_cliff_deepens_offshore():
+    """The seasonal thermocline relaxes DOWN toward its open-ocean
+    depth offshore — the v1.0 bug was a wrong-signed gradient here."""
+    nearshore = float(model.cliff_depth_ft(6, 33.0, 0.0, dts_km=0.0))
+    mid = float(model.cliff_depth_ft(6, 33.0, 0.0, dts_km=30.0))
+    far = float(model.cliff_depth_ft(6, 33.0, 0.0, dts_km=150.0))
+    assert nearshore < mid < far
+    assert far == pytest.approx(nearshore + C.OFFSHORE_DEEPEN_FT, rel=0.05)
+
+
+def test_upwelling_shoaling_is_coastal_trapped():
+    """Saturated upwelling barely moves the cliff 100+ km offshore —
+    the response is trapped within ~the deformation radius."""
+    calm_far = float(model.cliff_depth_ft(6, 36.0, 0.0, dts_km=120.0))
+    upwelled_far = float(model.cliff_depth_ft(6, 36.0, 1.0, dts_km=120.0))
+    assert upwelled_far == pytest.approx(calm_far, rel=0.02)
+    # ...while the same wind moves it strongly at the coast.
+    calm_near = float(model.cliff_depth_ft(6, 36.0, 0.0, dts_km=0.0))
+    upwelled_near = float(model.cliff_depth_ft(6, 36.0, 1.0, dts_km=0.0))
+    assert (calm_near - upwelled_near) > 5 * (calm_far - upwelled_far)
+
+
+def test_bight_upwelling_damped_vs_cencal():
+    """The same saturated upwelling shoals the Bight's cliff by a
+    smaller FRACTION of its band base than CenCal's (E-W coast =
+    mostly cross-shore wind there)."""
+    frac = lambda lat: 1.0 - (
+        float(model.cliff_depth_ft(6, lat, 1.0, dts_km=0.0))
+        / float(model.cliff_depth_ft(6, lat, 0.0, dts_km=0.0)))
+    assert frac(33.0) < frac(36.0)
+    assert frac(33.0) == pytest.approx(
+        C.UPWELLING_CLIFF_SHOALING_FRAC * C.BIGHT_UPWELLING_DAMPING, rel=1e-6)
 
 
 def test_cliff_respects_clamps():
@@ -180,7 +220,8 @@ def test_point_loma_acceptance_anchor():
     u, v = 5.0 * math.sin(theta), 5.0 * math.cos(theta)  # 5 m/s from NW
     out = model.column(
         surface_vis_ft=25.0, bottom_ft=60.0, month=6, lat_deg=32.67,
-        u10=u, v10=v, hs_m=1.0, period_s=14.0)
+        u10=u, v10=v, hs_m=1.0, period_s=14.0,
+        dts_km=2.0)  # the kelp line sits ~1-3 km off the point
     assert not bool(out["no_cliff"])
     assert 22.0 <= float(out["cliff_ft"]) <= 28.0
     assert 5.0 <= float(out["below_ft"]) <= 12.0

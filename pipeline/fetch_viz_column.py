@@ -33,11 +33,13 @@ no-op for other regions.
 from __future__ import annotations
 
 import json
+import math
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
+from scipy import ndimage
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -136,7 +138,30 @@ def _load_inputs():
         "surface_ft": surface_ft, "u10": u10, "v10": v10,
         "hs_m": np.where(np.isfinite(hs_m), hs_m, 0.0), "tp_s": tp_s,
         "depth_m": depth_m, "lat_grid": lat_grid,
+        "dts_km": _distance_to_shore_km(depth_m),
     }
+
+
+def _distance_to_shore_km(depth_m: np.ndarray) -> np.ndarray:
+    """Per-cell distance to the nearest land cell (km) on the viz grid.
+
+    The v1.1 cliff model is cross-shore-aware: upwelling shoaling is
+    coastal-trapped and the offshore thermocline relaxes deeper. Land
+    = NaN cells in the (resampled) bathy grid, which includes the
+    Channel Islands. Euclidean distance transform with the grid's
+    physical cell sizes; coarse (~10 km cells) but the model's decay
+    scales are 25-40 km, so the resolution is adequate.
+    """
+    ocean = np.isfinite(depth_m)
+    if not (~ocean).any():
+        # No land in the bbox (shouldn't happen for CA) — treat all
+        # cells as far offshore rather than dividing by zero.
+        return np.full(depth_m.shape, 200.0)
+    dlat_km = (BBOX["lat_max"] - BBOX["lat_min"]) / (GRID_H - 1) * 111.2
+    mean_lat = math.radians((BBOX["lat_max"] + BBOX["lat_min"]) / 2.0)
+    dlng_km = ((BBOX["lng_max"] - BBOX["lng_min"]) / (GRID_W - 1)
+               * 111.2 * math.cos(mean_lat))
+    return ndimage.distance_transform_edt(ocean, sampling=(dlat_km, dlng_km))
 
 
 def _hours_since_high_water(events: list[dict], now: datetime) -> float | None:
@@ -268,6 +293,7 @@ def main() -> int:
         lat_deg=fields["lat_grid"],
         u10=fields["u10"], v10=fields["v10"],
         hs_m=fields["hs_m"], period_s=fields["tp_s"],
+        dts_km=fields["dts_km"],
     )
 
     # Mask to the surface model's ocean coverage: no surface vis cell,
