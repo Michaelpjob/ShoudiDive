@@ -43,13 +43,12 @@ name: Sync dev with main
 on:
   push:
     branches: [main]
+  # Manual escape hatch — lets an operator force a sync without
+  # waiting for the next bot push to main.
+  workflow_dispatch:
 
 permissions:
   contents: write
-  # actions: write is needed for the final step where we dispatch
-  # dev-checks.yml against the freshly-synced dev HEAD. Without it,
-  # the GH api call fails with "Resource not accessible by integration".
-  actions: write
 
 concurrency:
   group: sync-dev
@@ -72,27 +71,27 @@ jobs:
     # (correct: dev was just consumed by the merge). Direct human
     # pushes to main are emergency scenarios — let those surface
     # normally rather than silently fan out to dev.
-    if: contains(github.event.head_commit.author.email, '[bot]')
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.author.email, '[bot]')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Checkout dev
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: dev
           fetch-depth: 0
-          # GITHUB_TOKEN can push to dev — dev isn't branch-protected.
-          # Caveat: pushes via GITHUB_TOKEN don't trigger downstream
-          # workflows (a GH safety feature to prevent recursion).
-          # 2026-05-24: this used to be flagged as "fine, we don't need
-          # dev-checks to re-run on a pure data-file sync". That was
-          # wrong. When an open dev → main PR exists, branch protection
-          # requires green status checks on the CURRENT head of dev.
-          # A sync commit changes the head SHA, so the PR's required
-          # checks no longer point at a checked commit, and the merge
-          # is BLOCKED until something dispatches dev-checks against
-          # the new HEAD. The final step in this job now does that
-          # explicitly via `gh workflow run`.
+          # BOT_PUSH_TOKEN (user PAT), NOT GITHUB_TOKEN — two reasons:
+          # 1. Syncs that carry .github/workflows/** changes from main
+          #    (any CI fix) are REJECTED for GITHUB_TOKEN ("refusing to
+          #    allow a GitHub App to ... update workflow ... without
+          #    `workflows` permission"). Seen live 2026-06-12 on the
+          #    first sync after the stabilization merge.
+          # 2. PAT pushes trigger downstream workflows, so a sync that
+          #    brings code to dev fires dev-checks (and the dev preview
+          #    deploy chain) natively — no explicit dispatch step
+          #    needed. Data-only syncs are filtered by dev-checks'
+          #    paths-ignore.
+          token: ${{ secrets.BOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Configure git identity
         run: |
@@ -105,6 +104,7 @@ jobs:
           git fetch origin main
           ahead=$(git rev-list dev..origin/main --count)
           echo "ahead=$ahead" >> "$GITHUB_OUTPUT"
+          echo "pre_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           if [ "$ahead" = "0" ]; then
             echo "dev already up to date with main — nothing to do"
           else
@@ -122,25 +122,56 @@ jobs:
             -X theirs \
             -m "sync(auto): bring dev up to main HEAD"
 
+      - name: Align main-owned data with main (coherence pass)
+        if: steps.check.outputs.ahead != '0'
+        id: align
+        run: |
+          # -X theirs resolves CONFLICTS to main, but hunks that only
+          # dev touched survive the merge — and two bots write the same
+          # files on the two branches (main: refresh-ca-*; dev: the
+          # ca-beta refreshes, which share public/data/ by design).
+          # A hunk-level mix of the two produced a manifest whose SST
+          # grid said 586×511 while sst_1d.png was 234×206 (#137):
+          # manifest + PNGs MUST move as one atomic set, which no
+          # hunk-level merge can guarantee. So after every sync, the
+          # MAIN-OWNED data paths are reset wholesale to main's
+          # coherent set. The ca-beta refreshes re-assert dev's own
+          # (equally coherent) set on their next run; what's banned is
+          # the mix.
+          #
+          # Ownership map (who refreshes where — keep in lockstep with
+          # the `ref:` line in each refresh-<region>-data.yml):
+          #   main-owned: public/data/ flat files + baja/ (prod regions
+          #               ca + baja refresh on main)
+          #   dev-owned:  public/data/pnw/ + public/data/tropical/
+          #               (beta regions refresh on dev; main's copies
+          #               LAG — resetting them from main would clobber
+          #               fresh beta data with weeks-stale copies)
+          DEV_OWNED_SUBDIRS="pnw tropical"
+
+          git checkout origin/main -- public/data/
+          for sub in $DEV_OWNED_SUBDIRS; do
+            if git rev-parse -q --verify "${{ steps.check.outputs.pre_sha }}:public/data/$sub" >/dev/null; then
+              git checkout "${{ steps.check.outputs.pre_sha }}" -- "public/data/$sub/"
+            fi
+          done
+          if git diff --cached --quiet; then
+            echo "public/data already coherent with main"
+            echo "data_realigned=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "sync(auto): align main-owned data with main (atomic manifest+PNG set)"
+            echo "data_realigned=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Push synced dev
         if: steps.check.outputs.ahead != '0'
         run: |
           git push origin dev
 
-      - name: Dispatch dev-checks against the new HEAD
-        # Without this, any open dev → main PR sits BLOCKED — its
-        # required status checks point at a SHA that has no checks
-        # run against it (GITHUB_TOKEN pushes don't trigger
-        # workflows). gh workflow run uses the workflow_dispatch
-        # path which DOES create check-runs visible to branch
-        # protection. Witnessed during the Stage 4 + Stage 5 PR
-        # merge dance — both PRs needed manual dispatches when sync
-        # commits landed mid-merge. Closing the loop here.
-        if: steps.check.outputs.ahead != '0'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh workflow run dev-checks.yml --ref dev
+      # (No dev-checks dispatch step: the BOT_PUSH_TOKEN push above
+      # triggers workflows natively. dev-checks' paths-ignore keeps
+      # data-only syncs from burning runs; code syncs gate + deploy
+      # the dev preview through the normal push-event path.)
 
       - name: Summary
         if: always()

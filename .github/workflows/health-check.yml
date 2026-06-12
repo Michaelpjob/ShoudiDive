@@ -32,9 +32,9 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
@@ -43,18 +43,42 @@ jobs:
       - name: Install pipeline dependencies
         run: pip install -r pipeline/requirements.txt
 
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install probe dependencies (puppeteer + Chromium)
+        run: npm install --no-audit --no-fund
+      - name: Ensure Chrome is installed for puppeteer
+        # See deploy-verify.yml — postinstall can skip silently under
+        # newer node/npm; install explicitly and fail loudly.
+        run: npx puppeteer browsers install chrome
+
       - name: Probe published manifest + layer PNGs
-        # Exit-code policy:
-        #   0 — healthy
-        #   1 — non-critical findings (high/medium)
+        # 2026-06-12: the live probe is now the same browser-transport
+        # probe deploy-verify.yml runs (tests/live-checkpoints/
+        # live-manifest.mjs --report). The previous python-requests
+        # probe (check_published.py) was intermittently 403'd by
+        # Cloudflare's bot scoring on runner IPs, which kept issue #6
+        # open with a phantom "manifest unreachable" critical while
+        # production served users fine. check_published.py still runs
+        # inside the refresh workflows against freshly-written files.
+        #
+        # Exit-code policy (unchanged):
+        #   0 — healthy (warn-level findings render in the body only)
+        #   1 — non-critical findings (high)
         #   2 — at least one critical finding (auto-retry trigger)
         # We capture the exit code instead of letting it fail the step
         # so the issue-sync + auto-retry steps below can still run.
         id: published
         continue-on-error: true
+        env:
+          LIVE_BASE_URL: https://shouldidive.com
         run: |
           set +e
-          python pipeline/check_published.py
+          node tests/live-checkpoints/live-manifest.mjs \
+            --report pipeline/validation/data/published_health.json
           echo "exit_code=$?" >> "$GITHUB_OUTPUT"
 
       - name: Probe external feeds (lightweight)
@@ -186,7 +210,7 @@ jobs:
             --label data-health \
             --state open \
             --json number \
-            --jq '.[0].number')
+            --jq '.[0].number // empty' || true)
 
           if [ "$PUBLISHED_EXIT" != "0" ]; then
             if [ -n "$existing" ]; then
@@ -266,7 +290,7 @@ jobs:
         # debugging, even after the rolling issue has been updated past
         # the state at the time of that run.
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: health-reports
           path: |

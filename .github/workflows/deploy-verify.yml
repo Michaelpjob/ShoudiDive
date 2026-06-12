@@ -76,8 +76,15 @@ jobs:
           fi
 
   # ---------------------------------------------------------------------
-  # live-cp-manifest + live-cp-pngs + live-cp-perf — fast HTTP probe
-  # of the live deploy. Pure node:fetch, no browser. ~10 s.
+  # live-cp-manifest + live-cp-pngs + live-cp-perf — probes the live
+  # deploy from inside real headless Chrome (puppeteer). ~90 s.
+  #
+  # 2026-06-12: switched from bare node:fetch to the browser transport.
+  # Cloudflare's bot scoring intermittently 403'd the bare fetch from
+  # GHA runner IPs (the TLS fingerprint doesn't match the spoofed
+  # Chrome UA), flapping this job red for days while production was
+  # fine. The previous "CDN warmup" 90 s sleep was a misdiagnosis of
+  # the same 403s — removed; Pages deploys are atomic.
   # ---------------------------------------------------------------------
   live-cp-manifest:
     name: live-cp-manifest
@@ -85,21 +92,20 @@ jobs:
     if: needs.gate.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: "20"
-      # 2026-05-26: CDN warmup wait. When triggered by workflow_run on
-      # deploy-prod success, Cloudflare's edges take 30-90 s to receive
-      # the new bundle. Probing immediately returned HTTP 403 on ~50% of
-      # post-deploy runs (32 false failures / 14 days). Sleep first.
-      # Scheduled cron runs (the every-4 h heartbeat) skip the sleep —
-      # CDN is already warm by then.
-      - name: Wait for Cloudflare edges to warm (workflow_run only)
-        if: github.event_name == 'workflow_run'
-        run: |
-          echo "Sleeping 90s for CF Pages edge propagation after deploy..."
-          sleep 90
+          cache: npm
+      - name: Install (puppeteer + Chromium)
+        run: npm install --no-audit --no-fund
+      - name: Ensure Chrome is installed for puppeteer
+        # Belt-and-braces: puppeteer's postinstall download can skip
+        # silently (observed under node24/npm11, 2026-06-12 — probes
+        # then die with "Could not find Chrome"). This explicit step
+        # is a no-op when the postinstall worked and fails LOUDLY with
+        # the downloader's logs when it didn't.
+        run: npx puppeteer browsers install chrome
       - name: Probe manifest + PNGs + perf budget
         env:
           LIVE_BASE_URL: https://shouldidive.com
@@ -116,13 +122,20 @@ jobs:
     if: needs.gate.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: "20"
           cache: npm
       - name: Install (puppeteer + Chromium)
         run: npm install --no-audit --no-fund
+      - name: Ensure Chrome is installed for puppeteer
+        # Belt-and-braces: puppeteer's postinstall download can skip
+        # silently (observed under node24/npm11, 2026-06-12 — probes
+        # then die with "Could not find Chrome"). This explicit step
+        # is a no-op when the postinstall worked and fails LOUDLY with
+        # the downloader's logs when it didn't.
+        run: npx puppeteer browsers install chrome
       - name: Headless browser smoke against shouldidive.com
         env:
           LIVE_BASE_URL: https://shouldidive.com
@@ -156,23 +169,28 @@ jobs:
           render_outcome="${{ needs.live-cp-render.result }}"
 
           # `result` is "success" | "failure" | "cancelled" | "skipped".
-          # Treat anything other than "success" as red, EXCEPT
-          # "skipped" (when upstream-deploy-failure caused us to skip).
+          # Only literal "failure" is a red verdict. "skipped" means the
+          # gate stopped us (upstream deploy failed — it already
+          # alerted); "cancelled" means this run was superseded by a
+          # newer deploy (concurrency cancel-in-progress) — the newer
+          # run delivers the verdict. Counting cancelled as red opened
+          # phantom "failed (2/2 checks)" issues during the 2026-06-12
+          # merge burst (#141). Both checks must SUCCEED to claim
+          # pass (close-the-issue); anything between fail and pass
+          # leaves the rolling issue untouched.
           fail_count=0
-          [ "$manifest_outcome" != "success" ] && [ "$manifest_outcome" != "skipped" ] && fail_count=$((fail_count + 1))
-          [ "$render_outcome"   != "success" ] && [ "$render_outcome"   != "skipped" ] && fail_count=$((fail_count + 1))
+          [ "$manifest_outcome" = "failure" ] && fail_count=$((fail_count + 1))
+          [ "$render_outcome"   = "failure" ] && fail_count=$((fail_count + 1))
 
-          # If everything was skipped (upstream failed), don't
-          # touch the issue — the upstream deploy already alerted.
-          if [ "$manifest_outcome" = "skipped" ] && [ "$render_outcome" = "skipped" ]; then
-            echo "outcome=skipped" >> "$GITHUB_OUTPUT"
-          elif [ "$fail_count" -gt 0 ]; then
+          if [ "$fail_count" -gt 0 ]; then
             echo "outcome=fail" >> "$GITHUB_OUTPUT"
             {
               echo "title=Live deploy verification failed (${fail_count}/2 checks)"
             } >> "$GITHUB_OUTPUT"
-          else
+          elif [ "$manifest_outcome" = "success" ] && [ "$render_outcome" = "success" ]; then
             echo "outcome=pass" >> "$GITHUB_OUTPUT"
+          else
+            echo "outcome=skipped" >> "$GITHUB_OUTPUT"
           fi
           echo "manifest_outcome=$manifest_outcome" >> "$GITHUB_OUTPUT"
           echo "render_outcome=$render_outcome"     >> "$GITHUB_OUTPUT"
@@ -207,6 +225,12 @@ jobs:
         if: steps.compute.outputs.outcome != 'skipped'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # No checkout in this job (intentional, see above), so gh
+          # can't infer the repo from a .git dir. Without GH_REPO every
+          # gh call dies with "failed to run git: not a git repository"
+          # — which silently broke open/update/close from 2026-05-26
+          # (when the checkout was removed) until 2026-06-12 (#95/#90).
+          GH_REPO: ${{ github.repository }}
           OUTCOME: ${{ steps.compute.outputs.outcome }}
           TITLE: ${{ steps.compute.outputs.title }}
         run: |
@@ -220,7 +244,7 @@ jobs:
             --label live-deploy-broken \
             --state open \
             --json number \
-            --jq '.[0].number' || true)
+            --jq '.[0].number // empty' || true)
 
           if [ "$OUTCOME" = "fail" ]; then
             if [ -n "$existing" ]; then
