@@ -88,9 +88,12 @@ INDEX_PATH = SPOTS_DIR / "index.json"
 # the builder dependency-free from JS. Add CA spots here as the pilot
 # expands per the kelp/spot roadmap.
 SPOT_CENTRES = {
-    "lajolla":  {"name": "La Jolla",  "lng": -117.275, "lat": 32.854},
-    "catalina": {"name": "Catalina",  "lng": -118.450, "lat": 33.389},
-    "monterey": {"name": "Monterey",  "lng": -121.920, "lat": 36.620},
+    "lajolla":  {"name": "La Jolla",   "lng": -117.275, "lat": 32.854},
+    "catalina": {"name": "Catalina",   "lng": -118.450, "lat": 33.389},
+    "monterey": {"name": "Monterey",   "lng": -121.920, "lat": 36.620},
+    # Centred on the deep kelp bed west of the peninsula (~70-80 ft),
+    # so the detail anchor sits on the cliff regime, not the shoreline.
+    "pointloma": {"name": "Point Loma", "lng": -117.270, "lat": 32.685},
 }
 
 # Mirror of frontend's SPOT_BUNDLE_RADIUS_KM. Same single-source-of-truth
@@ -108,6 +111,9 @@ SPOT_RADIUS_KM = {
     # more for an offshore island than the last metre of sharpness.
     "catalina": 16,
     "monterey": 6,
+    # Kelp bed strip runs ~9 km N-S along the peninsula (Ocean Beach to
+    # past the Cabrillo tip); 5 km covers the whole bed + margins.
+    "pointloma": 5,
 }
 
 # Curated landmark labels per spot — dive-relevant rather than general

@@ -196,6 +196,10 @@ const REGION_SAVED_SPOTS = {
     { id: "catalina",  name: "Catalina",       lng: -118.45, lat: 33.39 },
     { id: "lajolla",   name: "La Jolla",       lng: -117.28, lat: 32.85 },
     { id: "sandiego",  name: "San Diego",      lng: -117.18, lat: 32.70 },
+    // Anchored in the deep kelp bed (~70-80 ft) west of the peninsula,
+    // not on the shoreline — keeps the detail spot-mode column on the
+    // cliff regime instead of the shallow no-cliff state.
+    { id: "pointloma", name: "Point Loma",     lng: -117.27, lat: 32.685 },
     { id: "coronados", name: "Coronados",      lng: -117.27, lat: 32.40 },
   ],
   pnw: [
@@ -292,6 +296,9 @@ export const SPOT_BUNDLE_RADIUS_KM = {
   lajolla:  4,
   catalina: 16, // whole island, Land's End → East End (2026-06-10)
   monterey: 6,
+  // Kelp bed strip runs ~9 km N-S along the peninsula (Ocean Beach to
+  // past the Cabrillo tip); 5 km radius covers the whole bed + margins.
+  pointloma: 5,
 };
 
 // Project a (lng, lat) point into pixel coordinates inside an arbitrary
