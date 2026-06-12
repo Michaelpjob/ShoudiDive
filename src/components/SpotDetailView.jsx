@@ -834,17 +834,31 @@ export default function SpotDetailView({ spot, onClose }) {
     // re-pins it (or Clear marks restores cursor-follow).
     const pin = lastMark;
     const at = pin || cursor || { lng: spot.lng, lat: spot.lat };
+    const spotMode = !pin && !cursor;
     const d = depthAt(at.lng, at.lat);
-    if (d?.onLand) return null;
-    const col = getColumnAt(at.lng, at.lat);
-    if (!col) return null;
-    let out = col;
-    if (d && Number.isFinite(d.depthFt)) {
-      const bottom = Math.round(d.depthFt);
-      const noCliff = col.cliff_ft != null && bottom <= col.cliff_ft;
-      out = { ...col, bottom_ft: bottom, no_cliff: noCliff,
-              below_ft: noCliff ? col.surface_ft : col.below_ft };
+    let out = null;
+    if (!d?.onLand) {
+      const col = getColumnAt(at.lng, at.lat);
+      if (col) {
+        out = col;
+        if (d && Number.isFinite(d.depthFt)) {
+          const bottom = Math.round(d.depthFt);
+          const noCliff = col.cliff_ft != null && bottom <= col.cliff_ft;
+          out = { ...col, bottom_ft: bottom, no_cliff: noCliff,
+                  below_ft: noCliff ? col.surface_ft : col.below_ft };
+        }
+      }
     }
+    // Spot-mode fallback: a saved-spot anchor can sit on a masked raster
+    // pixel (Catalina = island centroid, Monterey = inner bay), which
+    // would otherwise render no card at all until the first click. The
+    // sidecar samples nearest-finite water for exactly this case — show
+    // its profile instead.
+    if (!out && spotMode) {
+      const sc = getColumnSpot(spot.id);
+      if (sc) out = { ...sc, bottom_ft: Math.round(sc.bottom_ft) };
+    }
+    if (!out) return null;
     // 24 h cliff series. The bundle spot's sidecar carries the
     // tide-phased series; the v1 swing amplitude is month-global, so
     // an arbitrary pinned point's series is the sidecar series
