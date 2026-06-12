@@ -342,6 +342,42 @@ export function getVizFt(lng, lat, composite = 1) {
   return bilinear(state.layers.viz?.[slotKey("viz", composite)], lng, lat);
 }
 
+const FT_PER_M = 3.28084;
+
+// Water-column profile at a point (PRD water-column V2 tap-to-slice).
+// Samples the viz_column rasters + the regional bathy grid and returns
+// the same shape viz_column_spots.json publishes, or null when the
+// column layer isn't loaded / the point has no data. The widget treats
+// bottom_ft === null as "depth unknown" (renders the column unanchored).
+export function getColumnAt(lng, lat) {
+  const vc = state.layers.viz_column;
+  if (!vc?.now) return null;
+  const surface = getVizFt(lng, lat);
+  const below = bilinear(vc.now.below, lng, lat);
+  const cliff = bilinear(vc.now.cliff, lng, lat);
+  if (!Number.isFinite(surface) || !Number.isFinite(below)) return null;
+  const bottomM = bilinear(vc.bathy, lng, lat);
+  const bottom_ft = Number.isFinite(bottomM)
+    ? Math.round(bottomM * FT_PER_M)
+    : null;
+  const no_cliff =
+    bottom_ft != null && Number.isFinite(cliff) && bottom_ft <= cliff;
+  return {
+    surface_ft: surface,
+    cliff_ft: Number.isFinite(cliff) ? cliff : null,
+    below_ft: no_cliff ? surface : below,
+    bottom_ft,
+    no_cliff,
+    cliff_swing_ft: vc.swing_ft ?? null,
+  };
+}
+
+// Per-saved-spot column profile from the pipeline sidecar (richer than
+// getColumnAt: carries the 24 h cliff series + tide station).
+export function getColumnSpot(id) {
+  return state.layers.viz_column?.spots?.[id] || null;
+}
+
 // Returns the loaded scalar grid for a (layer, composite) — the same Float32Array
 // that bilinear() reads from. Lets DataOverlay render at native grid resolution
 // (one canvas pixel per source cell) and let the browser scale up smoothly.

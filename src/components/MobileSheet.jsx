@@ -27,6 +27,8 @@ import {
   getCurrentSpeed,
   getCurrentUV,
   getVizFt,
+  getColumnAt,
+  getColumnSpot,
   getSwell5dStats,
   getCurrent5dSummary,
   windSource,
@@ -34,6 +36,7 @@ import {
   windCompass,
   windCardinal,
 } from "../lib/dataSource.js";
+import WaterColumn from "./micro/WaterColumn.jsx";
 import WindDayGrid from "./WindDayGrid.jsx";
 import { SwellCurrentCard } from "./SwellTimeline.jsx";
 import { SstCurrentCard, SstModeToggle } from "./SstTimeline.jsx";
@@ -277,6 +280,27 @@ export default function MobileShell({
             </div>
           </section>
 
+          {/* WATER COLUMN (PRD water-column V4 — mobile dock) -------------- */}
+          {layer === "viz" && prefs.waterColumnOn && (() => {
+            // Pinned tap wins; otherwise the selected saved spot
+            // (whose sidecar adds the 24 h cliff series).
+            let col = null, title = null, series = null;
+            if (hover && Number.isFinite(hover.lng)) {
+              col = getColumnAt(hover.lng, hover.lat);
+              if (col) title = `${hover.lat.toFixed(3)}°N ${Math.abs(hover.lng).toFixed(3)}°W`;
+            }
+            if (!col && activeSpot) {
+              const sc = getColumnSpot(activeSpot);
+              if (sc) { col = sc; title = sc.name; series = sc.cliff_series_ft; }
+            }
+            return (
+              <section className="ms-section">
+                <div className="ms-section-h">Water column</div>
+                <WaterColumn col={col} title={title} series={series} compact />
+              </section>
+            );
+          })()}
+
           {/* PIN / SPOTS -------------------------------------------------- */}
           <section className="ms-section">
             <div className="ms-section-h">
@@ -496,7 +520,14 @@ function SpotsList({ layer, composite, units, activeSpot, setActiveSpot, bundled
           col = "var(--ink-2)";
         } else {
           const v = getVizFt(s.lng, s.lat, composite);
-          valTxt = Number.isFinite(v) ? `~${Math.round(v)}` : "—";
+          // Two-number viz row (PRD water-column V4): surface→below
+          // when the spot's column sidecar is loaded and has a cliff.
+          const sc = getColumnSpot(s.id);
+          if (Number.isFinite(v) && sc && !sc.no_cliff && sc.below_ft != null) {
+            valTxt = `~${Math.round(v)}→${Math.round(sc.below_ft)}`;
+          } else {
+            valTxt = Number.isFinite(v) ? `~${Math.round(v)}` : "—";
+          }
           unit = "ft";
           col = "var(--ink-2)";
         }
@@ -551,7 +582,7 @@ function Legend({ layer, units, composite, compositeText, layerIsReal, dataReady
     : layer === "wind" ? "Wind Speed (10 m)"
     : layer === "swell" ? "Swell · Hs"
     : layer === "current" ? "Surface Current"
-    : "Predicted Visibility";
+    : "Predicted Visibility · surface";
   const unitLabel =
     layer === "sst" ? `°${units}`
     : layer === "chl" ? "mg/m³"

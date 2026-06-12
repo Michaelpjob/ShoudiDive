@@ -72,6 +72,8 @@ const ALLOWED_NAMES = new Set([
   "spot_detail_open",
   "spot_detail_close",
   "spot_detail_layer_toggle",
+  "column_open",
+  "column_depth_set",
 ]);
 
 function jsonResponse(body, init) {

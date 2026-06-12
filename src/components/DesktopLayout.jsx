@@ -40,6 +40,8 @@ import {
   getCurrentSpeed,
   getCurrentUV,
   getVizFt,
+  getColumnAt,
+  getColumnSpot,
   windCompass,
   windCardinal,
   windSource,
@@ -49,6 +51,8 @@ import {
 import { sstColor, chlColor, SAVED_SPOTS, BBOX } from "../lib/mapData.js";
 import { activeRegion } from "../lib/region.js";
 import ConfidenceDot from "./ConfidenceDot.jsx";
+import WaterColumn from "./micro/WaterColumn.jsx";
+import { usePrefs } from "../contexts/PrefsContext.jsx";
 
 function Chevron({ open }) {
   return (
@@ -164,6 +168,30 @@ export default function DesktopLayout({
   const [controlsOpen, setControlsOpen] = useState(true);
   const [spotsOpen, setSpotsOpen] = useState(true);
   const [legendOpen, setLegendOpen] = useState(true);
+  const { prefs } = usePrefs();
+
+  // Water column (PRD water-column V2/V4): the right-rail readout
+  // slices wherever the cursor hovers; with no hover it pins to the
+  // selected saved spot, whose sidecar profile also carries the 24 h
+  // cliff series for the diurnal strip.
+  const wcOn = layer === "viz" && prefs.waterColumnOn;
+  let wcCol = null, wcTitle = null, wcSeries = null;
+  if (wcOn) {
+    if (hover && Number.isFinite(hover.lng)) {
+      wcCol = getColumnAt(hover.lng, hover.lat);
+      if (wcCol) {
+        wcTitle = `${hover.lat.toFixed(3)}°N ${Math.abs(hover.lng).toFixed(3)}°W`;
+      }
+    }
+    if (!wcCol && activeSpot) {
+      const sc = getColumnSpot(activeSpot);
+      if (sc) {
+        wcCol = sc;
+        wcTitle = sc.name;
+        wcSeries = sc.cliff_series_ft;
+      }
+    }
+  }
 
   return (
     <>
@@ -367,6 +395,11 @@ export default function DesktopLayout({
         </div>
         {infoOpen && (<>
           <div className="panel-body" style={{ overflowY: "auto" }}>
+            {wcOn && (
+              <div className="wc-section-card">
+                <WaterColumn col={wcCol} title={wcTitle} series={wcSeries} />
+              </div>
+            )}
             {layer === "sst" ? (
               <div className="info-section">
                 <h4 className="info-h">Sea Surface Temperature</h4>
@@ -613,7 +646,15 @@ export default function DesktopLayout({
               </div>
             ) : (
               <div className="info-section">
-                <h4 className="info-h">Predicted Visibility · model output</h4>
+                <h4 className="info-h">Predicted Visibility · surface · model output</h4>
+                {wcOn && (
+                  <p className="info-p">
+                    The map and the numbers below describe the{" "}
+                    <strong>surface optical layer</strong>. The water
+                    column card above slices what the model expects
+                    below it.
+                  </p>
+                )}
                 {(() => {
                   const r = activeRegion();
                   const goodCopy = r === "baja"
@@ -798,6 +839,19 @@ export default function DesktopLayout({
                         View detailed map →
                       </button>
                     )}
+                    {/* Two-number viz row (PRD water-column V4): the
+                        spot's modeled below-cliff vis under the
+                        surface number. Falls back to one number when
+                        the column sidecar isn't loaded / no cliff. */}
+                    {wcOn && (() => {
+                      const sc = getColumnSpot(s.id);
+                      if (!sc || sc.no_cliff || sc.below_ft == null) return null;
+                      return (
+                        <div className="spot-below mono">
+                          → ~{Math.round(sc.below_ft)} ft below {Math.round(sc.cliff_ft)} ft
+                        </div>
+                      );
+                    })()}
                   </div>
                   <div className="spot-val mono">
                     {valTxt}
@@ -822,7 +876,7 @@ export default function DesktopLayout({
               : layer === "wind" ? "Wind Speed (10 m)"
               : layer === "swell" ? "Swell · Hs / Tp / Dp"
               : layer === "current" ? "Surface Current"
-              : "Predicted Visibility"}
+              : "Predicted Visibility · surface"}
             {layer === "viz" && <span className="predicted-badge">PREDICTED</span>}
             {layer === "current" && <span className="beta-badge">BETA</span>}
           </span>

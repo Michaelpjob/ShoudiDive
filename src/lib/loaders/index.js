@@ -23,6 +23,7 @@ import { loadCurrent5d } from "./current5d.js";
 import { loadRtofs5d } from "./rtofs5d.js";
 import { loadWind } from "./wind.js";
 import { loadViz } from "./viz.js";
+import { loadVizColumn } from "./vizColumn.js";
 import { loadScalarPng } from "./scalarPng.js";
 
 // Each entry: layer name → (info, state) => Promise<void>.
@@ -41,6 +42,7 @@ export const LAYER_LOADERS = {
   rtofs5d:  (info, state) => loadRtofs5d(info, state),
   wind:     (info, state) => loadWind(info, state),
   viz:      (info, state) => loadViz(info, state),
+  viz_column: (info, state) => loadVizColumn(info, state),
   sst:      (info, state) => loadScalarPng("sst", info, state),
   chl:      (info, state) => loadScalarPng("chl", info, state),
   // kd490 has the same shape as chl. Wire it in once the frontend

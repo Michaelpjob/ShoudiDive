@@ -128,13 +128,26 @@
   Scripps Pier, CalCOFI, depth-stratified diver reports via #139).
 - [ ] **C5 — per-layer confidence** (extend src/lib/confidence.js).
 
-## Group V — visualization (after C1 merges + data publishes)
+## Group V — visualization
 
-- [ ] V1 WaterColumn.jsx widget → V2 tap-to-slice (bathy.png sampling
-  until smooth-zoom Z12 lands) → V3 planned-depth marker → V4 right
-  rail + saved-spots two-number rows + "surface" legend relabel →
-  V5 diurnal strip (cliff_series_ft) → V6 ground truth via #139.
-  Flip `frontend_renders` + add BETA pref (D2) in V4's PR.
+- [x] **V1–V5 + D2 (PR `feat/water-column-ui`, stacked on C1's
+  branch).** `WaterColumn.jsx` (slice column + swing band + dashed
+  cliff + planned-depth marker + diurnal strip), `loaders/vizColumn.js`
+  (rasters + spots sidecar + frontend bathy grid), `dataSource.
+  getColumnAt/getColumnSpot`; docked in the desktop right rail
+  ("How to read this" zone) and a mobile-sheet section; saved-spot
+  rows show two numbers on both layouts; legend + info relabeled
+  "surface"; `waterColumnOn` pref (ON + BETA badge, settings
+  off-switch); analytics `column_open`/`column_depth_set`;
+  `frontend_renders` flipped. Slice point = live hover (desktop) /
+  pinned tap (mobile), falling back to the selected saved spot whose
+  sidecar adds the 24 h strip. Verified in a live preview: column
+  values, strip ("Cliff over the next 24 h · 20–30 ft"), crossing
+  callout, mobile sheet section, two-number rows; zero console
+  errors. Checkpoint: `tests/checkpoints/water-column.test.js`.
+- [ ] **V6 — ground truth + report capture**: blocked on #139's
+  field-reports engine (PRD: reuse its submission/display path; do
+  not build a parallel one).
 
 ## Group D — contract + gating
 
