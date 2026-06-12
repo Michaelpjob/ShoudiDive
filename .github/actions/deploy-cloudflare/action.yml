@@ -56,6 +56,12 @@ runs:
 
     - name: Deploy to Cloudflare Pages (${{ inputs.branch }})
       shell: bash
+      # 2026-05-26: wrap wrangler in a 3-attempt retry loop. Cloudflare's
+      # Pages-Function publish endpoint returns `Unknown internal error`
+      # at a 5-10% rate (~93 of the past 14 days' failures). Each retry
+      # waits 20 / 40 / 60 s. Only fails the job if all three attempts
+      # error out — a real Cloudflare outage will still surface, but
+      # routine flakiness is invisible.
       run: |
         # SC2155: declare + export on separate lines so the
         # substitution's exit status isn't masked by `export`.
@@ -64,7 +70,22 @@ runs:
         # Headers.set: '*** invalid header value' failure mode).
         CLOUDFLARE_API_TOKEN=$(printf '%s' "${CLOUDFLARE_API_TOKEN:-}" | tr -d '[:space:]')
         export CLOUDFLARE_API_TOKEN
-        npx wrangler@${{ inputs.wrangler-version }} pages deploy dist \
-          --project-name=${{ inputs.project-name }} \
-          --branch=${{ inputs.branch }} \
-          --commit-dirty=true
+        for attempt in 1 2 3; do
+          echo "::group::wrangler pages deploy attempt ${attempt}/3"
+          if npx wrangler@${{ inputs.wrangler-version }} pages deploy dist \
+              --project-name=${{ inputs.project-name }} \
+              --branch=${{ inputs.branch }} \
+              --commit-dirty=true; then
+            echo "::endgroup::"
+            echo "Deploy succeeded on attempt ${attempt}."
+            exit 0
+          fi
+          echo "::endgroup::"
+          if [ "${attempt}" -lt 3 ]; then
+            sleep_sec=$(( attempt * 20 ))
+            echo "Cloudflare deploy attempt ${attempt} failed — retrying in ${sleep_sec}s..."
+            sleep "${sleep_sec}"
+          fi
+        done
+        echo "::error::Cloudflare deploy failed after 3 attempts." >&2
+        exit 1

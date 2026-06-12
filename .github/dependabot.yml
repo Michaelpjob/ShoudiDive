@@ -1,0 +1,103 @@
+version: 2
+# Dependabot config — automated dependency PRs.
+#
+# The principle here is "lots of PRs, low review burden" rather than
+# "few PRs, careful review". Patch + minor bumps get grouped so a week
+# of `react@18.3.0 → 18.3.1` / `eslint-plugin-react@7.34.0 → 7.34.1`
+# don't each open their own PR. Major bumps DO get individual PRs
+# because they're the ones that need human eyes.
+#
+# Why this exists:
+# Two coding agents (Claude Code, Codex) make autonomous commits to
+# this repo. Without Dependabot the agents would never update
+# transitive deps on their own (they have no signal), so security CVEs
+# in nested packages would accumulate silently. Dependabot is the
+# automated "check this every week" that nobody has to remember.
+updates:
+  # ---- web app (React PWA at the repo root) -------------------------
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Los_Angeles"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "automated"
+    groups:
+      # All dev-only deps in one PR per week — typically 5-10 patch
+      # bumps. Low review burden; just glance at the changelog summary.
+      dev-deps:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+      # Production deps grouped at the patch/minor level. Majors get
+      # their own PR (Dependabot's default for "minor" group exclusion).
+      prod-deps:
+        dependency-type: "production"
+        update-types:
+          - "minor"
+          - "patch"
+    # Ignore packages we deliberately pin (none today; placeholder
+    # for the inevitable "wrangler 4.85.0 — don't upgrade until X" case).
+    ignore: []
+  # ---- python pipeline ----------------------------------------------
+  - package-ecosystem: "pip"
+    directory: "/pipeline"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:30"
+      timezone: "America/Los_Angeles"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "pipeline"
+      - "automated"
+    groups:
+      pipeline-deps:
+        update-types:
+          - "minor"
+          - "patch"
+  # ---- GitHub Actions versions --------------------------------------
+  # `actions/checkout@v4` etc. — Dependabot bumps these to fix CVEs
+  # in the action runtime (e.g. the actions/setup-node Node 20 → 24
+  # migration that's currently warned on every run).
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "07:00"
+      timezone: "America/Los_Angeles"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "github-actions"
+      - "automated"
+    groups:
+      actions-deps:
+        update-types:
+          - "minor"
+          - "patch"
+  # ---- React Native mobile client -----------------------------------
+  - package-ecosystem: "npm"
+    directory: "/mobile"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "07:30"
+      timezone: "America/Los_Angeles"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "mobile"
+      - "automated"
+    groups:
+      mobile-deps:
+        update-types:
+          - "minor"
+          - "patch"

@@ -27,13 +27,13 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           # See refresh-data.yml header for the BOT_PUSH_TOKEN rationale.
           # Falls back to GITHUB_TOKEN cleanly when the secret is absent.
           token: ${{ secrets.BOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip

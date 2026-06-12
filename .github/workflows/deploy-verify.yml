@@ -76,8 +76,15 @@ jobs:
           fi
 
   # ---------------------------------------------------------------------
-  # live-cp-manifest + live-cp-pngs + live-cp-perf — fast HTTP probe
-  # of the live deploy. Pure node:fetch, no browser. ~10 s.
+  # live-cp-manifest + live-cp-pngs + live-cp-perf — probes the live
+  # deploy from inside real headless Chrome (puppeteer). ~90 s.
+  #
+  # 2026-06-12: switched from bare node:fetch to the browser transport.
+  # Cloudflare's bot scoring intermittently 403'd the bare fetch from
+  # GHA runner IPs (the TLS fingerprint doesn't match the spoofed
+  # Chrome UA), flapping this job red for days while production was
+  # fine. The previous "CDN warmup" 90 s sleep was a misdiagnosis of
+  # the same 403s — removed; Pages deploys are atomic.
   # ---------------------------------------------------------------------
   live-cp-manifest:
     name: live-cp-manifest
@@ -85,10 +92,13 @@ jobs:
     if: needs.gate.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "24"
+          cache: npm
+      - name: Install (puppeteer + Chromium)
+        run: npm install --no-audit --no-fund
       - name: Probe manifest + PNGs + perf budget
         env:
           LIVE_BASE_URL: https://shouldidive.com
@@ -105,10 +115,10 @@ jobs:
     if: needs.gate.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
       - name: Install (puppeteer + Chromium)
         run: npm install --no-audit --no-fund
@@ -132,7 +142,11 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # 2026-05-26: removed actions/checkout. This job only writes a local
+      # file + calls the gh issue API; it never touches repo content. The
+      # checkout was failing with HTTP 403 on ~10% of runs (GitHub-side
+      # auth glitch), which produced a meta-failure on top of every real
+      # check failure. Removing it eliminates that class of false alert.
       - name: Compute outcome + body
         id: compute
         run: |
@@ -192,6 +206,12 @@ jobs:
         if: steps.compute.outputs.outcome != 'skipped'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # No checkout in this job (intentional, see above), so gh
+          # can't infer the repo from a .git dir. Without GH_REPO every
+          # gh call dies with "failed to run git: not a git repository"
+          # — which silently broke open/update/close from 2026-05-26
+          # (when the checkout was removed) until 2026-06-12 (#95/#90).
+          GH_REPO: ${{ github.repository }}
           OUTCOME: ${{ steps.compute.outputs.outcome }}
           TITLE: ${{ steps.compute.outputs.title }}
         run: |
@@ -205,7 +225,7 @@ jobs:
             --label live-deploy-broken \
             --state open \
             --json number \
-            --jq '.[0].number' || true)
+            --jq '.[0].number // empty' || true)
 
           if [ "$OUTCOME" = "fail" ]; then
             if [ -n "$existing" ]; then

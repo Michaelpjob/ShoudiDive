@@ -34,7 +34,6 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 import numpy as np
-import requests
 import xarray as xr
 from PIL import Image
 
@@ -105,8 +104,10 @@ SAMPLE_DAYS = (10, 15, 20)
 # Sample dates for the chl annual mean — one mid-month per quarter.
 ANNUAL_SAMPLE_MMDD = ((2, 15), (5, 15), (8, 15), (11, 15))
 
-SESSION = requests.Session()
-SESSION.headers.update({"Accept": "*/*", "User-Agent": "shouldidive/0.1"})
+# 2026-05-24 Stage 6a: this file previously held a per-file
+# requests.Session that became dead code after the http_get
+# migration. The two call sites already route through
+# pipeline.lib.http; this dangling Session has been removed.
 
 
 def erddap_nc(dataset: str, variable: str, d: date, stride: int, pre_xy: str,

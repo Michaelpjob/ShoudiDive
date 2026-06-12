@@ -14,9 +14,42 @@ import {
   windCompass,
   windCardinal,
 } from "../lib/dataSource.js";
+import { isLandAtSync } from "../lib/landMask.js";
+
+const TOOLTIP_TITLES = {
+  sst:     "Sea Surface Temp",
+  chl:     "Chl-a · Water Clarity",
+  wind:    "Wind · 10 m",
+  current: "Surface Current",
+  swell:   "Swell · WaveWatch III",
+  viz:     "Predicted Visibility",
+};
 
 export default function Tooltip({ x, y, layer, composite, lng, lat, units }) {
   let title, big, sub;
+  // Land guard. bilinear() in dataSource.js falls back to the nearest
+  // finite cell within ~30 km when all 4 sample corners are NaN, so
+  // hovering a peninsula pulls a chl/sst/viz value from a nearby ocean
+  // cell and presents it as if it were under the cursor. Reads wrong
+  // to the user. Short-circuit to "on land" before any per-layer
+  // sampling. The hover mask loads eagerly at module init; on the
+  // first hover before it resolves, isLandAtSync returns false and
+  // the existing per-layer "no data" path takes over.
+  if (isLandAtSync(lng, lat)) {
+    title = TOOLTIP_TITLES[layer] || TOOLTIP_TITLES.viz;
+    big = "—";
+    sub = "on land";
+    return (
+      <div className="tooltip" style={{ left: x, top: y }}>
+        <div className="tooltip-title">{title}</div>
+        <div className="tooltip-val">{big}</div>
+        <div className="tooltip-sub">{sub}</div>
+        <div className="tooltip-coord">
+          {lat.toFixed(3)}°N · {Math.abs(lng).toFixed(3)}°W
+        </div>
+      </div>
+    );
+  }
   if (layer === "sst") {
     const val = getSST(lng, lat, composite);
     title = "Sea Surface Temp";

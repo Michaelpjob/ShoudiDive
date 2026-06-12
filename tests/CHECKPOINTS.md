@@ -39,11 +39,11 @@ The test pyramid runs in two distinct stages:
 | `cp-mobile-static`    | dev   | <30 s    | Mobile RN data-layer + colormap jest tests                                               | Native render behavior (need real device)                    |
 | `cp-runtime-smoke`    | dev   | <60 s    | Boots dist/, watches for `pageerror`/`console.error`, asserts shell mounted              | Production-data quirks                                       |
 | `cp-visual-paint`     | dev   | <120 s   | For each layer, switches it on and verifies the canvas paints non-trivial pixels          | Pixel-perfect regression (no baseline image diffing yet)    |
-| **`live-cp-manifest`**| live  | <10 s    | shouldidive.com manifest reachable, `generated_at` fresh, all required layers present    | Runtime UI behavior                                          |
+| **`live-cp-manifest`**| live  | <90 s    | shouldidive.com manifest reachable, `generated_at` fresh, all required layers present — probed from inside real headless Chrome (2026-06-12: bare node:fetch was bot-scored 403 by Cloudflare from runner IPs) | Runtime UI behavior                                          |
 | **`live-cp-pngs`**    | live  | <30 s    | Every layer's primary PNG returns 200, decodes, has non-trivial content                  | Per-cell value correctness                                   |
 | **`live-cp-render`**  | live  | <60 s    | Hits shouldidive.com in headless Chrome, every layer chip clicks, no console errors      | What users on Edge/Firefox see (single-browser limit)        |
 | **`live-cp-perf`**    | live  | <30 s    | Bundle size budget, TTFB, LCP                                                            | Network-side variance                                        |
-| **`live-cp-feeds`**   | live  | <2 min   | `check_published.py` against the live deploy (existing — re-used)                        | Edge-cache staleness across regions                          |
+| **`live-cp-feeds`**   | live  | <2 min   | health-check.yml: live deploy via `live-manifest.mjs --report` (browser transport) + `check_feeds.py` for upstream feeds | Edge-cache staleness across regions                          |
 
 ## Bug-zone mapping (lessons learned)
 
