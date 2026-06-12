@@ -34,6 +34,51 @@ ZONE_LABELS = ["nearshore", "islands", "offshore"]
 LAT_LABELS = list(LAT_ZONE_BOUNDS.keys())
 
 
+# ---------------------------------------------------------------------------
+# Pacific-vs-Cortez longitude split (2026-06-10)
+# ---------------------------------------------------------------------------
+# The lat-only zone walk in classify_zone cannot tell the green Pacific
+# upwelling shelf from the clear Sea of Cortez at the SAME latitude.
+# Result on prod Baja: mid_baja / south_baja over-predict visibility on
+# the Pacific side — decoded prod values showed Magdalena (chl 2.1) at
+# 35 ft, San Juanico (chl 2.9) at 34 ft, Punta Abreojos (chl 9.6) at
+# 19 ft, all bloom water that should read 10-18 ft (Fair). North Baja
+# already reads correctly low (San Quintín chl 7.8 → 12 ft) because its
+# whole latitude is Pacific-dominant, so its low secchi `a` (5/7/7) is
+# exactly the right Pacific-upwelling profile.
+#
+# Fix: relabel PACIFIC-SIDE mid_baja / south_baja cells to north_baja so
+# they inherit that correct upwelling profile. Cortez-side cells keep
+# their clear-water mid/south coefficients (Cabo Pulmo, La Paz, Loreto
+# stay clear). north_baja itself is NOT relabeled — its Cortez side is
+# the cold tidally-mixed Midriff, so the same coefficients fit both
+# sides there. The split line is the peninsula spine: west edge of the
+# Cortez as lng = lng0 + slope·(lat − lat0), fit −110.5°@24°N →
+# −115.5°@30°N (slope −5/6 per degree). A cell is "Pacific" when its
+# longitude is WEST of (less than) that line.
+#
+# Region-gated: only Baja gets a split. Every other region resolves to
+# None, so classify_zone skips the relabel entirely → zero regression.
+_BAJA_PACIFIC_SPLIT = {
+    "west_edge": {"lat0": 24.0, "lng0": -110.5, "slope": -5.0 / 6.0},
+    "relabel": {"mid_baja": "north_baja", "south_baja": "north_baja"},
+}
+
+
+def _safe_region_name() -> str:
+    try:
+        try:
+            from pipeline.regions import active_region as _ar
+        except ModuleNotFoundError:
+            from regions import active_region as _ar
+        return _ar().name
+    except Exception:
+        return "ca"
+
+
+PACIFIC_SPLIT = _BAJA_PACIFIC_SPLIT if _safe_region_name() == "baja" else None
+
+
 def zone_key(lat_label: str, dist_label: str) -> str:
     return f"{lat_label}_{dist_label}"
 
