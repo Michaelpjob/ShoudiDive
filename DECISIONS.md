@@ -84,6 +84,29 @@ Pushed main's `public/data/` to dev directly (bot-owned, disposable
 preview data; rewritten by bots within hours) so #137 clears today
 instead of waiting for the next organic sync after this PR merges.
 
+**D12 — Post-merge live shakeout (2026-06-12, ~02:40–03:00 Z).**
+Merging six PRs in quick succession exercised the new machinery and
+surfaced two follow-ups, fixed the same hour: (a) sync-dev's first
+real sync carried `.github/workflows/**` changes and GITHUB_TOKEN is
+forbidden from pushing workflow files — switched the checkout/push to
+BOT_PUSH_TOKEN, which also self-triggers dev-checks on code syncs, so
+the explicit dispatch step (and `actions: write`) is gone; (b) the
+merge burst's concurrency cancellations made sync-issue count
+"cancelled" job results as failures and open a phantom
+"failed (2/2 checks)" issue (#141) — only literal "failure" counts
+now, both-success claims pass, anything else leaves the rolling issue
+untouched. (c) The probe jobs' `node-version: 24` made puppeteer's
+postinstall silently skip the Chrome download ("added 376 packages in
+14 s", no browser) — the first real verify run then died with "Could
+not find Chrome" on both jobs. Reverted those jobs to node 20 (proven
+by weeks of green render runs and #143's own web-smoke; D8's logic —
+the 06-16 deprecation concerns ACTION majors, not the installed node)
+and added an explicit `npx puppeteer browsers install chrome` step
+that is a no-op on success and loud on failure. Also confirmed live:
+the breaker let refresh-ca-data complete in ~16 min with NASA still
+down, production generated_at went 39.9 h stale → fresh, and
+#90/#130/#6 closed on merge.
+
 **D11 — Region-data ownership map (caught + corrected mid-build).**
 All region data nests under `public/data/` — CA flat, `baja/`,
 `pnw/`, `tropical/` as subdirs (NOT `public/data-<region>/` as the

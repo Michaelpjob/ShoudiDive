@@ -95,10 +95,17 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: "24"
+          node-version: "20"
           cache: npm
       - name: Install (puppeteer + Chromium)
         run: npm install --no-audit --no-fund
+      - name: Ensure Chrome is installed for puppeteer
+        # Belt-and-braces: puppeteer's postinstall download can skip
+        # silently (observed under node24/npm11, 2026-06-12 — probes
+        # then die with "Could not find Chrome"). This explicit step
+        # is a no-op when the postinstall worked and fails LOUDLY with
+        # the downloader's logs when it didn't.
+        run: npx puppeteer browsers install chrome
       - name: Probe manifest + PNGs + perf budget
         env:
           LIVE_BASE_URL: https://shouldidive.com
@@ -118,10 +125,17 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: "24"
+          node-version: "20"
           cache: npm
       - name: Install (puppeteer + Chromium)
         run: npm install --no-audit --no-fund
+      - name: Ensure Chrome is installed for puppeteer
+        # Belt-and-braces: puppeteer's postinstall download can skip
+        # silently (observed under node24/npm11, 2026-06-12 — probes
+        # then die with "Could not find Chrome"). This explicit step
+        # is a no-op when the postinstall worked and fails LOUDLY with
+        # the downloader's logs when it didn't.
+        run: npx puppeteer browsers install chrome
       - name: Headless browser smoke against shouldidive.com
         env:
           LIVE_BASE_URL: https://shouldidive.com
@@ -155,23 +169,28 @@ jobs:
           render_outcome="${{ needs.live-cp-render.result }}"
 
           # `result` is "success" | "failure" | "cancelled" | "skipped".
-          # Treat anything other than "success" as red, EXCEPT
-          # "skipped" (when upstream-deploy-failure caused us to skip).
+          # Only literal "failure" is a red verdict. "skipped" means the
+          # gate stopped us (upstream deploy failed — it already
+          # alerted); "cancelled" means this run was superseded by a
+          # newer deploy (concurrency cancel-in-progress) — the newer
+          # run delivers the verdict. Counting cancelled as red opened
+          # phantom "failed (2/2 checks)" issues during the 2026-06-12
+          # merge burst (#141). Both checks must SUCCEED to claim
+          # pass (close-the-issue); anything between fail and pass
+          # leaves the rolling issue untouched.
           fail_count=0
-          [ "$manifest_outcome" != "success" ] && [ "$manifest_outcome" != "skipped" ] && fail_count=$((fail_count + 1))
-          [ "$render_outcome"   != "success" ] && [ "$render_outcome"   != "skipped" ] && fail_count=$((fail_count + 1))
+          [ "$manifest_outcome" = "failure" ] && fail_count=$((fail_count + 1))
+          [ "$render_outcome"   = "failure" ] && fail_count=$((fail_count + 1))
 
-          # If everything was skipped (upstream failed), don't
-          # touch the issue — the upstream deploy already alerted.
-          if [ "$manifest_outcome" = "skipped" ] && [ "$render_outcome" = "skipped" ]; then
-            echo "outcome=skipped" >> "$GITHUB_OUTPUT"
-          elif [ "$fail_count" -gt 0 ]; then
+          if [ "$fail_count" -gt 0 ]; then
             echo "outcome=fail" >> "$GITHUB_OUTPUT"
             {
               echo "title=Live deploy verification failed (${fail_count}/2 checks)"
             } >> "$GITHUB_OUTPUT"
-          else
+          elif [ "$manifest_outcome" = "success" ] && [ "$render_outcome" = "success" ]; then
             echo "outcome=pass" >> "$GITHUB_OUTPUT"
+          else
+            echo "outcome=skipped" >> "$GITHUB_OUTPUT"
           fi
           echo "manifest_outcome=$manifest_outcome" >> "$GITHUB_OUTPUT"
           echo "render_outcome=$render_outcome"     >> "$GITHUB_OUTPUT"

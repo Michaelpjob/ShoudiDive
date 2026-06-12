@@ -43,13 +43,12 @@ name: Sync dev with main
 on:
   push:
     branches: [main]
+  # Manual escape hatch — lets an operator force a sync without
+  # waiting for the next bot push to main.
+  workflow_dispatch:
 
 permissions:
   contents: write
-  # actions: write is needed for the final step where we dispatch
-  # dev-checks.yml against the freshly-synced dev HEAD. Without it,
-  # the GH api call fails with "Resource not accessible by integration".
-  actions: write
 
 concurrency:
   group: sync-dev
@@ -72,7 +71,7 @@ jobs:
     # (correct: dev was just consumed by the merge). Direct human
     # pushes to main are emergency scenarios — let those surface
     # normally rather than silently fan out to dev.
-    if: contains(github.event.head_commit.author.email, '[bot]')
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.author.email, '[bot]')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -81,18 +80,18 @@ jobs:
         with:
           ref: dev
           fetch-depth: 0
-          # GITHUB_TOKEN can push to dev — dev isn't branch-protected.
-          # Caveat: pushes via GITHUB_TOKEN don't trigger downstream
-          # workflows (a GH safety feature to prevent recursion).
-          # 2026-05-24: this used to be flagged as "fine, we don't need
-          # dev-checks to re-run on a pure data-file sync". That was
-          # wrong. When an open dev → main PR exists, branch protection
-          # requires green status checks on the CURRENT head of dev.
-          # A sync commit changes the head SHA, so the PR's required
-          # checks no longer point at a checked commit, and the merge
-          # is BLOCKED until something dispatches dev-checks against
-          # the new HEAD. The final step in this job now does that
-          # explicitly via `gh workflow run`.
+          # BOT_PUSH_TOKEN (user PAT), NOT GITHUB_TOKEN — two reasons:
+          # 1. Syncs that carry .github/workflows/** changes from main
+          #    (any CI fix) are REJECTED for GITHUB_TOKEN ("refusing to
+          #    allow a GitHub App to ... update workflow ... without
+          #    `workflows` permission"). Seen live 2026-06-12 on the
+          #    first sync after the stabilization merge.
+          # 2. PAT pushes trigger downstream workflows, so a sync that
+          #    brings code to dev fires dev-checks (and the dev preview
+          #    deploy chain) natively — no explicit dispatch step
+          #    needed. Data-only syncs are filtered by dev-checks'
+          #    paths-ignore.
+          token: ${{ secrets.BOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Configure git identity
         run: |
@@ -169,31 +168,10 @@ jobs:
         run: |
           git push origin dev
 
-      - name: Dispatch dev-checks against the new HEAD (code syncs only)
-        # GITHUB_TOKEN pushes don't trigger workflows, so a sync that
-        # brought CODE to dev dispatches dev-checks explicitly — that
-        # keeps the dev preview deploy chain alive (deploy-dev.yml
-        # fires on Dev checks success).
-        #
-        # Data-only syncs (the hourly wind / daily data commits) skip
-        # the dispatch: per the 2026-06 stabilization, data-refresh
-        # commits must not burn dev-check runs (#137 noise). The dev
-        # preview's DATA freshness rides ca-beta's own deploy chain;
-        # dev.shouldidive.pages.dev refreshes data on the next code
-        # sync. (The old unconditional dispatch existed for dev → main
-        # PRs, an anti-pattern CLAUDE.md now bans.)
-        if: steps.check.outputs.ahead != '0'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          code_changed=$(git diff --name-only "${{ steps.check.outputs.pre_sha }}" HEAD \
-            | grep -vE '^public/data(-[a-z]+)?/' | head -1 || true)
-          if [ -n "$code_changed" ]; then
-            echo "Sync brought code changes (e.g. $code_changed) — dispatching dev-checks"
-            gh workflow run dev-checks.yml --ref dev
-          else
-            echo "Data-only sync — skipping dev-checks dispatch"
-          fi
+      # (No dev-checks dispatch step: the BOT_PUSH_TOKEN push above
+      # triggers workflows natively. dev-checks' paths-ignore keeps
+      # data-only syncs from burning runs; code syncs gate + deploy
+      # the dev preview through the normal push-event path.)
 
       - name: Summary
         if: always()

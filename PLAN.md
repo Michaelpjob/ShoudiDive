@@ -57,18 +57,25 @@
   codes); `check_feeds.py` unchanged. NASA OB.DAAC red feed entry is
   a true upstream outage — stays visible as a feed finding, which is
   correct and advisory-only.
-- [ ] **S6 — PR queue cleared.** Order (human merges):
-  1. #136 (swell double-count + beta-freshness skip) — READY; unblocks
-     pipeline-tests on every other off-main PR.
-  2. **This stabilization PR** (rebase/re-run after #136).
-  3. #135 (Baja viz) — re-run checks after #136.
-  4. #138 (per-feature promotion process) — re-run after #136.
-  5. Dependabot #132/#76/#58 (mobile dev-deps).
-  6. #134 (dev→main) — CLOSE, do not merge; spot-detail work re-cut
-     onto `feat/spot-detail-ncei` off main (hard prereq for Z12).
-  7. #102 (kelp admin beds) — see QUESTIONS.md (close-and-re-cut
-     recommendation).
-  8. #139 (field reports) — another agent's WIP draft; leave.
+- [x] **S6 — PR queue cleared** (executed 2026-06-12 02:35–03:00 Z
+  under user-granted merge authority):
+  1. [x] #136 merged 02:35 Z (swell double-count + beta-freshness skip).
+  2. [x] #140 merged 02:39 Z (this stabilization PR) — #90/#130/#6
+     closed on merge; production manifest refreshed to 02:43 Z via
+     dispatched refresh-ca-data (succeeded in ~16 min with NASA still
+     down — breaker verified live).
+  3. [x] #135 merged (conflict with #136's freshness skip resolved —
+     duplicate implementation dropped, #136's kept).
+  4. [x] #138 merged (per-feature promotion process now canonical).
+  5. [x] Dependabot #132/#76/#58 merged.
+  6. [x] #134 closed with disposition comment; spot-detail re-cut onto
+     `feat/spot-detail-ncei` is the next work item (hard prereq Z12).
+  7. [x] #102 closed with disposition comment (re-cut inside Z14).
+  8. #139 (field reports) — another agent's WIP draft; left open.
+  - [ ] Shakeout PR (sync-dev BOT_PUSH_TOKEN + cancelled-run
+    alerting): merge, then confirm dev syncs (brings the breaker to
+    dev before the ~10:00 UTC pnw/tropical crons) and #141/#137/#95
+    auto-close.
 
 ## Group T — Streamline (next after S merges)
 
