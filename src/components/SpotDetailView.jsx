@@ -825,10 +825,17 @@ export default function SpotDetailView({ spot, onClose }) {
   // clips the murk layer and a wall shows the full descent. Idle
   // cursor falls back to the spot centre, whose sidecar also carries
   // the 24 h cliff series.
+  const lastMark = marks.length ? marks[marks.length - 1] : null;
+
   const waterColumn = (() => {
     if (!prefs.waterColumnOn) return null;
-    const at = cursor || { lng: spot.lng, lat: spot.lat };
-    const d = cursor ? cursorDepth : depthAt(spot.lng, spot.lat);
+    // Point priority: PINNED mark (last chart click) > live cursor >
+    // spot centre. Dropping a mark locks the readout to that point —
+    // the column stops chasing the cursor until the next click
+    // re-pins it (or Clear marks restores cursor-follow).
+    const pin = lastMark;
+    const at = pin || cursor || { lng: spot.lng, lat: spot.lat };
+    const d = depthAt(at.lng, at.lat);
     if (d?.onLand) return null;
     const col = getColumnAt(at.lng, at.lat);
     if (!col) return null;
@@ -839,13 +846,26 @@ export default function SpotDetailView({ spot, onClose }) {
       out = { ...col, bottom_ft: bottom, no_cliff: noCliff,
               below_ft: noCliff ? col.surface_ft : col.below_ft };
     }
-    // No diurnal strip when the bottom sits above the cliff — a
-    // "cliff swing" chart for water the cliff never enters reads as
-    // noise on a shallow cove.
-    const series = (cursor || out.no_cliff)
-      ? null
-      : (getColumnSpot(spot.id)?.cliff_series_ft || null);
-    return { col: out, title: cursor ? "At cursor" : spot.name, series };
+    // 24 h cliff series. The bundle spot's sidecar carries the
+    // tide-phased series; the v1 swing amplitude is month-global, so
+    // an arbitrary pinned point's series is the sidecar series
+    // RE-CENTERED on that point's own cliff depth. Suppressed while
+    // cursor-following (too twitchy mid-glide) and on no-cliff
+    // shallows (a swing chart for water the cliff never enters reads
+    // as noise).
+    let series = null;
+    if (!out.no_cliff && (pin || !cursor)) {
+      const sc = getColumnSpot(spot.id);
+      if (sc?.cliff_series_ft && Number.isFinite(out.cliff_ft)) {
+        const offset = out.cliff_ft - (sc.cliff_ft ?? out.cliff_ft);
+        series = sc.cliff_series_ft.map(
+          (v) => Math.round((v + offset) * 10) / 10);
+      }
+    }
+    const title = pin
+      ? `Pinned · ${at.lat.toFixed(4)}°N ${Math.abs(at.lng).toFixed(4)}°W`
+      : cursor ? "At cursor" : spot.name;
+    return { col: out, title, series };
   })();
 
   // ---- Conditions at the spot centre ----------------------------------------
@@ -877,7 +897,6 @@ export default function SpotDetailView({ spot, onClose }) {
     ? new Date(bundle.manifest.generated_at).toISOString().slice(0, 10)
     : null;
 
-  const lastMark = marks.length ? marks[marks.length - 1] : null;
 
   // ---------------------------------------------------------------------------
   return (
