@@ -77,7 +77,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout dev
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: dev
           fetch-depth: 0
@@ -105,6 +105,7 @@ jobs:
           git fetch origin main
           ahead=$(git rev-list dev..origin/main --count)
           echo "ahead=$ahead" >> "$GITHUB_OUTPUT"
+          echo "pre_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           if [ "$ahead" = "0" ]; then
             echo "dev already up to date with main — nothing to do"
           else
@@ -122,25 +123,77 @@ jobs:
             -X theirs \
             -m "sync(auto): bring dev up to main HEAD"
 
+      - name: Align main-owned data with main (coherence pass)
+        if: steps.check.outputs.ahead != '0'
+        id: align
+        run: |
+          # -X theirs resolves CONFLICTS to main, but hunks that only
+          # dev touched survive the merge — and two bots write the same
+          # files on the two branches (main: refresh-ca-*; dev: the
+          # ca-beta refreshes, which share public/data/ by design).
+          # A hunk-level mix of the two produced a manifest whose SST
+          # grid said 586×511 while sst_1d.png was 234×206 (#137):
+          # manifest + PNGs MUST move as one atomic set, which no
+          # hunk-level merge can guarantee. So after every sync, the
+          # MAIN-OWNED data paths are reset wholesale to main's
+          # coherent set. The ca-beta refreshes re-assert dev's own
+          # (equally coherent) set on their next run; what's banned is
+          # the mix.
+          #
+          # Ownership map (who refreshes where — keep in lockstep with
+          # the `ref:` line in each refresh-<region>-data.yml):
+          #   main-owned: public/data/ flat files + baja/ (prod regions
+          #               ca + baja refresh on main)
+          #   dev-owned:  public/data/pnw/ + public/data/tropical/
+          #               (beta regions refresh on dev; main's copies
+          #               LAG — resetting them from main would clobber
+          #               fresh beta data with weeks-stale copies)
+          DEV_OWNED_SUBDIRS="pnw tropical"
+
+          git checkout origin/main -- public/data/
+          for sub in $DEV_OWNED_SUBDIRS; do
+            if git rev-parse -q --verify "${{ steps.check.outputs.pre_sha }}:public/data/$sub" >/dev/null; then
+              git checkout "${{ steps.check.outputs.pre_sha }}" -- "public/data/$sub/"
+            fi
+          done
+          if git diff --cached --quiet; then
+            echo "public/data already coherent with main"
+            echo "data_realigned=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "sync(auto): align main-owned data with main (atomic manifest+PNG set)"
+            echo "data_realigned=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Push synced dev
         if: steps.check.outputs.ahead != '0'
         run: |
           git push origin dev
 
-      - name: Dispatch dev-checks against the new HEAD
-        # Without this, any open dev → main PR sits BLOCKED — its
-        # required status checks point at a SHA that has no checks
-        # run against it (GITHUB_TOKEN pushes don't trigger
-        # workflows). gh workflow run uses the workflow_dispatch
-        # path which DOES create check-runs visible to branch
-        # protection. Witnessed during the Stage 4 + Stage 5 PR
-        # merge dance — both PRs needed manual dispatches when sync
-        # commits landed mid-merge. Closing the loop here.
+      - name: Dispatch dev-checks against the new HEAD (code syncs only)
+        # GITHUB_TOKEN pushes don't trigger workflows, so a sync that
+        # brought CODE to dev dispatches dev-checks explicitly — that
+        # keeps the dev preview deploy chain alive (deploy-dev.yml
+        # fires on Dev checks success).
+        #
+        # Data-only syncs (the hourly wind / daily data commits) skip
+        # the dispatch: per the 2026-06 stabilization, data-refresh
+        # commits must not burn dev-check runs (#137 noise). The dev
+        # preview's DATA freshness rides ca-beta's own deploy chain;
+        # dev.shouldidive.pages.dev refreshes data on the next code
+        # sync. (The old unconditional dispatch existed for dev → main
+        # PRs, an anti-pattern CLAUDE.md now bans.)
         if: steps.check.outputs.ahead != '0'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh workflow run dev-checks.yml --ref dev
+          code_changed=$(git diff --name-only "${{ steps.check.outputs.pre_sha }}" HEAD \
+            | grep -vE '^public/data(-[a-z]+)?/' | head -1 || true)
+          if [ -n "$code_changed" ]; then
+            echo "Sync brought code changes (e.g. $code_changed) — dispatching dev-checks"
+            gh workflow run dev-checks.yml --ref dev
+          else
+            echo "Data-only sync — skipping dev-checks dispatch"
+          fi
 
       - name: Summary
         if: always()

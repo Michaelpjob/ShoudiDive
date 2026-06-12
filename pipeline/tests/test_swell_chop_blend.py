@@ -82,16 +82,23 @@ def test_blend_decay_actually_reaches_far_cells():
 
 
 def test_blend_preserves_ww3_value_at_origin():
-    """Inside the WW3-valid region the output Hs must combine the raw
-    swell with the wind-sea via root-sum-square (not be cut by decay)."""
+    """Inside the WW3-valid region the output Hs must equal the raw gfswave
+    swell, with NO wind-sea added on top.
+
+    v7 (2026-06-11): gfswave's htsgw is already total significant wave height
+    (wind sea + swell combined). The SMB wind-sea term only FILLS cells the
+    model doesn't resolve — at a valid interior cell swell_weight=1, so the
+    wind term (scaled by 1−swell_weight) is zero and the reading is the
+    un-inflated model swell. Previously this asserted sqrt(3.0²+0.4²)≈3.03,
+    which double-counted the wind sea; that ~√2 inflation was the bug."""
     h_grid, p_grid, d_grid, u, v = _make_split_grid(swell_hs_m=3.0)
     h_out, _, _ = _blend_swell_chop(h_grid, p_grid, d_grid, u, v)
 
     interior = float(h_out[h_out.shape[0] // 2, 0])
-    # sqrt(3.0^2 + 0.4^2) ≈ 3.026 m, allow generous tolerance.
-    assert 2.9 < interior < 3.2, (
-        f"interior WW3 cell Hs={interior:.3f} m — should be ~3.02 m "
-        "(swell dominates, weight=1)"
+    # Pure swell at a valid cell: 3.0 m (wind-sea contributes 0 where weight=1).
+    assert 2.95 < interior < 3.05, (
+        f"interior WW3 cell Hs={interior:.3f} m — should be ~3.0 m "
+        "(un-inflated swell; wind-sea fills gaps only, not valid cells)"
     )
 
 
