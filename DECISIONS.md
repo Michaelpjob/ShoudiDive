@@ -3,6 +3,58 @@
 > Working artifact per the PRD (§7): what was ambiguous → what was
 > chosen → why. Newest first within each group.
 
+## Water Column PRD — Group C1 (2026-06-12)
+
+**WC-D1 — Two rasters + a spot sidecar, not three rasters.** Below-cliff
+vis (`viz_column_below_ft.png`, 0-80 ft — deliberately the viz layer's
+exact range/scale so the existing legend semantics decode it) and cliff
+depth (`viz_column_cliff_ft.png`, 0-100 ft) are per-cell rasters; the
+diurnal swing is NOT a raster (it's near-constant per month across the
+bbox at v1 fidelity) — the scalar `swing_ft` lives on the manifest
+layer and the hourly `cliff_series_ft` lives in the per-spot sidecar
+where the V5 strip actually needs it.
+
+**WC-D2 — Coefficients are documented guesses anchored on Point Loma.**
+All constants in `pipeline/viz_column/config.py` with rationale;
+the PRD acceptance anchor is encoded as a unit test
+(`test_point_loma_acceptance_anchor`). Notable simplifications, all
+flagged in-code: single coastline angle (140°) for the upwelling
+alongshore direction (Point Conception's bend is the casualty);
+single Coriolis f; constant drag coefficient; monthly cliff-base
+table with a flat NorCal deepening factor. C2 (ROMS MLD) replaces the
+cliff-base table; C4 tunes the rest.
+
+**WC-D3 — Internal-tide phase assumption.** Cliff deepest at HIGH
+water (downwelling phase at the coast), M2 period, amplitude grown by
+seasonal stratification strength. This is the weakest-evidence guess
+in the model and is isolated behind `PHASE_DEEPEST_AT_HIGH_WATER` so
+C4 can flip it from data without touching the series logic.
+
+**WC-D4 — fetch_tides.py extended additively.** The cliff-swing series
+needs tide PHASE; tides.json only carried the daily range. Stations
+now also publish `events` (hi/lo times + heights from the same CO-OPS
+response). Old consumers unaffected; when events are absent the
+sidecar publishes the swing band without an hourly series (UI renders
+band-only) — never blocks.
+
+**WC-D5 — Phased REQUIRED_LAYERS gating (D1a now, D1b later).**
+data-shape + the live probe assert against the COMMITTED/live
+manifest; gating `viz_column` before a refresh has published it would
+fail every check. C1's PR ships the LayerSpec entry + validator-proven
+manifest writer; the REQUIRED_LAYERS flip is a one-line follow-up
+after the first post-merge refresh.
+
+**WC-D6 — Spot list duplicated from mapData.js, knowingly.** The
+pipeline has no spot registry; the sidecar hardcodes the CA list that
+mirrors `src/lib/mapData.js` REGION_SAVED_SPOTS. Unifying them into
+one shared registry is queued in QUESTIONS.md (WQ2) rather than
+dragging a frontend refactor into a pipeline PR.
+
+**WC-D7 — CA-only at v1, no-op elsewhere.** `ENABLED_REGIONS=("ca",)`
+guard + wiring only in refresh-ca-data.yml, per PRD §3 (other regions
+inherit the heuristic when their input sets are verified — wave/wind
+encodings differ per region overrides).
+
 ## Group S (2026-06-12)
 
 **D1 — "Fix the producer, not the probe" met two distinct failures; both fixed.**

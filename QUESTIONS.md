@@ -39,6 +39,26 @@ ships without it.
 **Q5 — Mobile codebase archival (`mobile/` vs `flutter_app/`).** PRD
 §6 says you pick. No urgency; both stay CI-green meanwhile.
 
+**WQ1 — Water column: BETA→GA calibration threshold (ask-first, parked).**
+PRD §6 reserves the "below-cliff estimate is trustworthy enough to
+drop the BETA tag" decision for you. Proposal to react to when C4
+lands: GA when, over 30 days on the pilot spots, |modeled − observed
+cliff| ≤ 8 ft for ≥70% of glider/diver observations AND the below-
+cliff vis class (Good/Fair/Poor) matches ≥60%. Nothing needed now —
+the flag ships BETA regardless.
+
+**WQ2 — Water column: spot-registry duplication.** The pipeline
+sidecar hardcodes the CA saved-spots list that mirrors
+`src/lib/mapData.js` (WC-D6). Worth unifying into one JSON registry
+both sides read when the smooth-zoom spot fan-out (Z17 registry) lands
+— same registry can serve both PRDs. No action needed from you unless
+you object to the temporary duplication.
+
+**WQ3 — Water column V6 dependency on #139.** The diver-report
+submission/display reuse (V6) and the diver-report half of the C4
+calibration set stay blocked until the other agent's field-reports
+engine (#139) merges. Glider/pier calibration proceeds without it.
+
 **Q6 — GitHub vulnerability alerts.** Push output shows "8
 vulnerabilities on the default branch (1 critical, 6 moderate, 1
 low)" — beyond the three mobile dependabot PRs in the queue. Worth a
