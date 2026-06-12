@@ -91,6 +91,9 @@ CA_SPOTS = [
     {"id": "catalina",  "name": "Catalina",       "lng": -118.45, "lat": 33.39},
     {"id": "lajolla",   "name": "La Jolla",       "lng": -117.28, "lat": 32.85},
     {"id": "sandiego",  "name": "San Diego",      "lng": -117.18, "lat": 32.70},
+    # Anchored in the deep kelp bed west of the peninsula — mirrors the
+    # mapData.js entry (added with the pointloma spot-detail bundle).
+    {"id": "pointloma", "name": "Point Loma",     "lng": -117.27, "lat": 32.685},
     {"id": "coronados", "name": "Coronados",      "lng": -117.27, "lat": 32.40},
 ]
 
