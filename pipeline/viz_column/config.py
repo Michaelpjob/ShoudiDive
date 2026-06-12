@@ -62,14 +62,47 @@ CLIFF_BASE_FT_BY_MONTH = {
 }
 
 # Strong upwelling lifts the thermocline; at saturation the cliff
-# shoals by this fraction of its seasonal base.
+# shoals by this fraction of its base — but only near the coast (see
+# UPWELLING_DECAY_KM) and damped inside the Bight (below).
 UPWELLING_CLIFF_SHOALING_FRAC = 0.30
 
-# North of this latitude stratification is weaker/deeper on average;
-# v1 applies a flat deepening factor (crude — replaced by C2's ROMS
-# mixed-layer depth).
-NORCAL_LAT_DEG = 36.0
-NORCAL_CLIFF_DEEPEN_FRAC = 0.20
+# ---- Regional bands (v1.1, 2026-06-12) -----------------------------------
+# The coastline's regime changes at two real capes, not at a round
+# latitude:
+#   * SoCal Bight (south of Pt. Conception): the coast turns E-W and
+#     the Channel Islands shelter it — upwelling is weak/episodic,
+#     summer stratification strong, thermocline shallow + sharp. The
+#     monthly base table is tuned here (Point Loma anchor).
+#   * CenCal (Conception -> Pt. Arena): the classic upwelling core.
+#     Mean state colder/less stratified (deeper base), but coastal
+#     upwelling events legitimately drag the nearshore pycnocline up,
+#     so the full shoaling term applies.
+#   * NorCal (north of Pt. Arena): strongest wind mixing; weak, often
+#     diffuse stratification — deepest base. (C2's model MLD replaces
+#     all of this; C5 should also carry lower confidence here.)
+PT_CONCEPTION_LAT_DEG = 34.45
+PT_ARENA_LAT_DEG = 38.95
+CENCAL_CLIFF_DEEPEN_FRAC = 0.15
+NORCAL_CLIFF_DEEPEN_FRAC = 0.30
+
+# The Bight's E-W coast makes the prevailing NW wind largely
+# cross-shore (and the single ALONGSHORE_EQUATORWARD_DEG above is a
+# CenCal/NorCal angle), so the same wind produces less upwelling
+# there: damp the shoaling term.
+BIGHT_UPWELLING_DAMPING = 0.6
+
+# ---- Cross-shore structure (v1.1) -----------------------------------------
+# Coastal upwelling lifts the pycnocline only within roughly the
+# baroclinic deformation radius of the coast (~10-30 km off CA); the
+# shoaling term decays offshore on this scale. Beyond it the seasonal
+# thermocline RELAXES DOWN toward its open-ocean depth — offshore CA
+# Current summer mixed layers sit well below the upwelled nearshore
+# pycnocline. Without these two terms the v1.0 model shoaled the
+# cliff everywhere the wind blew (and winds are stronger offshore),
+# producing a wrong-signed offshore gradient.
+UPWELLING_DECAY_KM = 25.0
+OFFSHORE_DEEPEN_FT = 20.0
+OFFSHORE_DEEPEN_KM = 40.0
 
 CLIFF_MIN_FT = 10.0
 CLIFF_MAX_FT = 80.0
