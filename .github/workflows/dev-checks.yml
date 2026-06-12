@@ -16,14 +16,16 @@ on:
   push:
     branches: [dev]
     # Bot data commits (ca-beta refreshes pushing to dev hourly, the
-    # main→dev data syncs) must not burn dev-check runs — they were
-    # the bulk of #137's red noise. A push is skipped only when EVERY
-    # changed file matches; any code change still runs the gate.
-    # sync-dev.yml separately dispatches dev-checks when a sync brings
-    # code to dev (GITHUB_TOKEN pushes don't fire triggers).
+    # pnw/tropical beta refreshes, the main→dev data syncs) must not
+    # burn dev-check runs — they were the bulk of #137's red noise.
+    # All region data nests under public/data/ (CA flat; baja/, pnw/,
+    # tropical/ as subdirs), so one pattern covers every region. A
+    # push is skipped only when EVERY changed file matches; any code
+    # change still runs the gate. sync-dev.yml separately dispatches
+    # dev-checks when a sync brings code to dev (GITHUB_TOKEN pushes
+    # don't fire triggers).
     paths-ignore:
       - "public/data/**"
-      - "public/data-*/**"
   pull_request:
     branches: [main]
   workflow_dispatch:

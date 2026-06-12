@@ -123,7 +123,7 @@ jobs:
             -X theirs \
             -m "sync(auto): bring dev up to main HEAD"
 
-      - name: Align public/data with main (coherence pass)
+      - name: Align main-owned data with main (coherence pass)
         if: steps.check.outputs.ahead != '0'
         id: align
         run: |
@@ -134,18 +134,33 @@ jobs:
           # A hunk-level mix of the two produced a manifest whose SST
           # grid said 586×511 while sst_1d.png was 234×206 (#137):
           # manifest + PNGs MUST move as one atomic set, which no
-          # hunk-level merge can guarantee. So after every sync, prod's
-          # shared data dir is reset wholesale to main's coherent set.
-          # The ca-beta refreshes re-assert dev's own (equally
-          # coherent) set on their next run; what's banned is the mix.
-          # Beta-region dirs (public/data-pnw/ etc.) are dev-owned and
-          # main never writes them — left untouched.
+          # hunk-level merge can guarantee. So after every sync, the
+          # MAIN-OWNED data paths are reset wholesale to main's
+          # coherent set. The ca-beta refreshes re-assert dev's own
+          # (equally coherent) set on their next run; what's banned is
+          # the mix.
+          #
+          # Ownership map (who refreshes where — keep in lockstep with
+          # the `ref:` line in each refresh-<region>-data.yml):
+          #   main-owned: public/data/ flat files + baja/ (prod regions
+          #               ca + baja refresh on main)
+          #   dev-owned:  public/data/pnw/ + public/data/tropical/
+          #               (beta regions refresh on dev; main's copies
+          #               LAG — resetting them from main would clobber
+          #               fresh beta data with weeks-stale copies)
+          DEV_OWNED_SUBDIRS="pnw tropical"
+
           git checkout origin/main -- public/data/
+          for sub in $DEV_OWNED_SUBDIRS; do
+            if git rev-parse -q --verify "${{ steps.check.outputs.pre_sha }}:public/data/$sub" >/dev/null; then
+              git checkout "${{ steps.check.outputs.pre_sha }}" -- "public/data/$sub/"
+            fi
+          done
           if git diff --cached --quiet; then
             echo "public/data already coherent with main"
             echo "data_realigned=false" >> "$GITHUB_OUTPUT"
           else
-            git commit -m "sync(auto): align public/data with main (atomic manifest+PNG set)"
+            git commit -m "sync(auto): align main-owned data with main (atomic manifest+PNG set)"
             echo "data_realigned=true" >> "$GITHUB_OUTPUT"
           fi
 

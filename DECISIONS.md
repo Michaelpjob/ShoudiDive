@@ -50,7 +50,8 @@ the 586×511-vs-234×206 mismatch on dev was a git-merge artifact (two
 bots writing the same files on two branches; hunk-level `-X theirs`
 mixes their atomic sets). No pipeline guard can prevent a merge from
 pairing old manifest with new PNGs, so sync-dev now wholesale-resets
-`public/data/` to main's set post-merge.
+the main-owned data paths to main's set post-merge (see D11 for the
+ownership map).
 
 **D6 — Accepted tradeoff: ca-beta preview data gets clobbered hourly.**
 After every sync (≈hourly, on main's wind refreshes), dev's
@@ -82,3 +83,19 @@ the next green window instead of dangling forever.
 Pushed main's `public/data/` to dev directly (bot-owned, disposable
 preview data; rewritten by bots within hours) so #137 clears today
 instead of waiting for the next organic sync after this PR merges.
+
+**D11 — Region-data ownership map (caught + corrected mid-build).**
+All region data nests under `public/data/` — CA flat, `baja/`,
+`pnw/`, `tropical/` as subdirs (NOT `public/data-<region>/` as the
+first draft of the coherence pass assumed). Ownership follows each
+refresh workflow's `ref:` line: ca + baja (prod) refresh on main →
+main-owned; pnw + tropical (beta) refresh on dev → dev-owned, and
+main's copies lag by weeks. The first coherence draft (and the first
+manual dev push) reset ALL of `public/data/` from main, which
+clobbered dev's fresh pnw/tropical with main's ~449 h-stale copies and
+flipped dev-checks' failure from [ca]-dims to pnw/tropical-freshness.
+Corrected: the pass resets main-owned paths then restores the
+dev-owned subdirs from the pre-merge dev tree; the manual push was
+amended the same way. When a beta region is promoted to prod (its
+refresh moves to main), it must be removed from DEV_OWNED_SUBDIRS in
+sync-dev.yml.
