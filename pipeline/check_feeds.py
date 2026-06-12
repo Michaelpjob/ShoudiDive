@@ -329,16 +329,13 @@ FEEDS: list[FeedSpec] = [
         critical=False,
         notes="Reddit Atom feeds (.rss path; .json blocked from CI IPs).",
     ),
-    FeedSpec(
-        feed_id="ingest_eagle4",
-        category="ingest",
-        consumer="validation/ingest/eagle4.py",
-        probe_url="https://eagle4pacific.com/dive-reports/",
-        method="HEAD",
-        expect_status=(200,),
-        critical=False,
-        notes="Eagle 4 Pacific. Known dead — handoff URL was never verified. Tracked here so a future revival registers automatically.",
-    ),
+    # 2026-05-09: Eagle 4 Pacific scraper was removed from
+    # validation/ingest/__init__.py because eagle4pacific.com's DNS no
+    # longer resolves. The probe entry was kept here at the time with
+    # the intent of detecting a future revival. After ~2 weeks of
+    # NameResolutionError noise in every health-check log with no
+    # signs of the domain coming back, dropped 2026-05-24. If the
+    # site ever returns, re-add the FeedSpec.
 ]
 
 

@@ -59,7 +59,7 @@
 //        non-CA chips + force-pins region to ca regardless of URL or
 //        localStorage. Bump evicts any cached bundle so users with a
 //        stale shell stop seeing beta chips on prod.
-const CACHE_VERSION = "v10";
+const CACHE_VERSION = "v12";
 const SHELL_CACHE = `shouldidive-shell-${CACHE_VERSION}`;
 const DATA_CACHE  = `shouldidive-data-${CACHE_VERSION}`;
 

@@ -56,14 +56,15 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
-import requests
 import xarray as xr
 from PIL import Image
 
 try:
     from pipeline.regions import active_region
+    from pipeline.lib.http import http_get
 except ModuleNotFoundError:
     from regions import active_region
+    from lib.http import http_get
 
 REGION = active_region()
 BBOX = REGION.bbox
@@ -107,11 +108,11 @@ SST_RANGE = tuple(_overrides.get("sst5d", _overrides.get("sst", (9.0, 25.0))))
 UV_RANGE = (-2.0, 2.0)
 
 
-SESSION = requests.Session()
-SESSION.headers.update({
-    "Accept": "*/*",
-    "User-Agent": "shouldidive/0.1 (rtofs fetcher)",
-})
+# Stage 6a (2026-05-24): per-file Session replaced with the shared
+# lib/http.http_get path. Adds exponential-backoff retries on NOMADS
+# transient 5xx — previously the streaming download silently
+# fell back to "try prior cycle" on any first-attempt failure,
+# costing the freshest RTOFS init cycle.
 
 
 def _candidate_cycles(now: datetime) -> list[tuple[str, str]]:
@@ -151,9 +152,10 @@ def _fetch_lead(yyyymmdd: str, lead_hours: int) -> Path | None:
     url = _file_url(yyyymmdd, lead_hours)
     print(f"  GET {url}", flush=True)
     try:
-        r = SESSION.get(url, timeout=300, stream=True)
-        if r.status_code != 200:
-            print(f"    HTTP {r.status_code} — try prior cycle")
+        r = http_get(url, timeout=300, stream=True)
+        if r is None or r.status_code != 200:
+            code = r.status_code if r is not None else "ERR"
+            print(f"    HTTP {code} — try prior cycle")
             return None
         # Stream to disk to avoid holding the 155 MB blob in memory
         # twice (network buffer + write buffer).

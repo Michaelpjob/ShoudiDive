@@ -58,3 +58,48 @@ export function buildLandMask(features, width, height) {
   }
   return mask;
 }
+
+
+// ---- Hover-time "is this point on land?" ----------------------------------
+//
+// Used by the Tooltip to suppress data readings when the cursor is on
+// a coastline polygon. Without this guard, bilinear() in dataSource.js
+// expands outward up to 6 cells looking for the nearest finite pixel
+// when all 4 corners are NaN (the deep-land case) — so hovering the
+// peninsula renders e.g. "0.75 mg/m³ Clear" pulled from a nearby ocean
+// cell. The number is technically real but reads as wrong to the user
+// hovering land. (User report 2026-05-24, Baja peninsula at La Paz.)
+//
+// Resolution 560x440 ≈ 1.5 km/cell across the active region's bbox,
+// fine enough that "on land" closely matches the visible coastline.
+const HOVER_MASK_W = 560;
+const HOVER_MASK_H = 440;
+let _hoverMaskCache = null;
+let _hoverMaskPromise = null;
+
+export function ensureHoverLandMaskLoaded() {
+  if (_hoverMaskPromise) return _hoverMaskPromise;
+  _hoverMaskPromise = loadLandGeoJSON().then((fc) => {
+    if (!fc?.features) return null;
+    _hoverMaskCache = buildLandMask(fc.features, HOVER_MASK_W, HOVER_MASK_H);
+    return _hoverMaskCache;
+  });
+  return _hoverMaskPromise;
+}
+
+// Kick off the load eagerly at module import so the first hover after
+// page load already has the mask cached. Fire-and-forget; isLandAtSync()
+// silently returns false until the promise resolves.
+ensureHoverLandMaskLoaded();
+
+export function isLandAtSync(lng, lat) {
+  if (!_hoverMaskCache) return false;
+  const lngSpan = BBOX.lngMax - BBOX.lngMin;
+  const latSpan = BBOX.latMax - BBOX.latMin;
+  const fx = (lng - BBOX.lngMin) / lngSpan;
+  const fy = (BBOX.latMax - lat) / latSpan;
+  if (fx < 0 || fx >= 1 || fy < 0 || fy >= 1) return false;
+  const x = Math.floor(fx * HOVER_MASK_W);
+  const y = Math.floor(fy * HOVER_MASK_H);
+  return _hoverMaskCache[y * HOVER_MASK_W + x] === 1;
+}

@@ -39,7 +39,6 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import numpy as np
-import requests
 import xarray as xr
 from PIL import Image
 from scipy.spatial import cKDTree
@@ -48,13 +47,16 @@ from scipy.spatial import cKDTree
 # SHOULDIDIVE_REGION; default `ca` preserves today's behavior.
 try:
     from pipeline.regions import active_region
+    from pipeline.lib import nomads
 except ModuleNotFoundError:
     from regions import active_region
+    from lib import nomads
 
 BBOX = active_region().bbox
 
-NOMADS_HRRR = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/hrrr/prod"
-NOMADS_GFS  = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod"
+# Base URLs moved to lib/nomads.py (Stage 6a, 2026-05-24).
+NOMADS_HRRR = nomads.NOMADS_HRRR
+NOMADS_GFS = nomads.NOMADS_GFS
 
 GRID_W, GRID_H = 140, 110
 UV_RANGE = (-30.0, 30.0)  # m/s
@@ -83,54 +85,31 @@ HOURLY_DIR  = OUT_DIR / "hourly"
 BUCKETS_DIR = OUT_DIR / "buckets"
 CACHE_DIR   = ROOT / "pipeline" / ".cache"
 
-SESSION = requests.Session()
-SESSION.headers.update({
-    "Accept": "*/*",
-    "User-Agent": "shouldidive/0.1 (+github.com/Michaelpjob/ShoudiDive)",
-})
+# Shared session + cycle-walking via lib/nomads. Previously a per-file
+# Session + bare _head_ok that didn't retry NOMADS throttle responses;
+# Stage 6a (2026-05-24) routed everyone through the robust shared
+# 3-retry HEAD-then-range-GET helper.
+SESSION = nomads.session()
 
 
 # ---- Run discovery ----------------------------------------------------------
 
-def _head_ok(url: str) -> bool:
-    try:
-        return SESSION.head(url, timeout=30, allow_redirects=True).status_code == 200
-    except requests.RequestException:
-        return False
-
-
 def find_latest_hrrr_run_with_horizon(hours: int = 48) -> tuple[date, int]:
     """Latest HRRR run (00/06/12/18z) whose f{hours:02d} is published."""
-    now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
-    cycle = (now.hour // 6) * 6
-    candidate = now.replace(hour=cycle)
-    for _ in range(8):
-        url = (
-            f"{NOMADS_HRRR}/hrrr.{candidate.strftime('%Y%m%d')}/conus/"
-            f"hrrr.t{candidate.hour:02d}z.wrfsfcf{hours:02d}.grib2.idx"
-        )
-        if _head_ok(url):
-            return candidate.date(), candidate.hour
-        print(f"  miss: HRRR {candidate.strftime('%Y-%m-%d %H')}z f{hours:02d} not yet published")
-        candidate -= timedelta(hours=6)
-    raise RuntimeError(f"No HRRR run with f{hours:02d} found in last 48 hours")
+    return nomads.find_latest_run(
+        idx_url_for=lambda d, h: nomads.hrrr_sfc_idx_url(d, h, fhour=hours),
+        max_lookback_cycles=8,
+        label=f"HRRR f{hours:02d}",
+    )
 
 
 def find_latest_gfs_run_with_horizon(hours: int = 120) -> tuple[date, int]:
     """Latest GFS run (00/06/12/18z) whose f{hours:03d} is published."""
-    now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
-    cycle = (now.hour // 6) * 6
-    candidate = now.replace(hour=cycle)
-    for _ in range(6):
-        url = (
-            f"{NOMADS_GFS}/gfs.{candidate.strftime('%Y%m%d')}/{candidate.hour:02d}/atmos/"
-            f"gfs.t{candidate.hour:02d}z.pgrb2.0p25.f{hours:03d}.idx"
-        )
-        if _head_ok(url):
-            return candidate.date(), candidate.hour
-        print(f"  miss: GFS {candidate.strftime('%Y-%m-%d %H')}z f{hours:03d} not yet published")
-        candidate -= timedelta(hours=6)
-    raise RuntimeError(f"No GFS run with f{hours:03d} found in last 36 hours")
+    return nomads.find_latest_run(
+        idx_url_for=lambda d, h: nomads.gfs_pgrb2_idx_url(d, h, fhour=hours),
+        max_lookback_cycles=6,
+        label=f"GFS f{hours:03d}",
+    )
 
 
 # ---- Byte-range UV slice fetch ---------------------------------------------

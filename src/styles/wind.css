@@ -336,19 +336,23 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  padding: 5px 8px;
+  padding: 5px 4px;
   border-right: 1px solid var(--line-2);
+  /* 2026-05-25: center label within cell so it sits directly under
+     the playhead. Cells, ticks, and the playhead all use cell-center
+     spacing (i+0.5)/N now — see SstTimeline.jsx / SwellTimeline.jsx
+     / CurrentTimeline.jsx. The previous left-aligned default + edge
+     spacing (i/(N-1)) misaligned everything by up to 14% on the
+     7-day SST forecast. */
+  text-align: center;
 }
 .tl-day-cell:last-child { border-right: none; }
 .tl-day-cell.odd  { background: rgb(255 255 255 / 0.02); }
-.tl-day-cell.conf-medium .tl-day-label::after {
-  content: " ~";
-  color: var(--warn);
-}
-.tl-day-cell.conf-low .tl-day-label::after {
-  content: " ~~";
-  color: var(--warn);
-}
+/* 2026-05-25: "~" / "~~" confidence tier markers removed — the
+   TopBar confidence dot now carries the per-horizon signal and
+   updates as the user scrubs the timeline. The conf-{tier} classes
+   stay on .tl-day-cell as a future visual-styling hook (e.g. fade
+   the day cell by confidence) but no longer paint text. */
 .tl-day-label {
   font-size: 11px;
   font-weight: 600;

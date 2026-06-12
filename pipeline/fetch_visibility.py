@@ -40,8 +40,24 @@ from viz_predict import predict as viz_predict
 # SHOULDIDIVE_REGION; default `ca` preserves today's behavior.
 try:
     from pipeline.regions import active_region
+    from pipeline.lib.decode import (
+        decode_linear_png,
+        decode_log10_png,
+        decode_uv_png,
+        decode_wave_png,
+        decode_age_png,
+    )
+    from pipeline.lib.sampling import bilinear_sample as _bilinear_sample
 except ModuleNotFoundError:
     from regions import active_region
+    from lib.decode import (
+        decode_linear_png,
+        decode_log10_png,
+        decode_uv_png,
+        decode_wave_png,
+        decode_age_png,
+    )
+    from lib.sampling import bilinear_sample as _bilinear_sample
 
 BBOX = active_region().bbox
 
@@ -125,87 +141,25 @@ def shelf_depth_from_dist(dist_to_shore_km, dist_to_island_km=None):
     return np.clip(out, 1.0, 4000.0)
 
 
-# ---- PNG decoders matching dataSource.js encoding -------------------------
-
-def decode_linear_png(path: Path, lo: float, hi: float):
-    """8-bit grayscale: 0=NaN, 1..255 linear from lo..hi."""
-    img = np.array(Image.open(path))  # mode L, shape (h, w)
-    out = np.full(img.shape, np.nan, dtype=np.float32)
-    valid = img > 0
-    out[valid] = lo + ((img[valid].astype(np.float32) - 1) / 254) * (hi - lo)
-    return out
-
-
-def decode_uv_png(path: Path, lo: float, hi: float):
-    """RGBA: R=U byte, G=V byte (lo..hi linear), A=0 means NaN."""
-    img = np.array(Image.open(path))  # shape (h, w, 4)
-    valid = img[..., 3] > 0
-    span = hi - lo
-    u = np.full(img.shape[:2], np.nan, dtype=np.float32)
-    v = np.full(img.shape[:2], np.nan, dtype=np.float32)
-    u[valid] = lo + (img[..., 0][valid].astype(np.float32) / 255) * span
-    v[valid] = lo + (img[..., 1][valid].astype(np.float32) / 255) * span
-    return u, v
-
-
-def decode_wave_png(path: Path):
-    """Wave RGBA PNG: R=height (0..12 m), G=period (0..25 s), B=direction (0..360°)."""
-    img = np.array(Image.open(path))
-    valid = img[..., 3] > 0
-    h = np.full(img.shape[:2], np.nan, dtype=np.float32)
-    p = np.full(img.shape[:2], np.nan, dtype=np.float32)
-    d = np.full(img.shape[:2], np.nan, dtype=np.float32)
-    h[valid] = (img[..., 0][valid].astype(np.float32) / 255) * 12.0
-    p[valid] = (img[..., 1][valid].astype(np.float32) / 255) * 25.0
-    d[valid] = (img[..., 2][valid].astype(np.float32) / 255) * 360.0
-    return h, p, d
-
-
-def decode_log10_png(path: Path, lo: float, hi: float):
-    """8-bit grayscale where 0=NaN, 1..255 maps to log10 lo..hi."""
-    img = np.array(Image.open(path))
-    valid = img > 0
-    log_lo = np.log10(lo)
-    log_hi = np.log10(hi)
-    out = np.full(img.shape, np.nan, dtype=np.float32)
-    out[valid] = 10.0 ** (log_lo + ((img[valid].astype(np.float32) - 1) / 254) * (log_hi - log_lo))
-    return out
-
-
-def decode_age_png(path: Path):
-    """Decode an age-days sidecar PNG (mode='L'). Convention: pixel
-    value 0 = no data (encoded as 999.0 in the output to make
-    downstream conditionals cleaner — `np.isnan` checks are noisy and
-    `999.0` is well above any realistic age threshold). Pixel 1..255
-    maps to age = pixel - 1 days.
-
-    Returned array has the same orientation as the source PNG —
-    row 0 = lat_max — so it can be passed straight to
-    `bilinear_sample`.
-    """
-    img = np.array(Image.open(path))
-    out = np.full(img.shape, 999.0, dtype=np.float32)
-    valid = img > 0
-    out[valid] = img[valid].astype(np.float32) - 1.0
-    return out
+# PNG decoders moved to pipeline/lib/decode.py (Stage 6a, 2026-05-24).
+# The 5 functions decode_{linear,log10,uv,wave,age}_png are imported
+# at the top of this file; the byte-equivalent contract with
+# lib/encode.py + the frontend's dataSource.js is documented there.
 
 
 def bilinear_sample(src_arr, src_w, src_h, lng_grid, lat_grid):
-    """Sample src_arr at the given lng/lat using bilinear interp.
-    src_arr is shape (src_h, src_w) where row 0 = lat_max."""
-    fx = (lng_grid - BBOX["lng_min"]) / (BBOX["lng_max"] - BBOX["lng_min"]) * (src_w - 1)
-    fy = (BBOX["lat_max"] - lat_grid) / (BBOX["lat_max"] - BBOX["lat_min"]) * (src_h - 1)
-    fx = np.clip(fx, 0, src_w - 1)
-    fy = np.clip(fy, 0, src_h - 1)
-    x0 = np.floor(fx).astype(int); x1 = np.minimum(x0 + 1, src_w - 1)
-    y0 = np.floor(fy).astype(int); y1 = np.minimum(y0 + 1, src_h - 1)
-    tx = fx - x0; ty = fy - y0
-    v00 = src_arr[y0, x0]
-    v10 = src_arr[y0, x1]
-    v01 = src_arr[y1, x0]
-    v11 = src_arr[y1, x1]
-    out = v00 * (1 - tx) * (1 - ty) + v10 * tx * (1 - ty) + v01 * (1 - tx) * ty + v11 * tx * ty
-    return out
+    """Thin region-aware wrapper around lib.sampling.bilinear_sample.
+
+    The underlying algorithm moved to pipeline/lib/sampling.py in
+    Stage 6c (2026-05-24); this wrapper supplies the active region's
+    BBOX so existing callers don't need to thread it through. New
+    callers (other fetchers, future generalised samplers) should
+    import `lib.sampling.bilinear_sample` directly and pass their
+    own `bbox=` kwarg.
+
+    The full doc + history lives in lib/sampling.py.
+    """
+    return _bilinear_sample(src_arr, src_w, src_h, lng_grid, lat_grid, bbox=BBOX)
 
 
 # ---- Static fields from land.geojson --------------------------------------

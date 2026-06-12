@@ -119,9 +119,11 @@ export function SstCurrentCard({ sel, units, mode = "history" }) {
           </span>
         </div>
         <div className="wcs-confidence" style={{ color: "var(--ink-3)", fontStyle: "normal" }}>
-          {mode === "forecast"
-            ? `${day?.confidence || "low"} confidence trend model`
-            : deltaLabel(deltaC, units)}
+          {/* 2026-05-25: "high/medium/low confidence trend model" text
+              removed for the forecast mode — the TopBar confidence dot
+              now covers per-horizon confidence and updates as the user
+              scrubs. Historical mode keeps the delta vs climo label. */}
+          {mode === "forecast" ? null : deltaLabel(deltaC, units)}
         </div>
       </div>
     </div>
@@ -146,13 +148,17 @@ export default function SstTimeline({ sel, setSel, units, mode = "history" }) {
   const drag = useTimelineDrag({
     ref,
     currentTarget: idx,
+    // 2026-05-25: switched from edge-to-edge spacing (i/(N-1)) to
+    // cell-center spacing ((i+0.5)/N). Edge spacing made the playhead
+    // misalign with day labels — most visible after the tilde removal
+    // since the trailing " ~~" was previously masking the offset.
     xToTarget: (clientX) => {
       const r = ref.current?.getBoundingClientRect();
-      if (!r || numDays <= 1) return 0;
+      if (!r || numDays <= 0) return 0;
       const t = (clientX - r.left) / r.width;
-      return Math.max(0, Math.min(numDays - 1, Math.round(t * (numDays - 1))));
+      return Math.max(0, Math.min(numDays - 1, Math.floor(t * numDays)));
     },
-    targetToFrac: (i) => (numDays > 1 ? i / (numDays - 1) : 0),
+    targetToFrac: (i) => (numDays > 0 ? (i + 0.5) / numDays : 0),
     onCommit: (nextIdx) => {
       const next = days[nextIdx];
       if (next) setSel({ slot: effectiveSlot(next, nextIdx) });
@@ -190,7 +196,9 @@ export default function SstTimeline({ sel, setSel, units, mode = "history" }) {
   });
 
   const ticks = days.map((d, i) => {
-    const left = numDays > 1 ? (i / (numDays - 1)) * 100 : 0;
+    // Cell-center spacing matches the playhead + day-cell labels so the
+    // playhead lands directly above the selected day's text.
+    const left = numDays > 0 ? ((i + 0.5) / numDays) * 100 : 0;
     return (
       <div
         key={effectiveSlot(d, i)}
@@ -235,7 +243,10 @@ export default function SstTimeline({ sel, setSel, units, mode = "history" }) {
             </span>
           )}
           <span className="tl-pb-dir">
-            {mode === "forecast" ? `${day?.confidence || "low"} confidence` : deltaLabel(deltaC, units)}
+            {/* 2026-05-25: "{tier} confidence" text removed from forecast
+                mode — TopBar confidence dot now updates with the slider.
+                Historical mode keeps the delta vs climo label. */}
+            {mode === "forecast" ? null : deltaLabel(deltaC, units)}
           </span>
         </div>
       </div>

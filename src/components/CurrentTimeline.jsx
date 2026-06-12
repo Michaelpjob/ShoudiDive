@@ -134,12 +134,15 @@ export default function CurrentTimeline({ sel, setSel }) {
   if (!items.length) return null;
   const idx = selectedIndex(items, sel);
   const current = items[idx];
-  const playheadFrac = items.length > 1 ? idx / (items.length - 1) : 0;
+  // 2026-05-25: cell-center spacing (i+0.5)/N so the playhead lines
+  // up with the highlighted bucket cell. The old i/(N-1) edge spacing
+  // misaligned with the day-cell labels (which use 1/N spacing).
+  const playheadFrac = items.length > 0 ? (idx + 0.5) / items.length : 0;
 
   function xToIndex(clientX) {
     const r = ref.current.getBoundingClientRect();
     const t = (clientX - r.left) / r.width;
-    return Math.max(0, Math.min(items.length - 1, Math.round(t * (items.length - 1))));
+    return Math.max(0, Math.min(items.length - 1, Math.floor(t * items.length)));
   }
 
   function setIndex(nextIdx) {
@@ -183,7 +186,9 @@ export default function CurrentTimeline({ sel, setSel }) {
   });
 
   const ticks = items.map((item, i) => {
-    const left = items.length > 1 ? (i / (items.length - 1)) * 100 : 0;
+    // Cell-center spacing so ticks land directly under the day labels
+    // above + playhead below.
+    const left = items.length > 0 ? ((i + 0.5) / items.length) * 100 : 0;
     const klass = item.bucket.bucket === "predawn" ? "day" : "major";
     return <div key={`${item.day.day}-${item.bucket.bucket}`} className={`tl-tick ${klass}`} style={{ left: `${left}%` }} />;
   });
@@ -226,9 +231,10 @@ export default function CurrentTimeline({ sel, setSel }) {
           {Number.isFinite(bucket.consistency) && (
             <span className="tl-pb-dir">{bucket.consistency}% steady</span>
           )}
-          <span className="tl-pb-est" title={sourceLabel(bucket.source)}>
-            {bucket.source === "hfr_observed" ? "" : "~"}
-          </span>
+          {/* 2026-05-25: "~" source-tier marker removed. The TopBar
+              confidence dot carries the per-region + per-horizon
+              signal (Baja currents = Inferred 2/5 always). The
+              source label stays in the timeline's day card. */}
         </div>
       </div>
     </div>

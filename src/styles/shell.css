@@ -346,6 +346,24 @@
 .layer-toggle .lt-sub { font-size: 10px; color: var(--ink-3); font-weight: 400; }
 .layer-toggle button.active .lt-sub { color: var(--ink-2); }
 
+/* Confidence dot lives in the chip's top-right corner so it never
+   competes with label/sub for horizontal space inside the 5–6-column
+   layer-toggle grid. The button itself becomes the positioning context. */
+.layer-toggle button { position: relative; }
+.layer-toggle .lt-conf {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  pointer-events: none;
+}
+.ms-chip { position: relative; }
+.ms-chip-conf {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  pointer-events: none;
+}
+
 .composite {
   margin-top: 10px;
 }
