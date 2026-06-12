@@ -95,9 +95,17 @@ merge burst's concurrency cancellations made sync-issue count
 "cancelled" job results as failures and open a phantom
 "failed (2/2 checks)" issue (#141) — only literal "failure" counts
 now, both-success claims pass, anything else leaves the rolling issue
-untouched. Also confirmed live: the breaker let refresh-ca-data
-complete in ~16 min with NASA still down, production generated_at
-went 39.9 h stale → fresh, and #90/#130/#6 closed on merge.
+untouched. (c) The probe jobs' `node-version: 24` made puppeteer's
+postinstall silently skip the Chrome download ("added 376 packages in
+14 s", no browser) — the first real verify run then died with "Could
+not find Chrome" on both jobs. Reverted those jobs to node 20 (proven
+by weeks of green render runs and #143's own web-smoke; D8's logic —
+the 06-16 deprecation concerns ACTION majors, not the installed node)
+and added an explicit `npx puppeteer browsers install chrome` step
+that is a no-op on success and loud on failure. Also confirmed live:
+the breaker let refresh-ca-data complete in ~16 min with NASA still
+down, production generated_at went 39.9 h stale → fresh, and
+#90/#130/#6 closed on merge.
 
 **D11 — Region-data ownership map (caught + corrected mid-build).**
 All region data nests under `public/data/` — CA flat, `baja/`,

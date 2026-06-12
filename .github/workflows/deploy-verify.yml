@@ -95,10 +95,17 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: "24"
+          node-version: "20"
           cache: npm
       - name: Install (puppeteer + Chromium)
         run: npm install --no-audit --no-fund
+      - name: Ensure Chrome is installed for puppeteer
+        # Belt-and-braces: puppeteer's postinstall download can skip
+        # silently (observed under node24/npm11, 2026-06-12 — probes
+        # then die with "Could not find Chrome"). This explicit step
+        # is a no-op when the postinstall worked and fails LOUDLY with
+        # the downloader's logs when it didn't.
+        run: npx puppeteer browsers install chrome
       - name: Probe manifest + PNGs + perf budget
         env:
           LIVE_BASE_URL: https://shouldidive.com
@@ -118,10 +125,17 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: "24"
+          node-version: "20"
           cache: npm
       - name: Install (puppeteer + Chromium)
         run: npm install --no-audit --no-fund
+      - name: Ensure Chrome is installed for puppeteer
+        # Belt-and-braces: puppeteer's postinstall download can skip
+        # silently (observed under node24/npm11, 2026-06-12 — probes
+        # then die with "Could not find Chrome"). This explicit step
+        # is a no-op when the postinstall worked and fails LOUDLY with
+        # the downloader's logs when it didn't.
+        run: npx puppeteer browsers install chrome
       - name: Headless browser smoke against shouldidive.com
         env:
           LIVE_BASE_URL: https://shouldidive.com

@@ -45,11 +45,15 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: "24"
+          node-version: "20"
           cache: npm
 
       - name: Install probe dependencies (puppeteer + Chromium)
         run: npm install --no-audit --no-fund
+      - name: Ensure Chrome is installed for puppeteer
+        # See deploy-verify.yml — postinstall can skip silently under
+        # newer node/npm; install explicitly and fail loudly.
+        run: npx puppeteer browsers install chrome
 
       - name: Probe published manifest + layer PNGs
         # 2026-06-12: the live probe is now the same browser-transport
