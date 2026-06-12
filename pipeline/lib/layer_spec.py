@@ -276,6 +276,26 @@ LAYER_SPECS: dict[str, LayerSpec] = {
             "beta", "beta_reason",
         ),
     ),
+    "viz_column": LayerSpec(
+        # Water-column visibility (PRD water-column C1): below-cliff
+        # vis raster on the viz 0-80 ft range (so the existing Vis
+        # legend semantics decode it), plus a cliff-depth raster
+        # (cliff_range_ft) and a per-spot sidecar (spots_url) carrying
+        # the 24 h internal-tide cliff series. frontend_renders stays
+        # False until the V-group UI (WaterColumn.jsx) lands; flip it
+        # in that PR.
+        name="viz_column",
+        category="visibility",
+        range=None,  # range_ft + cliff_range_ft instead
+        scale="linear",
+        unit="ft",
+        payload="scalar_png",
+        frontend_renders=False,
+        extra_required_keys=("range_ft", "cliff_range_ft"),
+        extra_optional_keys=(
+            "swing_ft", "spots_url", "method", "beta", "beta_reason",
+        ),
+    ),
     "wave": LayerSpec(
         # Published as a wave_png with height_range_m + period_range_s,
         # same encoding as swell5d. Used as input to fetch_visibility,

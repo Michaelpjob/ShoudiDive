@@ -42,8 +42,13 @@ STATIONS = REGION.tide_stations
 API = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
 
 
-def fetch_tide_range_m(station_id: str) -> float | None:
-    """Predicted max - min tide height (m) over the next 24h. None on error."""
+def fetch_tide_range_m(station_id: str) -> dict | None:
+    """Next-24h tide predictions for a station. None on error.
+
+    Returns ``{"range_m": float, "events": [{"t", "type", "v_m"}, ...]}``
+    — the predicted max-minus-min height plus the hi/lo events
+    themselves (ISO UTC time, "H"/"L", height in meters).
+    """
     now = datetime.now(timezone.utc)
     begin = now.strftime("%Y%m%d %H:%M")
     end = (now + timedelta(hours=24)).strftime("%Y%m%d %H:%M")
@@ -73,14 +78,27 @@ def fetch_tide_range_m(station_id: str) -> float | None:
     if not preds:
         return None
     vals = []
+    events = []
     for p in preds:
         try:
-            vals.append(float(p["v"]))
+            v = float(p["v"])
         except (KeyError, ValueError):
             continue
+        vals.append(v)
+        # Keep the hi/lo EVENTS too (time + type), not just the range.
+        # The water-column model (fetch_viz_column.py) phase-locks the
+        # internal-tide cliff swing to high-water times. Additive key —
+        # existing range_m consumers are unaffected.
+        t, typ = p.get("t"), p.get("type")
+        if t and typ in ("H", "L"):
+            events.append({
+                "t": t.replace(" ", "T") + "Z",  # CO-OPS gmt -> ISO UTC
+                "type": typ,
+                "v_m": round(v, 3),
+            })
     if len(vals) < 2:
         return None
-    return max(vals) - min(vals)
+    return {"range_m": max(vals) - min(vals), "events": events}
 
 
 def main() -> None:
@@ -94,19 +112,20 @@ def main() -> None:
         return
     out_stations = []
     for st in STATIONS:
-        rng = fetch_tide_range_m(st["id"])
+        fetched = fetch_tide_range_m(st["id"])
         # Fallback: 1.5 m is a reasonable mean range on the CA coast — keeps
         # `tide_index` ≠ 0 but well below spring-tide values.
-        rng_safe = rng if rng is not None else 1.5
+        rng_safe = fetched["range_m"] if fetched is not None else 1.5
         out_stations.append({
             "name":          st["name"],
             "id":            st["id"],
             "lat":           st["lat"],
             "lng":           st["lng"],
             "range_m":       round(rng_safe, 3),
-            "has_real_data": rng is not None,
+            "events":        fetched["events"] if fetched is not None else [],
+            "has_real_data": fetched is not None,
         })
-        tag = "OK" if rng is not None else "fallback"
+        tag = "OK" if fetched is not None else "fallback"
         print(f"  {st['name']:>14} ({st['id']}): {rng_safe:.2f} m  [{tag}]")
 
     out = {

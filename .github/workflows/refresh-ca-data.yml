@@ -134,6 +134,15 @@ jobs:
         continue-on-error: true
         run: python pipeline/fetch_visibility.py
 
+      - name: Derive water-column visibility (two-layer profile)
+        # PRD water-column C1 — derives cliff depth + below-cliff vis
+        # from this run's own outputs (viz/wind/wave/bathy/tides); no
+        # network. Must run AFTER fetch_visibility. Degrades to a
+        # no-op when inputs are missing.
+        continue-on-error: true
+        timeout-minutes: 3
+        run: python pipeline/fetch_viz_column.py
+
       - name: Fetch RTOFS ocean-model forecast
         # Parallel SST forecast + surface currents from NOAA RTOFS.
         # ~620 MB transfer (4 sample leads × ~155 MB). 25-min timeout
