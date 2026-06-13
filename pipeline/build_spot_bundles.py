@@ -8,7 +8,9 @@ self-contained bundle of nav-quality static assets:
     bathy.png         — high-res grayscale bathymetry (linear depth encoding)
     contours.geojson  — depth contour lines derived from the DEM
     coastline.geojson — high-res OSM coastline, clipped to spot bbox
-    kelp.geojson      — CDFW admin kelp beds, clipped to spot bbox
+    kelp.geojson      — CDFW aerial-survey kelp: per-spot multi-year
+                        fetch (surveyed extent + best recent canopy);
+                        statewide 2016-only clip as fallback
     mpa.geojson       — CDFW MPA polygons, clipped to spot bbox
 
   public/data/spots/
@@ -175,7 +177,10 @@ SPOT_LANDMARKS = {
         # Underwater features (italic label only — no marker)
         (-117.2895, 32.8600, "La Jolla Canyon",        "marquee", "marine"),
         (-117.2700, 32.8590, "Mushroom Bch Reef",      "minor",   "marine"),
-        (-117.2820, 32.8430, "Yellowtail Hole",        "minor",   "marine"),
+        # 2026-06-12 user placement: the summer yellowtail ambush zone
+        # just outside the kelp line NW of the Cove point (local name,
+        # not on NOAA charts).
+        (-117.2760, 32.8500, "Yellowtail Hole",        "minor",   "marine"),
         (-117.2660, 32.8520, "Vallecitos Bank",        "minor",   "marine"),
         (-117.2730, 32.8560, "La Jolla Kelp Bed",      "major",   "marine"),
     ],
@@ -1143,6 +1148,163 @@ def bundle_is_fresh(bundle_dir: Path) -> bool:
         return False
 
 
+# CDFW "Kelp Forests California 2002 to 2016" FeatureServer — same
+# service fetch_kelp_canopy.py pulls statewide, but each layer is one
+# aerial survey pass. The statewide kelp-canopy.geojson keeps only
+# layer 0 (2016), surveyed at the BOTTOM of the 2014-16 marine-heatwave
+# kelp crash — the big southern beds (Point Loma!) appear as tiny
+# fragments there. Spot charts want the nautical-chart convention
+# instead: "kelp area" = surveyed extent across years, plus the
+# freshest healthy canopy pass for texture.
+KELP_SURVEY_BASE = (
+    "https://services1.arcgis.com/jOKMO9vKmc98J4JC/arcgis/rest/services/"
+    "Kelp_Forests_California_2002_to_2016/FeatureServer/{layer}/query"
+)
+KELP_SURVEY_LAYERS = [  # (service layer index, survey year)
+    (0, 2016), (1, 2015), (2, 2013), (3, 2011), (4, 2010),
+    (5, 2009), (6, 2008), (7, 2006), (8, 2005), (9, 2003),
+]
+
+
+def fetch_spot_kelp(spot_id: str, bbox: dict):
+    """Full-resolution multi-year kelp for one spot bbox.
+
+    Queries every survey year inside the bbox and emits the two classes
+    the frontend already styles:
+      * "Kelp Subsurface" (dot stipple) — union of ALL years = surveyed
+        kelp extent, the chart-style "kelp area".
+      * "Kelp Canopy" (diagonal hatch) — the most recent year whose
+        in-bbox canopy is >= 25% of the best year's, so a crash-year
+        pass can't masquerade as the bed.
+
+    Returns (feature_collection, meta) or None on any failure — the
+    caller falls back to clipping the statewide 2016-only file.
+    """
+    try:
+        from shapely.geometry import mapping, shape
+        from shapely.ops import unary_union
+    except ImportError:
+        print("    [kelp] shapely unavailable — falling back to statewide clip")
+        return None
+
+    envelope = (f"{bbox['lng_min']},{bbox['lat_min']},"
+                f"{bbox['lng_max']},{bbox['lat_max']}")
+    per_year = {}
+    for layer_idx, year in KELP_SURVEY_LAYERS:
+        params = {
+            "where": "1=1",
+            "geometry": envelope,
+            "geometryType": "esriGeometryEnvelope",
+            "inSR": 4326,
+            "spatialRel": "esriSpatialRelIntersects",
+            "outFields": "*",
+            "outSR": 4326,
+            "f": "geojson",
+        }
+        feats = None
+        for attempt in range(3):
+            try:
+                r = requests.get(KELP_SURVEY_BASE.format(layer=layer_idx),
+                                 params=params, timeout=60)
+                r.raise_for_status()
+                feats = r.json().get("features", [])
+                break
+            except Exception as e:
+                if attempt == 2:
+                    print(f"    [kelp] year {year} query failed ({e!r}) — skipping year")
+        if not feats:
+            continue
+        geoms = []
+        for f in feats:
+            try:
+                g = shape(f["geometry"])
+                if not g.is_valid:
+                    g = g.buffer(0)
+                if not g.is_empty:
+                    geoms.append(g)
+            except Exception:
+                continue
+        if geoms:
+            per_year[year] = unary_union(geoms)
+
+    if not per_year:
+        return None
+
+    # Approximate km² (plate carrée at mid-lat — only used to rank years).
+    lat_mid = (bbox["lat_min"] + bbox["lat_max"]) / 2
+    km2_per_deg2 = 110.574 * 111.320 * math.cos(math.radians(lat_mid))
+    def area_km2(g):
+        return g.area * km2_per_deg2
+
+    best_area = max(area_km2(g) for g in per_year.values())
+    canopy_year = None
+    for year in sorted(per_year, reverse=True):
+        if best_area > 0 and area_km2(per_year[year]) >= 0.25 * best_area:
+            canopy_year = year
+            break
+    if canopy_year is None:
+        canopy_year = max(per_year, key=lambda y: area_km2(per_year[y]))
+
+    spot_name = SPOT_CENTRES.get(spot_id, {}).get("name", spot_id)
+
+    # Chart-scale geometry diet — full-precision multi-year unions run
+    # >10 MB (Point Loma: 13 MB). Three passes get them to overlay
+    # weight without visible loss at the bundle's ~10-20 m/px pitch:
+    # part filter (drop noise paddies), simplify, 5-dp coord rounding.
+    def _drop_small_parts(g, min_km2):
+        from shapely.geometry import MultiPolygon
+        min_deg2 = min_km2 / km2_per_deg2
+        if g.geom_type == "MultiPolygon":
+            kept = [p for p in g.geoms if p.area >= min_deg2]
+            if not kept:
+                return g  # never empty a real bed entirely
+            return MultiPolygon(kept) if len(kept) > 1 else kept[0]
+        return g
+
+    def _round_coords(coords):
+        if isinstance(coords, (list, tuple)):
+            if coords and isinstance(coords[0], (int, float)):
+                return [round(c, 5) for c in coords]
+            return [_round_coords(c) for c in coords]
+        return coords
+
+    def _feature(geom, props):
+        gj = mapping(geom)
+        gj = {**gj, "coordinates": _round_coords(gj["coordinates"])}
+        return {"type": "Feature", "geometry": gj, "properties": props}
+
+    features = []
+    # Extent first — the frontend paints features in order, so the dot
+    # stipple lands under the canopy hatch.
+    extent = _drop_small_parts(
+        unary_union(list(per_year.values())), 0.003)
+    extent = extent.simplify(1.2e-4, preserve_topology=True)
+    if not extent.is_empty:
+        features.append(_feature(extent, {
+            "id": f"{spot_id}-kelp-extent",
+            "name": f"{spot_name} surveyed kelp extent",
+            "className": "Kelp Subsurface",
+            "years": "2003-2016",
+            "areaKm2": round(area_km2(extent), 2),
+        }))
+    canopy = _drop_small_parts(per_year[canopy_year], 0.0015)
+    canopy = canopy.simplify(6e-5, preserve_topology=True)
+    if not canopy.is_empty:
+        features.append(_feature(canopy, {
+            "id": f"{spot_id}-kelp-canopy-{canopy_year}",
+            "name": f"{spot_name} kelp canopy ({canopy_year} survey)",
+            "className": "Kelp Canopy",
+            "year": canopy_year,
+            "areaKm2": round(area_km2(canopy), 2),
+        }))
+    meta = {
+        "source": "CDFW aerial kelp surveys 2003-2016 (per-spot, full res)",
+        "canopy_year": canopy_year,
+        "years_with_data": sorted(per_year),
+    }
+    return {"type": "FeatureCollection", "features": features}, meta
+
+
 def build_spot(spot_id: str, *, force: bool) -> bool:
     """Build a single spot bundle. Returns True on success, False on
     skip / soft-fail. Hard errors (HTTP 5xx, parse errors) raise.
@@ -1297,14 +1459,31 @@ def build_spot(spot_id: str, *, force: bool) -> bool:
     else:
         print(f"    [coastline] land.geojson not present — skipping")
 
-    # Layer source mapping for the remaining layers (kelp + MPA both
-    # have statewide curated polygons that already match spot-detail
-    # fidelity — bbox clip is enough). `kelp` reads kelp-canopy.geojson
-    # (observed aerial-survey polygons from BIO_CA_Kelp2016) rather
-    # than kelp-beds.geojson (admin lease rectangles, not useful for
-    # divers).
-    for layer_key, src_name in [
-        ("kelp",      "kelp-canopy.geojson"),
+    # Kelp gets a per-spot multi-year fetch at full fidelity — the
+    # statewide kelp-canopy.geojson carries only the 2016 crash-year
+    # pass and reads near-empty at the big southern beds. MPA keeps the
+    # statewide clip (its curated polygons genuinely match spot-detail
+    # fidelity).
+    kelp_done = False
+    spot_kelp = fetch_spot_kelp(spot_id, bbox)
+    if spot_kelp is not None:
+        kelp_fc, kelp_meta = spot_kelp
+        out_path = bundle_dir / "kelp.geojson"
+        out_path.write_text(json.dumps(kelp_fc, separators=(",", ":")))
+        layers_meta["kelp"] = {
+            "url": "kelp.geojson",
+            "features": len(kelp_fc["features"]),
+            **kelp_meta,
+        }
+        size_kb = out_path.stat().st_size / 1024
+        print(f"    [kelp] {len(kelp_fc['features'])} features "
+              f"(canopy year {kelp_meta['canopy_year']}, "
+              f"{len(kelp_meta['years_with_data'])} survey years) "
+              f"{size_kb:.0f} KB")
+        kelp_done = True
+
+    fallback_layers = [] if kelp_done else [("kelp", "kelp-canopy.geojson")]
+    for layer_key, src_name in fallback_layers + [
         ("mpa",       "mpa-boundaries.geojson"),
     ]:
         src_path = region_data_dir / src_name
