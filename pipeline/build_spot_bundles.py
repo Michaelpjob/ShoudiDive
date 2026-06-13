@@ -118,6 +118,11 @@ SPOT_RADIUS_KM = {
     "pointloma": 5,
 }
 
+# Max sounding depth (ft) kept in a spot bundle. 330 ft ≈ 100 m, the
+# technical-diving floor; deeper lattice samples are open-ocean noise
+# that clutter deep-water spots (see the sounding filter in build_spot).
+SOUNDING_MAX_FT = 330
+
 # Curated landmark labels per spot — dive-relevant rather than general
 # place names. Each entry is (lng, lat, label, importance) where
 # importance is "marquee" (always shown, larger) | "major" | "minor"
@@ -1244,20 +1249,41 @@ def fetch_spot_kelp(spot_id: str, bbox: dict):
     def area_km2(g):
         return g.area * km2_per_deg2
 
-    # Some survey passes (the SCSR years) are "kelp bed area" products —
-    # filled survey outlines including the water between paddies, not
-    # pixel canopy. They render as one massive smooth slab (Point Loma
-    # 2011: a single 13.7 km² connected part vs <2.6 km² in every
-    # pixel-canopy year) and their filled area inflates the canopy-year
-    # ranking. Detect by largest connected part; drop the year.
-    REGION_FILL_PART_KM2 = 4.0
+    # Some survey passes (the SCSR years, e.g. 2011) are "kelp bed area"
+    # products — smooth digitized outlines that fill the water between
+    # paddies, not pixel canopy. They render as a clean rectangular slab
+    # over the real patchy beds and skew the canopy-year ranking.
+    #
+    # The discriminator is VERTEX DENSITY of the largest connected part,
+    # which is scale-free (works at any bbox size). Measured across both
+    # SoCal pilot spots × all survey years, the two populations separate
+    # cleanly:
+    #   bed-area (2011):   10 v/km² (La Jolla, a 9-vertex rectangle)
+    #                   2,276 v/km² (Point Loma, the 13.7 km² slab —
+    #                              larger and more digitized, but still
+    #                              an outline)
+    #   real pixel canopy: 12,117 v/km² (lowest, La Jolla 2008) up to
+    #                              146,000 v/km²
+    # The 5,000 v/km² cut sits in the 2,276→12,117 gap with ~2× margin
+    # either side. Absolute area can't do this: the same 2011 product is
+    # 13.7 km² at Point Loma but 0.87 km² at La Jolla, so any area
+    # threshold that catches one misses the other.
+    SMOOTH_MAX_V_PER_KM2 = 5000.0
+    SMOOTH_MIN_PART_KM2 = 0.1     # ignore tiny smooth specks
+    def _part_vertices(part):
+        if part.geom_type != "Polygon":
+            return 0
+        return len(part.exterior.coords) + sum(
+            len(r.coords) for r in part.interiors)
     for year in sorted(per_year):
         g = per_year[year]
         parts = list(g.geoms) if g.geom_type == "MultiPolygon" else [g]
-        biggest = max(area_km2(p) for p in parts)
-        if biggest > REGION_FILL_PART_KM2:
+        big = max(parts, key=lambda p: p.area)
+        a = area_km2(big)
+        vd = _part_vertices(big) / a if a > 0 else float("inf")
+        if a >= SMOOTH_MIN_PART_KM2 and vd < SMOOTH_MAX_V_PER_KM2:
             print(f"    [kelp] year {year} looks like a bed-area product "
-                  f"(one {biggest:.1f} km² part) — excluded")
+                  f"({a:.1f} km² part at {vd:.0f} v/km²) — excluded")
             del per_year[year]
     if not per_year:
         return None
@@ -1556,8 +1582,15 @@ def build_spot(spot_id: str, *, force: bool) -> bool:
             if not np.isfinite(d_m) or d_m <= 0:
                 continue  # land — no sounding
             d_ft = int(round(float(d_m) * 3.28084))
-            # Skip absurd depths (artifact of bilinear NaN edges)
-            if d_ft <= 0 or d_ft > 10000:
+            # Keep only diver-relevant soundings. Beyond ~100 m (330 ft,
+            # the technical-diving floor) the numerals are open-ocean
+            # depth no diver reaches — and on a deep-water spot like
+            # Catalina, ringed by the 600 m+ San Pedro Channel, the
+            # 24×24 lattice otherwise scatters ~450 four-figure numbers
+            # (up to 4386 ft) across the chart in a grid that reads as
+            # placeholder noise. The contour lines still convey the deep
+            # structure; soundings stay a nearshore, dive-planning layer.
+            if d_ft <= 0 or d_ft > SOUNDING_MAX_FT:
                 continue
             sounding_features.append({
                 "type": "Feature",
