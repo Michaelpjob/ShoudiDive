@@ -39,6 +39,7 @@ import MapLabels from "./MapLabels.jsx";
 import MobileSheet from "./MobileSheet.jsx";
 import BathyPopup from "./BathyPopup.jsx";
 import MpaPopup from "./MpaPopup.jsx";
+import SpotDetailView from "./SpotDetailView.jsx";
 import CoronadosBanner from "./CoronadosBanner.jsx";
 import { selToSlotKey } from "./WindDayGrid.jsx";
 import WindTimeline from "./WindTimeline.jsx";
@@ -64,7 +65,7 @@ import {
   getCurrent5dSummary,
   getSwell5dSummary,
 } from "../lib/dataSource.js";
-import { activeRegion } from "../lib/region.js";
+import { activeRegion, dataPath } from "../lib/region.js";
 import {
   isMapGestureChildTarget,
   shouldPinMapTap,
@@ -183,6 +184,27 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
     }
     setActiveSpotRaw(next);
   };
+  // Spot Detail (Phase 1B): which saved spots have a pre-computed
+  // bundle (public/data/spots/index.json, written by
+  // pipeline/build_spot_bundles.py), and which spot's detail overlay
+  // is currently open. Regions without bundles no-op gracefully.
+  const [bundledSpots, setBundledSpots] = useState(new Set());
+  const [spotDetailFor, setSpotDetailFor] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(dataPath("/data/spots/index.json"))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((idx) => {
+        if (cancelled || !idx?.spots) return;
+        setBundledSpots(new Set(idx.spots));
+      })
+      .catch(() => { /* no bundles in this region — graceful no-op */ });
+    return () => { cancelled = true; };
+  }, []);
+  function openSpotDetail(spotId) {
+    const s = SAVED_SPOTS.find((x) => x.id === spotId);
+    if (s) setSpotDetailFor(s);
+  }
   // MPA/bathy popup state extracted into usePopupState (2026-05-23,
   // Stage 3 of the refactor). The hook owns the selected* state +
   // the toggle-off effects + the bathy lazy-load. See
@@ -748,6 +770,8 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
         size={size} zoomAt={zoomAt} resetView={resetView}
         dataState={dataState}
         isMobile={isMobile}
+        bundledSpots={bundledSpots}
+        openSpotDetail={openSpotDetail}
       />
 
       {/* Coronados / CONANP disclaimer is CA-specific (the Coronados sit in
@@ -766,6 +790,14 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
         <BathyPopup feature={selectedBathy} onClose={() => setSelectedBathy(null)} />
       )}
     </div>
+    {/* Spot Detail overlay (Phase 1B) — fixed full-screen, mounted
+        outside .map-stage so the wide map's layout is undisturbed. */}
+    {spotDetailFor && (
+      <SpotDetailView
+        spot={spotDetailFor}
+        onClose={() => setSpotDetailFor(null)}
+      />
+    )}
     {/* MobileShell sits OUTSIDE .map-stage so the map can shrink to
         leave room for the peek strip on phones (without the strip
         overlapping the bottom of the bbox). On desktop this branch
@@ -788,6 +820,8 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
         setMpaOn={updateMpaOn}
         setBathyOn={updateBathyOn}
         activeSpot={activeSpot} setActiveSpot={setActiveSpot}
+        bundledSpots={bundledSpots}
+        openSpotDetail={openSpotDetail}
         timeOpts={timeOpts}
         compositeText={compositeText}
         layerIsReal={layerIsReal}
