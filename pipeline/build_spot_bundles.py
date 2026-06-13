@@ -1244,6 +1244,24 @@ def fetch_spot_kelp(spot_id: str, bbox: dict):
     def area_km2(g):
         return g.area * km2_per_deg2
 
+    # Some survey passes (the SCSR years) are "kelp bed area" products —
+    # filled survey outlines including the water between paddies, not
+    # pixel canopy. They render as one massive smooth slab (Point Loma
+    # 2011: a single 13.7 km² connected part vs <2.6 km² in every
+    # pixel-canopy year) and their filled area inflates the canopy-year
+    # ranking. Detect by largest connected part; drop the year.
+    REGION_FILL_PART_KM2 = 4.0
+    for year in sorted(per_year):
+        g = per_year[year]
+        parts = list(g.geoms) if g.geom_type == "MultiPolygon" else [g]
+        biggest = max(area_km2(p) for p in parts)
+        if biggest > REGION_FILL_PART_KM2:
+            print(f"    [kelp] year {year} looks like a bed-area product "
+                  f"(one {biggest:.1f} km² part) — excluded")
+            del per_year[year]
+    if not per_year:
+        return None
+
     best_area = max(area_km2(g) for g in per_year.values())
     canopy_year = None
     for year in sorted(per_year, reverse=True):
