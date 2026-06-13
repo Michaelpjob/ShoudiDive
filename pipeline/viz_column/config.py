@@ -139,3 +139,22 @@ BELOW_ATTENUATION_MIN = 0.10
 BELOW_ATTENUATION_MAX = 0.55
 
 BELOW_VIS_FLOOR_FT = 3.0
+
+# ---- Shallow-water (no-cliff) resuspension --------------------------------
+#
+# Where the bottom sits ABOVE the cliff, there is no clear-over-murky
+# split — but swell still reaches the bottom and stirs sediment through
+# the WHOLE column, so a shallow sandy shelf under groundswell is the
+# murkiest water around, not the clearest. The old model ignored this
+# (it passed surface visibility straight down in the no-cliff case),
+# which reported open-water clarity in stirred shallows (e.g. ~17 ft at
+# Point Loma's <25 ft shelf under a 4.5 ft / 10 s swell that pegs the
+# bottom orbital velocity well past the resuspension threshold).
+#
+# Fraction of surface visibility LOST at full resuspension (index = 1).
+# 0.55 => a fully-stirred shallow column reads at 45% of the open-water
+# surface number; scales down smoothly as the swell eases (index -> 0).
+# Stronger than the below-cliff resuspension term (0.15) because that
+# one only clouds the lower layer, whereas this clouds the entire
+# shallow column a diver swims through.
+SHALLOW_RESUS_STRENGTH = 0.55

@@ -196,6 +196,23 @@ def below_cliff_vis_ft(surface_vis_ft: np.ndarray, upwelling: np.ndarray,
     return np.minimum(below, surface)
 
 
+def shallow_column_vis_ft(surface_vis_ft: np.ndarray,
+                          resuspension: np.ndarray) -> np.ndarray:
+    """Whole-column visibility where the bottom is ABOVE the cliff.
+
+    No clear/murk split here — but swell reaches the bottom and stirs
+    sediment through the entire shallow column, so the effective vis a
+    diver swims through is the surface number reduced by resuspension.
+    Reduces to the surface value as the swell eases (resuspension -> 0)
+    and to BELOW_VIS_FLOOR_FT under a fully-stirred shelf; never exceeds
+    surface.
+    """
+    surface = np.asarray(surface_vis_ft, dtype=float)
+    atten = 1.0 - C.SHALLOW_RESUS_STRENGTH * np.asarray(resuspension, dtype=float)
+    out = np.maximum(surface * atten, C.BELOW_VIS_FLOOR_FT)
+    return np.minimum(out, surface)
+
+
 # ---- Column assembly ---------------------------------------------------------
 
 def column(surface_vis_ft, bottom_ft, month, lat_deg, u10, v10, hs_m,
@@ -216,7 +233,9 @@ def column(surface_vis_ft, bottom_ft, month, lat_deg, u10, v10, hs_m,
     cliff = cliff_depth_ft(month, lat_deg, up, dts_km)
     below = below_cliff_vis_ft(surface, up, resus)
     no_cliff = bottom <= cliff
-    below = np.where(no_cliff, surface, below)
+    # Shallow (no-cliff): the whole column is swept by bottom resuspension,
+    # so report the stirred whole-column vis rather than open-water surface.
+    below = np.where(no_cliff, shallow_column_vis_ft(surface, resus), below)
     swing = np.full_like(cliff, swing_amplitude_ft(month))
     return {
         "cliff_ft": cliff,

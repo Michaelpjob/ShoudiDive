@@ -48,6 +48,7 @@ import {
   windCardinal,
 } from "../lib/dataSource.js";
 import WaterColumn from "./micro/WaterColumn.jsx";
+import { resuspensionIndex, shallowColumnVisFt, FT_PER_M } from "../lib/waterColumn.js";
 import { usePrefs } from "../contexts/PrefsContext.jsx";
 import { track } from "../lib/analytics.js";
 
@@ -852,8 +853,17 @@ export default function SpotDetailView({ spot, onClose }) {
         if (d && Number.isFinite(d.depthFt)) {
           const bottom = Math.round(d.depthFt);
           const noCliff = col.cliff_ft != null && bottom <= col.cliff_ft;
-          out = { ...col, bottom_ft: bottom, no_cliff: noCliff,
-                  below_ft: noCliff ? col.surface_ft : col.below_ft };
+          // Shallow (no-cliff): the grid raster can't resolve this strip,
+          // so recompute the stirred whole-column vis from the PRECISE
+          // click depth + the local swell. The deep (below-cliff) path
+          // keeps the grid value untouched. See waterColumn.js.
+          let belowFt = col.below_ft;
+          if (noCliff) {
+            const sw = getSwell5dStats(at.lng, at.lat, "d0_morning");
+            const resus = resuspensionIndex(sw.hs, sw.tp, bottom / FT_PER_M);
+            belowFt = shallowColumnVisFt(col.surface_ft, resus);
+          }
+          out = { ...col, bottom_ft: bottom, no_cliff: noCliff, below_ft: belowFt };
         }
       }
     }
