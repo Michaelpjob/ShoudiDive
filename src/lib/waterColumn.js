@@ -31,13 +31,78 @@ export function vizRampColor(visFt) {
   return "rgb(31,77,117)";                   // Excellent
 }
 
+// ---------------------------------------------------------------------------
+// Shallow-water resuspension (mirror of pipeline/viz_column/{model,config}.py)
+//
+// Where the bottom sits above the cliff there's no clear/murk split, but
+// swell still reaches the bottom and clouds the whole column — a shallow
+// sandy shelf under groundswell is the murkiest water around. The grid
+// raster can't resolve the shallow strip (its bottom depth is a coarse
+// ~10 km cell), so the detail view recomputes this at the click point
+// where it knows the precise local depth. Constants mirror config.py;
+// keep them in lockstep.
+// ---------------------------------------------------------------------------
+
+const GRAVITY = 9.81; // m/s^2
+const ORBITAL_VEL_CRITICAL_MS = 0.08;
+const ORBITAL_VEL_SCALE_MS = 0.25;
+const SHALLOW_RESUS_STRENGTH = 0.55;
+const BELOW_VIS_FLOOR_FT = 3.0;
+export const FT_PER_M = 3.28084;
+
+// Hunt (1979) direct wavenumber approximation (mirror of model._wavenumber).
+function wavenumber(periodS, depthM) {
+  const d = Math.max(depthM, 0.1);
+  const omega = (2 * Math.PI) / periodS;
+  const y = (omega * omega * d) / GRAVITY;
+  const c = [0.666, 0.355, 0.1608465608, 0.0632098765, 0.0217540484, 0.0065407983];
+  let poly = 0;
+  for (let n = 0; n < c.length; n++) poly += c[n] * Math.pow(y, n + 1);
+  const kd = Math.sqrt(y * y + y / (1 + poly));
+  return kd / d;
+}
+
+// Near-bottom wave orbital velocity u_b (m/s), linear theory.
+export function bottomOrbitalVelocity(hsM, periodS, depthM) {
+  const d = Math.max(depthM, 0.1);
+  const kd = Math.min(wavenumber(periodS, d) * d, 50);
+  return (Math.PI * hsM) / (periodS * Math.sinh(kd));
+}
+
+// Normalized near-bottom resuspension in [0,1]. 0 when swell can't reach
+// the bottom; ramps to 1 as orbital velocity passes the stirring threshold.
+export function resuspensionIndex(hsM, periodS, depthM) {
+  if (!Number.isFinite(hsM) || !Number.isFinite(periodS) || !(periodS > 0)) return 0;
+  if (!Number.isFinite(depthM) || depthM <= 0) return 0;
+  const ub = bottomOrbitalVelocity(hsM, periodS, depthM);
+  return Math.max(0, Math.min(1, (ub - ORBITAL_VEL_CRITICAL_MS) / ORBITAL_VEL_SCALE_MS));
+}
+
+// Whole-column vis in shallow (no-cliff) water: surface clarity reduced by
+// bottom resuspension. Mirror of model.shallow_column_vis_ft.
+export function shallowColumnVisFt(surfaceFt, resus) {
+  if (!Number.isFinite(surfaceFt)) return surfaceFt;
+  const atten = 1 - SHALLOW_RESUS_STRENGTH * resus;
+  return Math.min(surfaceFt, Math.max(surfaceFt * atten, BELOW_VIS_FLOOR_FT));
+}
+
+// The single number a diver reads for a column: the stirred whole-column
+// value in shallow (no-cliff) water, else the open-water surface clarity.
+export function effectiveColumnVisFt(col) {
+  if (!col) return null;
+  if (col.no_cliff && col.below_ft != null) return col.below_ft;
+  return col.surface_ft;
+}
+
 // Saved-spots row upgrade (V4): one number when the column is clear to
-// the bottom (or data is missing below), two when there's a cliff.
+// the bottom (or data is missing below), two when there's a cliff. In
+// shallow no-cliff water the single number is the stirred whole-column
+// value, which can be well below the open-water surface clarity.
 export function formatColumnSummary(col) {
   if (!col || col.surface_ft == null) return null;
-  const surf = `~${Math.round(col.surface_ft)} ft`;
-  if (col.no_cliff || col.below_ft == null) return surf;
-  return `${surf} → ~${Math.round(col.below_ft)} ft below`;
+  if (col.no_cliff) return `~${Math.round(effectiveColumnVisFt(col))} ft`;
+  if (col.below_ft == null) return `~${Math.round(col.surface_ft)} ft`;
+  return `~${Math.round(col.surface_ft)} ft → ~${Math.round(col.below_ft)} ft below`;
 }
 
 // V3 — planned-depth crossing callout. Voice stays descriptive (the

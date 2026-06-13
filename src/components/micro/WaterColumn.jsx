@@ -15,6 +15,7 @@ import {
   columnGeometry,
   crossingCallout,
   diurnalStrip,
+  effectiveColumnVisFt,
   vizRampColor,
 } from "../../lib/waterColumn.js";
 import { track } from "../../lib/analytics.js";
@@ -54,6 +55,14 @@ export default function WaterColumn({ col, title, series, compact = false }) {
     return <div className="wc-hint">No column data for this point.</div>;
   }
 
+  // In shallow (no-cliff) water the single "clear" band represents the
+  // whole column, which swell can cloud — show the stirred effective vis
+  // there rather than the open-water surface number. A meaningful gap
+  // means the shallows are actively being stirred.
+  const clearVis = col.no_cliff ? effectiveColumnVisFt(col) : col.surface_ft;
+  const stirred = col.no_cliff && col.below_ft != null
+    && col.surface_ft != null && col.below_ft < col.surface_ft - 0.5;
+
   const clearMidY = depthY(geom, (geom.clear.top + geom.clear.bottom) / 2);
   const murkMidY = geom.murk
     ? depthY(geom, (geom.murk.top + geom.murk.bottom) / 2)
@@ -84,7 +93,9 @@ export default function WaterColumn({ col, title, series, compact = false }) {
         role="img"
         aria-label={
           col.no_cliff
-            ? `Clear to the bottom, about ${Math.round(col.surface_ft)} feet visibility`
+            ? (stirred
+                ? `Shallow and stirred by swell, about ${Math.round(clearVis)} feet visibility top to bottom`
+                : `Clear to the bottom, about ${Math.round(clearVis)} feet visibility`)
             : `About ${Math.round(col.surface_ft)} feet visibility above a cliff near ${Math.round(col.cliff_ft)} feet, about ${Math.round(col.below_ft)} feet below it`
         }
       >
@@ -104,9 +115,9 @@ export default function WaterColumn({ col, title, series, compact = false }) {
         {/* clear layer */}
         <rect x={COL_X} y={depthY(geom, geom.clear.top)} width={COL_W}
           height={(geom.clear.bottom - geom.clear.top) * COL_H}
-          fill={vizRampColor(col.surface_ft)} opacity="0.88" />
+          fill={vizRampColor(clearVis)} opacity="0.88" />
         <text x={COL_X + COL_W + 8} y={clearMidY + 3} className="wc-val mono">
-          ≈{Math.round(col.surface_ft)} ft vis
+          ≈{Math.round(clearVis)} ft vis
         </text>
 
         {/* tide swing band + cliff */}
@@ -164,8 +175,9 @@ export default function WaterColumn({ col, title, series, compact = false }) {
 
       {col.no_cliff ? (
         <div className="wc-note">
-          Shallower than the cliff — the surface number applies all the
-          way down.
+          {stirred
+            ? "Shallower than the cliff, but swell is reaching the bottom and stirring sediment through the whole column."
+            : "Shallower than the cliff: the surface number applies all the way down."}
         </div>
       ) : null}
 

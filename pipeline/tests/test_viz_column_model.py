@@ -189,13 +189,38 @@ def test_below_worsens_with_upwelling_and_resuspension():
 # ---- column assembly --------------------------------------------------------------
 
 def test_column_shallow_shelf_has_no_cliff():
-    """Bottom shallower than the cliff: no murk layer; the surface
-    number applies all the way down."""
+    """Bottom shallower than the cliff: no murk layer. In flat-calm
+    conditions the surface number applies all the way down."""
     out = model.column(
         surface_vis_ft=20.0, bottom_ft=12.0, month=6, lat_deg=32.8,
-        u10=0.0, v10=0.0, hs_m=0.5)
+        u10=0.0, v10=0.0, hs_m=0.02)
     assert bool(out["no_cliff"])
-    assert float(out["below_ft"]) == 20.0
+    assert float(out["below_ft"]) == pytest.approx(20.0, abs=0.5)
+
+
+def test_column_shallow_stirred_by_swell():
+    """A shallow shelf under real groundswell is the murkiest water
+    around, not the clearest: swell reaches the bottom and clouds the
+    whole column, so the no-cliff vis must fall well below the
+    open-water surface number (regression for the Point Loma <25 ft
+    shelf reading ~17 ft under a 4.5 ft / 10 s swell)."""
+    calm = model.column(
+        surface_vis_ft=18.0, bottom_ft=18.0, month=6, lat_deg=32.69,
+        u10=0.0, v10=0.0, hs_m=0.05, period_s=8.0)
+    stirred = model.column(
+        surface_vis_ft=18.0, bottom_ft=18.0, month=6, lat_deg=32.69,
+        u10=5.0, v10=-8.0, hs_m=1.4, period_s=10.0)
+    assert bool(stirred["no_cliff"]) and bool(calm["no_cliff"])
+    assert float(stirred["resuspension"]) > 0.9          # bottom is being swept
+    assert float(stirred["below_ft"]) < 0.6 * 18.0       # well under surface
+    assert float(stirred["below_ft"]) < float(calm["below_ft"])  # worse than calm
+
+
+def test_shallow_column_vis_floor_and_ceiling():
+    """shallow_column_vis_ft never exceeds surface and is floored."""
+    assert float(model.shallow_column_vis_ft(20.0, 0.0)) == pytest.approx(20.0)
+    assert float(model.shallow_column_vis_ft(20.0, 1.0)) >= C.BELOW_VIS_FLOOR_FT
+    assert float(model.shallow_column_vis_ft(20.0, 1.0)) <= 20.0
 
 
 def test_column_vectorized_shapes():
