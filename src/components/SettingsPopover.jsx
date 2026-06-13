@@ -46,6 +46,25 @@ export default function SettingsPopover({ onClose }) {
       <div className="sp-section">
         <div className="sp-h">Map</div>
         <div className="sp-row">
+          <span>
+            Water column <span className="lt-beta">BETA</span>
+          </span>
+          <div className="sp-seg">
+            <button
+              className={prefs.waterColumnOn ? "active" : ""}
+              onClick={() => setPref("waterColumnOn", true)}
+            >
+              On
+            </button>
+            <button
+              className={!prefs.waterColumnOn ? "active" : ""}
+              onClick={() => setPref("waterColumnOn", false)}
+            >
+              Off
+            </button>
+          </div>
+        </div>
+        <div className="sp-row">
           <span>Overlay opacity</span>
           <span className="sp-val mono">{Math.round(prefs.opacity * 100)}%</span>
         </div>

@@ -281,16 +281,15 @@ LAYER_SPECS: dict[str, LayerSpec] = {
         # vis raster on the viz 0-80 ft range (so the existing Vis
         # legend semantics decode it), plus a cliff-depth raster
         # (cliff_range_ft) and a per-spot sidecar (spots_url) carrying
-        # the 24 h internal-tide cliff series. frontend_renders stays
-        # False until the V-group UI (WaterColumn.jsx) lands; flip it
-        # in that PR.
+        # the 24 h internal-tide cliff series. The V-group UI
+        # (WaterColumn.jsx) consumes it.
         name="viz_column",
         category="visibility",
         range=None,  # range_ft + cliff_range_ft instead
         scale="linear",
         unit="ft",
         payload="scalar_png",
-        frontend_renders=False,
+        frontend_renders=True,
         extra_required_keys=("range_ft", "cliff_range_ft"),
         extra_optional_keys=(
             "swing_ft", "spots_url", "method", "beta", "beta_reason",

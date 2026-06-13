@@ -21,7 +21,11 @@ import { track } from "../lib/analytics.js";
 
 const PREF_KEY = "ca-coast-conditions:prefs:v1";
 const OVERLAY_DEFAULTS_MIGRATION_KEY = "ca-coast-conditions:prefs:migrations:overlay-defaults-v1";
-const DEFAULT_PREFS = { theme: "light", opacity: 0.62, units: "F", mpaOn: true, bathyOn: true };
+// waterColumnOn gates the depth-resolved visibility readout (PRD
+// water-column D2) — ON by default with a BETA badge, matching how
+// Current/Vis ship as visible-with-BETA-tag; the settings toggle is
+// the off-switch.
+const DEFAULT_PREFS = { theme: "light", opacity: 0.62, units: "F", mpaOn: true, bathyOn: true, waterColumnOn: true };
 
 function loadPrefs() {
   try {

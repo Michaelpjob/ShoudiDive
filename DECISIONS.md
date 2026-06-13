@@ -3,6 +3,35 @@
 > Working artifact per the PRD (§7): what was ambiguous → what was
 > chosen → why. Newest first within each group.
 
+## Water Column PRD — Group V (2026-06-12)
+
+**WC-D8 — "Tap-to-slice" = the existing hover/pin state, not a new
+gesture.** Desktop slices wherever the cursor hovers (the same `hover`
+state the Tooltip and legend readout already consume — cursor-follow
+matches the app's feel and previews Z12's behavior); mobile slices the
+tap-to-pin point; with neither, the column pins to the selected saved
+spot, whose pipeline sidecar also provides the 24 h cliff series for
+the diurnal strip. Zero MapShell changes, no new gesture surface.
+
+**WC-D9 — BETA = visible by default + settings off-switch.** PRD D2
+says "behind a settings flag (BETA), consistent with how Current/Vis
+already carry BETA tags" — Current/Vis ship VISIBLE with a BETA badge,
+so `waterColumnOn` defaults true with the badge and Settings gets the
+off-switch. Flag-gating it dark would contradict the cited precedent.
+
+**WC-D10 — Column dock = inside the "How to read this" panel.** The
+PRD names "the zone currently holding 'How to read this'"; rendering
+the card at the top of that panel's body (rather than a new fixed
+panel) inherits its collapse behavior and avoids fixed-position
+stacking math against the variable-height moon widget above it.
+
+**WC-D11 — Frontend bathy sampling via direct bathy.png decode.** No
+frontend loader existed for the bathy grid (BathyLayer renders
+markers only); the vizColumn loader decodes `bathy.png` against
+`bathy.json`'s `depth_range_m` and `getColumnAt` samples it with the
+shared bilinear helper. When smooth-zoom Z12 lands its higher-res
+spot-bundle DEMs, this is the single substitution point.
+
 ## Water Column PRD — Group C1 (2026-06-12)
 
 **WC-D1 — Two rasters + a spot sidecar, not three rasters.** Below-cliff
