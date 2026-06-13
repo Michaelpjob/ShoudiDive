@@ -83,13 +83,13 @@ function hoverReadout(layer, hover, activeComposite, units) {
     const v = getSST(lng, lat, activeComposite);
     if (!Number.isFinite(v)) return null;
     return units === "F"
-      ? `${(v * 9 / 5 + 32).toFixed(1)}°F at cursor`
-      : `${v.toFixed(1)}°C at cursor`;
+      ? `${(v * 9 / 5 + 32).toFixed(1)}°F at pin`
+      : `${v.toFixed(1)}°C at pin`;
   }
   if (layer === "chl") {
     const v = getChl(lng, lat, activeComposite);
     if (!Number.isFinite(v)) return null;
-    return `${v.toFixed(2)} mg/m³ at cursor`;
+    return `${v.toFixed(2)} mg/m³ at pin`;
   }
   if (layer === "wind") {
     const kt = getWindSpeed(lng, lat, activeComposite);
@@ -99,7 +99,7 @@ function hoverReadout(layer, hover, activeComposite, units) {
       Number.isFinite(u) && Number.isFinite(v)
         ? ` ${windCardinal(windCompass(u, v))}`
         : "";
-    return `${kt.toFixed(1)} kt${dirStr} at cursor`;
+    return `${kt.toFixed(1)} kt${dirStr} at pin`;
   }
   if (layer === "current") {
     const kt = getCurrentSpeed(lng, lat, activeComposite);
@@ -109,7 +109,7 @@ function hoverReadout(layer, hover, activeComposite, units) {
       Number.isFinite(u) && Number.isFinite(v)
         ? ` to ${windCardinal((Math.atan2(u, v) * 180 / Math.PI + 360) % 360)}`
         : "";
-    return `${kt.toFixed(1)} kt${dirStr} at cursor`;
+    return `${kt.toFixed(1)} kt${dirStr} at pin`;
   }
   if (layer === "swell") {
     const w = getSwell5dStats(lng, lat, activeComposite);
@@ -143,8 +143,9 @@ export default function DesktopLayout({
   swellSel, currentSel,
   // Prefs read by panels
   units,
-  // Map-driven UI state
-  hover,
+  // Map-driven UI state. `hover` is the dropped readout pin (require-a-pin:
+  // there's no cursor-follow on the main map). clearPin removes it.
+  hover, clearPin,
   // Derived values computed in MapShell + passed down
   activeComposite, compositeText, timeOpts, layerIsReal,
   // Saved-spots panel state (analytics-wrapped setter lives in MapShell)
@@ -206,7 +207,16 @@ export default function DesktopLayout({
           units={units}
         />
       )}
-      
+
+      {/* Require-a-pin discoverability: until the user drops a pin there's
+          no readout, so a one-line coach mark tells them to click. It
+          disappears the moment a pin exists. */}
+      {!isMobile && !hover && (
+        <div className="map-pin-hint" aria-hidden="true">
+          Click anywhere on the map to read that point
+        </div>
+      )}
+
       <div className={"panel controls-tl" + (controlsOpen ? "" : " collapsed")}>
         <div
           className="panel-header"
@@ -938,12 +948,22 @@ export default function DesktopLayout({
             </span>
             <span>
               {(() => {
-                // Mirror the cursor's reading in the legend metadata when
-                // the user is hovering over the map. Falls back to the
-                // active window / source line when there's nothing to
-                // mirror — so the strip doesn't go blank on idle.
-                const hv = hover ? hoverReadout(layer, hover, activeComposite, units) : null;
-                if (hv) return <strong>{hv}</strong>;
+                // When a pin is dropped, the strip mirrors that point's value
+                // for the active layer. Show the pin chip + clear affordance
+                // whenever a pin exists — even where the active layer has no
+                // data here — so it's always dismissable. Falls back to the
+                // active window / source line when there's no pin.
+                if (hover?.pinned) {
+                  const hv = hoverReadout(layer, hover, activeComposite, units);
+                  return (
+                    <span className="legend-pin-readout">
+                      <span className="legend-pin-dot" aria-hidden="true" />
+                      <strong>{hv || "no data here"}</strong>
+                      <button type="button" className="legend-pin-clear"
+                        onClick={clearPin} title="Clear pin (Esc)" aria-label="Clear pin">×</button>
+                    </span>
+                  );
+                }
                 const suffix =
                   layer === "sst"   ? ` · MUR trend`
                   : layer === "wind"  ? ` · ${windSource(activeComposite) || "HRRR"}`
