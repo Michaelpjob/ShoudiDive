@@ -1181,7 +1181,7 @@ def fetch_spot_kelp(spot_id: str, bbox: dict):
     caller falls back to clipping the statewide 2016-only file.
     """
     try:
-        from shapely.geometry import mapping, shape
+        from shapely.geometry import box as shp_box, mapping, shape
         from shapely.ops import unary_union
     except ImportError:
         print("    [kelp] shapely unavailable — falling back to statewide clip")
@@ -1189,6 +1189,13 @@ def fetch_spot_kelp(spot_id: str, bbox: dict):
 
     envelope = (f"{bbox['lng_min']},{bbox['lat_min']},"
                 f"{bbox['lng_max']},{bbox['lat_max']}")
+    # The service returns whole intersecting features UNCLIPPED, and the
+    # survey layers store county-scale multipart features — without an
+    # intersection here the per-year unions span half of San Diego
+    # County: mostly off-chart geometry that bloats the file and skews
+    # the canopy-year ranking toward out-of-bbox area.
+    clip_box = shp_box(bbox["lng_min"], bbox["lat_min"],
+                       bbox["lng_max"], bbox["lat_max"])
     per_year = {}
     for layer_idx, year in KELP_SURVEY_LAYERS:
         params = {
@@ -1220,6 +1227,7 @@ def fetch_spot_kelp(spot_id: str, bbox: dict):
                 g = shape(f["geometry"])
                 if not g.is_valid:
                     g = g.buffer(0)
+                g = g.intersection(clip_box)
                 if not g.is_empty:
                     geoms.append(g)
             except Exception:
