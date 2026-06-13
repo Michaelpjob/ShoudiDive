@@ -772,16 +772,24 @@ export default function SpotDetailView({ spot, onClose }) {
     return pts;
   }, [bundle, bbox]);
 
-  // Soundings, filtered to OSM-water (PIP against land polygons).
+  // Soundings, filtered to OSM-water (PIP against land polygons) and to
+  // diver-relevant depths. The 330 ft (~100 m) cap matches the pipeline
+  // builder's SOUNDING_MAX_FT; it's repeated here so older bundles that
+  // still carry deep-ocean lattice samples (Catalina's 600 m+ channel
+  // scattered ~450 four-figure numbers across the chart) clean up
+  // without waiting on a rebuild.
+  const SOUNDING_MAX_FT = 330;
   const soundingPts = useMemo(() => {
     if (!bbox || !bundle?.soundings) return [];
     const landGeoms = (bundle?.coastline?.features || []).map((f) => f.geometry);
     return (bundle.soundings.features || [])
       .map((f) => {
+        const depth_ft = f.properties.depth_ft;
+        if (!(depth_ft > 0) || depth_ft > SOUNDING_MAX_FT) return null;
         const [lng, lat] = f.geometry.coordinates;
         if (landGeoms.some((g) => pointInGeometry(lng, lat, g))) return null;
         const [x, y] = projectInBbox(bbox, lng, lat, CANVAS_W, CANVAS_H);
-        return { key: `${lng}-${lat}`, x, y, depth_ft: f.properties.depth_ft };
+        return { key: `${lng}-${lat}`, x, y, depth_ft };
       })
       .filter(Boolean);
   }, [bundle, bbox]);
