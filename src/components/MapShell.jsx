@@ -958,6 +958,7 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
       <SpotDetailView
         spot={spotDetailFor}
         onClose={() => setSpotDetailFor(null)}
+        isMobile={isMobile}
       />
     )}
     {isMobile && (

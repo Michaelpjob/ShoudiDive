@@ -1031,6 +1031,126 @@
   }
 }
 
+/* ===== Mobile detail view (.sd-mobile): a stacked sheet — chart on top,
+   then a compact cliff readout, then conditions. Desktop keeps its
+   chart-plotter overlay (the absolutely-positioned panels above). The
+   class is set in JS (isMobile), so these rules aren't media-gated. ===== */
+.spot-detail-overlay.sd-mobile .spot-detail-stage {
+  flex: 0 0 44vh;
+  min-height: 0;
+}
+.sd-mobile-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 10px 12px calc(14px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  background: var(--bg);
+}
+.sd-m-chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.sd-m-chips::-webkit-scrollbar { display: none; }
+.sd-m-chip {
+  flex: none;
+  appearance: none;
+  border: 1px solid var(--line);
+  background: var(--bg-panel-solid, var(--bg-panel));
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 7px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sd-m-chip.active {
+  background: var(--accent);
+  color: var(--accent-ink, #fff);
+  border-color: var(--accent);
+}
+.sd-m-cliff {
+  background: var(--bg-panel-solid, var(--bg-panel));
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.sd-m-cliff-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 5px;
+}
+.sd-m-cliff-lab { font-size: 11.5px; color: var(--ink-3); }
+.sd-m-beta {
+  font-size: 9px;
+  color: var(--warn);
+  border: 1px solid var(--warn);
+  border-radius: 4px;
+  padding: 0 4px;
+  margin-left: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.sd-m-cliff-where { font-size: 10.5px; color: var(--ink-3); }
+.sd-m-cliff-head { font-size: 16px; font-weight: 500; line-height: 1.35; color: var(--ink-2); }
+.sd-m-cliff-head strong { font-weight: 700; color: var(--ink); }
+.sd-m-cliff-sub { font-size: 11.5px; color: var(--ink-3); margin-top: 7px; }
+.sd-m-cliffbar {
+  position: relative;
+  display: flex;
+  height: 15px;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 10px;
+}
+.sd-m-clear { background: rgba(6, 182, 212, 0.42); }
+.sd-m-murk  { background: rgba(194, 65, 12, 0.38); }
+.sd-m-cliffmark {
+  position: absolute;
+  top: -1px; bottom: -1px;
+  width: 2px;
+  background: var(--ink);
+  transform: translateX(-1px);
+}
+.sd-m-clearlab, .sd-m-murklab {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  font-weight: 600;
+  font-family: JetBrains Mono, ui-monospace, monospace;
+}
+.sd-m-clearlab { left: 6px; color: #05484f; }
+.sd-m-murklab { right: 6px; color: #5a1e08; }
+.sd-m-conds {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.sd-m-cond {
+  background: var(--bg-sunken, var(--bg-panel));
+  border-radius: 8px;
+  padding: 7px 9px;
+}
+.sd-m-cond span { display: block; font-size: 10px; color: var(--ink-3); margin-bottom: 1px; }
+.sd-m-cond strong { font-size: 12.5px; font-weight: 600; font-family: JetBrains Mono, ui-monospace, monospace; color: var(--ink); }
+.sd-m-mark {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+.sd-m-mark span { flex: 1; color: var(--ink-2); }
+
 /* ---------- Settings popover (replaces iframe-protocol Tweaks panel) ---------- */
 
 .settings-pop {

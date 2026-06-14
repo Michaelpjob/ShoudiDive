@@ -349,7 +349,7 @@ function clampVb(vb, baseW, baseH) {
 // Component
 // ---------------------------------------------------------------------------
 
-export default function SpotDetailView({ spot, onClose }) {
+export default function SpotDetailView({ spot, onClose, isMobile = false }) {
   const [bundle, setBundle] = useState(null);
   const [error, setError] = useState(null);
   const [layers, setLayers] = useState({
@@ -931,7 +931,7 @@ export default function SpotDetailView({ spot, onClose }) {
 
   // ---------------------------------------------------------------------------
   return (
-    <div className="spot-detail-overlay" role="dialog" aria-modal="true" aria-label={`${spot.name} detail chart`}>
+    <div className={"spot-detail-overlay" + (isMobile ? " sd-mobile" : "")} role="dialog" aria-modal="true" aria-label={`${spot.name} detail chart`}>
       <div className="spot-detail-header">
         <div className="spot-detail-title">
           <strong>{spot.name}</strong>
@@ -1299,7 +1299,96 @@ export default function SpotDetailView({ spot, onClose }) {
         </div>
       )}
 
-      {/* Conditions + mark panel — bottom-left */}
+      {/* ===== MOBILE bottom sheet: layer chips → compact cliff → conditions.
+           Desktop keeps its chart-plotter panels (the branch below). ===== */}
+      {isMobile && (
+        <div className="sd-mobile-panel">
+          <div className="sd-m-chips">
+            {[
+              ["bands", "Depth"], ["contours", "Contours"], ["soundings", "Soundings"],
+              ["kelp", "Kelp"], ["landmarks", "Labels"], ["mpa", "MPA"],
+            ].map(([key, label]) => (
+              <button key={key} type="button"
+                className={"sd-m-chip" + (layers[key] ? " active" : "")}
+                onClick={() => toggleLayer(key)} aria-pressed={layers[key]}>{label}</button>
+            ))}
+            <button type="button" className="sd-m-chip" onClick={resetView}>Reset</button>
+          </div>
+
+          {waterColumn && (() => {
+            const c = waterColumn.col;
+            const surf = Math.round(c.surface_ft);
+            if (c.no_cliff || c.cliff_ft == null) {
+              return (
+                <div className="sd-m-cliff">
+                  <div className="sd-m-cliff-top">
+                    <span className="sd-m-cliff-lab">Visibility <span className="sd-m-beta">beta</span></span>
+                    <span className="sd-m-cliff-where mono">{waterColumn.title}</span>
+                  </div>
+                  <div className="sd-m-cliff-head">≈{surf} ft, clear to the bottom</div>
+                  <div className="sd-m-cliff-sub">
+                    {c.bottom_ft != null ? `bottom ${Math.round(c.bottom_ft)} ft` : "shallower than the cliff here"}
+                  </div>
+                </div>
+              );
+            }
+            const cliff = Math.round(c.cliff_ft);
+            const below = Math.round(c.below_ft);
+            const bottom = c.bottom_ft != null ? Math.round(c.bottom_ft) : null;
+            const drawnMax = Math.max(60, c.cliff_ft * 3);
+            const clearPct = Math.max(12, Math.min(80, (c.cliff_ft / drawnMax) * 100));
+            const swing = c.cliff_swing_ft || 0;
+            return (
+              <div className="sd-m-cliff">
+                <div className="sd-m-cliff-top">
+                  <span className="sd-m-cliff-lab">Visibility <span className="sd-m-beta">beta</span></span>
+                  <span className="sd-m-cliff-where mono">{waterColumn.title}</span>
+                </div>
+                <div className="sd-m-cliff-head">
+                  <strong>≈{surf} ft</strong> clear to <strong>~{cliff} ft</strong>, then <strong>≈{below} ft</strong> below
+                </div>
+                <div className="sd-m-cliffbar" role="img"
+                  aria-label={`Clear about ${surf} feet down to ${cliff} feet, then about ${below} feet below.`}>
+                  <span className="sd-m-clear" style={{ width: `${clearPct}%` }} />
+                  <span className="sd-m-murk" style={{ width: `${100 - clearPct}%` }} />
+                  <span className="sd-m-cliffmark" style={{ left: `${clearPct}%` }} />
+                  <span className="sd-m-clearlab">≈{surf} ft</span>
+                  <span className="sd-m-murklab">≈{below} ft</span>
+                </div>
+                <div className="sd-m-cliff-sub">
+                  cliff {swing > 1 ? `swings ${Math.round(cliff - swing / 2)}–${Math.round(cliff + swing / 2)} ft with the tide` : `~${cliff} ft`}
+                  {bottom != null && ` · bottom ${bottom} ft`}
+                </div>
+              </div>
+            );
+          })()}
+
+          <div className="sd-m-conds">
+            <div className="sd-m-cond"><span>Depth</span><strong>{cursor ? depthLabel : (() => {
+              const d = depthAt(spot.lng, spot.lat);
+              return d && !d.onLand ? `${Math.round(d.depthFt)} ft` : "—";
+            })()}</strong></div>
+            <div className="sd-m-cond"><span>Temp</span><strong>{conditions.sstStr}</strong></div>
+            <div className="sd-m-cond"><span>Wind</span><strong>{conditions.windStr}</strong></div>
+            <div className="sd-m-cond"><span>Swell</span><strong>{conditions.swellStr}</strong></div>
+            <div className="sd-m-cond"><span>Vis (est.)</span><strong>{conditions.vizStr}</strong></div>
+            <div className="sd-m-cond"><span>Chl</span><strong>{conditions.chlStr}</strong></div>
+          </div>
+
+          {lastMark && (
+            <div className="sd-m-mark">
+              <span><i className="mono">{formatDecimal(lastMark.lat, lastMark.lng)}</i></span>
+              <button type="button" className="sdc-copy-btn" onClick={() => copyCoords(lastMark)}>
+                {copied ? "✓ copied" : "Copy GPS"}
+              </button>
+              <button type="button" className="sdc-copy-btn" onClick={() => setMarks([])}>Clear</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Conditions + mark panel — bottom-left (DESKTOP) */}
+      {!isMobile && (<>
       <div className="spot-detail-conditions">
         {waterColumn && (
           <div className="sdc-wc">
@@ -1386,6 +1475,7 @@ export default function SpotDetailView({ spot, onClose }) {
           </button>
         )}
       </div>
+      </>)}
 
       {/* Sources footer — bathy attribution follows what the bundle
           actually used (NCEI mosaic normally; GMRT only as fallback,
