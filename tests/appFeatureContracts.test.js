@@ -103,10 +103,12 @@ test("Current, swell, wind, and mobile overlay features remain wired", () => {
     read("src/styles/mobile.css") +
     read("src/styles/wind.css");
 
-  // Timeline scrubbers stay in MapShell.
-  assert.match(mapShell, /<CurrentTimeline sel=\{currentSel\} setSel=\{setCurrentSel\} \/>/);
-  assert.match(mapShell, /<SwellTimeline sel=\{swellSel\} setSel=\{setSwellSel\} \/>/);
-  assert.match(mapShell, /<WindTimeline sel=\{windSel\} setSel=\{setWindSel\} \/>/);
+  // Timeline scrubbers stay in MapShell. (2026-06-14: they now also take a
+  // `hover` prop so the playhead can report the pinned point through the
+  // forecast — match the sel/setSel wiring without pinning the prop list.)
+  assert.match(mapShell, /<CurrentTimeline sel=\{currentSel\} setSel=\{setCurrentSel\}/);
+  assert.match(mapShell, /<SwellTimeline sel=\{swellSel\} setSel=\{setSwellSel\}/);
+  assert.match(mapShell, /<WindTimeline sel=\{windSel\} setSel=\{setWindSel\}/);
   // Current-value cards live in DesktopLayout's controls panel.
   assert.match(desktopLayout, /<CurrentCurrentCard sel=\{currentSel\} \/>/);
   assert.match(mobileSheet, /className="ms-overlay-quick"/);
