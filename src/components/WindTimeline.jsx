@@ -5,6 +5,7 @@ import {
   loadWind5dHourly,
   windCardinal,
 } from "../lib/dataSource.js";
+import { pinnedWind } from "../lib/pinSample.js";
 import { useTimelineDrag } from "./useTimelineDrag.js";
 
 // Bucket → first hour of that bucket (for selections that came from a card click).
@@ -63,7 +64,7 @@ function ktColor(kt) {
   return KT_STOPS[KT_STOPS.length - 1].c;
 }
 
-export default function WindTimeline({ sel, setSel }) {
+export default function WindTimeline({ sel, setSel, hover }) {
   const summary = getWind5dSummary();
   const ref = useRef(null);
 
@@ -124,15 +125,30 @@ export default function WindTimeline({ sel, setSel }) {
   const dayInfo = summary.days[selDay];
   const bucketName = hourToBucket(selHour);
   const bucketStats = dayInfo?.buckets?.find((b) => b.bucket === bucketName);
-  const displayKt =
+  const regionKt =
     stats && Number.isFinite(stats.kt)
       ? stats.kt
       : bucketStats?.mean_kt ?? null;
-  const displayDir =
+  const regionDir =
     stats && Number.isFinite(stats.dir)
       ? stats.dir
       : bucketStats?.mean_dir_deg ?? null;
-  const isReal = stats != null;
+
+  // When a pin is dropped, the playhead reports THAT location through time
+  // instead of the area mean — so scrubbing answers "what's the wind at my
+  // spot". pinnedWind() samples the SAME slot the map raster paints (the
+  // scrubbed hour once its grid is in, the bucket mean while it loads), so the
+  // badge agrees to the decimal with the map pin readout and the left forecast
+  // card. (.real is false on the bucket-mean fallback → flagged as an estimate.)
+  const pinned = hover?.pinned && Number.isFinite(hover?.lng);
+  const pinSample = pinned ? pinnedWind(hover.lng, hover.lat, sel) : null;
+  const pinKt = pinSample ? pinSample.kt : null;
+  const pinDir = pinSample ? pinSample.dir : null;
+  const atPin = pinned && Number.isFinite(pinKt);
+
+  const displayKt = atPin ? pinKt : regionKt;
+  const displayDir = atPin && Number.isFinite(pinDir) ? pinDir : regionDir;
+  const isReal = atPin ? pinSample.real : stats != null;
 
   // Day stripes — alternating bg so the boundaries are visible at a glance.
   const dayCells = summary.days.map((d, i) => {
@@ -198,6 +214,7 @@ export default function WindTimeline({ sel, setSel }) {
         <div className={`tl-playhead-badge align-${badgeClamp}`}>
           <span className="tl-pb-time">
             {dayInfo?.weekday?.slice(0, 3)} {formatHour(selHour)}
+            {atPin && <span className="tl-pb-atpin"> · at pin</span>}
           </span>
           {Number.isFinite(displayKt) && (
             <span

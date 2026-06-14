@@ -201,6 +201,13 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
       .catch(() => { /* no bundles in this region — graceful no-op */ });
     return () => { cancelled = true; };
   }, []);
+  // Escape clears the readout pin (desktop affordance; mobile has a
+  // tap-X on the status row). Bound once for the lifetime of the shell.
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") setHover(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   function openSpotDetail(spotId) {
     const s = SAVED_SPOTS.find((x) => x.id === spotId);
     if (s) setSpotDetailFor(s);
@@ -231,11 +238,10 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
     setBathyOn(value);
   };
 
-  // Stale hover state from the previous layer carries an incompatible val
-  // shape (number for sst/chl, {u,v,kt} object for wind). Drop it on switch.
-  useEffect(() => {
-    setHover(null);
-  }, [layer]);
+  // The readout pin holds across layer switches by design (drop it once,
+  // read temp → chl → wind → current → viz at the SAME point). Safe because
+  // the pin stores only lng/lat — each layer's value is recomputed from the
+  // coordinate, never a cached per-layer shape.
 
   function onWheel(e) {
     // No preventDefault — body has overflow:hidden so there's nothing to
@@ -266,14 +272,32 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
     setIsPanning(true);
   }
 
-  function onMouseUp() {
+  function onMouseUp(e) {
+    const ps = panStateRef.current;
+    // A click that didn't turn into a pan = drop (or move) the readout
+    // pin. The pin is the single point every layer's value reads from
+    // (no cursor-follow; see onMove). Skip if the click landed on a
+    // saved-spot pin (that owns its own selection) or a gesture child.
+    const onSpotPin = e?.target?.closest?.(".spot-pins, .map-pin");
+    if (ps && !ps.moved && !isMobile && !onSpotPin
+        && !isMapGestureChildTarget(e?.target)) {
+      const r = stageRef.current.getBoundingClientRect();
+      const vbX = vb.x + (ps.startScreenX / r.width) * vb.w;
+      const vbY = vb.y + (ps.startScreenY / r.height) * vb.h;
+      const [lng, lat] = unproject(vbX, vbY, size.w, size.h);
+      setHover({ x: ps.startScreenX, y: ps.startScreenY, lng, lat, pinned: true });
+      track("map_pin_set", { layer });
+    }
     panStateRef.current = null;
     setIsPanning(false);
   }
 
   function onMove(e) {
+    // Over a gesture child (timeline scrubber, panel) we don't pan — but
+    // we must NOT clear the pin here. The pin is persistent; clearing it
+    // on mouse-over was what made the value revert to the area mean the
+    // instant you reached for the time slider.
     if (isMapGestureChildTarget(e.target)) {
-      setHover(null);
       return;
     }
     const r = stageRef.current.getBoundingClientRect();
@@ -293,23 +317,18 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
         w: ps.startVb.w,
         h: ps.startVb.h,
       }));
-      setHover(null);
+      // The pin is geographic — keep it through a pan (its on-screen
+      // position is reprojected from lng/lat each render).
       return;
     }
-
-    // Hover lookup — convert screen px to vbox coord, then to lng/lat. We
-    // intentionally do NOT cache the value here: if the layer changes while
-    // hover is still populated, the cached val shape would mismatch the
-    // active layer's tooltip code. Tooltip recomputes from lng/lat instead.
-    if (isMobile) return;
-
-    const vbX = vb.x + (x / r.width) * vb.w;
-    const vbY = vb.y + (y / r.height) * vb.h;
-    const [lng, lat] = unproject(vbX, vbY, size.w, size.h);
-    setHover({ x, y, lng, lat });
+    // Require-a-pin (2026-06-13): moving the cursor no longer sets a
+    // transient readout. The single point every layer reads from is the
+    // pin dropped on click (onMouseUp) — so "12.8 kt" is always anchored
+    // to a visible marker rather than wherever the mouse happens to be.
   }
   function onLeave() {
-    setHover(null);
+    // Do NOT clear the pin on mouse-leave — it persists until the next
+    // click moves it (or the user clears it).
     panStateRef.current = null;
     setIsPanning(false);
   }
@@ -514,6 +533,22 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
     return out;
   }, [activeSpot, bathyOn, bathyFeatures, zoomLevel]);
 
+  // The readout pin is geographic; its on-screen position drifts as the
+  // map pans/zooms. Reproject lng/lat → live screen px each render so the
+  // value tooltip (which positions off hover.x/y) tracks the marker
+  // instead of sticking at the original click point. Same viewBox→screen
+  // mapping the fitted-box overlay uses (cssLeft/cssTop below).
+  const hoverForUI = (() => {
+    if (!hover?.pinned || !Number.isFinite(hover.lng) || !size.w) return hover;
+    const [vbX, vbY] = project(hover.lng, hover.lat, size.w, size.h);
+    return {
+      ...hover,
+      x: ((vbX - renderVb.x) / renderVb.w) * size.w,
+      y: ((vbY - renderVb.y) / renderVb.h) * size.h,
+    };
+  })();
+  const clearPin = () => setHover(null);
+
   return (
     <>
     <div
@@ -671,6 +706,31 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
             );
           })}
         </g>
+
+        {/* Readout pin — the single point every layer's value reads from.
+            Projected from lng/lat like the spot pins, so it stays put on
+            the map through pan/zoom. A crosshair + ring reads as "measure
+            here", visually distinct from the round saved-spot pins. */}
+        {hover?.pinned && Number.isFinite(hover.lng) && (() => {
+          const [px, py] = project(hover.lng, hover.lat, size.w, size.h);
+          const rr = 9 / zoomLevel;
+          const arm = 14 / zoomLevel;
+          return (
+            <g className="map-pin" style={{ pointerEvents: "none" }}>
+              <circle cx={px} cy={py} r={rr} fill="none"
+                stroke="var(--accent)" strokeWidth={2 / zoomLevel} />
+              <circle cx={px} cy={py} r={2.5 / zoomLevel} fill="var(--accent)" />
+              <line x1={px - arm} y1={py} x2={px - rr} y2={py}
+                stroke="var(--accent)" strokeWidth={1.6 / zoomLevel} />
+              <line x1={px + rr} y1={py} x2={px + arm} y2={py}
+                stroke="var(--accent)" strokeWidth={1.6 / zoomLevel} />
+              <line x1={px} y1={py - arm} x2={px} y2={py - rr}
+                stroke="var(--accent)" strokeWidth={1.6 / zoomLevel} />
+              <line x1={px} y1={py + rr} x2={px} y2={py + arm}
+                stroke="var(--accent)" strokeWidth={1.6 / zoomLevel} />
+            </g>
+          );
+        })()}
       </svg>
 
       {/* Wind particles — moved out of the SVG (used to be a
@@ -736,13 +796,13 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
         <SstTimeline sel={sstActiveSel} setSel={setSstActiveSel} units={units} mode={activeSstMode} />
       )}
       {layer === "wind" && (
-        <WindTimeline sel={windSel} setSel={setWindSel} />
+        <WindTimeline sel={windSel} setSel={setWindSel} hover={hoverForUI} />
       )}
       {layer === "swell" && (
-        <SwellTimeline sel={swellSel} setSel={setSwellSel} />
+        <SwellTimeline sel={swellSel} setSel={setSwellSel} hover={hoverForUI} />
       )}
       {layer === "current" && (
-        <CurrentTimeline sel={currentSel} setSel={setCurrentSel} />
+        <CurrentTimeline sel={currentSel} setSel={setCurrentSel} hover={hoverForUI} />
       )}
 
       <DesktopLayout
@@ -759,7 +819,8 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
         swellSel={swellSel}
         currentSel={currentSel}
         units={units}
-        hover={hover}
+        hover={hoverForUI}
+        clearPin={clearPin}
         activeComposite={activeComposite}
         compositeText={compositeText}
         timeOpts={timeOpts}
@@ -826,7 +887,7 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
         timeOpts={timeOpts}
         compositeText={compositeText}
         layerIsReal={layerIsReal}
-        hover={hover}
+        hover={hoverForUI}
         setHover={setHover}
       />
     )}

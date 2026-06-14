@@ -8,6 +8,7 @@ import {
   bucketKey,
   hourKey,
 } from "../lib/dataSource.js";
+import { pinnedWind } from "../lib/pinSample.js";
 import { findTodayDay } from "../lib/today.js";
 
 // Beaufort-aligned colour ramp — same kt stops as the legend / particles.
@@ -377,7 +378,7 @@ function fmtSelTime(dayInfo, hour) {
   return `${dayInfo.weekday} ${h12} ${ampm}`;
 }
 
-export function WindCurrentSelectionCard({ sel, setSel }) {
+export function WindCurrentSelectionCard({ sel, setSel, hover }) {
   const summary = getWind5dSummary();
   if (!summary) {
     return (
@@ -393,8 +394,15 @@ export function WindCurrentSelectionCard({ sel, setSel }) {
       : sel.bucket;
   const bucket = dayInfo?.buckets?.find((b) => b.bucket === bucketName);
   const stats = sel.hour != null ? getHourlyStatsFromCache(sel.day, sel.hour) : null;
-  const meanKt = stats?.kt ?? bucket?.mean_kt;
-  const meanDir = stats?.dir ?? bucket?.mean_dir_deg;
+  // With a dropped pin, slave this card to THAT point (same helper the slider
+  // badge + map pin readout use) instead of the region mean — otherwise the
+  // card reads the area average while the map/slider read the pin.
+  const pin =
+    hover?.pinned && Number.isFinite(hover?.lng)
+      ? pinnedWind(hover.lng, hover.lat, sel)
+      : null;
+  const meanKt = pin ? pin.kt : stats?.kt ?? bucket?.mean_kt;
+  const meanDir = pin ? pin.dir : stats?.dir ?? bucket?.mean_dir_deg;
   const cardinal = Number.isFinite(meanDir) ? windCardinal(meanDir) : "—";
 
   return (
@@ -404,6 +412,7 @@ export function WindCurrentSelectionCard({ sel, setSel }) {
           {sel.hour != null && dayInfo
             ? fmtSelTime(dayInfo, sel.hour)
             : `${dayInfo?.weekday} ${sel.bucket}`}
+          {pin && <span className="wcs-atpin"> · at pin</span>}
         </div>
         <div className="wcs-kt-row">
           <span className="wcs-kt">
