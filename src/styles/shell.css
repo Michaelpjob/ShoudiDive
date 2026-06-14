@@ -941,6 +941,52 @@
 }
 .legend-meta strong { color: var(--ink-2); font-weight: 500; }
 
+/* Pinned-readout chip in the legend strip (the dropped-pin value + clear). */
+.legend-pin-readout {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.legend-pin-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex: none;
+}
+.legend-pin-readout strong { color: var(--accent); }
+.legend-pin-clear {
+  border: none;
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 1px;
+  margin-left: 1px;
+}
+.legend-pin-clear:hover { color: var(--ink); }
+
+/* Require-a-pin coach mark — subtle, centered at the bottom of the map,
+   only while no pin is set. */
+.map-pin-hint {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  pointer-events: none;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--bg-panel) 86%, transparent);
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: 0 2px 10px rgb(15 23 42 / 0.10);
+  white-space: nowrap;
+}
+
 /* Tooltip */
 .tooltip {
   position: absolute;

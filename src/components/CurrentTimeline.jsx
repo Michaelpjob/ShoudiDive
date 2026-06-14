@@ -5,6 +5,7 @@ import {
   getCurrent5dSummary,
   windCardinal,
 } from "../lib/dataSource.js";
+import { pinnedCurrent } from "../lib/pinSample.js";
 import { findTodayDay } from "../lib/today.js";
 
 const BUCKET_LABELS = {
@@ -74,7 +75,7 @@ function selectedIndex(items, sel) {
   return idx >= 0 ? idx : 0;
 }
 
-export function CurrentCurrentCard({ sel }) {
+export function CurrentCurrentCard({ sel, hover }) {
   const summary = getCurrent5dSummary();
   if (!summary?.days?.length) {
     return (
@@ -85,21 +86,28 @@ export function CurrentCurrentCard({ sel }) {
   }
   const dayInfo = summary.days?.find((d) => d.day === sel?.day) || summary.days[0];
   const bucket = dayInfo?.buckets?.find((b) => b.bucket === sel?.bucket) || dayInfo?.buckets?.[0];
-  const dir = Number.isFinite(bucket?.mean_dir_to_deg)
-    ? windCardinal(bucket.mean_dir_to_deg)
-    : null;
+  // With a dropped pin, slave this card to THAT point instead of the region
+  // mean (same helper the slider badge + map pin readout use).
+  const pin =
+    hover?.pinned && Number.isFinite(hover?.lng)
+      ? pinnedCurrent(hover.lng, hover.lat, sel)
+      : null;
+  const showKt = pin ? pin.kt : bucket?.mean_kt;
+  const dirDeg = pin ? pin.dirToDeg : bucket?.mean_dir_to_deg;
+  const dir = Number.isFinite(dirDeg) ? windCardinal(dirDeg) : null;
   return (
     <div className="wind-current-card">
       <div className="wind-current-stats">
         <div className="wcs-headline">
           <div className="wcs-time">
             {dayInfo?.weekday ?? "Current"} {bucketLabel(bucket?.bucket)}
+            {pin && <span className="wcs-atpin"> · at pin</span>}
           </div>
           <span className="beta-badge">BETA</span>
         </div>
         <div className="wcs-kt-row">
           <span className="wcs-kt">
-            {Number.isFinite(bucket?.mean_kt) ? bucket.mean_kt.toFixed(1) : "--"}
+            {Number.isFinite(showKt) ? showKt.toFixed(1) : "--"}
             <span className="wcs-kt-unit"> kt</span>
           </span>
           <span className="wcs-dir">
@@ -123,7 +131,7 @@ export function CurrentCurrentCard({ sel }) {
   );
 }
 
-export default function CurrentTimeline({ sel, setSel }) {
+export default function CurrentTimeline({ sel, setSel, hover }) {
   const summary = getCurrent5dSummary();
   const ref = useRef(null);
   const [dragging, setDragging] = useState(false);
@@ -194,9 +202,19 @@ export default function CurrentTimeline({ sel, setSel }) {
   });
 
   const bucket = current.bucket;
-  const dir = Number.isFinite(bucket.mean_dir_to_deg)
-    ? windCardinal(bucket.mean_dir_to_deg)
+  // With a pin dropped, the playhead reports the current AT THAT POINT through
+  // the forecast instead of the area mean. pinnedCurrent() routes through the
+  // shared sampler so the badge agrees with the map pin readout and the left
+  // forecast card. (current5d is bucket-only — no hourly slot to prefer.)
+  const pinned = hover?.pinned && Number.isFinite(hover?.lng);
+  const pinC = pinned
+    ? pinnedCurrent(hover.lng, hover.lat, { day: current.day.day, bucket: bucket.bucket })
     : null;
+  const atPin = pinned && pinC != null;
+  const showKt = atPin ? pinC.kt : bucket.mean_kt;
+  const dir = atPin
+    ? (Number.isFinite(pinC.dirToDeg) ? windCardinal(pinC.dirToDeg) : null)
+    : (Number.isFinite(bucket.mean_dir_to_deg) ? windCardinal(bucket.mean_dir_to_deg) : null);
   const badgeClamp =
     playheadFrac < 0.1 ? "left" : playheadFrac > 0.9 ? "right" : "center";
 
@@ -221,14 +239,15 @@ export default function CurrentTimeline({ sel, setSel }) {
         <div className={`tl-playhead-badge align-${badgeClamp}`}>
           <span className="tl-pb-time">
             {current.day.weekday.slice(0, 3)} {bucketLabel(bucket.bucket)}
+            {atPin && <span className="tl-pb-atpin"> · at pin</span>}
           </span>
-          {Number.isFinite(bucket.mean_kt) && (
-            <span className="tl-pb-kt" style={{ background: ktColor(bucket.mean_kt) }}>
-              {bucket.mean_kt.toFixed(1)} kt
+          {Number.isFinite(showKt) && (
+            <span className="tl-pb-kt" style={{ background: ktColor(showKt) }}>
+              {showKt.toFixed(1)} kt
             </span>
           )}
           {dir && <span className="tl-pb-dir">to {dir}</span>}
-          {Number.isFinite(bucket.consistency) && (
+          {!atPin && Number.isFinite(bucket.consistency) && (
             <span className="tl-pb-dir">{bucket.consistency}% steady</span>
           )}
           {/* 2026-05-25: "~" source-tier marker removed. The TopBar
