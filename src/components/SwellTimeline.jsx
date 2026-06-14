@@ -6,6 +6,7 @@ import {
   loadSwell5dHourly,
   windCardinal,
 } from "../lib/dataSource.js";
+import { pinnedSwell } from "../lib/pinSample.js";
 import { bucketKey } from "../lib/loaders/decoders.js";
 import { useTimelineDrag } from "./useTimelineDrag.js";
 
@@ -69,7 +70,7 @@ function hsColor(hsM) {
 
 // Compact panel-side card mirroring WindCurrentSelectionCard but for swell.
 // Big Hs readout, period + direction underneath, plus a confidence note.
-export function SwellCurrentCard({ sel }) {
+export function SwellCurrentCard({ sel, hover }) {
   const summary = getSwell5dSummary();
   if (!summary) {
     return (
@@ -83,10 +84,16 @@ export function SwellCurrentCard({ sel }) {
     sel?.hour != null ? hourToBucket(sel.hour) : sel?.bucket;
   const bucket = dayInfo?.buckets?.find((b) => b.bucket === bucketName);
   const stats = sel?.hour != null ? getSwell5dHourlyStats(sel.day, sel.hour) : null;
-  const meanHsM  = stats?.hs ?? bucket?.mean_hs_m ?? null;
+  // With a dropped pin, slave this card to THAT point instead of the region
+  // mean (same helper the slider badge + map pin readout use).
+  const pin =
+    hover?.pinned && Number.isFinite(hover?.lng)
+      ? pinnedSwell(hover.lng, hover.lat, sel)
+      : null;
+  const meanHsM  = pin ? pin.hs : stats?.hs ?? bucket?.mean_hs_m ?? null;
   const meanHsFt = Number.isFinite(meanHsM) ? meanHsM * 3.28084 : null;
-  const meanTp   = stats?.tp ?? bucket?.mean_tp_s ?? null;
-  const meanDp   = stats?.dp ?? bucket?.mean_dp_deg ?? null;
+  const meanTp   = pin ? pin.tp : stats?.tp ?? bucket?.mean_tp_s ?? null;
+  const meanDp   = pin ? pin.dp : stats?.dp ?? bucket?.mean_dp_deg ?? null;
   const cardinal = Number.isFinite(meanDp) ? windCardinal(meanDp) : "—";
 
   // Period interpretation — drives the second-line description.
@@ -109,7 +116,10 @@ export function SwellCurrentCard({ sel }) {
   return (
     <div className="wind-current-card">
       <div className="wind-current-stats">
-        <div className="wcs-time">{timeLabel}</div>
+        <div className="wcs-time">
+          {timeLabel}
+          {pin && <span className="wcs-atpin"> · at pin</span>}
+        </div>
         <div className="wcs-kt-row">
           <span className="wcs-kt">
             {Number.isFinite(meanHsFt) ? meanHsFt.toFixed(1) : "—"}

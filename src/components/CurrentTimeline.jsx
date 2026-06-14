@@ -7,6 +7,7 @@ import {
   getCurrentUV,
   windCardinal,
 } from "../lib/dataSource.js";
+import { pinnedCurrent } from "../lib/pinSample.js";
 import { findTodayDay } from "../lib/today.js";
 
 const BUCKET_LABELS = {
@@ -76,7 +77,7 @@ function selectedIndex(items, sel) {
   return idx >= 0 ? idx : 0;
 }
 
-export function CurrentCurrentCard({ sel }) {
+export function CurrentCurrentCard({ sel, hover }) {
   const summary = getCurrent5dSummary();
   if (!summary?.days?.length) {
     return (
@@ -87,21 +88,28 @@ export function CurrentCurrentCard({ sel }) {
   }
   const dayInfo = summary.days?.find((d) => d.day === sel?.day) || summary.days[0];
   const bucket = dayInfo?.buckets?.find((b) => b.bucket === sel?.bucket) || dayInfo?.buckets?.[0];
-  const dir = Number.isFinite(bucket?.mean_dir_to_deg)
-    ? windCardinal(bucket.mean_dir_to_deg)
-    : null;
+  // With a dropped pin, slave this card to THAT point instead of the region
+  // mean (same helper the slider badge + map pin readout use).
+  const pin =
+    hover?.pinned && Number.isFinite(hover?.lng)
+      ? pinnedCurrent(hover.lng, hover.lat, sel)
+      : null;
+  const showKt = pin ? pin.kt : bucket?.mean_kt;
+  const dirDeg = pin ? pin.dirToDeg : bucket?.mean_dir_to_deg;
+  const dir = Number.isFinite(dirDeg) ? windCardinal(dirDeg) : null;
   return (
     <div className="wind-current-card">
       <div className="wind-current-stats">
         <div className="wcs-headline">
           <div className="wcs-time">
             {dayInfo?.weekday ?? "Current"} {bucketLabel(bucket?.bucket)}
+            {pin && <span className="wcs-atpin"> · at pin</span>}
           </div>
           <span className="beta-badge">BETA</span>
         </div>
         <div className="wcs-kt-row">
           <span className="wcs-kt">
-            {Number.isFinite(bucket?.mean_kt) ? bucket.mean_kt.toFixed(1) : "--"}
+            {Number.isFinite(showKt) ? showKt.toFixed(1) : "--"}
             <span className="wcs-kt-unit"> kt</span>
           </span>
           <span className="wcs-dir">

@@ -109,8 +109,10 @@ test("Current, swell, wind, and mobile overlay features remain wired", () => {
   assert.match(mapShell, /<CurrentTimeline sel=\{currentSel\} setSel=\{setCurrentSel\}/);
   assert.match(mapShell, /<SwellTimeline sel=\{swellSel\} setSel=\{setSwellSel\}/);
   assert.match(mapShell, /<WindTimeline sel=\{windSel\} setSel=\{setWindSel\}/);
-  // Current-value cards live in DesktopLayout's controls panel.
-  assert.match(desktopLayout, /<CurrentCurrentCard sel=\{currentSel\} \/>/);
+  // Current-value cards live in DesktopLayout's controls panel. (2026-06-14:
+  // they now also take a `hover` prop so a dropped map pin slaves the card to
+  // that point — match the sel wiring without pinning the prop list.)
+  assert.match(desktopLayout, /<CurrentCurrentCard sel=\{currentSel\}/);
   assert.match(mobileSheet, /className="ms-overlay-quick"/);
   assert.match(mobileSheet, /aria-pressed=\{mpaOn\}/);
   assert.match(mobileSheet, /aria-pressed=\{bathyOn\}/);
