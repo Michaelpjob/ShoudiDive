@@ -3,8 +3,6 @@ import {
   bucketKey,
   currentSource,
   getCurrent5dSummary,
-  getCurrentSpeed,
-  getCurrentUV,
   windCardinal,
 } from "../lib/dataSource.js";
 import { pinnedCurrent } from "../lib/pinSample.js";
@@ -204,20 +202,18 @@ export default function CurrentTimeline({ sel, setSel, hover }) {
   });
 
   const bucket = current.bucket;
-  // With a pin dropped, the playhead reports the current AT THAT POINT
-  // through the forecast (bucket grid, always loaded) instead of the area
-  // mean — scrub to see how it sets at your spot, bucket by bucket.
+  // With a pin dropped, the playhead reports the current AT THAT POINT through
+  // the forecast instead of the area mean. pinnedCurrent() routes through the
+  // shared sampler so the badge agrees with the map pin readout and the left
+  // forecast card. (current5d is bucket-only — no hourly slot to prefer.)
   const pinned = hover?.pinned && Number.isFinite(hover?.lng);
-  const pinSlot = bucketKey(current.day.day, bucket.bucket);
-  const pinKt = pinned ? getCurrentSpeed(hover.lng, hover.lat, pinSlot) : NaN;
-  const pinUV = pinned ? getCurrentUV(hover.lng, hover.lat, pinSlot) : null;
-  const atPin = pinned && Number.isFinite(pinKt);
-  const showKt = atPin ? pinKt : bucket.mean_kt;
-  const pinDirTo = pinUV && Number.isFinite(pinUV.u) && Number.isFinite(pinUV.v)
-    ? windCardinal((Math.atan2(pinUV.u, pinUV.v) * 180 / Math.PI + 360) % 360)
+  const pinC = pinned
+    ? pinnedCurrent(hover.lng, hover.lat, { day: current.day.day, bucket: bucket.bucket })
     : null;
+  const atPin = pinned && pinC != null;
+  const showKt = atPin ? pinC.kt : bucket.mean_kt;
   const dir = atPin
-    ? pinDirTo
+    ? (Number.isFinite(pinC.dirToDeg) ? windCardinal(pinC.dirToDeg) : null)
     : (Number.isFinite(bucket.mean_dir_to_deg) ? windCardinal(bucket.mean_dir_to_deg) : null);
   const badgeClamp =
     playheadFrac < 0.1 ? "left" : playheadFrac > 0.9 ? "right" : "center";

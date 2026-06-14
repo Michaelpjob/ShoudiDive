@@ -2,12 +2,10 @@ import { useEffect, useRef } from "react";
 import {
   getSwell5dSummary,
   getSwell5dHourlyStats,
-  getSwell5dStats,
   loadSwell5dHourly,
   windCardinal,
 } from "../lib/dataSource.js";
 import { pinnedSwell } from "../lib/pinSample.js";
-import { bucketKey } from "../lib/loaders/decoders.js";
 import { useTimelineDrag } from "./useTimelineDrag.js";
 
 // Bucket → first hour (mirrors the wind timeline so a bucket-only
@@ -213,10 +211,12 @@ export default function SwellTimeline({ sel, setSel, hover }) {
       : bucketStats?.mean_dp_deg ?? null;
 
   // With a pin dropped, the playhead reports the swell AT THAT POINT through
-  // the forecast (bucket grid, always loaded) instead of the area mean.
+  // the forecast. pinnedSwell() samples the SAME slot the map paints (hourly
+  // once its grid is in, bucket mean while it loads) so the badge agrees with
+  // the map pin readout and the left forecast card.
   const pinned = hover?.pinned && Number.isFinite(hover?.lng);
-  const pinSw = pinned ? getSwell5dStats(hover.lng, hover.lat, bucketKey(selDay, bucketName)) : null;
-  const atPin = pinned && pinSw && Number.isFinite(pinSw.hs);
+  const pinSw = pinned ? pinnedSwell(hover.lng, hover.lat, sel) : null;
+  const atPin = pinned && pinSw != null;
   const showHsFt = atPin ? pinSw.hs * 3.28084 : displayHsFt;
   const showTp = atPin ? pinSw.tp : displayTp;
   const displayDp = atPin && Number.isFinite(pinSw.dp) ? pinSw.dp : regionDp;
