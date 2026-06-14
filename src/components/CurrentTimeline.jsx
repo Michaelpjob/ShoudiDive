@@ -3,6 +3,8 @@ import {
   bucketKey,
   currentSource,
   getCurrent5dSummary,
+  getCurrentSpeed,
+  getCurrentUV,
   windCardinal,
 } from "../lib/dataSource.js";
 import { findTodayDay } from "../lib/today.js";
@@ -123,7 +125,7 @@ export function CurrentCurrentCard({ sel }) {
   );
 }
 
-export default function CurrentTimeline({ sel, setSel }) {
+export default function CurrentTimeline({ sel, setSel, hover }) {
   const summary = getCurrent5dSummary();
   const ref = useRef(null);
   const [dragging, setDragging] = useState(false);
@@ -194,9 +196,21 @@ export default function CurrentTimeline({ sel, setSel }) {
   });
 
   const bucket = current.bucket;
-  const dir = Number.isFinite(bucket.mean_dir_to_deg)
-    ? windCardinal(bucket.mean_dir_to_deg)
+  // With a pin dropped, the playhead reports the current AT THAT POINT
+  // through the forecast (bucket grid, always loaded) instead of the area
+  // mean — scrub to see how it sets at your spot, bucket by bucket.
+  const pinned = hover?.pinned && Number.isFinite(hover?.lng);
+  const pinSlot = bucketKey(current.day.day, bucket.bucket);
+  const pinKt = pinned ? getCurrentSpeed(hover.lng, hover.lat, pinSlot) : NaN;
+  const pinUV = pinned ? getCurrentUV(hover.lng, hover.lat, pinSlot) : null;
+  const atPin = pinned && Number.isFinite(pinKt);
+  const showKt = atPin ? pinKt : bucket.mean_kt;
+  const pinDirTo = pinUV && Number.isFinite(pinUV.u) && Number.isFinite(pinUV.v)
+    ? windCardinal((Math.atan2(pinUV.u, pinUV.v) * 180 / Math.PI + 360) % 360)
     : null;
+  const dir = atPin
+    ? pinDirTo
+    : (Number.isFinite(bucket.mean_dir_to_deg) ? windCardinal(bucket.mean_dir_to_deg) : null);
   const badgeClamp =
     playheadFrac < 0.1 ? "left" : playheadFrac > 0.9 ? "right" : "center";
 
@@ -221,14 +235,15 @@ export default function CurrentTimeline({ sel, setSel }) {
         <div className={`tl-playhead-badge align-${badgeClamp}`}>
           <span className="tl-pb-time">
             {current.day.weekday.slice(0, 3)} {bucketLabel(bucket.bucket)}
+            {atPin && <span className="tl-pb-atpin"> · at pin</span>}
           </span>
-          {Number.isFinite(bucket.mean_kt) && (
-            <span className="tl-pb-kt" style={{ background: ktColor(bucket.mean_kt) }}>
-              {bucket.mean_kt.toFixed(1)} kt
+          {Number.isFinite(showKt) && (
+            <span className="tl-pb-kt" style={{ background: ktColor(showKt) }}>
+              {showKt.toFixed(1)} kt
             </span>
           )}
           {dir && <span className="tl-pb-dir">to {dir}</span>}
-          {Number.isFinite(bucket.consistency) && (
+          {!atPin && Number.isFinite(bucket.consistency) && (
             <span className="tl-pb-dir">{bucket.consistency}% steady</span>
           )}
           {/* 2026-05-25: "~" source-tier marker removed. The TopBar

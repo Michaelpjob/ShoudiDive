@@ -293,8 +293,11 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
   }
 
   function onMove(e) {
+    // Over a gesture child (timeline scrubber, panel) we don't pan — but
+    // we must NOT clear the pin here. The pin is persistent; clearing it
+    // on mouse-over was what made the value revert to the area mean the
+    // instant you reached for the time slider.
     if (isMapGestureChildTarget(e.target)) {
-      setHover(null);
       return;
     }
     const r = stageRef.current.getBoundingClientRect();
@@ -793,13 +796,13 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
         <SstTimeline sel={sstActiveSel} setSel={setSstActiveSel} units={units} mode={activeSstMode} />
       )}
       {layer === "wind" && (
-        <WindTimeline sel={windSel} setSel={setWindSel} />
+        <WindTimeline sel={windSel} setSel={setWindSel} hover={hoverForUI} />
       )}
       {layer === "swell" && (
-        <SwellTimeline sel={swellSel} setSel={setSwellSel} />
+        <SwellTimeline sel={swellSel} setSel={setSwellSel} hover={hoverForUI} />
       )}
       {layer === "current" && (
-        <CurrentTimeline sel={currentSel} setSel={setCurrentSel} />
+        <CurrentTimeline sel={currentSel} setSel={setCurrentSel} hover={hoverForUI} />
       )}
 
       <DesktopLayout

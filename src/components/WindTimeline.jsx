@@ -2,8 +2,11 @@ import { useEffect, useRef } from "react";
 import {
   getWind5dSummary,
   getWind5dHourlyStats,
+  getWind5dSpeed,
+  getWind5dUV,
   loadWind5dHourly,
   windCardinal,
+  windCompass,
 } from "../lib/dataSource.js";
 import { useTimelineDrag } from "./useTimelineDrag.js";
 
@@ -63,7 +66,7 @@ function ktColor(kt) {
   return KT_STOPS[KT_STOPS.length - 1].c;
 }
 
-export default function WindTimeline({ sel, setSel }) {
+export default function WindTimeline({ sel, setSel, hover }) {
   const summary = getWind5dSummary();
   const ref = useRef(null);
 
@@ -124,15 +127,31 @@ export default function WindTimeline({ sel, setSel }) {
   const dayInfo = summary.days[selDay];
   const bucketName = hourToBucket(selHour);
   const bucketStats = dayInfo?.buckets?.find((b) => b.bucket === bucketName);
-  const displayKt =
+  const regionKt =
     stats && Number.isFinite(stats.kt)
       ? stats.kt
       : bucketStats?.mean_kt ?? null;
-  const displayDir =
+  const regionDir =
     stats && Number.isFinite(stats.dir)
       ? stats.dir
       : bucketStats?.mean_dir_deg ?? null;
-  const isReal = stats != null;
+
+  // When a pin is dropped, the playhead reports THAT location through time
+  // instead of the area mean — so scrubbing answers "what's the wind at my
+  // spot, bucket by bucket". Sample at the BUCKET key (all 25 bucket grids
+  // are decoded at load), NOT the hourly key the map may use mid-scrub
+  // (those load lazily per day → NaN until ready).
+  const pinned = hover?.pinned && Number.isFinite(hover?.lng);
+  const pinSlot = `d${selDay}_${bucketName}`;
+  const pinKt = pinned ? getWind5dSpeed(hover.lng, hover.lat, pinSlot) : null;
+  const pinUV = pinned ? getWind5dUV(hover.lng, hover.lat, pinSlot) : null;
+  const pinDir = pinUV && Number.isFinite(pinUV.u) && Number.isFinite(pinUV.v)
+    ? windCompass(pinUV.u, pinUV.v) : null;
+  const atPin = pinned && Number.isFinite(pinKt);
+
+  const displayKt = atPin ? pinKt : regionKt;
+  const displayDir = atPin && Number.isFinite(pinDir) ? pinDir : regionDir;
+  const isReal = atPin || stats != null;
 
   // Day stripes — alternating bg so the boundaries are visible at a glance.
   const dayCells = summary.days.map((d, i) => {
@@ -198,6 +217,7 @@ export default function WindTimeline({ sel, setSel }) {
         <div className={`tl-playhead-badge align-${badgeClamp}`}>
           <span className="tl-pb-time">
             {dayInfo?.weekday?.slice(0, 3)} {formatHour(selHour)}
+            {atPin && <span className="tl-pb-atpin"> · at pin</span>}
           </span>
           {Number.isFinite(displayKt) && (
             <span

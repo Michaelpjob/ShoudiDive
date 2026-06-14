@@ -2,9 +2,11 @@ import { useEffect, useRef } from "react";
 import {
   getSwell5dSummary,
   getSwell5dHourlyStats,
+  getSwell5dStats,
   loadSwell5dHourly,
   windCardinal,
 } from "../lib/dataSource.js";
+import { bucketKey } from "../lib/loaders/decoders.js";
 import { useTimelineDrag } from "./useTimelineDrag.js";
 
 // Bucket → first hour (mirrors the wind timeline so a bucket-only
@@ -131,7 +133,7 @@ export function SwellCurrentCard({ sel }) {
   );
 }
 
-export default function SwellTimeline({ sel, setSel }) {
+export default function SwellTimeline({ sel, setSel, hover }) {
   const summary = getSwell5dSummary();
   const ref = useRef(null);
 
@@ -195,10 +197,19 @@ export default function SwellTimeline({ sel, setSel }) {
     stats && Number.isFinite(stats.tp)
       ? stats.tp
       : bucketStats?.mean_tp_s ?? null;
-  const displayDp =
+  const regionDp =
     stats && Number.isFinite(stats.dp)
       ? stats.dp
       : bucketStats?.mean_dp_deg ?? null;
+
+  // With a pin dropped, the playhead reports the swell AT THAT POINT through
+  // the forecast (bucket grid, always loaded) instead of the area mean.
+  const pinned = hover?.pinned && Number.isFinite(hover?.lng);
+  const pinSw = pinned ? getSwell5dStats(hover.lng, hover.lat, bucketKey(selDay, bucketName)) : null;
+  const atPin = pinned && pinSw && Number.isFinite(pinSw.hs);
+  const showHsFt = atPin ? pinSw.hs * 3.28084 : displayHsFt;
+  const showTp = atPin ? pinSw.tp : displayTp;
+  const displayDp = atPin && Number.isFinite(pinSw.dp) ? pinSw.dp : regionDp;
   const isReal = stats != null;
 
   const dayCells = summary.days.map((d, i) => {
@@ -262,18 +273,19 @@ export default function SwellTimeline({ sel, setSel }) {
         <div className={`tl-playhead-badge align-${badgeClamp}`}>
           <span className="tl-pb-time">
             {dayInfo?.weekday?.slice(0, 3)} {formatHour(selHour)}
+            {atPin && <span className="tl-pb-atpin"> · at pin</span>}
           </span>
-          {Number.isFinite(displayHsFt) && (
+          {Number.isFinite(showHsFt) && (
             <span
               className="tl-pb-kt"
-              style={{ background: hsColor(displayHsM) }}
+              style={{ background: hsColor(showHsFt / 3.28084) }}
             >
-              {displayHsFt.toFixed(1)} ft
+              {showHsFt.toFixed(1)} ft
             </span>
           )}
-          {Number.isFinite(displayTp) && (
+          {Number.isFinite(showTp) && (
             <span className="tl-pb-dir">
-              {displayTp.toFixed(0)} s
+              {showTp.toFixed(0)} s
             </span>
           )}
           {Number.isFinite(displayDp) && (
@@ -281,7 +293,7 @@ export default function SwellTimeline({ sel, setSel }) {
               {dirArrow(displayDp)} {windCardinal(displayDp)}
             </span>
           )}
-          {!isReal && Number.isFinite(displayHsFt) && (
+          {!atPin && !isReal && Number.isFinite(displayHsFt) && (
             <span className="tl-pb-est" title="Bucket-mean estimate; per-hour grid still loading">
               ~
             </span>
