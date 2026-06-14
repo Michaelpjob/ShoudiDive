@@ -1,6 +1,6 @@
-# Validation watchdog — 2026-06-13T22:40Z
+# Validation watchdog — 2026-06-14T09:36Z
 
-**3 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
+**2 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
@@ -10,13 +10,7 @@ Multiple scrapers may be silently broken.
 
 **Suggested action:** Open the latest hourly ingest workflow run; look for `FAILED` lines per scraper.
 
-### ⚠️ 2. 1 non-critical external feed(s) are red
-
-Red feeds: nasa_obdaac_search. Fallbacks may keep the model running, but redundancy is degraded.
-
-**Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
-
-### 🔴 3. Published-data freshness gate found 1 issue(s)
+### 🔴 2. Published-data freshness gate found 1 issue(s)
 
 Freshness/completeness failures: wave:layer_date_stale.
 
@@ -26,14 +20,14 @@ Freshness/completeness failures: wave:layer_date_stale.
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_nearshore` | 4 | 8.11 | -5.98 | 100% | 0.95 |
+| `bight_nearshore` | 4 | 8.21 | -6.58 | 100% | 0.98 |
 
 ## Per-source bias (informational)
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `dive-shop-diveviz` | 1 | -14.96 ft |
-| `dive-shop-justgetwet` | 3 | -2.98 ft |
+| `dive-shop-diveviz` | 1 | -14.91 ft |
+| `dive-shop-justgetwet` | 3 | -3.80 ft |
 
 ## How to act on this issue
 
