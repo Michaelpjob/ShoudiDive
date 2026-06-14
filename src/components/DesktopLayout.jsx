@@ -36,18 +36,16 @@ import {
   getSST,
   getChl,
   getWindSpeed,
-  getWindUV,
   getCurrentSpeed,
-  getCurrentUV,
   getVizFt,
   getColumnAt,
   getColumnSpot,
-  windCompass,
   windCardinal,
   windSource,
   currentSource,
   getSwell5dStats,
 } from "../lib/dataSource.js";
+import { pinnedWind, pinnedCurrent, pinnedSwell } from "../lib/pinSample.js";
 import { sstColor, chlColor, SAVED_SPOTS, BBOX } from "../lib/mapData.js";
 import { activeRegion } from "../lib/region.js";
 import ConfidenceDot from "./ConfidenceDot.jsx";
@@ -76,7 +74,7 @@ function Chevron({ open }) {
 
 // Compact value readout for the legend metadata strip when the user is
 // hovering over the map. Returns null if the cursor doesn't have data.
-function hoverReadout(layer, hover, activeComposite, units) {
+function hoverReadout(layer, hover, activeComposite, units, sels = {}) {
   if (!hover) return null;
   const { lng, lat } = hover;
   if (layer === "sst") {
@@ -91,32 +89,27 @@ function hoverReadout(layer, hover, activeComposite, units) {
     if (!Number.isFinite(v)) return null;
     return `${v.toFixed(2)} mg/m³ at pin`;
   }
+  // Wind / current / swell go through the shared pin samplers so this readout,
+  // the slider playhead badge, and the left forecast card report ONE number for
+  // the pinned point (they used to sample three different slots/sources).
   if (layer === "wind") {
-    const kt = getWindSpeed(lng, lat, activeComposite);
-    if (!Number.isFinite(kt)) return null;
-    const { u, v } = getWindUV(lng, lat, activeComposite);
-    const dirStr =
-      Number.isFinite(u) && Number.isFinite(v)
-        ? ` ${windCardinal(windCompass(u, v))}`
-        : "";
-    return `${kt.toFixed(1)} kt${dirStr} at pin`;
+    const p = pinnedWind(lng, lat, sels.windSel);
+    if (!p) return null;
+    const dirStr = Number.isFinite(p.dir) ? ` ${windCardinal(p.dir)}` : "";
+    return `${p.kt.toFixed(1)} kt${dirStr} at pin`;
   }
   if (layer === "current") {
-    const kt = getCurrentSpeed(lng, lat, activeComposite);
-    if (!Number.isFinite(kt)) return null;
-    const { u, v } = getCurrentUV(lng, lat, activeComposite);
-    const dirStr =
-      Number.isFinite(u) && Number.isFinite(v)
-        ? ` to ${windCardinal((Math.atan2(u, v) * 180 / Math.PI + 360) % 360)}`
-        : "";
-    return `${kt.toFixed(1)} kt${dirStr} at pin`;
+    const p = pinnedCurrent(lng, lat, sels.currentSel);
+    if (!p) return null;
+    const dirStr = Number.isFinite(p.dirToDeg) ? ` to ${windCardinal(p.dirToDeg)}` : "";
+    return `${p.kt.toFixed(1)} kt${dirStr} at pin`;
   }
   if (layer === "swell") {
-    const w = getSwell5dStats(lng, lat, activeComposite);
-    if (!Number.isFinite(w.hs)) return null;
-    const ft = w.hs * 3.28084;
-    const tp = Number.isFinite(w.tp) ? ` · ${w.tp.toFixed(0)} s` : "";
-    const dp = Number.isFinite(w.dp) ? ` · ${windCardinal(w.dp)}` : "";
+    const p = pinnedSwell(lng, lat, sels.swellSel);
+    if (!p) return null;
+    const ft = p.hs * 3.28084;
+    const tp = Number.isFinite(p.tp) ? ` · ${p.tp.toFixed(0)} s` : "";
+    const dp = Number.isFinite(p.dp) ? ` · ${windCardinal(p.dp)}` : "";
     return `${ft.toFixed(1)} ft${tp}${dp}`;
   }
   if (layer === "viz") {
@@ -330,6 +323,7 @@ export default function DesktopLayout({
               <WindCurrentSelectionCard
                 sel={windSel}
                 setSel={setWindSel}
+                hover={hover}
               />
             </div>
           ) : layer === "swell" ? (
@@ -338,7 +332,7 @@ export default function DesktopLayout({
                 <span>5-day swell</span>
                 <span className="hint">drag the timeline below</span>
               </div>
-              <SwellCurrentCard sel={swellSel} />
+              <SwellCurrentCard sel={swellSel} hover={hover} />
             </div>
           ) : layer === "current" ? (
             <div className="composite wind-grid-host">
@@ -346,7 +340,7 @@ export default function DesktopLayout({
                 <span>Surface current</span>
                 <span className="hint">drag the timeline below</span>
               </div>
-              <CurrentCurrentCard sel={currentSel} />
+              <CurrentCurrentCard sel={currentSel} hover={hover} />
             </div>
           ) : (
             <div className="composite">
@@ -941,7 +935,7 @@ export default function DesktopLayout({
                 // data here — so it's always dismissable. Falls back to the
                 // active window / source line when there's no pin.
                 if (hover?.pinned) {
-                  const hv = hoverReadout(layer, hover, activeComposite, units);
+                  const hv = hoverReadout(layer, hover, activeComposite, units, { windSel, swellSel, currentSel });
                   return (
                     <span className="legend-pin-readout">
                       <span className="legend-pin-dot" aria-hidden="true" />

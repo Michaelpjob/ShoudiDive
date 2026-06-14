@@ -2,12 +2,10 @@ import { useEffect, useRef } from "react";
 import {
   getWind5dSummary,
   getWind5dHourlyStats,
-  getWind5dSpeed,
-  getWind5dUV,
   loadWind5dHourly,
   windCardinal,
-  windCompass,
 } from "../lib/dataSource.js";
+import { pinnedWind } from "../lib/pinSample.js";
 import { useTimelineDrag } from "./useTimelineDrag.js";
 
 // Bucket → first hour of that bucket (for selections that came from a card click).
@@ -138,20 +136,19 @@ export default function WindTimeline({ sel, setSel, hover }) {
 
   // When a pin is dropped, the playhead reports THAT location through time
   // instead of the area mean — so scrubbing answers "what's the wind at my
-  // spot, bucket by bucket". Sample at the BUCKET key (all 25 bucket grids
-  // are decoded at load), NOT the hourly key the map may use mid-scrub
-  // (those load lazily per day → NaN until ready).
+  // spot". pinnedWind() samples the SAME slot the map raster paints (the
+  // scrubbed hour once its grid is in, the bucket mean while it loads), so the
+  // badge agrees to the decimal with the map pin readout and the left forecast
+  // card. (.real is false on the bucket-mean fallback → flagged as an estimate.)
   const pinned = hover?.pinned && Number.isFinite(hover?.lng);
-  const pinSlot = `d${selDay}_${bucketName}`;
-  const pinKt = pinned ? getWind5dSpeed(hover.lng, hover.lat, pinSlot) : null;
-  const pinUV = pinned ? getWind5dUV(hover.lng, hover.lat, pinSlot) : null;
-  const pinDir = pinUV && Number.isFinite(pinUV.u) && Number.isFinite(pinUV.v)
-    ? windCompass(pinUV.u, pinUV.v) : null;
+  const pinSample = pinned ? pinnedWind(hover.lng, hover.lat, sel) : null;
+  const pinKt = pinSample ? pinSample.kt : null;
+  const pinDir = pinSample ? pinSample.dir : null;
   const atPin = pinned && Number.isFinite(pinKt);
 
   const displayKt = atPin ? pinKt : regionKt;
   const displayDir = atPin && Number.isFinite(pinDir) ? pinDir : regionDir;
-  const isReal = atPin || stats != null;
+  const isReal = atPin ? pinSample.real : stats != null;
 
   // Day stripes — alternating bg so the boundaries are visible at a glance.
   const dayCells = summary.days.map((d, i) => {
