@@ -191,7 +191,15 @@ const REGION_SAVED_SPOTS = {
     { id: "morro",     name: "Morro Bay",      lng: -120.88, lat: 35.36 },
     { id: "pt-concep", name: "Pt. Conception", lng: -120.47, lat: 34.45 },
     { id: "santabarb", name: "Santa Barbara",  lng: -119.70, lat: 34.40 },
-    { id: "santacruz", name: "Santa Cruz I.",  lng: -119.75, lat: 34.05 },
+    // Phase 2 — Channel Islands (detailed-chart targets; centres mirror
+    // SPOT_CENTRES in build_spot_bundles.py).
+    { id: "anacapa",     name: "Anacapa",          lng: -119.392, lat: 34.012 },
+    { id: "santacruz",   name: "Santa Cruz I.",    lng: -119.740, lat: 34.000 },
+    { id: "santarosa",   name: "Santa Rosa I.",    lng: -120.083, lat: 33.960 },
+    { id: "sanmiguel",   name: "San Miguel I.",    lng: -120.365, lat: 34.038 },
+    { id: "sbisland",    name: "Santa Barbara I.", lng: -119.035, lat: 33.475 },
+    { id: "sannicolas",  name: "San Nicolas I.",   lng: -119.500, lat: 33.240 },
+    { id: "sanclemente", name: "San Clemente I.",  lng: -118.450, lat: 32.920 },
     { id: "malibu",    name: "Malibu",         lng: -118.78, lat: 34.02 },
     { id: "catalina",  name: "Catalina",       lng: -118.45, lat: 33.39 },
     { id: "lajolla",   name: "La Jolla",       lng: -117.28, lat: 32.85 },
