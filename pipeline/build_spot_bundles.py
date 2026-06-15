@@ -108,6 +108,22 @@ SPOT_CENTRES = {
     "sbisland":    {"name": "Santa Barbara Is.", "lng": -119.035, "lat": 33.475},
     "sannicolas":  {"name": "San Nicolas Is.",   "lng": -119.500, "lat": 33.240},
     "sanclemente": {"name": "San Clemente Is.",  "lng": -118.450, "lat": 32.920},
+    # ── Phase 2: popular shore-diving hubs (S→N) ─────────────────────
+    "laguna":      {"name": "Laguna Beach",  "lng": -117.790, "lat": 33.542},
+    "palosverdes": {"name": "Palos Verdes",  "lng": -118.405, "lat": 33.740},
+    "redondo":     {"name": "Redondo Beach", "lng": -118.398, "lat": 33.842},
+    "malibu":      {"name": "Malibu",        "lng": -118.806, "lat": 34.001},
+    "refugio":     {"name": "Refugio",       "lng": -120.070, "lat": 34.464},
+    "pointlobos":  {"name": "Point Lobos",   "lng": -121.945, "lat": 36.518},
+    "monastery":   {"name": "Monastery",     "lng": -121.923, "lat": 36.534},
+    "jadecove":    {"name": "Jade Cove",     "lng": -121.502, "lat": 35.920},
+    "saltpoint":   {"name": "Salt Point",    "lng": -123.334, "lat": 38.567},
+    "mendocino":   {"name": "Mendocino",     "lng": -123.793, "lat": 39.275},
+    # ── Phase 2: Coronado Islands (Baja, just S of the border) ───────
+    # Bathy/contours/soundings come cross-border; kelp comes from the
+    # SBC LTER Landsat source (CDFW stops at the border) — see
+    # fetch_coronados_kelp / BUILD_BAJA_KELP wiring below.
+    "coronados":   {"name": "Coronados",     "lng": -117.270, "lat": 32.400},
 }
 
 # Mirror of frontend's SPOT_BUNDLE_RADIUS_KM. Same single-source-of-truth
@@ -141,6 +157,20 @@ SPOT_RADIUS_KM = {
     "sbisland":    5,
     "sannicolas":  12,
     "sanclemente": 22,
+    # Phase 2: shore-diving hubs (cove/reef scale; PV spans the peninsula).
+    "laguna":      4,
+    "palosverdes": 7,
+    "redondo":     3,
+    "malibu":      5,
+    "refugio":     5,
+    "pointlobos":  3,
+    "monastery":   3,
+    "jadecove":    3,
+    "saltpoint":   4,
+    "mendocino":   4,
+    # Coronado Islands chain spans ~10 km N-S (North Coronado → South
+    # Coronado); 9 km radius covers all four islets + the deep channel.
+    "coronados":   9,
 }
 
 # Max sounding depth (ft) kept in a spot bundle. 330 ft ≈ 100 m, the
@@ -272,6 +302,19 @@ SPOT_DEPTH_RANGES_M = {
     "sbisland":    (0, 600),
     "sannicolas":  (0, 700),
     "sanclemente": (0, 1100),
+    # Phase 2: shore-diving hubs. Canyon spots (Redondo, Monastery/Carmel
+    # Canyon) drop fast; NorCal/SB reefs are shallow shelf.
+    "laguna":      (0, 150),
+    "palosverdes": (0, 250),
+    "redondo":     (0, 400),
+    "malibu":      (0, 200),
+    "refugio":     (0, 120),
+    "pointlobos":  (0, 200),
+    "monastery":   (0, 400),
+    "jadecove":    (0, 300),
+    "saltpoint":   (0, 100),
+    "mendocino":   (0, 100),
+    "coronados":   (0, 400),   # deep channel between the islands + mainland
 }
 DEFAULT_DEPTH_RANGE_M = (0, 500)
 

@@ -188,6 +188,13 @@ export const ISLANDS = [
 const REGION_SAVED_SPOTS = {
   ca: [
     { id: "monterey",  name: "Monterey",       lng: -121.92, lat: 36.62 },
+    // Phase 2 — Central + NorCal shore-diving hubs
+    { id: "mendocino",  name: "Mendocino",     lng: -123.793, lat: 39.275 },
+    { id: "saltpoint",  name: "Salt Point",    lng: -123.334, lat: 38.567 },
+    { id: "pointlobos", name: "Point Lobos",   lng: -121.945, lat: 36.518 },
+    { id: "monastery",  name: "Monastery",     lng: -121.923, lat: 36.534 },
+    { id: "jadecove",   name: "Jade Cove",     lng: -121.502, lat: 35.920 },
+    { id: "refugio",    name: "Refugio",       lng: -120.070, lat: 34.464 },
     { id: "morro",     name: "Morro Bay",      lng: -120.88, lat: 35.36 },
     { id: "pt-concep", name: "Pt. Conception", lng: -120.47, lat: 34.45 },
     { id: "santabarb", name: "Santa Barbara",  lng: -119.70, lat: 34.40 },
@@ -200,7 +207,10 @@ const REGION_SAVED_SPOTS = {
     { id: "sbisland",    name: "Santa Barbara I.", lng: -119.035, lat: 33.475 },
     { id: "sannicolas",  name: "San Nicolas I.",   lng: -119.500, lat: 33.240 },
     { id: "sanclemente", name: "San Clemente I.",  lng: -118.450, lat: 32.920 },
-    { id: "malibu",    name: "Malibu",         lng: -118.78, lat: 34.02 },
+    { id: "malibu",      name: "Malibu",        lng: -118.806, lat: 34.001 },
+    { id: "palosverdes", name: "Palos Verdes",  lng: -118.405, lat: 33.740 },
+    { id: "redondo",     name: "Redondo Beach", lng: -118.398, lat: 33.842 },
+    { id: "laguna",      name: "Laguna Beach",  lng: -117.790, lat: 33.542 },
     { id: "catalina",  name: "Catalina",       lng: -118.45, lat: 33.39 },
     { id: "lajolla",   name: "La Jolla",       lng: -117.28, lat: 32.85 },
     { id: "sandiego",  name: "San Diego",      lng: -117.18, lat: 32.70 },
