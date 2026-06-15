@@ -1,5 +1,5 @@
 {
-  "computed_at": "2026-06-14T09:36:19Z",
+  "computed_at": "2026-06-15T12:47:34Z",
   "manifest": "public/data/manifest.json",
   "layers_checked": [
     "sst",
@@ -12,16 +12,23 @@
     "precip"
   ],
   "summary": {
-    "total_findings": 1,
+    "total_findings": 2,
     "healthy": false
   },
   "findings": [
     {
       "severity": "high",
       "code": "layer_date_stale",
-      "title": "Layer wave is 20.9d old",
+      "title": "Layer wave is 22.0d old",
       "layer": "wave",
       "detail": "threshold=2d window=now"
+    },
+    {
+      "severity": "high",
+      "code": "sst_source_lag",
+      "title": "SST is 2.0d behind latest MUR availability",
+      "layer": "sst",
+      "detail": "published=2026-06-12 source=2026-06-14 point=San Clemente Island"
     }
   ]
 }
