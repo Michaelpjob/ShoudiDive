@@ -31,7 +31,7 @@ except ModuleNotFoundError:
     from regions import active_region
 
 REGION = active_region()
-BBOX = REGION.bbox
+BBOX = active_region().bbox  # PR-X-2 contract literal (see fetch.py)
 
 # CDFW Open Data Portal — California Marine Protected Areas (ds582).
 # Direct GeoJSON download in WGS84.
