@@ -379,6 +379,36 @@ def test_wind_speed_in_plausible_range(region):
     )
 
 
+def test_coverage_guard_floors_match_gate():
+    """The producer-side coverage guard (check_coverage_guard.FLOORS) exists to
+    keep test_no_nan_floods green by refusing to commit a layer below the gate's
+    floor — restoring last-good instead. If the two drift apart, the guard
+    protects the wrong threshold. Every (artifact, region) pair the guard knows
+    about that the gate also covers must match exactly; baja is guard-only (the
+    gate doesn't parametrize it yet)."""
+    try:
+        from pipeline.check_coverage_guard import FLOORS as GUARD_FLOORS
+    except ModuleNotFoundError:
+        from check_coverage_guard import FLOORS as GUARD_FLOORS
+
+    for region, layers in GUARD_FLOORS.items():
+        for artifact, guard_floor in layers.items():
+            key = (artifact, region)
+            if key in LAYER_VALID_FRAC_FLOOR:
+                assert guard_floor == LAYER_VALID_FRAC_FLOOR[key], (
+                    f"coverage-guard floor {key}={guard_floor} has drifted from "
+                    f"gate floor {LAYER_VALID_FRAC_FLOOR[key]} — keep "
+                    f"check_coverage_guard.FLOORS in sync with "
+                    f"LAYER_VALID_FRAC_FLOOR"
+                )
+            else:
+                # Guard-only region/layer (baja isn't in the gate yet). The
+                # guard must still only claim layers it can decode + restore.
+                assert artifact in {"sst_1d.png", "chl_1d.png"}, (
+                    f"coverage guard has an unexpected guard-only entry {key}"
+                )
+
+
 @pytest.mark.parametrize("region", REGIONS)
 def test_bathy_depth_in_plausible_range(region):
     """Bathy depth: 0 = shoreline, 6000 = deep abyss. Encoded as 1..255

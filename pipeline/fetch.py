@@ -88,6 +88,14 @@ REQUEST_HEADERS = {
     "User-Agent": "shouldidive-data-pipeline/1.0 (+https://shouldidive.com)",
 }
 
+# ERDDAP per-request budget. Tightened 2026-06-16: a NOAA outage (MUR 404 +
+# the NOAA-blended fallback returning 503 *slowly* — ~60 s each) made the old
+# 180 s × 3-retry default grind for 75 min across the day-walk and time the
+# fetch step out. 90 s + one retry bounds a dead source so the step fails
+# fast; the coverage guard (check_coverage_guard.py) then keeps last-good.
+ERDDAP_TIMEOUT = 90
+ERDDAP_RETRIES = 2
+
 ROOT = Path(__file__).resolve().parents[1]
 # Region-aware output dir. CA stays at `public/data/` (frontend-visible
 # path the React app expects). PNW + tropical land under
@@ -255,15 +263,12 @@ def fetch_day(
         if not nc_path.exists():
             url = erddap_url(source_cfg, d, source_stride)
             print(f"  GET {layer} {d}{suffix}", flush=True)
-            # Stage 6 — replaced the bare `requests.get(url, timeout=180,
-            # headers=REQUEST_HEADERS)` with the shared `http_get`. Same
-            # User-Agent, same 180s timeout, BUT now exponential-backoff
-            # retries the call on transient transport failures and 5xx /
-            # 429 responses (~2/4s sleeps between attempts). 4xx (incl.
-            # the dataset-403 case the legacy comments document at PFEG)
-            # is returned without retry — same as before. The host-
-            # fallback above is unchanged.
-            r = http_get(url, timeout=180)
+            # Shared http_get adds exponential-backoff retries on transient
+            # transport failures + 5xx/429; 4xx returns without retry. Uses
+            # the tightened ERDDAP budget (90 s + 1 retry) so a slow-503 or
+            # dead source fails fast instead of grinding the whole day-walk
+            # — the host-fallback above + the coverage guard handle the rest.
+            r = http_get(url, timeout=ERDDAP_TIMEOUT, retries=ERDDAP_RETRIES)
             if r is None:
                 # http_get returns None when every retry attempt raised
                 # a transport exception. Match the legacy log line so

@@ -74,6 +74,15 @@ jobs:
         # public/data/baja/ automatically.
         run: python pipeline/check_fetch_freshness.py --layer sst
 
+      - name: Coverage guard — keep last-good for any near-empty layer
+        continue-on-error: true
+        # Restores the prior good PNG from HEAD for any ocean layer that came
+        # out below its valid floor (a dead ERDDAP source emits a near-empty
+        # 1-day composite). SHOULDIDIVE_REGION=baja is inherited from the job
+        # env, so it checks public/data/baja/ with the baja floors. See
+        # refresh-ca-data.yml + check_coverage_guard.py for the full rationale.
+        run: python pipeline/check_coverage_guard.py
+
       - name: Fetch 7-day precipitation
         continue-on-error: true
         timeout-minutes: 5
