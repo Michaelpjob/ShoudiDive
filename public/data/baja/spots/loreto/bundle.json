@@ -1,0 +1,57 @@
+{
+  "id": "loreto",
+  "name": "Loreto",
+  "centre": {
+    "lng": -111.34,
+    "lat": 26.01
+  },
+  "bbox": {
+    "lng_min": -111.43021864941892,
+    "lng_max": -111.24978135058109,
+    "lat_min": 25.92891891891892,
+    "lat_max": 26.091081081081082
+  },
+  "generated_at": "2026-06-16T18:11:27Z",
+  "layers": {
+    "bathy": {
+      "url": "bathy.png",
+      "width": 480,
+      "height": 480,
+      "depth_range_m": [
+        0,
+        500
+      ],
+      "encoding": "linear_8bit_0nan"
+    },
+    "contours": {
+      "url": "contours.geojson",
+      "intervals_m": [
+        1,
+        5,
+        25,
+        100
+      ],
+      "levels": 31
+    },
+    "coastline": {
+      "url": "coastline.geojson",
+      "features": 1
+    },
+    "mpa": {
+      "url": "mpa.geojson",
+      "features": 1
+    },
+    "soundings": {
+      "url": "soundings.geojson",
+      "features": 76
+    }
+  },
+  "sources": {
+    "bathy": "NOAA NCEI DEM global mosaic exportImage (CUDEM/coastal DEMs nearshore, best-available blend)",
+    "coastline": "OSM natural=coastline via fetch_coastline.py \u2014 clipped from global land.geojson",
+    "kelp": "CDFW BIO_CA_Kelp2016 observed aerial-survey canopy (clipped)",
+    "mpa": "CONANP federal ANPs 2020 (marine + island, clipped)",
+    "landmarks": "Curated per-spot dive-site / harbor labels",
+    "soundings": "Depth soundings sampled from the spot DEM on a 24x24 lattice"
+  }
+}
