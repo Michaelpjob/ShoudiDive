@@ -250,8 +250,8 @@ const REGION_SAVED_SPOTS = {
   baja: [
     // Pacific side — surf + dive points (N to S)
     { id: "k38",          name: "K-38",            lng: -117.05, lat: 32.36 },
-    { id: "salsipuedes",  name: "Salsipuedes",     lng: -116.78, lat: 31.66 },
-    { id: "sacramento",   name: "Sacramento Reef", lng: -116.04, lat: 30.55 },
+    { id: "salsipuedes",  name: "Salsipuedes",     lng: -116.78, lat: 31.98 },
+    { id: "sacramento",   name: "Sacramento Reef", lng: -115.83, lat: 29.75 },
     { id: "quatro-casas", name: "Quatro Casas",    lng: -116.05, lat: 30.75 },
     { id: "santa-ros",    name: "Santa Rosalillita",lng: -114.27, lat: 28.65 },
     { id: "san-benito",   name: "Isla San Benito", lng: -115.55, lat: 28.31 },

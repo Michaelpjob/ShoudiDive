@@ -181,8 +181,8 @@ SPOT_RADIUS_KM = {
 # the render and bump if clipped, same as the CA islands.
 BAJA_SPOT_CENTRES = {
     # Pacific side — kelp coast (California Current)
-    "salsipuedes":  {"name": "Salsipuedes",      "lng": -116.78, "lat": 31.66},
-    "sacramento":   {"name": "Sacramento Reef",  "lng": -116.04, "lat": 30.55},
+    "salsipuedes":  {"name": "Salsipuedes",      "lng": -116.78, "lat": 31.98},
+    "sacramento":   {"name": "Sacramento Reef",  "lng": -115.83, "lat": 29.75},
     "san-benito":   {"name": "Islas San Benito", "lng": -115.55, "lat": 28.31},
     "cedros":       {"name": "Isla Cedros",      "lng": -115.20, "lat": 28.20},
     "bahia-tort":   {"name": "Bahia Tortugas",   "lng": -114.88, "lat": 27.69},
@@ -1908,6 +1908,22 @@ def build_spot(spot_id: str, *, force: bool) -> bool:
         }
         print(f"    [landmarks] {len(landmark_features)} features → landmarks.geojson")
 
+    # Source attribution — kelp + mpa vary by spot/region (Landsat vs CDFW;
+    # CONANP vs CDFW), so reflect what was actually used rather than the CA
+    # defaults. kelp: prefer the layer's own source (set by the Landsat
+    # fetcher); fall back to the CDFW label when kelp came from the statewide
+    # CDFW clip. mpa: CONANP for baja, CDFW elsewhere.
+    region_name = REGION.name if hasattr(REGION, "name") else "ca"
+    kelp_source_label = (
+        layers_meta.get("kelp", {}).get("source")
+        or "CDFW BIO_CA_Kelp2016 observed aerial-survey canopy (clipped)"
+    )
+    mpa_source_label = (
+        "CONANP federal ANPs 2020 (marine + island, clipped)"
+        if region_name == "baja"
+        else "CDFW MPA ds582 (clipped)"
+    )
+
     # 4. Bundle manifest
     manifest = {
         "id": spot_id,
@@ -1919,8 +1935,8 @@ def build_spot(spot_id: str, *, force: bool) -> bool:
         "sources": {
             "bathy":     bathy_source,
             "coastline": "OSM natural=coastline via fetch_coastline.py — clipped from global land.geojson",
-            "kelp":      "CDFW BIO_CA_Kelp2016 observed aerial-survey canopy (clipped)",
-            "mpa":       "CDFW MPA ds582 (clipped)",
+            "kelp":      kelp_source_label,
+            "mpa":       mpa_source_label,
             "landmarks": "Curated per-spot dive-site / harbor labels",
             "soundings": "Depth soundings sampled from the spot DEM on a 24x24 lattice",
         },
