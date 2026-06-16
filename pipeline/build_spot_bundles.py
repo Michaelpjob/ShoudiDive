@@ -1279,6 +1279,98 @@ KELP_SURVEY_LAYERS = [  # (service layer index, survey year)
 ]
 
 
+# Spots whose kelp comes from the SBC LTER "Kelp from Landsat" dataset
+# instead of CDFW. CDFW's "Kelp Forests California 2002-2016" survey has
+# no coverage in Baja (Coronados), thin/absent coverage for NorCal bull
+# kelp (Salt Point, Mendocino), and timed out on some islands. The
+# compact CA+Baja extract lives at pipeline/data/landsat_kelp_ca.nc and
+# is refreshed quarterly by .github/workflows/refresh-kelp.yml so the
+# spot bundles always rebuild against fresh canopy.
+KELP_SOURCES_LANDSAT = {
+    "coronados", "jadecove", "malibu", "palosverdes",
+    "mendocino", "saltpoint", "sanclemente", "sannicolas",
+}
+_LANDSAT_KELP_CACHE = None
+
+
+def _load_landsat_kelp():
+    """Lazily load the compact CA+Baja Landsat kelp extract once."""
+    global _LANDSAT_KELP_CACHE
+    if _LANDSAT_KELP_CACHE is None:
+        import xarray as xr
+        p = REPO_ROOT / "pipeline" / "data" / "landsat_kelp_ca.nc"
+        ds = xr.open_dataset(p)
+        _LANDSAT_KELP_CACHE = (
+            ds.longitude.values, ds.latitude.values,
+            ds.recent_area.values, ds.attrs.get("recent_quarter", "?"),
+        )
+    return _LANDSAT_KELP_CACHE
+
+
+def fetch_spot_kelp_landsat(spot_id: str, bbox: dict):
+    """Per-spot kelp from the SBC LTER Landsat extract.
+
+    Emits the same two classes fetch_spot_kelp does, so the builder and
+    frontend treat both sources identically:
+      * "Kelp Subsurface" — every ever-kelp pixel in the bbox (extent).
+      * "Kelp Canopy"     — pixels with canopy in the most recent year.
+    Each 30 m pixel becomes a square; squares are unioned + lightly
+    simplified. Returns (feature_collection, meta) or None.
+    """
+    if os.environ.get("BUILD_SKIP_KELP") == "1":
+        return None
+    try:
+        import math
+        from shapely.geometry import box as shp_box, mapping
+        from shapely.ops import unary_union
+    except ImportError:
+        return None
+    try:
+        lon, lat, recent, recent_q = _load_landsat_kelp()
+    except Exception as e:
+        print(f"    [kelp] Landsat extract unavailable ({e!s}) — falling back")
+        return None
+    m = ((lon >= bbox["lng_min"]) & (lon <= bbox["lng_max"]) &
+         (lat >= bbox["lat_min"]) & (lat <= bbox["lat_max"]))
+    if not m.any():
+        return None
+    lo, la, re = lon[m], lat[m], recent[m]
+    latm = (bbox["lat_min"] + bbox["lat_max"]) / 2.0
+    dlat = 15.0 / 110540.0
+    dlon = 15.0 / (111320.0 * math.cos(math.radians(latm)))
+
+    def _polys(loi, lai):
+        if len(loi) == 0:
+            return None
+        u = unary_union([shp_box(x - dlon, y - dlat, x + dlon, y + dlat)
+                         for x, y in zip(loi, lai)])
+        return u.simplify(0.00008)  # ~9 m — drop near-collinear pixel edges
+
+    ext = _polys(lo, la)
+    cm = re > 0
+    can = _polys(lo[cm], la[cm])
+    spot_name = SPOT_CENTRES.get(spot_id, {}).get("name", spot_id)
+    feats = []
+    if ext is not None and not ext.is_empty:
+        feats.append({"type": "Feature",
+                      "properties": {"id": f"{spot_id}-kelp-extent",
+                                     "name": f"{spot_name} surveyed kelp extent",
+                                     "className": "Kelp Subsurface"},
+                      "geometry": mapping(ext)})
+    if can is not None and not can.is_empty:
+        feats.append({"type": "Feature",
+                      "properties": {"id": f"{spot_id}-kelp-canopy",
+                                     "name": f"{spot_name} recent kelp canopy",
+                                     "className": "Kelp Canopy"},
+                      "geometry": mapping(can)})
+    if not feats:
+        return None
+    fc = {"type": "FeatureCollection", "features": feats}
+    meta = {"source": "SBC LTER kelp from Landsat (knb-lter-sbc.74)",
+            "canopy_quarter": recent_q, "pixel_m": 30}
+    return fc, meta
+
+
 def fetch_spot_kelp(spot_id: str, bbox: dict):
     """Full-resolution multi-year kelp for one spot bbox.
 
@@ -1631,7 +1723,10 @@ def build_spot(spot_id: str, *, force: bool) -> bool:
     # statewide clip (its curated polygons genuinely match spot-detail
     # fidelity).
     kelp_done = False
-    spot_kelp = fetch_spot_kelp(spot_id, bbox)
+    if spot_id in KELP_SOURCES_LANDSAT:
+        spot_kelp = fetch_spot_kelp_landsat(spot_id, bbox)
+    else:
+        spot_kelp = fetch_spot_kelp(spot_id, bbox)
     if spot_kelp is not None:
         kelp_fc, kelp_meta = spot_kelp
         out_path = bundle_dir / "kelp.geojson"
@@ -1642,10 +1737,9 @@ def build_spot(spot_id: str, *, force: bool) -> bool:
             **kelp_meta,
         }
         size_kb = out_path.stat().st_size / 1024
+        _ksrc = "Landsat" if "Landsat" in kelp_meta.get("source", "") else "CDFW"
         print(f"    [kelp] {len(kelp_fc['features'])} features "
-              f"(canopy year {kelp_meta['canopy_year']}, "
-              f"{len(kelp_meta['years_with_data'])} survey years) "
-              f"{size_kb:.0f} KB")
+              f"({_ksrc}) {size_kb:.0f} KB")
         kelp_done = True
 
     fallback_layers = [] if kelp_done else [("kelp", "kelp-canopy.geojson")]
