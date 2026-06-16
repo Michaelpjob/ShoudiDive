@@ -1906,6 +1906,16 @@ def main() -> int:
     target_spots = [args.spot] if args.spot else list(SPOT_CENTRES.keys())
     built = []
     failed = []
+
+    def _on_disk_spots():
+        # Spots that currently have a complete bundle on disk. The index is
+        # derived from this (not just this run's successes) so a failed
+        # rebuild doesn't drop a spot whose prior bundle is still present.
+        return [
+            d.name for d in sorted(SPOTS_DIR.iterdir())
+            if d.is_dir() and (d / "bundle.json").exists()
+        ] if SPOTS_DIR.exists() else []
+
     for spot_id in target_spots:
         try:
             if build_spot(spot_id, force=args.force):
@@ -1915,16 +1925,18 @@ def main() -> int:
         except Exception as e:
             print(f"  [{spot_id}] FAILED: {e!r}")
             failed.append(spot_id)
+        # Re-emit the index after EVERY spot. Building all 22 sequentially
+        # can exceed the CI step's hard timeout; a single final write would
+        # then be killed before it runs, dropping the whole run's progress
+        # from index.json (this stranded the islands + hubs on 2026-06-16
+        # and forced a manual seed). Writing incrementally means whatever
+        # finished before a timeout stays discoverable + committable; the
+        # scan is cheap (a directory listing + a small JSON write).
+        write_index(_on_disk_spots())
 
-    # Always re-emit the index — even on partial failure, the spots that
-    # already have a bundle in their directory should be discoverable.
-    # Discover by scanning the spots dir rather than only listing this
-    # run's successes, so e.g. a failed catalina rebuild doesn't drop
-    # catalina from the index if its prior bundle is still on disk.
-    on_disk = [
-        d.name for d in sorted(SPOTS_DIR.iterdir())
-        if d.is_dir() and (d / "bundle.json").exists()
-    ] if SPOTS_DIR.exists() else []
+    # Final write covers the no-target-spots edge and reflects the end
+    # state after the last build.
+    on_disk = _on_disk_spots()
     write_index(on_disk)
 
     print(f"\nDone. built={len(built)}, failed={len(failed)}, "
