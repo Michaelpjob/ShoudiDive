@@ -105,9 +105,9 @@ SPOT_CENTRES = {
     "santacruz":   {"name": "Santa Cruz Is.",    "lng": -119.740, "lat": 34.000},
     "santarosa":   {"name": "Santa Rosa Is.",    "lng": -120.083, "lat": 33.960},
     "sanmiguel":   {"name": "San Miguel Is.",    "lng": -120.365, "lat": 34.038},
-    "sbisland":    {"name": "Santa Barbara Is.", "lng": -119.035, "lat": 33.475},
-    "sannicolas":  {"name": "San Nicolas Is.",   "lng": -119.506, "lat": 33.248},
-    "sanclemente": {"name": "San Clemente Is.",  "lng": -118.485, "lat": 32.9},
+    "sbisland":    {"name": "Santa Barbara Is.", "lng": -119.046, "lat": 33.476},
+    "sannicolas":  {"name": "San Nicolas Is.",   "lng": -119.509, "lat": 33.254},
+    "sanclemente": {"name": "San Clemente Is.",  "lng": -118.483, "lat": 32.92},
     # ── Phase 2: popular shore-diving hubs (S→N) ─────────────────────
     "laguna":      {"name": "Laguna Beach",  "lng": -117.790, "lat": 33.542},
     "palosverdes": {"name": "Palos Verdes",  "lng": -118.405, "lat": 33.740},
@@ -123,7 +123,7 @@ SPOT_CENTRES = {
     # Bathy/contours/soundings come cross-border; kelp comes from the
     # SBC LTER Landsat source (CDFW stops at the border) — see
     # fetch_coronados_kelp / BUILD_BAJA_KELP wiring below.
-    "coronados":   {"name": "Coronados",     "lng": -117.257, "lat": 32.413},
+    "coronados":   {"name": "Coronados",     "lng": -117.26, "lat": 32.401},
 }
 
 # Mirror of frontend's SPOT_BUNDLE_RADIUS_KM. Same single-source-of-truth
@@ -155,8 +155,8 @@ SPOT_RADIUS_KM = {
     "santarosa":   16,
     "sanmiguel":   11,
     "sbisland":    3,
-    "sannicolas":  9,
-    "sanclemente": 22,
+    "sannicolas":  11,
+    "sanclemente": 15,
     # Phase 2: shore-diving hubs (cove/reef scale; PV spans the peninsula).
     "laguna":      4,
     "palosverdes": 7,
@@ -170,7 +170,7 @@ SPOT_RADIUS_KM = {
     "mendocino":   4,
     # Coronado Islands chain spans ~10 km N-S (North Coronado → South
     # Coronado); 9 km radius covers all four islets + the deep channel.
-    "coronados":   5,
+    "coronados":   6,
 }
 
 # Max sounding depth (ft) kept in a spot bundle. 330 ft ≈ 100 m, the
