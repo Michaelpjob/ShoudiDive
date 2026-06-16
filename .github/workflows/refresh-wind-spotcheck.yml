@@ -1,0 +1,53 @@
+name: Wind spot-check (vs buoys + ECMWF + GFS)
+
+# Standing accuracy review. Compares the PUBLISHED wind against three
+# independent sources at the NDBC buoy locations:
+#   * NDBC buoy observations (ground truth, height-adjusted to 10 m)
+#   * ECMWF IFS  (via Open-Meteo — Windy's default layer)
+#   * GFS        (via Open-Meteo)
+# …at the same valid hour, and writes pipeline/validation/data/
+# wind_spotcheck.{json,md} (uploaded as an artifact). Advisory only — this
+# NEVER gates a deploy; it's a daily review so wind drift is visible.
+
+on:
+  schedule:
+    - cron: "0 18 * * *"   # 18:00 UTC daily (~11:00 PDT, sea breeze building)
+  workflow_dispatch:
+    inputs:
+      source:
+        description: "What to check — 'local' or a base URL (default prod)"
+        required: false
+        default: "https://shouldidive.com"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wind-spotcheck
+  cancel-in-progress: false
+
+jobs:
+  spotcheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+      - name: Install pipeline dependencies
+        run: pip install -r pipeline/requirements.txt
+      - name: Run wind spot-check
+        run: |
+          python -m pipeline.validation.wind_spotcheck \
+            --source "${{ inputs.source || 'https://shouldidive.com' }}"
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wind-spotcheck-report
+          path: pipeline/validation/data/wind_spotcheck.*
+          if-no-files-found: ignore
