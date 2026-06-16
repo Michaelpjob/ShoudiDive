@@ -159,16 +159,24 @@ jobs:
       - name: Build Spot Detail bundles (idempotent, ~30-day TTL)
         # Per-spot pre-computed bathy + contours + clipped overlays for
         # the Spot Detail view (Phase 1B — docs/spot-detail-handover.md).
-        # 3 CA pilot spots today (lajolla, catalina, monterey). The
-        # script self-skips bundles fresher than 30 days, so the daily
-        # cron does real work ~once a month. The Commit refreshed data
-        # step below picks up public/data/spots/ automatically.
+        # 22 CA spots today (4 pilots + 7 Channel Islands + 10 shore hubs
+        # + Coronados). The script self-skips bundles fresher than 30 days,
+        # so the daily cron does real work ~once a month — and only for the
+        # handful that expired that day. The Commit refreshed data step
+        # below picks up public/data/spots/ automatically.
         #
         # The force_spot_bundles workflow_dispatch input maps to --force,
         # used to invalidate the on-disk cache when the builder itself
         # has changed (contour sizing, encoding, etc.).
+        #
+        # 90-min budget: a forced full rebuild fetches GMRT bathy + CDFW
+        # kelp per spot for all 22 sequentially (~3-4 min each on the big
+        # island bboxes), which overran the old 30-min cap and left the run
+        # with no index update. build_spot_bundles.py now re-emits
+        # index.json after every spot, so even if a rebuild still times out
+        # the finished bundles stay committed + discoverable.
         continue-on-error: true
-        timeout-minutes: 30
+        timeout-minutes: 90
         run: |
           if [ "${{ inputs.force_spot_bundles }}" = "true" ]; then
             python pipeline/build_spot_bundles.py --force
