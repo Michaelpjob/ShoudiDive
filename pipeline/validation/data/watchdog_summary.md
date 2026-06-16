@@ -1,34 +1,22 @@
-# Validation watchdog — 2026-06-16T06:38Z
+# Validation watchdog — 2026-06-16T08:15Z
 
-**5 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
+**3 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
-### 🔴 1. Only 7 observations in the last 24h (floor: 50)
+### 🔴 1. Only 22 observations in the last 24h (floor: 50)
 
 Multiple scrapers may be silently broken.
 
 **Suggested action:** Open the latest hourly ingest workflow run; look for `FAILED` lines per scraper.
 
-### 🔴 2. Required source `cdip-buoy` has been silent for >24h
+### ⚠️ 2. 3 non-critical external feed(s) are red
 
-Expected `cdip-buoy` to contribute at least one observation per cron. None seen in the recent window.
-
-**Suggested action:** Inspect `pipeline/validation/ingest/cdip.py` and the latest ingest cron's log.
-
-### 🔴 3. Required source `ndbc-buoy` has been silent for >24h
-
-Expected `ndbc-buoy` to contribute at least one observation per cron. None seen in the recent window.
-
-**Suggested action:** Inspect `pipeline/validation/ingest/ndbc.py` and the latest ingest cron's log.
-
-### ⚠️ 4. 4 non-critical external feed(s) are red
-
-Red feeds: chl_dineof_nrt_4km, chl_dineof_sci_2km, kd490_dineof_2km, nasa_obdaac_search. Fallbacks may keep the model running, but redundancy is degraded.
+Red feeds: chl_dineof_nrt_4km, chl_dineof_sci_2km, kd490_dineof_2km. Fallbacks may keep the model running, but redundancy is degraded.
 
 **Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
 
-### 🔴 5. Published-data freshness gate found 5 issue(s)
+### 🔴 3. Published-data freshness gate found 5 issue(s)
 
 Freshness/completeness failures: manifest:manifest_generated_at_stale, sst:layer_date_stale, kd490:layer_date_stale, wave:layer_date_stale, sst:sst_source_lag.
 
