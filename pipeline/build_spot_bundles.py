@@ -201,7 +201,7 @@ BAJA_SPOT_CENTRES = {
     "cabo-pulmo":   {"name": "Cabo Pulmo",       "lng": -109.424, "lat": 23.434},
     "los-islotes":  {"name": "Los Islotes",      "lng": -110.388, "lat": 24.593},
     "espiritu-stm": {"name": "Espiritu Santo",   "lng": -110.360, "lat": 24.490},
-    "el-bajo":      {"name": "El Bajo",          "lng": -110.375, "lat": 24.440},
+    "el-bajo":      {"name": "El Bajo",          "lng": -110.310, "lat": 24.700},
     "cerralvo":     {"name": "Cerralvo",         "lng": -109.949, "lat": 24.445},
     # Sea of Cortez — central (Loreto NP)
     "isla-carmen":  {"name": "Isla Carmen",      "lng": -111.154, "lat": 25.978},
