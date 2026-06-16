@@ -188,11 +188,29 @@ export const ISLANDS = [
 const REGION_SAVED_SPOTS = {
   ca: [
     { id: "monterey",  name: "Monterey",       lng: -121.92, lat: 36.62 },
+    // Phase 2 — Central + NorCal shore-diving hubs
+    { id: "mendocino",  name: "Mendocino",     lng: -123.793, lat: 39.275 },
+    { id: "saltpoint",  name: "Salt Point",    lng: -123.334, lat: 38.567 },
+    { id: "pointlobos", name: "Point Lobos",   lng: -121.945, lat: 36.518 },
+    { id: "monastery",  name: "Monastery",     lng: -121.923, lat: 36.534 },
+    { id: "jadecove",   name: "Jade Cove",     lng: -121.502, lat: 35.920 },
+    { id: "refugio",    name: "Refugio",       lng: -120.070, lat: 34.464 },
     { id: "morro",     name: "Morro Bay",      lng: -120.88, lat: 35.36 },
     { id: "pt-concep", name: "Pt. Conception", lng: -120.47, lat: 34.45 },
     { id: "santabarb", name: "Santa Barbara",  lng: -119.70, lat: 34.40 },
-    { id: "santacruz", name: "Santa Cruz I.",  lng: -119.75, lat: 34.05 },
-    { id: "malibu",    name: "Malibu",         lng: -118.78, lat: 34.02 },
+    // Phase 2 — Channel Islands (detailed-chart targets; centres mirror
+    // SPOT_CENTRES in build_spot_bundles.py).
+    { id: "anacapa",     name: "Anacapa",          lng: -119.41, lat: 34.01 },
+    { id: "santacruz",   name: "Santa Cruz I.",    lng: -119.740, lat: 34.000 },
+    { id: "santarosa",   name: "Santa Rosa I.",    lng: -120.083, lat: 33.960 },
+    { id: "sanmiguel",   name: "San Miguel I.",    lng: -120.365, lat: 34.038 },
+    { id: "sbisland",    name: "Santa Barbara I.", lng: -119.046, lat: 33.476 },
+    { id: "sannicolas",  name: "San Nicolas I.",   lng: -119.509, lat: 33.254 },
+    { id: "sanclemente", name: "San Clemente I.",  lng: -118.483, lat: 32.92 },
+    { id: "malibu",      name: "Malibu",        lng: -118.806, lat: 34.001 },
+    { id: "palosverdes", name: "Palos Verdes",  lng: -118.405, lat: 33.740 },
+    { id: "redondo",     name: "Redondo Beach", lng: -118.398, lat: 33.842 },
+    { id: "laguna",      name: "Laguna Beach",  lng: -117.790, lat: 33.542 },
     { id: "catalina",  name: "Catalina",       lng: -118.45, lat: 33.39 },
     { id: "lajolla",   name: "La Jolla",       lng: -117.28, lat: 32.85 },
     { id: "sandiego",  name: "San Diego",      lng: -117.18, lat: 32.70 },
@@ -200,7 +218,7 @@ const REGION_SAVED_SPOTS = {
     // not on the shoreline — keeps the detail spot-mode column on the
     // cliff regime instead of the shallow no-cliff state.
     { id: "pointloma", name: "Point Loma",     lng: -117.27, lat: 32.685 },
-    { id: "coronados", name: "Coronados",      lng: -117.27, lat: 32.40 },
+    { id: "coronados", name: "Coronados",      lng: -117.26, lat: 32.401 },
   ],
   pnw: [
     { id: "edmonds",     name: "Edmonds UWP",   lng: -122.382, lat: 47.812 },
@@ -274,6 +292,43 @@ const REGION_SAVED_SPOTS = {
 
 export const SAVED_SPOTS =
   REGION_SAVED_SPOTS[activeRegion()] || REGION_SAVED_SPOTS.ca;
+
+// Spot Detail bundle radii (km). Used by `pipeline/build_spot_bundles.py`
+// to define the per-spot bounding box around `(lng, lat)` for the
+// high-res CUDEM bathy + contour + clipped overlay generation.
+//
+// Authoritative list of *which* spots have a bundle is the pipeline's
+// emitted `public/data/spots/index.json` (read at runtime in App.jsx).
+// This map exists so the Python builder doesn't have to import JS — it
+// keeps a small Python copy of the same constants in build_spot_bundles.py.
+//
+// Phase 1B picks three spots that span the variation we'd expect at
+// fan-out time:
+//   * lajolla  — mainland cove + La Jolla Canyon (steep nearshore drop)
+//   * catalina — Channel Island shelf (offshore, larger radius)
+//   * monterey — NorCal kelp-heavy coast + Monterey Canyon edge
+//
+// Anything that breaks on one of these three is something the bundle
+// schema needs to handle before we extend to the rest of REGION_SAVED_SPOTS.
+export const SPOT_BUNDLE_RADIUS_KM = {
+  lajolla:  4,
+  catalina: 16, // whole island, Land's End → East End (2026-06-10)
+  monterey: 6,
+  // Kelp bed strip runs ~9 km N-S along the peninsula (Ocean Beach to
+  // past the Cabrillo tip); 5 km radius covers the whole bed + margins.
+  pointloma: 5,
+};
+
+// Project a (lng, lat) point into pixel coordinates inside an arbitrary
+// bbox. Used by SpotDetailView (PR Spot-C) so its independent viewBox
+// can render bundle content without coupling to the wide-view BBOX.
+// Mirrors the math in `project()` above but takes a bbox-as-argument
+// rather than reading the module-level CA/PNW/etc. constant.
+export function projectInBbox(bbox, lng, lat, w, h) {
+  const x = ((lng - bbox.lng_min) / (bbox.lng_max - bbox.lng_min)) * w;
+  const y = ((bbox.lat_max - lat) / (bbox.lat_max - bbox.lat_min)) * h;
+  return [x, y];
+}
 
 export const SST_STOPS = [
   { t: 0.00, c: [12, 38, 130] },
@@ -511,38 +566,4 @@ export function chlAt(lng, lat) {
   logv += (fbm((lng + 124) * 1.6, (lat - 32) * 1.7, 13) - 0.5) * 0.8;
   const mg = Math.pow(10, logv);
   return Math.max(0.05, Math.min(20, mg));
-}
-
-// Spot Detail bundle radii (km). Used by `pipeline/build_spot_bundles.py`
-// to define the per-spot bounding box around `(lng, lat)` for the
-// high-res CUDEM bathy + contour + clipped overlay generation.
-//
-// Authoritative list of *which* spots have a bundle is the pipeline's
-// emitted `public/data/spots/index.json` (read at runtime in MapShell).
-// This map exists so the Python builder doesn't have to import JS — it
-// keeps a small Python copy of the same constants in build_spot_bundles.py.
-//
-// Phase 1B picks three spots that span the variation we'd expect at
-// fan-out time:
-//   * lajolla  — mainland cove + La Jolla Canyon (steep nearshore drop)
-//   * catalina — Channel Island shelf (offshore, larger radius)
-//   * monterey — NorCal kelp-heavy coast + Monterey Canyon edge
-export const SPOT_BUNDLE_RADIUS_KM = {
-  lajolla:  4,
-  catalina: 16,
-  monterey: 6,
-  // Kelp bed strip runs ~9 km N-S along the peninsula (Ocean Beach to
-  // past the Cabrillo tip); 5 km radius covers the whole bed + margins.
-  pointloma: 5,
-};
-
-// Project a (lng, lat) point into pixel coordinates inside an arbitrary
-// bbox. Used by SpotDetailView so its independent viewBox can render
-// bundle content without coupling to the wide-view BBOX. Mirrors the
-// math in `project()` above but takes a bbox-as-argument rather than
-// reading the module-level CA/PNW/etc. constant.
-export function projectInBbox(bbox, lng, lat, w, h) {
-  const x = ((lng - bbox.lng_min) / (bbox.lng_max - bbox.lng_min)) * w;
-  const y = ((bbox.lat_max - lat) / (bbox.lat_max - bbox.lat_min)) * h;
-  return [x, y];
 }
