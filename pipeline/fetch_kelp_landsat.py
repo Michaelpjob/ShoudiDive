@@ -29,9 +29,13 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 OUT_PATH = REPO_ROOT / "pipeline" / "data" / "landsat_kelp_ca.nc"
 PASTA = "https://pasta.lternet.edu/package"
 SCOPE, PKG_ID = "knb-lter-sbc", "74"
-# Generous CA+Baja box covering every CA/Baja spot bundle (Coronados
-# 32.4N -> Mendocino 39.3N; lon -124 -> -117). Margin on all sides.
-BBOX = (31.0, 40.5, -125.0, -116.0)   # lat_min, lat_max, lon_min, lon_max
+# CA + Baja Pacific kelp box. Reaches down to 27N / -113.5 so the Baja
+# Pacific kelp forests (Isla Cedros ~28.2N, Islas San Benito ~28.3N,
+# Bahia Tortugas ~27.7N) are captured alongside the full CA coast (to
+# ~40.5N). The California-Current kelp dataset carries no Sea-of-Cortez
+# stations, so the eastern margin harmlessly spans the peninsula. Margin
+# on all sides.
+BBOX = (27.0, 40.5, -125.0, -113.5)   # lat_min, lat_max, lon_min, lon_max
 RECENT_QUARTERS = 4                    # last year defines the "canopy" class
 
 
