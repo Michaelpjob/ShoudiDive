@@ -468,6 +468,139 @@ def encode_uv_png(u: np.ndarray, v: np.ndarray, out_path: Path) -> None:
 
 # ---- Orchestrator -----------------------------------------------------------
 
+# ---- ECMWF IFS open-data (0.25°) — blended into HRRR/GFS to match Windy ----
+#
+# Windy's default layer is ECMWF; our HRRR+GFS sources run ~1-3 kt hotter at
+# light coastal winds (verified 2026-06-16 vs Windy + NDBC buoys). We fetch
+# ECMWF 10 m wind from ECMWF Open Data and average it per-cell with the NOAA
+# source — pulling magnitudes toward ECMWF's calibration while keeping HRRR's
+# coastal structure. Entirely fail-safe: any ECMWF hiccup (run not yet
+# published, missing step, decode error) logs + falls back to NOAA-only.
+
+ECMWF_BASE = "https://data.ecmwf.int/forecasts"
+
+
+def find_latest_ecmwf_run() -> tuple[date, int] | None:
+    """Latest ECMWF IFS 0p25 oper run (00/06/12/18z) with data published.
+    Open data lags ~7-9 h behind the cycle; look back 24 h. Returns None when
+    nothing is published yet — caller then ships NOAA-only."""
+    now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    cand = now.replace(hour=(now.hour // 6) * 6)
+    for _ in range(5):
+        # Probe a late step (48 h), not an early one: ECMWF open data
+        # publishes steps progressively, so a run can have 6 h up but not yet
+        # 24 h. Requiring 48 h means the chosen run covers our now/p6h/p24h
+        # slots; if the newest cycle is still landing we fall back to the
+        # previous, fully-published one.
+        idx = (f"{ECMWF_BASE}/{cand:%Y%m%d}/{cand.hour:02d}z/ifs/0p25/oper/"
+               f"{cand:%Y%m%d}{cand.hour:02d}0000-48h-oper-fc.index")
+        try:
+            if SESSION.head(idx, timeout=30, allow_redirects=True).status_code == 200:
+                return cand.date(), cand.hour
+        except Exception:
+            pass
+        cand -= timedelta(hours=6)
+    return None
+
+
+def _snap_ecmwf_step(step: int) -> int:
+    """ECMWF open-data oper publishes 3-hourly steps to 144 h, then 6-hourly.
+    Snap a requested forecast hour onto the nearest available step (≤1.5 h off
+    the target — fine for a blend)."""
+    step = max(0, step)
+    if step <= 144:
+        return int(round(step / 3.0) * 3)
+    return int(round(step / 6.0) * 6)
+
+
+def fetch_ecmwf_slice(run_date: date, run_hour: int, step: int) -> Path:
+    """Byte-range fetch ECMWF 10u + 10v for `step` via the JSON .index
+    sidecar. ECMWF's index is JSON-lines with _offset/_length (unlike the
+    NOMADS wgrib2 .idx text format), so it needs its own parser."""
+    slug = f"ecmwf_{run_date:%Y%m%d}_t{run_hour:02d}z_f{step:03d}"
+    cache_path = CACHE_DIR / f"{slug}.grib2"
+    if cache_path.exists():
+        return cache_path
+    stem = (f"{ECMWF_BASE}/{run_date:%Y%m%d}/{run_hour:02d}z/ifs/0p25/oper/"
+            f"{run_date:%Y%m%d}{run_hour:02d}0000-{step}h-oper-fc")
+    u_o = u_l = v_o = v_l = None
+    for line in _get(stem + ".index").text.strip().split("\n"):
+        try:
+            e = json.loads(line)
+        except ValueError:
+            continue
+        if e.get("levtype") == "sfc" and e.get("param") == "10u":
+            u_o, u_l = int(e["_offset"]), int(e["_length"])
+        elif e.get("levtype") == "sfc" and e.get("param") == "10v":
+            v_o, v_l = int(e["_offset"]), int(e["_length"])
+    if u_o is None or v_o is None:
+        raise RuntimeError(f"ECMWF 10u/10v not in index for step {step}h")
+    # One contiguous range covering both messages (cheaper than two requests;
+    # any params in the gap are complete GRIB messages cfgrib's level filter
+    # ignores). ~3 MB vs the 148 MB full file.
+    lo = min(u_o, v_o)
+    hi = max(u_o + u_l, v_o + v_l) - 1
+    r = _get(stem + ".grib2", headers={"Range": f"bytes={lo}-{hi}"})
+    r.raise_for_status()
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    cache_path.write_bytes(r.content)
+    return cache_path
+
+
+def open_ecmwf_uv(grib_path: Path):
+    """Open an ECMWF 10 m wind slice. cfgrib may name the vars u10/v10 or
+    10u/10v depending on the eccodes version, so accept either."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        ds = xr.open_dataset(
+            grib_path, engine="cfgrib",
+            backend_kwargs={"indexpath": "",
+                            "filter_by_keys": {"typeOfLevel": "heightAboveGround",
+                                               "level": 10}},
+        )
+    uname = next((n for n in ("u10", "10u") if n in ds), None)
+    vname = next((n for n in ("v10", "10v") if n in ds), None)
+    if uname is None or vname is None:
+        raise RuntimeError(f"ECMWF: no 10 m u/v in {list(ds.data_vars)}")
+    u = np.asarray(ds[uname].values).squeeze()
+    v = np.asarray(ds[vname].values).squeeze()
+    lat = np.asarray(ds["latitude"].values)
+    lng = np.asarray(ds["longitude"].values)
+    if lat.ndim == 1 and lng.ndim == 1:
+        lng2d, lat2d = np.meshgrid(lng, lat)
+    else:
+        lat2d, lng2d = lat, lng
+    lng2d = ((lng2d + 180.0) % 360.0) - 180.0
+    return lat2d, lng2d, u, v
+
+
+def fetch_ecmwf_grid(run, target_dt):
+    """ECMWF wind regridded to the bbox for `target_dt`, or (None, None) on
+    any failure. `run` is (date, hour) or None."""
+    if run is None:
+        return None, None
+    run_date, run_hour = run
+    run_dt = datetime(run_date.year, run_date.month, run_date.day, run_hour,
+                      tzinfo=timezone.utc)
+    step = _snap_ecmwf_step(round((target_dt - run_dt).total_seconds() / 3600))
+    try:
+        path = fetch_ecmwf_slice(run_date, run_hour, step)
+        lat2d, lng2d, u_n, v_n = open_ecmwf_uv(path)
+        # ECMWF 0.25° ≈ GFS resolution; reuse the GFS out-of-domain threshold.
+        return regrid_to_bbox(lat2d, lng2d, u_n, v_n, "gfs")
+    except Exception as e:
+        print(f"    ECMWF step {step}h: {e!s}", flush=True)
+        return None, None
+
+
+def _blend_uv(a, b):
+    """Per-cell mean of two regridded fields; where one is NaN take the other;
+    NaN only where both are NaN."""
+    both = np.isfinite(a) & np.isfinite(b)
+    out = np.where(both, (a + b) / 2.0, np.where(np.isfinite(a), a, b))
+    return out.astype(np.float32)
+
+
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -485,12 +618,20 @@ def main() -> None:
         runs["gfs"] = (d, h)
         print(f"GFS run:  {d} t{h:02d}z")
 
+    # ECMWF run for the blend (None when open data isn't published yet — then
+    # every slot ships NOAA-only, exactly as before this change).
+    ecmwf_run = find_latest_ecmwf_run()
+    if ecmwf_run is not None:
+        print(f"ECMWF run: {ecmwf_run[0]} t{ecmwf_run[1]:02d}z")
+    else:
+        print("ECMWF run: none published — shipping NOAA-only wind")
+
     wind_layer = {
         "speed_range": list(SPEED_RANGE),
         "uv_range": list(UV_RANGE),
         "unit": "kt",
         "grid": {"width": GRID_W, "height": GRID_H},
-        "source": "NOAA HRRR + GFS",
+        "source": "NOAA HRRR + GFS blended with ECMWF" if ecmwf_run else "NOAA HRRR + GFS",
         "windows": {},
     }
 
@@ -533,6 +674,17 @@ def main() -> None:
             print(f"  {slot}: failed — {e!s}", flush=True)
             continue
 
+        # Blend with ECMWF (Windy's default model) where available — pulls
+        # the NOAA wind toward ECMWF's calibration. Fail-safe: (None, None)
+        # leaves the NOAA field untouched, so a missing/late ECMWF run just
+        # reverts this slot to NOAA-only.
+        slot_source = source.upper()
+        e_u, e_v = fetch_ecmwf_grid(ecmwf_run, target)
+        if e_u is not None:
+            u = _blend_uv(u, e_u)
+            v = _blend_uv(v, e_v)
+            slot_source = f"{source.upper()}+ECMWF"
+
         # Mask over-land cells BEFORE encoding so the published PNG has
         # alpha=0 over land. WindParticles' "!Number.isFinite(u)" respawn
         # then fires on the very first frame a particle samples a land
@@ -551,9 +703,9 @@ def main() -> None:
             "uv_url": f"/data/wind_uv_{slot}.png",
             "valid_at": valid_at.isoformat().replace("+00:00", "Z"),
             "fcst_hour": fhour,
-            "source": source.upper(),
+            "source": slot_source,
         }
-        print(f"  wrote wind_{slot}  source={source} f{fhour:02d} "
+        print(f"  wrote wind_{slot}  source={slot_source} f{fhour:02d} "
               f"valid {valid_at.isoformat().replace('+00:00', 'Z')}")
 
     # ---- Daily history (prior 4 days of GFS f000) ----------------------------
