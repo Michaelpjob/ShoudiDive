@@ -179,48 +179,54 @@ SPOT_RADIUS_KM = {
 # frontend's saved-spot pins); radii sized to the feature + a water margin
 # (islands large; reefs / seamounts / points small). Re-check each against
 # the render and bump if clipped, same as the CA islands.
+# 2026-06-16 re-tune: centres re-anchored on the actual dive feature (research
+# + Landsat kelp-centroid cross-check) and radii tightened — the prior hand-set
+# values framed the wrong area / zoomed out so far the dive site fell out of
+# frame. "marisla" was dropped: it's the same feature as "el-bajo" (Marisla
+# Seamount = El Bajo Seamount). "loreto" re-centred onto Isla Coronado (the town
+# has no in-water diving). Cabo→Land's End, cerralvo→La Reina rock, bahia-angel→
+# the bay's dive islands, gordo-banks→the inner seamount.
 BAJA_SPOT_CENTRES = {
     # Pacific side — kelp coast (California Current)
-    "salsipuedes":  {"name": "Salsipuedes",      "lng": -116.78, "lat": 31.98},
-    "sacramento":   {"name": "Sacramento Reef",  "lng": -115.83, "lat": 29.75},
-    "san-benito":   {"name": "Islas San Benito", "lng": -115.55, "lat": 28.31},
-    "cedros":       {"name": "Isla Cedros",      "lng": -115.20, "lat": 28.20},
-    "bahia-tort":   {"name": "Bahia Tortugas",   "lng": -114.88, "lat": 27.69},
-    "abreojos":     {"name": "Punta Abreojos",   "lng": -113.60, "lat": 26.71},
+    "salsipuedes":  {"name": "Salsipuedes",      "lng": -116.787, "lat": 31.974},
+    "sacramento":   {"name": "Sacramento Reef",  "lng": -115.790, "lat": 29.760},
+    "san-benito":   {"name": "Islas San Benito", "lng": -115.575, "lat": 28.306},
+    "cedros":       {"name": "Isla Cedros",      "lng": -115.190, "lat": 28.110},
+    "bahia-tort":   {"name": "Bahia Tortugas",   "lng": -114.896, "lat": 27.655},
+    "abreojos":     {"name": "Punta Abreojos",   "lng": -113.575, "lat": 26.715},
     # Cabo corridor
-    "cabo":         {"name": "Cabo San Lucas",   "lng": -109.92, "lat": 22.89},
-    "gordo-banks":  {"name": "Gordo Banks",      "lng": -109.34, "lat": 22.95},
+    "cabo":         {"name": "Cabo San Lucas",   "lng": -109.894, "lat": 22.876},
+    "gordo-banks":  {"name": "Gordo Banks",      "lng": -109.456, "lat": 23.057},
     # Sea of Cortez — south (La Paz / Cerralvo)
-    "cabo-pulmo":   {"name": "Cabo Pulmo",       "lng": -109.43, "lat": 23.43},
-    "los-islotes":  {"name": "Los Islotes",      "lng": -110.39, "lat": 24.59},
-    "espiritu-stm": {"name": "Espiritu Santo",   "lng": -110.37, "lat": 24.50},
-    "el-bajo":      {"name": "El Bajo",          "lng": -109.96, "lat": 24.59},
-    "marisla":      {"name": "Marisla Smt",      "lng": -110.40, "lat": 24.45},
-    "cerralvo":     {"name": "Cerralvo",         "lng": -109.86, "lat": 24.27},
+    "cabo-pulmo":   {"name": "Cabo Pulmo",       "lng": -109.424, "lat": 23.434},
+    "los-islotes":  {"name": "Los Islotes",      "lng": -110.388, "lat": 24.593},
+    "espiritu-stm": {"name": "Espiritu Santo",   "lng": -110.360, "lat": 24.490},
+    "el-bajo":      {"name": "El Bajo",          "lng": -110.375, "lat": 24.440},
+    "cerralvo":     {"name": "Cerralvo",         "lng": -109.949, "lat": 24.445},
     # Sea of Cortez — central (Loreto NP)
-    "isla-carmen":  {"name": "Isla Carmen",      "lng": -111.18, "lat": 26.02},
-    "isla-danzante":{"name": "Isla Danzante",    "lng": -111.27, "lat": 25.78},
-    "loreto":       {"name": "Loreto",           "lng": -111.34, "lat": 26.01},
+    "isla-carmen":  {"name": "Isla Carmen",      "lng": -111.154, "lat": 25.978},
+    "isla-danzante":{"name": "Isla Danzante",    "lng": -111.251, "lat": 25.786},
+    "loreto":       {"name": "Loreto",           "lng": -111.274, "lat": 26.119},
     # Midriff Islands
-    "bahia-angel":  {"name": "Bahia de los Angeles", "lng": -113.55, "lat": 28.95},
+    "bahia-angel":  {"name": "Bahia de los Angeles", "lng": -113.510, "lat": 29.035},
 }
 
 BAJA_SPOT_RADIUS_KM = {
-    "salsipuedes": 4, "sacramento": 5, "san-benito": 8,
-    "cedros": 24,        # ~35 km island N-S
-    "bahia-tort": 10,    # bay
+    "salsipuedes": 5, "sacramento": 6, "san-benito": 8,
+    "cedros": 8,         # SE dive coast near the village (not the whole island)
+    "bahia-tort": 7,
     "abreojos": 6,
-    "cabo": 6,           # Land's End + the arch
-    "gordo-banks": 9,    # outer/inner seamount offshore
-    "cabo-pulmo": 6,     # the reef
-    "los-islotes": 3,    # small sea-lion islet
-    "espiritu-stm": 16,  # Espiritu Santo island
-    "el-bajo": 6, "marisla": 5,
-    "cerralvo": 14,      # Isla Cerralvo (Jacques Cousteau)
-    "isla-carmen": 20,   # large island
-    "isla-danzante": 8,
-    "loreto": 9,         # bay + nearshore
-    "bahia-angel": 18,   # big bay + islands
+    "cabo": 5,           # Land's End / the arch + marine-park rocks
+    "gordo-banks": 6,    # inner seamount (deep — DEM can't resolve the pinnacle)
+    "cabo-pulmo": 7,     # the reef park
+    "los-islotes": 5,    # sea-lion islets
+    "espiritu-stm": 9,   # large island chain
+    "el-bajo": 6,        # Marisla / El Bajo seamount (deep)
+    "cerralvo": 6,       # La Reina rock off the N tip
+    "isla-carmen": 9,    # large island
+    "isla-danzante": 6,
+    "loreto": 6,         # Isla Coronado (dive area N of town)
+    "bahia-angel": 8,    # the bay's dive islands
 }
 
 if REGION.name == "baja":
