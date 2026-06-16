@@ -64,28 +64,30 @@ NOMADS_GFS = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod"
 # "wind only over US waters." For tropical, use GFS (global 0.25°)
 # for every slot instead. Lower resolution than HRRR but covers the
 # full bbox uniformly. CA + PNW keep HRRR for short-range.
-def _slots_for_active_region():
+def _slot_sources_for_active_region():
     try:
         from pipeline.regions import active_region
     except ModuleNotFoundError:
         from regions import active_region
     if active_region().name == "tropical":
-        return {
-            "now":  {"source": "gfs", "fhour": 0},
-            "p6h":  {"source": "gfs", "fhour": 6},
-            "p24h": {"source": "gfs", "fhour": 24},
-            "p72h": {"source": "gfs", "fhour": 72},
-        }
+        return {"now": "gfs", "p6h": "gfs", "p24h": "gfs", "p72h": "gfs"}
     # CA + PNW are inside HRRR's CONUS domain — keep the high-res mix.
-    return {
-        "now":  {"source": "hrrr", "fhour": 0},
-        "p6h":  {"source": "hrrr", "fhour": 6},
-        "p24h": {"source": "hrrr", "fhour": 24},
-        "p72h": {"source": "gfs",  "fhour": 72},
-    }
+    return {"now": "hrrr", "p6h": "hrrr", "p24h": "hrrr", "p72h": "gfs"}
 
 
-SLOTS = _slots_for_active_region()
+SLOT_SOURCES = _slot_sources_for_active_region()
+
+# Hours from the CURRENT hour that each window targets. The forecast hour is
+# derived per-run in main() (offset + age-of-run), not hardcoded, so "now"
+# is valid at the current hour. Before 2026-06-16 the slots used fixed
+# forecast hours (now=f00, p6h=f06, ...), which pinned "now" to the model
+# cycle (00/06/12/18z) and left it lagging the real hour by up to ~8 h —
+# the app showed the early-morning analysis as "now".
+SLOT_OFFSET_H = {"now": 0, "p6h": 6, "p24h": 24, "p72h": 72}
+
+# HRRR only carries f00..f48 on the extended (00/06/12/18z) runs; if a
+# window's derived forecast hour exceeds this, that slot falls back to GFS.
+HRRR_MAX_FHOUR = 48
 
 # History slots: prior daily GFS f000 analyses, used by the visibility model
 # to compute upwelling anomalies (5-day along-shore wind mean). HRRR isn't
@@ -470,7 +472,9 @@ def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     # Find runs lazily — only call HRRR/GFS discovery if at least one slot needs it.
-    sources_needed = {cfg["source"] for cfg in SLOTS.values()}
+    sources_needed = set(SLOT_SOURCES.values())
+    if "hrrr" in sources_needed:
+        sources_needed.add("gfs")  # also need GFS for the >f48 fallback below
     runs: dict[str, tuple[date, int]] = {}
     if "hrrr" in sources_needed:
         d, h = find_latest_hrrr_extended_run()
@@ -501,10 +505,21 @@ def main() -> None:
               "values; streamlines may jitter at the coast until bathy lands",
               flush=True)
 
-    for slot, cfg in SLOTS.items():
-        source = cfg["source"]
-        fhour = cfg["fhour"]
+    now_utc = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    for slot, source in SLOT_SOURCES.items():
+        target = now_utc + timedelta(hours=SLOT_OFFSET_H[slot])
         run_date, run_hour = runs[source]
+        run_dt = datetime(run_date.year, run_date.month, run_date.day, run_hour,
+                          tzinfo=timezone.utc)
+        fhour = max(0, round((target - run_dt).total_seconds() / 3600))
+        # HRRR tops out at f48; if the derived hour runs past that (e.g. p24h
+        # off an older extended run), fall back to GFS for this slot.
+        if source == "hrrr" and fhour > HRRR_MAX_FHOUR:
+            source = "gfs"
+            run_date, run_hour = runs["gfs"]
+            run_dt = datetime(run_date.year, run_date.month, run_date.day, run_hour,
+                              tzinfo=timezone.utc)
+            fhour = max(0, round((target - run_dt).total_seconds() / 3600))
 
         try:
             if source == "hrrr":
@@ -530,10 +545,7 @@ def main() -> None:
         uv_path = OUT_DIR / f"wind_uv_{slot}.png"
         encode_speed_png(u, v, speed_path)
         encode_uv_png(u, v, uv_path)
-        valid_at = (
-            datetime(run_date.year, run_date.month, run_date.day, run_hour, tzinfo=timezone.utc)
-            + timedelta(hours=fhour)
-        )
+        valid_at = run_dt + timedelta(hours=fhour)
         wind_layer["windows"][slot] = {
             "speed_url": f"/data/wind_speed_{slot}.png",
             "uv_url": f"/data/wind_uv_{slot}.png",
@@ -541,7 +553,8 @@ def main() -> None:
             "fcst_hour": fhour,
             "source": source.upper(),
         }
-        print(f"  wrote wind_{slot}  ({GRID_H}x{GRID_W})  source={source}")
+        print(f"  wrote wind_{slot}  source={source} f{fhour:02d} "
+              f"valid {valid_at.isoformat().replace('+00:00', 'Z')}")
 
     # ---- Daily history (prior 4 days of GFS f000) ----------------------------
     # Used by the visibility model's upwelling-anomaly feature. We use t12z as
