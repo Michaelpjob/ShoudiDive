@@ -1,0 +1,57 @@
+{
+  "id": "sannicolas",
+  "name": "San Nicolas Is.",
+  "centre": {
+    "lng": -119.5,
+    "lat": 33.24
+  },
+  "bbox": {
+    "lng_min": -119.62925688143088,
+    "lng_max": -119.37074311856912,
+    "lat_min": 33.1318918918919,
+    "lat_max": 33.34810810810811
+  },
+  "generated_at": "2026-06-15T19:59:07Z",
+  "layers": {
+    "bathy": {
+      "url": "bathy.png",
+      "width": 480,
+      "height": 480,
+      "depth_range_m": [
+        0,
+        700
+      ],
+      "encoding": "linear_8bit_0nan"
+    },
+    "contours": {
+      "url": "contours.geojson",
+      "intervals_m": [
+        1,
+        5,
+        25,
+        100
+      ],
+      "levels": 48
+    },
+    "coastline": {
+      "url": "coastline.geojson",
+      "features": 1
+    },
+    "mpa": {
+      "url": "mpa.geojson",
+      "features": 0
+    },
+    "soundings": {
+      "url": "soundings.geojson",
+      "features": 269
+    }
+  },
+  "sources": {
+    "bathy": "NOAA NCEI DEM global mosaic exportImage (CUDEM/coastal DEMs nearshore, best-available blend)",
+    "coastline": "OSM natural=coastline via fetch_coastline.py \u2014 clipped from global land.geojson",
+    "kelp": "CDFW BIO_CA_Kelp2016 observed aerial-survey canopy (clipped)",
+    "mpa": "CDFW MPA ds582 (clipped)",
+    "landmarks": "Curated per-spot dive-site / harbor labels",
+    "soundings": "Depth soundings sampled from the spot DEM on a 24x24 lattice"
+  }
+}

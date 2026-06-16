@@ -1,0 +1,66 @@
+{
+  "id": "redondo",
+  "name": "Redondo Beach",
+  "centre": {
+    "lng": -118.398,
+    "lat": 33.842
+  },
+  "bbox": {
+    "lng_min": -118.43054008309475,
+    "lng_max": -118.36545991690524,
+    "lat_min": 33.814972972972974,
+    "lat_max": 33.86902702702702
+  },
+  "generated_at": "2026-06-16T01:41:57Z",
+  "layers": {
+    "bathy": {
+      "url": "bathy.png",
+      "width": 480,
+      "height": 480,
+      "depth_range_m": [
+        0,
+        400
+      ],
+      "encoding": "linear_8bit_0nan"
+    },
+    "contours": {
+      "url": "contours.geojson",
+      "intervals_m": [
+        1,
+        5,
+        25,
+        100
+      ],
+      "levels": 29
+    },
+    "coastline": {
+      "url": "coastline.geojson",
+      "features": 1
+    },
+    "kelp": {
+      "url": "kelp.geojson",
+      "features": 2,
+      "source": "CDFW aerial kelp surveys 2003-2016 (per-spot, full res)",
+      "canopy_year": 2013,
+      "years_with_data": [
+        2013
+      ]
+    },
+    "mpa": {
+      "url": "mpa.geojson",
+      "features": 0
+    },
+    "soundings": {
+      "url": "soundings.geojson",
+      "features": 251
+    }
+  },
+  "sources": {
+    "bathy": "NOAA NCEI DEM global mosaic exportImage (CUDEM/coastal DEMs nearshore, best-available blend)",
+    "coastline": "OSM natural=coastline via fetch_coastline.py \u2014 clipped from global land.geojson",
+    "kelp": "CDFW BIO_CA_Kelp2016 observed aerial-survey canopy (clipped)",
+    "mpa": "CDFW MPA ds582 (clipped)",
+    "landmarks": "Curated per-spot dive-site / harbor labels",
+    "soundings": "Depth soundings sampled from the spot DEM on a 24x24 lattice"
+  }
+}
