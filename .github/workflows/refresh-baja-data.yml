@@ -119,7 +119,7 @@ jobs:
         timeout-minutes: 8
         run: python pipeline/fetch_coastline.py
 
-      - name: Fetch MPA boundaries (empty for baja until PR-BAJA-3 wires CONANP)
+      - name: Fetch MPA boundaries (CONANP federal ANPs — marine + island)
         continue-on-error: true
         timeout-minutes: 5
         run: python pipeline/fetch_mpa.py
