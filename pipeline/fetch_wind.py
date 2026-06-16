@@ -646,6 +646,27 @@ def main() -> None:
               "values; streamlines may jitter at the coast until bathy lands",
               flush=True)
 
+    # Buoy-anchored nowcast correction. A buoy reading is "now", so this is
+    # applied to the "now" slot only (below); forecast slots keep the plain
+    # blend. Fetch the buoys once here; the correction surface is built per
+    # slot from that slot's blended field. Fully fail-safe: any failure
+    # leaves the blend untouched.
+    try:
+        from pipeline.wind_buoy_correction import (
+            fetch_buoy_winds, wind_correction_surface, correction_summary)
+    except ModuleNotFoundError:
+        from wind_buoy_correction import (
+            fetch_buoy_winds, wind_correction_surface, correction_summary)
+    grid_lats = np.linspace(BBOX["lat_max"], BBOX["lat_min"], GRID_H)
+    grid_lngs = np.linspace(BBOX["lng_min"], BBOX["lng_max"], GRID_W)
+    try:
+        buoy_winds = fetch_buoy_winds()
+        print(f"Buoy correction: {len(buoy_winds)} buoys reporting wind", flush=True)
+    except Exception as e:
+        buoy_winds = []
+        print(f"Buoy correction: fetch failed ({e!s}) — staying on plain blend",
+              flush=True)
+
     now_utc = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
     for slot, source in SLOT_SOURCES.items():
         target = now_utc + timedelta(hours=SLOT_OFFSET_H[slot])
@@ -684,6 +705,25 @@ def main() -> None:
             u = _blend_uv(u, e_u)
             v = _blend_uv(v, e_v)
             slot_source = f"{source.upper()}+ECMWF"
+
+        # Buoy-anchor the NOWCAST: pull the blended "now" field onto the live
+        # buoy obs via a kriged residual. Forecast slots keep the plain blend
+        # (a buoy can't speak to a future hour). Fail-safe — any error leaves
+        # the field as the blend.
+        if slot == "now" and buoy_winds:
+            try:
+                du, dv, anchors = wind_correction_surface(
+                    u_grid=u, v_grid=v, lats=grid_lats, lngs=grid_lngs,
+                    buoys=buoy_winds)
+                u = u + du
+                v = v + dv
+                wind_layer["buoy_correction"] = correction_summary(anchors)
+                slot_source += "+buoy"
+                print(f"  now: buoy-corrected "
+                      f"({wind_layer['buoy_correction']['n_anchors_active']} anchors, "
+                      f"peak |du|={float(np.abs(du).max()):.1f} m/s)", flush=True)
+            except Exception as e:
+                print(f"  now: buoy correction skipped — {e!s}", flush=True)
 
         # Mask over-land cells BEFORE encoding so the published PNG has
         # alpha=0 over land. WindParticles' "!Number.isFinite(u)" respawn
