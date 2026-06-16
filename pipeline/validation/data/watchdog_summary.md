@@ -1,18 +1,18 @@
-# Validation watchdog — 2026-06-16T08:15Z
+# Validation watchdog — 2026-06-16T11:46Z
 
 **3 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
-### 🔴 1. Only 22 observations in the last 24h (floor: 50)
+### 🔴 1. Only 20 observations in the last 24h (floor: 50)
 
 Multiple scrapers may be silently broken.
 
 **Suggested action:** Open the latest hourly ingest workflow run; look for `FAILED` lines per scraper.
 
-### ⚠️ 2. 3 non-critical external feed(s) are red
+### ⚠️ 2. 4 non-critical external feed(s) are red
 
-Red feeds: chl_dineof_nrt_4km, chl_dineof_sci_2km, kd490_dineof_2km. Fallbacks may keep the model running, but redundancy is degraded.
+Red feeds: chl_dineof_nrt_4km, chl_dineof_sci_2km, kd490_dineof_2km, nasa_obdaac_search. Fallbacks may keep the model running, but redundancy is degraded.
 
 **Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
 
