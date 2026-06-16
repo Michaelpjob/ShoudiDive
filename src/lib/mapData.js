@@ -200,13 +200,13 @@ const REGION_SAVED_SPOTS = {
     { id: "santabarb", name: "Santa Barbara",  lng: -119.70, lat: 34.40 },
     // Phase 2 — Channel Islands (detailed-chart targets; centres mirror
     // SPOT_CENTRES in build_spot_bundles.py).
-    { id: "anacapa",     name: "Anacapa",          lng: -119.392, lat: 34.012 },
+    { id: "anacapa",     name: "Anacapa",          lng: -119.41, lat: 34.01 },
     { id: "santacruz",   name: "Santa Cruz I.",    lng: -119.740, lat: 34.000 },
     { id: "santarosa",   name: "Santa Rosa I.",    lng: -120.083, lat: 33.960 },
     { id: "sanmiguel",   name: "San Miguel I.",    lng: -120.365, lat: 34.038 },
     { id: "sbisland",    name: "Santa Barbara I.", lng: -119.035, lat: 33.475 },
-    { id: "sannicolas",  name: "San Nicolas I.",   lng: -119.500, lat: 33.240 },
-    { id: "sanclemente", name: "San Clemente I.",  lng: -118.450, lat: 32.920 },
+    { id: "sannicolas",  name: "San Nicolas I.",   lng: -119.506, lat: 33.248 },
+    { id: "sanclemente", name: "San Clemente I.",  lng: -118.485, lat: 32.9 },
     { id: "malibu",      name: "Malibu",        lng: -118.806, lat: 34.001 },
     { id: "palosverdes", name: "Palos Verdes",  lng: -118.405, lat: 33.740 },
     { id: "redondo",     name: "Redondo Beach", lng: -118.398, lat: 33.842 },
@@ -218,7 +218,7 @@ const REGION_SAVED_SPOTS = {
     // not on the shoreline — keeps the detail spot-mode column on the
     // cliff regime instead of the shallow no-cliff state.
     { id: "pointloma", name: "Point Loma",     lng: -117.27, lat: 32.685 },
-    { id: "coronados", name: "Coronados",      lng: -117.27, lat: 32.40 },
+    { id: "coronados", name: "Coronados",      lng: -117.257, lat: 32.413 },
   ],
   pnw: [
     { id: "edmonds",     name: "Edmonds UWP",   lng: -122.382, lat: 47.812 },

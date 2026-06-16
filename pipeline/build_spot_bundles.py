@@ -101,13 +101,13 @@ SPOT_CENTRES = {
     # Centres on each island's centroid so the bbox covers it
     # symmetrically; radii (below) sized tip-to-tip. Verify extents
     # against the render and bump radius if clipped (cf. Catalina).
-    "anacapa":     {"name": "Anacapa",           "lng": -119.392, "lat": 34.012},
+    "anacapa":     {"name": "Anacapa",           "lng": -119.41, "lat": 34.01},
     "santacruz":   {"name": "Santa Cruz Is.",    "lng": -119.740, "lat": 34.000},
     "santarosa":   {"name": "Santa Rosa Is.",    "lng": -120.083, "lat": 33.960},
     "sanmiguel":   {"name": "San Miguel Is.",    "lng": -120.365, "lat": 34.038},
     "sbisland":    {"name": "Santa Barbara Is.", "lng": -119.035, "lat": 33.475},
-    "sannicolas":  {"name": "San Nicolas Is.",   "lng": -119.500, "lat": 33.240},
-    "sanclemente": {"name": "San Clemente Is.",  "lng": -118.450, "lat": 32.920},
+    "sannicolas":  {"name": "San Nicolas Is.",   "lng": -119.506, "lat": 33.248},
+    "sanclemente": {"name": "San Clemente Is.",  "lng": -118.485, "lat": 32.9},
     # ── Phase 2: popular shore-diving hubs (S→N) ─────────────────────
     "laguna":      {"name": "Laguna Beach",  "lng": -117.790, "lat": 33.542},
     "palosverdes": {"name": "Palos Verdes",  "lng": -118.405, "lat": 33.740},
@@ -123,7 +123,7 @@ SPOT_CENTRES = {
     # Bathy/contours/soundings come cross-border; kelp comes from the
     # SBC LTER Landsat source (CDFW stops at the border) — see
     # fetch_coronados_kelp / BUILD_BAJA_KELP wiring below.
-    "coronados":   {"name": "Coronados",     "lng": -117.270, "lat": 32.400},
+    "coronados":   {"name": "Coronados",     "lng": -117.257, "lat": 32.413},
 }
 
 # Mirror of frontend's SPOT_BUNDLE_RADIUS_KM. Same single-source-of-truth
@@ -148,14 +148,14 @@ SPOT_RADIUS_KM = {
     # water margin. Big islands (Santa Cruz ~30 km, San Clemente ~34 km)
     # take a Catalina-style large radius → coarser pixel pitch at 480 px,
     # acceptable for whole-island context. Re-check each against render.
-    "anacapa":     8,
+    "anacapa":     6,
     # 2026-06-15: 20 → 24 after QA render — 20 km clipped the island's
     # east end (San Pedro Pt); Santa Cruz is ~35 km E-W.
     "santacruz":   24,
     "santarosa":   16,
     "sanmiguel":   11,
-    "sbisland":    5,
-    "sannicolas":  12,
+    "sbisland":    3,
+    "sannicolas":  9,
     "sanclemente": 22,
     # Phase 2: shore-diving hubs (cove/reef scale; PV spans the peninsula).
     "laguna":      4,
@@ -170,7 +170,7 @@ SPOT_RADIUS_KM = {
     "mendocino":   4,
     # Coronado Islands chain spans ~10 km N-S (North Coronado → South
     # Coronado); 9 km radius covers all four islets + the deep channel.
-    "coronados":   9,
+    "coronados":   5,
 }
 
 # Max sounding depth (ft) kept in a spot bundle. 330 ft ≈ 100 m, the
