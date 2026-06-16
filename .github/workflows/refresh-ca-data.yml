@@ -79,7 +79,15 @@ jobs:
         # lets the freshness sentinels below skip too (they'd otherwise trip
         # on the deliberately-unrefreshed data and kill the run).
         if: ${{ !inputs.force_spot_bundles }}
-        timeout-minutes: 35
+        # 2026-06-16: 35 → 75 min. The fetch is normally ~3 min, but NOAA
+        # ERDDAP had a slow spell 2026-06-15/16 where SST (7 days of 1 km
+        # MUR over the wide bbox) crawled to 35+ min — the 06-15 run barely
+        # finished at the 35-min cap, 06-16 timed out and the content
+        # sentinel then failed the whole run, freezing SST/chl/kd490 on prod
+        # for 2 days. A generous cap lets the daily refresh ride out an
+        # ERDDAP-slow day instead of failing. (If it keeps recurring, the
+        # real fix is to parallelize fetch.py's per-day requests.)
+        timeout-minutes: 75
         env:
           EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
         run: python pipeline/fetch.py
