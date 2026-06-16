@@ -9,9 +9,10 @@
 // cleanup-on-cancel pattern.
 //
 // API:
-//   const p = usePopupState({ mpaOn, bathyOn });
+//   const p = usePopupState({ mpaOn, bathyOn, kelpOn });
 //   p.selectedMpa, p.setSelectedMpa       — currently-clicked MPA polygon, null = closed
 //   p.selectedBathy, p.setSelectedBathy   — currently-clicked bathy feature (seamount/reef/community spot)
+//   p.selectedKelp, p.setSelectedKelp     — currently-clicked kelp bed polygon, null = closed
 //   p.bathyFeatures                       — lazy-loaded GeoJSON feature array, null until bathyOn is true
 //   p.setBathyFeatures                    — exposed for test/dev tooling; rarely called outside the lazy-load effect
 //
@@ -25,9 +26,10 @@ import { useEffect, useState } from "react";
 
 import { loadBathyFeatures } from "../components/BathyLayer.jsx";
 
-export function usePopupState({ mpaOn, bathyOn }) {
+export function usePopupState({ mpaOn, bathyOn, kelpOn }) {
   const [selectedMpa, setSelectedMpa] = useState(null);
   const [selectedBathy, setSelectedBathy] = useState(null);
+  const [selectedKelp, setSelectedKelp] = useState(null);
   const [bathyFeatures, setBathyFeatures] = useState(null);
 
   // Close MPA popup when the MPA layer is turned off.
@@ -39,6 +41,11 @@ export function usePopupState({ mpaOn, bathyOn }) {
   useEffect(() => {
     if (!bathyOn) setSelectedBathy(null);
   }, [bathyOn]);
+
+  // Close kelp popup when the kelp layer is turned off.
+  useEffect(() => {
+    if (!kelpOn) setSelectedKelp(null);
+  }, [kelpOn]);
 
   // Lazy-load bathy features whenever the layer flips on (used for
   // both the SVG markers and the screen-space labels). Cancel on
@@ -57,6 +64,7 @@ export function usePopupState({ mpaOn, bathyOn }) {
   return {
     selectedMpa, setSelectedMpa,
     selectedBathy, setSelectedBathy,
+    selectedKelp, setSelectedKelp,
     bathyFeatures, setBathyFeatures,
   };
 }

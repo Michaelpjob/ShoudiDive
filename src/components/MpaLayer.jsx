@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { project } from "../lib/mapData.js";
 import { dataPath } from "../lib/region.js";
+import { simplifyGeometry, toleranceForZoom } from "../lib/vectorSimplify.js";
 
 // Color/style by MPA type, per design spec.
 // Outline 2 px, fill 10–12% opacity.
@@ -57,7 +58,7 @@ function geometryToPath(geom, w, h) {
   return "";
 }
 
-export default function MpaLayer({ width, height, active, onSelect }) {
+export default function MpaLayer({ width, height, active, zoomLevel, onSelect }) {
   const [features, setFeatures] = useState(null);
 
   useEffect(() => {
@@ -72,19 +73,33 @@ export default function MpaLayer({ width, height, active, onSelect }) {
     };
   }, [active]);
 
-  // Pre-project everything once per (width, height, features) — avoids
-  // re-projecting on every viewBox change since viewBox handles zoom for us.
+  // Pre-project everything once per (width, height, features, tolerance).
+  // PR-K3-2: zoom-aware simplification — most MPA polygons are dense
+  // enough that running DP at low zoom drops ~30% of vertices with no
+  // visible difference. Sharing the simplifier with KelpLayer (and
+  // future canopy layer) keeps render math consistent across layers.
+  const tolerance = toleranceForZoom(zoomLevel);
   const paths = useMemo(() => {
     if (!features) return [];
     return features.map((f) => ({
       id: f.properties.id,
       props: f.properties,
-      d: geometryToPath(f.geometry, width, height),
+      d: geometryToPath(simplifyGeometry(f.geometry, tolerance), width, height),
       style: styleForType(f.properties.type),
     }));
-  }, [features, width, height]);
+  }, [features, width, height, tolerance]);
 
   if (!active || !paths.length) return null;
+
+  // PR-K2-2 (kelp roadmap Phase 2): stroke + fill scale with zoom so the
+  // overlay doesn't render as fat blue marker outlines at zoom 12+.
+  // At 1×, stroke is 1.6 px; at 4× and beyond, 0.4 px (clamped).
+  // Fill stays at the rgba()-baked opacity below zoom 4; above, the
+  // layer fades toward outline-only so the underlying raster + spot
+  // pins read better. See docs/kelp-roadmap.md § "Phase 2".
+  const z = Number.isFinite(zoomLevel) && zoomLevel > 0 ? zoomLevel : 1;
+  const strokeW = Math.max(0.4, 1.6 / Math.min(z, 4));
+  const fillOpacityFactor = z <= 4 ? 1 : Math.max(0.35, 4 / z);
 
   return (
     <g className="mpa-layer">
@@ -93,8 +108,9 @@ export default function MpaLayer({ width, height, active, onSelect }) {
           key={p.id}
           d={p.d}
           fill={p.style.fill}
+          fillOpacity={fillOpacityFactor}
           stroke={p.style.stroke}
-          strokeWidth="1.6"
+          strokeWidth={strokeW}
           strokeOpacity="0.85"
           style={{ cursor: "pointer", pointerEvents: "visiblePainted" }}
           onMouseDown={(e) => e.stopPropagation()}

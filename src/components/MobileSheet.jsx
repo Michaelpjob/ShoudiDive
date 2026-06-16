@@ -129,14 +129,16 @@ export default function MobileShell({
   dataState,
   setMpaOn,
   setBathyOn,
+  setKelpOn,
+  kelpAvailable,
+  bundledSpots,
+  openSpotDetail,
   activeSpot, setActiveSpot,
   timeOpts,
   compositeText,
   layerIsReal,
   hover,
   setHover,
-  bundledSpots,
-  openSpotDetail,
 }) {
   const [open, setOpen] = useState(false);
   // Stage 5c: units/mpaOn/bathyOn come from context (PrefsProvider in
@@ -144,7 +146,7 @@ export default function MobileShell({
   // wraps them with a popup-clearing side effect before passing them in
   // (see updateMpaOn/updateBathyOn there).
   const { prefs } = usePrefs();
-  const { units, mpaOn, bathyOn } = prefs;
+  const { units, mpaOn, bathyOn, kelpOn } = prefs;
   // wind + swell + current use slot keys; sst uses history/forecast slots
   // when loaded; chl/viz use integer composites.
   //
@@ -262,6 +264,19 @@ export default function MobileShell({
               >
                 Bottom Detail
               </button>
+              {kelpAvailable && (
+                <button
+                  type="button"
+                  className={"mpa-pill" + (kelpOn ? " active" : "")}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setKelpOn(!kelpOn);
+                  }}
+                  aria-pressed={kelpOn}
+                >
+                  Kelp Beds
+                </button>
+              )}
             </div>
           </section>
 
@@ -361,6 +376,19 @@ export default function MobileShell({
         >
           Bottom
         </button>
+        {kelpAvailable && (
+          <button
+            type="button"
+            className={"mpa-pill" + (kelpOn ? " active" : "")}
+            onClick={(e) => {
+              e.stopPropagation();
+              setKelpOn(!kelpOn);
+            }}
+            aria-pressed={kelpOn}
+          >
+            Kelp
+          </button>
+        )}
       </div>
 
       {/* Always-visible peek strip ------------------------------------- */}
@@ -449,8 +477,7 @@ function layerNameFor(layer) {
 
 // ---- Saved spots list (used inside the open sheet) ------------------------
 
-function SpotsList({ layer, composite, units, activeSpot, setActiveSpot,
-  bundledSpots, openSpotDetail }) {
+function SpotsList({ layer, composite, units, activeSpot, setActiveSpot, bundledSpots, openSpotDetail }) {
   return (
     <div className="ms-spots">
       {SAVED_SPOTS.map((s) => {
@@ -504,10 +531,12 @@ function SpotsList({ layer, composite, units, activeSpot, setActiveSpot,
           unit = "ft";
           col = "var(--ink-2)";
         }
+        const isBundled = bundledSpots?.has(s.id);
+        const isActive = activeSpot === s.id;
         return (
           <div key={s.id} className="ms-spot-row">
             <button
-              className={"ms-spot" + (activeSpot === s.id ? " active" : "")}
+              className={"ms-spot" + (isActive ? " active" : "")}
               onClick={() => setActiveSpot(s.id)}
             >
               <span className="ms-spot-pin" style={{ color: col }}></span>
@@ -525,7 +554,7 @@ function SpotsList({ layer, composite, units, activeSpot, setActiveSpot,
             {/* Spot Detail launch — mobile mirror of the desktop
                 button. Shows only for the active row to keep the
                 list compact on small screens. */}
-            {bundledSpots?.has(s.id) && activeSpot === s.id && (
+            {isBundled && isActive && (
               <button
                 type="button"
                 className="spot-detail-open"
