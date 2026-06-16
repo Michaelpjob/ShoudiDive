@@ -66,6 +66,7 @@ import argparse
 import io
 import json
 import math
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -96,6 +97,33 @@ SPOT_CENTRES = {
     # Centred on the deep kelp bed west of the peninsula (~70-80 ft),
     # so the detail anchor sits on the cliff regime, not the shoreline.
     "pointloma": {"name": "Point Loma", "lng": -117.270, "lat": 32.685},
+    # ── Phase 2: Channel Islands (all 8; Catalina already above) ──────
+    # Centres on each island's centroid so the bbox covers it
+    # symmetrically; radii (below) sized tip-to-tip. Verify extents
+    # against the render and bump radius if clipped (cf. Catalina).
+    "anacapa":     {"name": "Anacapa",           "lng": -119.41, "lat": 34.01},
+    "santacruz":   {"name": "Santa Cruz Is.",    "lng": -119.740, "lat": 34.000},
+    "santarosa":   {"name": "Santa Rosa Is.",    "lng": -120.083, "lat": 33.960},
+    "sanmiguel":   {"name": "San Miguel Is.",    "lng": -120.365, "lat": 34.038},
+    "sbisland":    {"name": "Santa Barbara Is.", "lng": -119.046, "lat": 33.476},
+    "sannicolas":  {"name": "San Nicolas Is.",   "lng": -119.509, "lat": 33.254},
+    "sanclemente": {"name": "San Clemente Is.",  "lng": -118.483, "lat": 32.92},
+    # ── Phase 2: popular shore-diving hubs (S→N) ─────────────────────
+    "laguna":      {"name": "Laguna Beach",  "lng": -117.790, "lat": 33.542},
+    "palosverdes": {"name": "Palos Verdes",  "lng": -118.405, "lat": 33.740},
+    "redondo":     {"name": "Redondo Beach", "lng": -118.398, "lat": 33.842},
+    "malibu":      {"name": "Malibu",        "lng": -118.806, "lat": 34.001},
+    "refugio":     {"name": "Refugio",       "lng": -120.070, "lat": 34.464},
+    "pointlobos":  {"name": "Point Lobos",   "lng": -121.945, "lat": 36.518},
+    "monastery":   {"name": "Monastery",     "lng": -121.923, "lat": 36.534},
+    "jadecove":    {"name": "Jade Cove",     "lng": -121.502, "lat": 35.920},
+    "saltpoint":   {"name": "Salt Point",    "lng": -123.334, "lat": 38.567},
+    "mendocino":   {"name": "Mendocino",     "lng": -123.793, "lat": 39.275},
+    # ── Phase 2: Coronado Islands (Baja, just S of the border) ───────
+    # Bathy/contours/soundings come cross-border; kelp comes from the
+    # SBC LTER Landsat source (CDFW stops at the border) — see
+    # fetch_coronados_kelp / BUILD_BAJA_KELP wiring below.
+    "coronados":   {"name": "Coronados",     "lng": -117.26, "lat": 32.401},
 }
 
 # Mirror of frontend's SPOT_BUNDLE_RADIUS_KM. Same single-source-of-truth
@@ -116,6 +144,33 @@ SPOT_RADIUS_KM = {
     # Kelp bed strip runs ~9 km N-S along the peninsula (Ocean Beach to
     # past the Cabrillo tip); 5 km covers the whole bed + margins.
     "pointloma": 5,
+    # ── Phase 2: Channel Islands ── radius covers island tip-to-tip +
+    # water margin. Big islands (Santa Cruz ~30 km, San Clemente ~34 km)
+    # take a Catalina-style large radius → coarser pixel pitch at 480 px,
+    # acceptable for whole-island context. Re-check each against render.
+    "anacapa":     6,
+    # 2026-06-15: 20 → 24 after QA render — 20 km clipped the island's
+    # east end (San Pedro Pt); Santa Cruz is ~35 km E-W.
+    "santacruz":   24,
+    "santarosa":   16,
+    "sanmiguel":   11,
+    "sbisland":    3,
+    "sannicolas":  11,
+    "sanclemente": 15,
+    # Phase 2: shore-diving hubs (cove/reef scale; PV spans the peninsula).
+    "laguna":      4,
+    "palosverdes": 7,
+    "redondo":     3,
+    "malibu":      5,
+    "refugio":     5,
+    "pointlobos":  3,
+    "monastery":   3,
+    "jadecove":    3,
+    "saltpoint":   4,
+    "mendocino":   4,
+    # Coronado Islands chain spans ~10 km N-S (North Coronado → South
+    # Coronado); 9 km radius covers all four islets + the deep channel.
+    "coronados":   6,
 }
 
 # Max sounding depth (ft) kept in a spot bundle. 330 ft ≈ 100 m, the
@@ -237,6 +292,29 @@ SPOT_DEPTH_RANGES_M = {
     # the old range clamped into a flat max-depth band.
     "catalina": (0, 1300),
     "monterey": (0, 1200),    # Inner Monterey Canyon
+    # ── Phase 2: Channel Islands ── per-island floor from local bathy;
+    # the outer Channel Islands sit on deep escarpments (San Clemente's
+    # west wall, San Nicolas basin). Tune against the render's depth band.
+    "anacapa":     (0, 400),
+    "santacruz":   (0, 800),
+    "santarosa":   (0, 600),
+    "sanmiguel":   (0, 500),
+    "sbisland":    (0, 600),
+    "sannicolas":  (0, 700),
+    "sanclemente": (0, 1100),
+    # Phase 2: shore-diving hubs. Canyon spots (Redondo, Monastery/Carmel
+    # Canyon) drop fast; NorCal/SB reefs are shallow shelf.
+    "laguna":      (0, 150),
+    "palosverdes": (0, 250),
+    "redondo":     (0, 400),
+    "malibu":      (0, 200),
+    "refugio":     (0, 120),
+    "pointlobos":  (0, 200),
+    "monastery":   (0, 400),
+    "jadecove":    (0, 300),
+    "saltpoint":   (0, 100),
+    "mendocino":   (0, 100),
+    "coronados":   (0, 400),   # deep channel between the islands + mainland
 }
 DEFAULT_DEPTH_RANGE_M = (0, 500)
 
@@ -752,6 +830,33 @@ def _douglas_peucker(points, epsilon_deg):
     return [points[i] for i in range(len(points)) if keep[i]]
 
 
+def _smooth_contour_grid(depth_grid, size: int = 3):
+    """Median de-speckle the depth grid before contour tracing.
+
+    NCEI's synthesised bathy carries single-pixel speckle + stripe
+    artefacts in some offshore bboxes (see the module docstring). Raw
+    marching-squares turns that speckle into tens of thousands of tiny
+    segments per level, and the chaining pass then blows up — San
+    Nicolas hung at ~650 s CPU on a 12 km spot. A 3×3 median filter
+    removes the speckle (edge-preserving, unlike a blur) so the segment
+    count stays sane, with no visible change on already-clean DEMs.
+    Runs on a COPY — the raw grid still feeds the bathy PNG + soundings.
+    Land (NaN) is preserved.
+    """
+    g = np.asarray(depth_grid, dtype=float)
+    try:
+        from scipy.ndimage import median_filter
+    except Exception:
+        return g  # scipy absent → skip, keep prior behaviour
+    nan_mask = np.isnan(g)
+    if nan_mask.all():
+        return g
+    filled = np.where(nan_mask, float(np.nanmedian(g)), g)
+    sm = median_filter(filled, size=size, mode="nearest")
+    sm[nan_mask] = np.nan
+    return sm
+
+
 def generate_contours(depth_grid, bbox) -> dict:
     """Walk the depth grid + produce a GeoJSON FeatureCollection of
     MultiLineString contours, one feature per depth level.
@@ -773,6 +878,9 @@ def generate_contours(depth_grid, bbox) -> dict:
     three together drop the contours.geojson from ~5-11 MB down to
     ~100-400 KB.
     """
+    # De-speckle the DEM first: NCEI artefacts otherwise explode the
+    # marching-squares segment count + hang the chaining pass.
+    depth_grid = _smooth_contour_grid(depth_grid)
     # Effective max depth — skip levels past this so we don't trace
     # contours that can't exist (saves CPU + cuts file size).
     try:
@@ -1185,6 +1293,12 @@ def fetch_spot_kelp(spot_id: str, bbox: dict):
     Returns (feature_collection, meta) or None on any failure — the
     caller falls back to clipping the statewide 2016-only file.
     """
+    # Fast-iteration / outage escape hatch: skip the live multi-year
+    # CDFW survey fetch (which stalls ~30 s/year when the FeatureServer
+    # 504s) and let the caller use the local statewide kelp clip. Off by
+    # default; only the dev loop / a degraded-CDFW CI run sets it.
+    if os.environ.get("BUILD_SKIP_KELP") == "1":
+        return None
     try:
         from shapely.geometry import box as shp_box, mapping, shape
         from shapely.ops import unary_union
