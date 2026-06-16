@@ -72,13 +72,20 @@ jobs:
         # advancing. live-cp-manifest finally surfaced it: manifest
         # 58.7h stale on 2026-05-17.
         continue-on-error: true
+        # Skip the slow ocean fetch on a force_spot_bundles run. That path
+        # exists only to rebuild Spot Detail bundles + redeploy, and the
+        # bundles (bathy/coastline/kelp/mpa) don't depend on today's
+        # SST/chl/kd490. Skipping avoids burning the 35-min timeout cap and
+        # lets the freshness sentinels below skip too (they'd otherwise trip
+        # on the deliberately-unrefreshed data and kill the run).
+        if: ${{ !inputs.force_spot_bundles }}
         timeout-minutes: 35
         env:
           EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
         run: python pipeline/fetch.py
 
       - name: Sentinel — fail loudly if ocean fetch produced no fresh output
-        if: ${{ inputs.force_spot_bundles != 'true' }}
+        if: ${{ !inputs.force_spot_bundles }}
         # The previous step has `continue-on-error: true` so a timeout
         # there is silent. This sentinel checks the canonical SST PNG's
         # mtime to detect that case and fails the workflow loudly. Without
@@ -176,6 +183,10 @@ jobs:
         # Walks back to prior day's 00z cycle if today's hasn't fully
         # landed by 06:00 UTC.
         continue-on-error: true
+        # Skip on a force_spot_bundles run — RTOFS is a ~620 MB ocean-model
+        # pull unrelated to the Spot Detail bundles; no need to spend up to
+        # 25 min on it when the run only rebuilds bundles + redeploys.
+        if: ${{ !inputs.force_spot_bundles }}
         timeout-minutes: 25
         run: python pipeline/fetch_rtofs.py
 
@@ -258,7 +269,7 @@ jobs:
       # without having to refire the heavy data pipeline.
 
       - name: Sentinel — fail if SST/chl/wind PNGs unchanged from HEAD
-        if: ${{ inputs.force_spot_bundles != 'true' }}
+        if: ${{ !inputs.force_spot_bundles }}
         # Complements `check_fetch_freshness.py` (which is mtime-based,
         # catches "fetcher didn't run") with a content-based check that
         # catches "fetcher ran but produced byte-identical output."
