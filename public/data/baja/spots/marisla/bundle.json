@@ -1,0 +1,57 @@
+{
+  "id": "marisla",
+  "name": "Marisla Smt",
+  "centre": {
+    "lng": -110.4,
+    "lat": 24.45
+  },
+  "bbox": {
+    "lng_min": -110.44948249613013,
+    "lng_max": -110.35051750386988,
+    "lat_min": 24.404954954954952,
+    "lat_max": 24.495045045045046
+  },
+  "generated_at": "2026-06-16T18:10:20Z",
+  "layers": {
+    "bathy": {
+      "url": "bathy.png",
+      "width": 480,
+      "height": 480,
+      "depth_range_m": [
+        0,
+        500
+      ],
+      "encoding": "linear_8bit_0nan"
+    },
+    "contours": {
+      "url": "contours.geojson",
+      "intervals_m": [
+        1,
+        5,
+        25,
+        100
+      ],
+      "levels": 25
+    },
+    "coastline": {
+      "url": "coastline.geojson",
+      "features": 3
+    },
+    "mpa": {
+      "url": "mpa.geojson",
+      "features": 5
+    },
+    "soundings": {
+      "url": "soundings.geojson",
+      "features": 235
+    }
+  },
+  "sources": {
+    "bathy": "NOAA NCEI DEM global mosaic exportImage (CUDEM/coastal DEMs nearshore, best-available blend)",
+    "coastline": "OSM natural=coastline via fetch_coastline.py \u2014 clipped from global land.geojson",
+    "kelp": "CDFW BIO_CA_Kelp2016 observed aerial-survey canopy (clipped)",
+    "mpa": "CONANP federal ANPs 2020 (marine + island, clipped)",
+    "landmarks": "Curated per-spot dive-site / harbor labels",
+    "soundings": "Depth soundings sampled from the spot DEM on a 24x24 lattice"
+  }
+}
