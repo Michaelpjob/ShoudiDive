@@ -269,7 +269,7 @@ const REGION_SAVED_SPOTS = {
     { id: "cabo-pulmo",   name: "Cabo Pulmo",      lng: -109.424, lat: 23.434 },
     { id: "los-islotes",  name: "Los Islotes",     lng: -110.388, lat: 24.593 },
     { id: "espiritu-stm", name: "Espíritu Santo",  lng: -110.36, lat: 24.49 },
-    { id: "el-bajo",      name: "El Bajo",         lng: -110.375, lat: 24.44 },
+    { id: "el-bajo",      name: "El Bajo",         lng: -110.31, lat: 24.7 },
     { id: "cerralvo",     name: "Cerralvo",        lng: -109.949, lat: 24.445 },
     // Sea of Cortez — central (Loreto NP)
     { id: "isla-carmen",  name: "Isla Carmen",     lng: -111.154, lat: 25.978 },
