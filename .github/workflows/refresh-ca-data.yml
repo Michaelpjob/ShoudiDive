@@ -78,6 +78,7 @@ jobs:
         run: python pipeline/fetch.py
 
       - name: Sentinel — fail loudly if ocean fetch produced no fresh output
+        if: ${{ inputs.force_spot_bundles != 'true' }}
         # The previous step has `continue-on-error: true` so a timeout
         # there is silent. This sentinel checks the canonical SST PNG's
         # mtime to detect that case and fails the workflow loudly. Without
@@ -160,7 +161,7 @@ jobs:
         # used to invalidate the on-disk cache when the builder itself
         # has changed (contour sizing, encoding, etc.).
         continue-on-error: true
-        timeout-minutes: 15
+        timeout-minutes: 30
         run: |
           if [ "${{ inputs.force_spot_bundles }}" = "true" ]; then
             python pipeline/build_spot_bundles.py --force
@@ -257,6 +258,7 @@ jobs:
       # without having to refire the heavy data pipeline.
 
       - name: Sentinel — fail if SST/chl/wind PNGs unchanged from HEAD
+        if: ${{ inputs.force_spot_bundles != 'true' }}
         # Complements `check_fetch_freshness.py` (which is mtime-based,
         # catches "fetcher didn't run") with a content-based check that
         # catches "fetcher ran but produced byte-identical output."
