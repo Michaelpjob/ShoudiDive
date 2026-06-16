@@ -293,7 +293,7 @@
           "uv_url": "/data/wind_uv_now.png",
           "valid_at": "2026-06-16T17:00:00Z",
           "fcst_hour": 5,
-          "source": "HRRR+ECMWF"
+          "source": "HRRR+ECMWF+buoy"
         },
         "p6h": {
           "speed_url": "/data/wind_speed_p6h.png",
@@ -317,6 +317,88 @@
           "source": "GFS+ECMWF"
         }
       },
+      "buoy_correction": {
+        "method": "buoy_kriging_uv",
+        "length_km": 45.0,
+        "anemometer_height_m": 5.0,
+        "n_anchors_total": 6,
+        "n_anchors_active": 6,
+        "mean_resid_ms": 0.75,
+        "anchors": [
+          {
+            "stn": "46086",
+            "name": "San Clemente Basin",
+            "lat": 32.499,
+            "lng": -118.034,
+            "buoy_spd_kt": 10.4,
+            "n_samples": 16,
+            "age_hours": 0.4,
+            "model_spd_kt": 11.8,
+            "resid_ms": 0.9,
+            "skipped": null
+          },
+          {
+            "stn": "46047",
+            "name": "Tanner Bank",
+            "lat": 32.418,
+            "lng": -119.535,
+            "buoy_spd_kt": 11.0,
+            "n_samples": 16,
+            "age_hours": 0.4,
+            "model_spd_kt": 11.0,
+            "resid_ms": 0.9,
+            "skipped": null
+          },
+          {
+            "stn": "46025",
+            "name": "Santa Monica Basin",
+            "lat": 33.765,
+            "lng": -119.077,
+            "buoy_spd_kt": 4.7,
+            "n_samples": 16,
+            "age_hours": 0.4,
+            "model_spd_kt": 6.9,
+            "resid_ms": 1.2,
+            "skipped": null
+          },
+          {
+            "stn": "46011",
+            "name": "Santa Maria",
+            "lat": 34.937,
+            "lng": -120.999,
+            "buoy_spd_kt": 7.4,
+            "n_samples": 15,
+            "age_hours": 0.6,
+            "model_spd_kt": 6.2,
+            "resid_ms": 0.7,
+            "skipped": null
+          },
+          {
+            "stn": "46028",
+            "name": "Cape San Martin",
+            "lat": 35.763,
+            "lng": -121.893,
+            "buoy_spd_kt": 7.0,
+            "n_samples": 14,
+            "age_hours": 0.7,
+            "model_spd_kt": 5.9,
+            "resid_ms": 0.7,
+            "skipped": null
+          },
+          {
+            "stn": "46042",
+            "name": "Monterey",
+            "lat": 36.787,
+            "lng": -122.408,
+            "buoy_spd_kt": 2.8,
+            "n_samples": 16,
+            "age_hours": 0.4,
+            "model_spd_kt": 3.0,
+            "resid_ms": 0.1,
+            "skipped": null
+          }
+        ]
+      },
       "history": {
         "d-1": {
           "uv_url": "/data/wind_uv_d-1.png",
@@ -339,7 +421,7 @@
           "source": "GFS"
         }
       },
-      "generated_at": "2026-06-16T17:20:46Z"
+      "generated_at": "2026-06-16T17:23:45Z"
     },
     "viz": {
       "range_ft": [
@@ -433,11 +515,11 @@
         30.0
       ],
       "tz": "America/Los_Angeles",
-      "generated_at": "2026-06-16T17:21:32Z",
+      "generated_at": "2026-06-16T17:23:55Z",
       "best_window": {
         "day": 0,
         "bucket": "predawn",
-        "mean_kt": 8.5
+        "mean_kt": 8.8
       }
     },
     "swell5d": {
@@ -455,7 +537,7 @@
         25.0
       ],
       "tz": "America/Los_Angeles",
-      "generated_at": "2026-06-16T17:22:12Z"
+      "generated_at": "2026-06-16T17:24:30Z"
     },
     "kd490": {
       "range": [
@@ -509,7 +591,7 @@
       ],
       "unit": "kt",
       "vector_convention": "direction_to",
-      "generated_at": "2026-06-16T17:22:15Z",
+      "generated_at": "2026-06-16T17:24:32Z",
       "best_window": {
         "day": 4,
         "bucket": "afternoon",
