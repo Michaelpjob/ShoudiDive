@@ -173,6 +173,60 @@ SPOT_RADIUS_KM = {
     "coronados":   6,
 }
 
+# ── Baja region spot bundles ─────────────────────────────────────────────
+# When SHOULDIDIVE_REGION=baja the builder swaps the CA dicts above for
+# these. Coords mirror REGION_SAVED_SPOTS.baja in src/lib/mapData.js (the
+# frontend's saved-spot pins); radii sized to the feature + a water margin
+# (islands large; reefs / seamounts / points small). Re-check each against
+# the render and bump if clipped, same as the CA islands.
+BAJA_SPOT_CENTRES = {
+    # Pacific side — kelp coast (California Current)
+    "salsipuedes":  {"name": "Salsipuedes",      "lng": -116.78, "lat": 31.66},
+    "sacramento":   {"name": "Sacramento Reef",  "lng": -116.04, "lat": 30.55},
+    "san-benito":   {"name": "Islas San Benito", "lng": -115.55, "lat": 28.31},
+    "cedros":       {"name": "Isla Cedros",      "lng": -115.20, "lat": 28.20},
+    "bahia-tort":   {"name": "Bahia Tortugas",   "lng": -114.88, "lat": 27.69},
+    "abreojos":     {"name": "Punta Abreojos",   "lng": -113.60, "lat": 26.71},
+    # Cabo corridor
+    "cabo":         {"name": "Cabo San Lucas",   "lng": -109.92, "lat": 22.89},
+    "gordo-banks":  {"name": "Gordo Banks",      "lng": -109.34, "lat": 22.95},
+    # Sea of Cortez — south (La Paz / Cerralvo)
+    "cabo-pulmo":   {"name": "Cabo Pulmo",       "lng": -109.43, "lat": 23.43},
+    "los-islotes":  {"name": "Los Islotes",      "lng": -110.39, "lat": 24.59},
+    "espiritu-stm": {"name": "Espiritu Santo",   "lng": -110.37, "lat": 24.50},
+    "el-bajo":      {"name": "El Bajo",          "lng": -109.96, "lat": 24.59},
+    "marisla":      {"name": "Marisla Smt",      "lng": -110.40, "lat": 24.45},
+    "cerralvo":     {"name": "Cerralvo",         "lng": -109.86, "lat": 24.27},
+    # Sea of Cortez — central (Loreto NP)
+    "isla-carmen":  {"name": "Isla Carmen",      "lng": -111.18, "lat": 26.02},
+    "isla-danzante":{"name": "Isla Danzante",    "lng": -111.27, "lat": 25.78},
+    "loreto":       {"name": "Loreto",           "lng": -111.34, "lat": 26.01},
+    # Midriff Islands
+    "bahia-angel":  {"name": "Bahia de los Angeles", "lng": -113.55, "lat": 28.95},
+}
+
+BAJA_SPOT_RADIUS_KM = {
+    "salsipuedes": 4, "sacramento": 5, "san-benito": 8,
+    "cedros": 24,        # ~35 km island N-S
+    "bahia-tort": 10,    # bay
+    "abreojos": 6,
+    "cabo": 6,           # Land's End + the arch
+    "gordo-banks": 9,    # outer/inner seamount offshore
+    "cabo-pulmo": 6,     # the reef
+    "los-islotes": 3,    # small sea-lion islet
+    "espiritu-stm": 16,  # Espiritu Santo island
+    "el-bajo": 6, "marisla": 5,
+    "cerralvo": 14,      # Isla Cerralvo (Jacques Cousteau)
+    "isla-carmen": 20,   # large island
+    "isla-danzante": 8,
+    "loreto": 9,         # bay + nearshore
+    "bahia-angel": 18,   # big bay + islands
+}
+
+if REGION.name == "baja":
+    SPOT_CENTRES = BAJA_SPOT_CENTRES
+    SPOT_RADIUS_KM = BAJA_SPOT_RADIUS_KM
+
 # Max sounding depth (ft) kept in a spot bundle. 330 ft ≈ 100 m, the
 # technical-diving floor; deeper lattice samples are open-ocean noise
 # that clutter deep-water spots (see the sounding filter in build_spot).
@@ -1289,6 +1343,10 @@ KELP_SURVEY_LAYERS = [  # (service layer index, survey year)
 KELP_SOURCES_LANDSAT = {
     "coronados", "jadecove", "malibu", "palosverdes",
     "mendocino", "saltpoint", "sanclemente", "sannicolas",
+    # Baja Pacific kelp coast (California Current). The widened Landsat
+    # extract now reaches 27N, so these draw real canopy. Gulf-side Baja
+    # spots are deliberately absent — there is no kelp in the Sea of Cortez.
+    "salsipuedes", "sacramento", "san-benito", "cedros", "bahia-tort", "abreojos",
 }
 _LANDSAT_KELP_CACHE = None
 
@@ -1894,11 +1952,11 @@ def main() -> int:
     args = parser.parse_args()
 
     region_name = REGION.name if hasattr(REGION, "name") else "ca"
-    if region_name != "ca":
-        # MVP is CA-only. Write an empty index so the frontend's
-        # bundled-spots set is { } and no "View detailed map" buttons
-        # render outside CA — graceful no-op.
-        print(f"[build_spot_bundles] region={region_name} — MVP is CA-only, "
+    if region_name not in ("ca", "baja"):
+        # ca + baja have curated SPOT_CENTRES. Other regions write an empty
+        # index so no "View detailed map" buttons render there — a graceful
+        # no-op until their spot lists are curated.
+        print(f"[build_spot_bundles] region={region_name} — no spot list yet, "
               f"writing empty index.json")
         write_index([])
         return 0
