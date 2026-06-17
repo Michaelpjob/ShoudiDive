@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-06-17T12:37:09Z",
+  "generated_at": "2026-06-17T16:47:12Z",
   "tz": "America/Los_Angeles",
   "anchor_date": "2026-06-17",
-  "hrrr_cycle": "2026-06-17T06:00:00Z",
-  "gfs_cycle": "2026-06-17T06:00:00Z",
+  "hrrr_cycle": "2026-06-17T12:00:00Z",
+  "gfs_cycle": "2026-06-17T12:00:00Z",
   "buckets_def": [
     {
       "name": "predawn",
@@ -43,13 +43,12 @@
           "day": 0,
           "bucket": "predawn",
           "hours": [
-            4,
             5
           ],
-          "mean_kt": 22.9,
-          "min_kt": 22.9,
-          "max_kt": 23.0,
-          "mean_dir_deg": 11.0,
+          "mean_kt": 20.9,
+          "min_kt": 20.9,
+          "max_kt": 20.9,
+          "mean_dir_deg": 9.0,
           "uv_url": "/data/wind/buckets/d0_predawn_uv.png",
           "sources": [
             "hrrr"
@@ -64,9 +63,9 @@
             8,
             9
           ],
-          "mean_kt": 22.6,
-          "min_kt": 22.4,
-          "max_kt": 22.7,
+          "mean_kt": 21.8,
+          "min_kt": 21.2,
+          "max_kt": 22.1,
           "mean_dir_deg": 11.0,
           "uv_url": "/data/wind/buckets/d0_morning_uv.png",
           "sources": [
@@ -82,10 +81,10 @@
             12,
             13
           ],
-          "mean_kt": 22.7,
-          "min_kt": 22.5,
-          "max_kt": 23.0,
-          "mean_dir_deg": 9.0,
+          "mean_kt": 22.0,
+          "min_kt": 21.8,
+          "max_kt": 22.3,
+          "mean_dir_deg": 11.0,
           "uv_url": "/data/wind/buckets/d0_midday_uv.png",
           "sources": [
             "hrrr"
@@ -101,11 +100,27 @@
             17,
             18
           ],
-          "mean_kt": 23.7,
-          "min_kt": 23.3,
-          "max_kt": 24.1,
+          "mean_kt": 23.5,
+          "min_kt": 22.7,
+          "max_kt": 24.2,
           "mean_dir_deg": 7.0,
           "uv_url": "/data/wind/buckets/d0_afternoon_uv.png",
+          "sources": [
+            "hrrr"
+          ]
+        },
+        {
+          "day": 0,
+          "bucket": "evening",
+          "hours": [
+            19,
+            20
+          ],
+          "mean_kt": 24.4,
+          "min_kt": 24.4,
+          "max_kt": 24.4,
+          "mean_dir_deg": 7.0,
+          "uv_url": "/data/wind/buckets/d0_evening_uv.png",
           "sources": [
             "hrrr"
           ]
@@ -119,7 +134,58 @@
       "label": "+1",
       "weekday": "Thursday",
       "confidence": "high",
-      "buckets": [],
+      "buckets": [
+        {
+          "day": 1,
+          "bucket": "predawn",
+          "hours": [
+            4,
+            5
+          ],
+          "mean_kt": 21.3,
+          "min_kt": 21.1,
+          "max_kt": 21.4,
+          "mean_dir_deg": 12.0,
+          "uv_url": "/data/wind/buckets/d1_predawn_uv.png",
+          "sources": [
+            "hrrr"
+          ]
+        },
+        {
+          "day": 1,
+          "bucket": "morning",
+          "hours": [
+            6,
+            7,
+            8,
+            9
+          ],
+          "mean_kt": 20.1,
+          "min_kt": 19.7,
+          "max_kt": 20.7,
+          "mean_dir_deg": 14.0,
+          "uv_url": "/data/wind/buckets/d1_morning_uv.png",
+          "sources": [
+            "hrrr"
+          ]
+        },
+        {
+          "day": 1,
+          "bucket": "midday",
+          "hours": [
+            10,
+            11
+          ],
+          "mean_kt": 19.7,
+          "min_kt": 19.6,
+          "max_kt": 19.7,
+          "mean_dir_deg": 11.0,
+          "uv_url": "/data/wind/buckets/d1_midday_uv.png",
+          "sources": [
+            "hrrr"
+          ]
+        }
+      ],
       "hourly_url_template": "/data/wind/hourly/d1_h{HH}_uv.png"
     },
     {
@@ -137,7 +203,23 @@
       "label": "+3",
       "weekday": "Saturday",
       "confidence": "medium",
-      "buckets": [],
+      "buckets": [
+        {
+          "day": 3,
+          "bucket": "predawn",
+          "hours": [
+            5
+          ],
+          "mean_kt": 14.7,
+          "min_kt": 14.7,
+          "max_kt": 14.7,
+          "mean_dir_deg": 332.0,
+          "uv_url": "/data/wind/buckets/d3_predawn_uv.png",
+          "sources": [
+            "gfs"
+          ]
+        }
+      ],
       "hourly_url_template": "/data/wind/hourly/d3_h{HH}_uv.png"
     },
     {
@@ -169,9 +251,9 @@
     }
   ],
   "best_window": {
-    "day": 0,
-    "bucket": "morning",
-    "mean_kt": 22.6
+    "day": 3,
+    "bucket": "predawn",
+    "mean_kt": 14.7
   },
   "speed_range": [
     0.0,
