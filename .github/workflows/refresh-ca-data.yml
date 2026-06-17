@@ -285,15 +285,21 @@ jobs:
       # without having to refire the heavy data pipeline.
 
       - name: Coverage guard — keep last-good for any near-empty layer
-        if: ${{ !inputs.force_spot_bundles }}
+        # always() is REQUIRED. An earlier step that FAILS — e.g. the
+        # post-fetch freshness sentinel firing on a degraded chl_1d — would
+        # otherwise skip this guard (a custom `if:` still carries an implicit
+        # success()), yet the commit step below runs with if: always() and
+        # would land the degraded layer anyway. That stranded a 9%-valid
+        # chl_1d on main twice (e.g. run 27666503612: fetch ok → freshness
+        # sentinel FAILED → guard SKIPPED → commit still ran), breaking
+        # test_no_nan_floods for every open PR. always() runs the guard so it
+        # restores last-good BEFORE the always-commit, regardless of prior
+        # failures. A flaky / dead ERDDAP source emits a near-empty 1-day
+        # composite; this restores the prior good PNG from HEAD for any layer
+        # below its valid floor (an all-failed fetch → every layer restored to
+        # HEAD = unchanged → the unchanged-sentinel below still trips).
+        if: ${{ always() && !inputs.force_spot_bundles }}
         continue-on-error: true
-        # A flaky / dead ERDDAP fetch can emit a near-empty 1-day composite
-        # (chl_1d fell to 9% valid on 2026-06-16 when both SST sources were
-        # down). This restores the prior good PNG from HEAD for any layer
-        # below its valid floor, so a bad fetch keeps last-good instead of
-        # degrading prod + breaking the test_no_nan_floods gate for every
-        # open PR. Runs BEFORE the sentinel so an all-failed fetch (every
-        # layer restored to HEAD = unchanged) still trips it.
         run: python pipeline/check_coverage_guard.py
 
       - name: Sentinel — fail if SST/chl/wind PNGs unchanged from HEAD

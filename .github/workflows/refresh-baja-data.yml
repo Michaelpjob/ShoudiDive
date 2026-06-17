@@ -75,6 +75,12 @@ jobs:
         run: python pipeline/check_fetch_freshness.py --layer sst
 
       - name: Coverage guard — keep last-good for any near-empty layer
+        # always() so a failed earlier step (e.g. the SST freshness sentinel
+        # above) can't skip the guard before the always-commit lands a
+        # degraded layer — without it a custom/implicit success() drops the
+        # guard on any prior failure. See refresh-ca-data.yml for the full
+        # post-mortem (chl_1d stranded at 9% valid, run 27666503612).
+        if: ${{ always() }}
         continue-on-error: true
         # Restores the prior good PNG from HEAD for any ocean layer that came
         # out below its valid floor (a dead ERDDAP source emits a near-empty
