@@ -23,8 +23,9 @@
 //     plus decimal degrees and live depth readout
 //   * Click to drop marks; copy coordinates to clipboard to punch
 //     into a GPS unit
-//   * Observed kelp canopy (CDFW 2016 aerial survey) as a hatch
-//     overlay — actual forest extent, not management rectangles
+//   * Recent kelp canopy (SBC LTER Landsat, last 4 quarters) as a hatch
+//     overlay — where the forest actually is now, not where it stood at
+//     the decade-old 2016 CDFW aerial peak
 //   * Reef / canyon / bank callouts in chart-italic labels
 //
 // Data: pre-computed bundle at public/data/spots/<id>/ (bathy.png,
@@ -983,14 +984,17 @@ export default function SpotDetailView({ spot, onClose, isMobile = false }) {
                 <rect width="6" height="6" fill="rgba(34, 110, 60, 0.40)" />
                 <line x1="0" y1="0" x2="0" y2="6" stroke="#14532d" strokeWidth="1.3" />
               </pattern>
-              {/* Kelp subsurface — dot stipple */}
+              {/* Kelp FORMER extent — faint desaturated ghost (all-time
+                  extent that no longer carries live canopy). Greyed +
+                  low-opacity so it clearly reads as "kelp was here, gone
+                  now", never as live kelp. */}
               <pattern
-                id="kelp-subsurface-dots"
-                width="5" height="5"
+                id="kelp-former-ghost"
+                width="6" height="6"
                 patternUnits="userSpaceOnUse"
               >
-                <rect width="5" height="5" fill="rgba(74, 160, 100, 0.22)" />
-                <circle cx="2.5" cy="2.5" r="0.9" fill="#15803d" />
+                <rect width="6" height="6" fill="rgba(118, 126, 120, 0.20)" />
+                <circle cx="3" cy="3" r="0.85" fill="rgba(84, 92, 86, 0.60)" />
               </pattern>
             </defs>
 
@@ -1074,18 +1078,21 @@ export default function SpotDetailView({ spot, onClose, isMobile = false }) {
               </g>
             )}
 
-            {/* 6. Kelp canopy — observed forest extent, hatched. Drawn
-                above land so shoreline-hugging fronds never get cut. */}
+            {/* 6. Kelp — two layers: faint grey "former extent" ghost
+                (all-time, drawn first so it sits underneath) + the vivid
+                green current-canopy hatch on top. Drawn above land so
+                shoreline-hugging fronds never get cut. */}
             {layers.kelp && (
               <g>
                 {kelpPaths.map((p) => (
                   <path
                     key={p.key}
                     d={p.d}
-                    fill={p.surface ? "url(#kelp-canopy-hatch)" : "url(#kelp-subsurface-dots)"}
-                    stroke={p.surface ? "#14532d" : "#15803d"}
+                    fill={p.surface ? "url(#kelp-canopy-hatch)" : "url(#kelp-former-ghost)"}
+                    stroke={p.surface ? "#14532d" : "rgba(82, 90, 84, 0.8)"}
                     strokeWidth={p.surface ? 1.4 : 1.0}
-                    strokeOpacity="0.9"
+                    strokeDasharray={p.surface ? undefined : "3 2.5"}
+                    strokeOpacity={p.surface ? 0.9 : 0.85}
                     vectorEffect="non-scaling-stroke"
                   >
                     <title>
@@ -1484,7 +1491,9 @@ export default function SpotDetailView({ spot, onClose, isMobile = false }) {
         <span className="spot-detail-sources">
           Bathy: {bundle?.manifest?.sources?.bathy?.includes("NCEI")
             ? "NOAA NCEI DEM mosaic"
-            : "GMRT"} · Coast: OSM · Kelp: CDFW 2016 aerial survey · Soundings: DEM-derived
+            : "GMRT"} · Coast: OSM · Kelp: {bundle?.manifest?.sources?.kelp?.includes("Landsat")
+            ? "SBC LTER Landsat (3-yr canopy)"
+            : "CDFW 2016 aerial survey"} · Soundings: DEM-derived
         </span>
         {bundleDate && (
           <span className="spot-detail-fresh mono">chart {bundleDate}</span>
