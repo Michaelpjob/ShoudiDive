@@ -1750,36 +1750,45 @@ def build_spot(spot_id: str, *, force: bool) -> bool:
     except Exception as e:
         print(f"    NCEI mosaic fetch failed ({e!r}) — falling back to GMRT")
 
-    # GMRT pass runs only when needed: NCEI down entirely, or the
-    # mosaic returned nodata holes inside the bbox (possible for
-    # offshore-heavy future spots — today's three CA spots are fully
-    # covered, so this is normally skipped).
-    hole_frac = (float(np.mean(~np.isfinite(z_grid)))
-                 if z_grid is not None else 1.0)
-    if hole_frac > 0.0:
-        try:
-            nc_bytes = fetch_gmrt_dem(bbox)
-            gz, g_lats, g_lons = parse_gmrt_netcdf(nc_bytes)
-            g_grid = resample_to_bbox(gz, g_lats, g_lons, bbox,
-                                      BATHY_SIZE, BATHY_SIZE)
-            if z_grid is None:
-                z_grid = g_grid
-                bathy_source = ("GMRT high-resolution GridServer "
-                                "(NetCDF; NCEI mosaic unavailable)")
-            else:
-                fill = ~np.isfinite(z_grid) & np.isfinite(g_grid)
-                if fill.any():
-                    z_grid[fill] = g_grid[fill]
-                    pct = 100.0 * float(fill.mean())
-                    bathy_source += f" + GMRT offshore fill ({pct:.1f}% px)"
-                    print(f"    [blend] filled {int(fill.sum())} px "
-                          f"({pct:.1f}%) from GMRT")
-        except Exception as e:
-            if z_grid is None:
-                print(f"  ERROR: NCEI and GMRT bathy fetches both failed: {e!r}")
-                return False
-            print(f"    [blend] GMRT fill unavailable ({e!r}) — "
-                  f"{hole_frac * 100.0:.1f}% px stay transparent")
+    # GMRT pass — ALWAYS fetch the high-res GMRT grid and blend with NCEI.
+    # Two roles: (a) fill NCEI nodata holes; (b) the SHELF FIX — the coarse
+    # NCEI mosaic marks the shallow Baja subtidal shelf as land/positive
+    # elevation (no real depth), but GMRT resolves the ACTUAL nearshore depth
+    # there. Where NCEI says land (z>=0 or NaN) but GMRT says water (z<0), take
+    # GMRT's real depth instead of fabricating one — this is why the kelp shelf
+    # was reading "0 ft"/"land". CA's CUDEM nearshore is already z<0, so the
+    # shelf fix barely touches CA; it rescues Baja. (Was hole-only before, which
+    # never triggered for Baja because the bad shelf is positive, not NaN.)
+    g_grid = None
+    try:
+        nc_bytes = fetch_gmrt_dem(bbox)
+        gz, g_lats, g_lons = parse_gmrt_netcdf(nc_bytes)
+        g_grid = resample_to_bbox(gz, g_lats, g_lons, bbox,
+                                  BATHY_SIZE, BATHY_SIZE)
+    except Exception as e:
+        if z_grid is None:
+            print(f"  ERROR: NCEI and GMRT bathy fetches both failed: {e!r}")
+            return False
+        print(f"    [blend] GMRT unavailable ({e!r}) — NCEI only")
+    if g_grid is not None:
+        if z_grid is None:
+            z_grid = g_grid
+            bathy_source = ("GMRT high-resolution GridServer "
+                            "(NetCDF; NCEI mosaic unavailable)")
+        else:
+            holes = ~np.isfinite(z_grid) & np.isfinite(g_grid)
+            shelf = (np.isfinite(z_grid) & (z_grid >= 0)
+                     & np.isfinite(g_grid) & (g_grid < 0))
+            use = holes | shelf
+            if use.any():
+                z_grid[use] = g_grid[use]
+                print(f"    [blend] GMRT: {int(holes.sum())} hole + "
+                      f"{int(shelf.sum())} shelf px (NCEI land → GMRT water)")
+                if shelf.any():
+                    bathy_source += " + GMRT nearshore-shelf depths"
+                elif holes.any():
+                    bathy_source += (
+                        f" + GMRT offshore fill ({100.0 * float(holes.mean()):.1f}% px)")
 
     try:
         depth_grid = np.where(z_grid < 0, -z_grid, np.nan).astype(np.float32)
