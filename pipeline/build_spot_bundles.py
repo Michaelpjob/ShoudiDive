@@ -179,32 +179,27 @@ SPOT_RADIUS_KM = {
 # frontend's saved-spot pins); radii sized to the feature + a water margin
 # (islands large; reefs / seamounts / points small). Re-check each against
 # the render and bump if clipped, same as the CA islands.
-# 2026-06-16 re-tune: centres re-anchored on the actual dive feature (research
-# + Landsat kelp-centroid cross-check) and radii tightened — the prior hand-set
-# values framed the wrong area / zoomed out so far the dive site fell out of
-# frame. "marisla" was dropped: it's the same feature as "el-bajo" (Marisla
-# Seamount = El Bajo Seamount). "loreto" re-centred onto Isla Coronado (the town
-# has no in-water diving). Cabo→Land's End, cerralvo→La Reina rock, bahia-angel→
-# the bay's dive islands, gordo-banks→the inner seamount.
+# 2026-06-16 re-tune + QA pass: centres re-anchored on the actual dive feature
+# (research + Landsat kelp-centroid cross-check), radii tightened, and framing
+# offset toward the dive water so a big island doesn't fill the frame. Dropped
+# from the DETAIL set (kept as main-map points only, no bundle): marisla
+# (= el-bajo dup) and — per user QA on the live maps — cabo / gordo-banks /
+# el-bajo / cerralvo (deep seamounts/pinnacles + a land-heavy cape the coarse
+# Mexico DEM can't render as useful dive charts). "loreto" → Isla Coronado.
 BAJA_SPOT_CENTRES = {
     # Pacific side — kelp coast (California Current)
     "salsipuedes":  {"name": "Salsipuedes",      "lng": -116.787, "lat": 31.974},
     "sacramento":   {"name": "Sacramento Reef",  "lng": -115.790, "lat": 29.760},
     "san-benito":   {"name": "Islas San Benito", "lng": -115.575, "lat": 28.306},
-    "cedros":       {"name": "Isla Cedros",      "lng": -115.190, "lat": 28.110},
+    "cedros":       {"name": "Isla Cedros",      "lng": -115.165, "lat": 28.080},
     "bahia-tort":   {"name": "Bahia Tortugas",   "lng": -114.896, "lat": 27.655},
     "abreojos":     {"name": "Punta Abreojos",   "lng": -113.575, "lat": 26.715},
-    # Cabo corridor
-    "cabo":         {"name": "Cabo San Lucas",   "lng": -109.894, "lat": 22.876},
-    "gordo-banks":  {"name": "Gordo Banks",      "lng": -109.456, "lat": 23.057},
-    # Sea of Cortez — south (La Paz / Cerralvo)
+    # Sea of Cortez — south (La Paz)
     "cabo-pulmo":   {"name": "Cabo Pulmo",       "lng": -109.424, "lat": 23.434},
-    "los-islotes":  {"name": "Los Islotes",      "lng": -110.388, "lat": 24.593},
-    "espiritu-stm": {"name": "Espiritu Santo",   "lng": -110.360, "lat": 24.490},
-    "el-bajo":      {"name": "El Bajo",          "lng": -110.310, "lat": 24.700},
-    "cerralvo":     {"name": "Cerralvo",         "lng": -109.949, "lat": 24.445},
+    "los-islotes":  {"name": "Los Islotes",      "lng": -110.385, "lat": 24.600},
+    "espiritu-stm": {"name": "Espiritu Santo",   "lng": -110.405, "lat": 24.520},
     # Sea of Cortez — central (Loreto NP)
-    "isla-carmen":  {"name": "Isla Carmen",      "lng": -111.154, "lat": 25.978},
+    "isla-carmen":  {"name": "Isla Carmen",      "lng": -111.180, "lat": 26.030},
     "isla-danzante":{"name": "Isla Danzante",    "lng": -111.251, "lat": 25.786},
     "loreto":       {"name": "Loreto",           "lng": -111.274, "lat": 26.119},
     # Midriff Islands
@@ -212,18 +207,14 @@ BAJA_SPOT_CENTRES = {
 }
 
 BAJA_SPOT_RADIUS_KM = {
-    "salsipuedes": 5, "sacramento": 6, "san-benito": 8,
-    "cedros": 8,         # SE dive coast near the village (not the whole island)
+    "salsipuedes": 5, "sacramento": 6, "san-benito": 5,
+    "cedros": 7,         # SE dive coast, island pushed to the W edge
     "bahia-tort": 7,
     "abreojos": 6,
-    "cabo": 5,           # Land's End / the arch + marine-park rocks
-    "gordo-banks": 6,    # inner seamount (deep — DEM can't resolve the pinnacle)
     "cabo-pulmo": 7,     # the reef park
-    "los-islotes": 5,    # sea-lion islets
-    "espiritu-stm": 9,   # large island chain
-    "el-bajo": 6,        # Marisla / El Bajo seamount (deep)
-    "cerralvo": 6,       # La Reina rock off the N tip
-    "isla-carmen": 9,    # large island
+    "los-islotes": 4,    # sea-lion islets (Partida pushed to the edge)
+    "espiritu-stm": 6,   # W dive coast, island to one side
+    "isla-carmen": 6,    # NW dive coast (Punta Lobos), island to one side
     "isla-danzante": 6,
     "loreto": 6,         # Isla Coronado (dive area N of town)
     "bahia-angel": 8,    # the bay's dive islands
@@ -1150,6 +1141,101 @@ def _mask_depth_by_land(depth_grid, bbox, land_path):
     return masked
 
 
+def _fill_nearshore_nodata(depth_grid, max_iters: int = 45):
+    """Fill no-data depth cells by smoothly extending the nearest resolved depth
+    inward, up to ~max_iters px from valid water.
+
+    The coarse NCEI/GEBCO mosaic over Baja marks the shallow subtidal shelf as
+    z≥0 (land elevation), so build_spot turns it into NaN and the kelp zone
+    renders as "land" with a "land" depth readout — the exact bug the user hit.
+    This dilation fills that nearshore band with a smooth ramp off the nearest
+    real depths. It runs BEFORE the OSM land burn, so true above-water land is
+    re-cut to NaN afterwards; only the OSM-water shelf keeps the filled depth.
+    """
+    import numpy as _np
+    d = _np.asarray(depth_grid, dtype=_np.float32).copy()
+    for _ in range(max_iters):
+        nan = ~_np.isfinite(d)
+        if not nan.any():
+            break
+        acc = _np.zeros_like(d)
+        cnt = _np.zeros_like(d)
+        for axis, shift in ((0, 1), (0, -1), (1, 1), (1, -1)):
+            rolled = _np.roll(d, shift, axis=axis)
+            valid = _np.isfinite(rolled)
+            acc += _np.where(valid, _np.nan_to_num(rolled), 0.0)
+            cnt += valid
+        fillable = nan & (cnt > 0)
+        if not fillable.any():
+            break
+        d[fillable] = (acc[fillable] / cnt[fillable])
+    return d
+
+
+def _clip_kelp_to_water(kelp_fc: dict, land_path, bbox: dict) -> dict:
+    """Subtract the OSM land polygon from kelp polygons so kelp never paints
+    over land. Landsat kelp false-positives on the wet rocky shore (surf /
+    shadow read as canopy); against the bathy's OSM land mask that shows up as
+    "kelp on land" with a "land" depth readout. Uses the SAME land.geojson the
+    bathy mask uses, so kelp ⊆ water by construction.
+    """
+    if kelp_fc is None or not land_path.exists():
+        return kelp_fc
+    try:
+        import json as _json
+        from shapely.geometry import shape as _shape, box as _box, mapping as _mapping
+        from shapely.ops import unary_union as _unary_union
+        from shapely.validation import make_valid as _make_valid
+    except ImportError:
+        return kelp_fc
+    with land_path.open("r", encoding="utf-8") as f:
+        fc = _json.load(f)
+    spot_box = _box(bbox["lng_min"], bbox["lat_min"], bbox["lng_max"], bbox["lat_max"])
+    geoms = []
+    for feat in fc.get("features", []) or []:
+        try:
+            g = _shape(feat["geometry"])
+            if g.is_empty:
+                continue
+            if not g.is_valid:
+                g = _make_valid(g)
+                if g.is_empty:
+                    continue
+            if g.intersects(spot_box):
+                geoms.append(g)
+        except Exception:
+            continue
+    if not geoms:
+        return kelp_fc  # offshore spot — no land to subtract
+    land_union = _unary_union(geoms)
+    out_feats = []
+    dropped = 0
+    for feat in kelp_fc.get("features", []) or []:
+        try:
+            g = _shape(feat["geometry"])
+            if not g.is_valid:
+                g = _make_valid(g)
+            cut = g.difference(land_union)
+            if cut.is_empty:
+                dropped += 1
+                continue
+            if cut.geom_type not in ("Polygon", "MultiPolygon"):
+                polys = [gg for gg in getattr(cut, "geoms", [cut])
+                         if gg.geom_type in ("Polygon", "MultiPolygon")]
+                if not polys:
+                    dropped += 1
+                    continue
+                cut = _unary_union(polys)
+            out_feats.append({"type": "Feature",
+                              "properties": feat.get("properties", {}),
+                              "geometry": _mapping(cut)})
+        except Exception:
+            out_feats.append(feat)  # keep original if the clip errors
+    if dropped:
+        print(f"    [kelp] clipped {dropped} all-on-land kelp feature(s) to water")
+    return {"type": "FeatureCollection", "features": out_feats}
+
+
 def fetch_overpass_coastline_for_bbox(bbox: dict) -> dict | None:
     """Pull native-resolution OSM coastline ways for a single spot bbox.
 
@@ -1697,6 +1783,12 @@ def build_spot(spot_id: str, *, force: bool) -> bool:
 
     try:
         depth_grid = np.where(z_grid < 0, -z_grid, np.nan).astype(np.float32)
+        # Fill the shallow-shelf no-data BEFORE the OSM burn. The coarse Baja
+        # DEM marks the subtidal kelp shelf as land elevation (z≥0 → NaN), so
+        # the kelp zone would otherwise render as "land"; this ramps the nearest
+        # real depths into that nearshore band. The OSM burn below re-cuts true
+        # above-water land, so only the OSM-water shelf keeps the filled depth.
+        depth_grid = _fill_nearshore_nodata(depth_grid)
         # Burn the OSM coastline into the bathy grid: any pixel whose
         # centre falls inside an OSM land polygon becomes NaN.
         # Without this, the bathy PNG carries the GMRT coastline as a
@@ -1793,6 +1885,7 @@ def build_spot(spot_id: str, *, force: bool) -> bool:
         spot_kelp = fetch_spot_kelp(spot_id, bbox)
     if spot_kelp is not None:
         kelp_fc, kelp_meta = spot_kelp
+        kelp_fc = _clip_kelp_to_water(kelp_fc, region_data_dir / "land.geojson", bbox)
         out_path = bundle_dir / "kelp.geojson"
         out_path.write_text(json.dumps(kelp_fc, separators=(",", ":")))
         layers_meta["kelp"] = {
