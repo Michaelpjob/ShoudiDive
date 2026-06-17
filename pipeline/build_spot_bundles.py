@@ -200,19 +200,25 @@ SPOT_RADIUS_KM = {
 # el-bajo / cerralvo (deep seamounts/pinnacles + a land-heavy cape the coarse
 # Mexico DEM can't render as useful dive charts). "loreto" → Isla Coronado.
 BAJA_SPOT_CENTRES = {
+    # 2026-06-16: same seaward re-framing pass as the CA shore spots —
+    # abreojos (mainland point) shifted S off its land block; espiritu-stm /
+    # isla-carmen (big islands) shifted W onto the dive coast so the island
+    # sits ~1/3 of the frame and the reef water dominates. Each checked
+    # against a render. The rest were already water-dominant (islands/reefs
+    # framed with water around them; salsipuedes' kelp coast frames fine).
     # Pacific side — kelp coast (California Current)
     "salsipuedes":  {"name": "Salsipuedes",      "lng": -116.787, "lat": 31.974},
     "sacramento":   {"name": "Sacramento Reef",  "lng": -115.790, "lat": 29.760},
     "san-benito":   {"name": "Islas San Benito", "lng": -115.575, "lat": 28.306},
     "cedros":       {"name": "Isla Cedros",      "lng": -115.165, "lat": 28.080},
     "bahia-tort":   {"name": "Bahia Tortugas",   "lng": -114.896, "lat": 27.655},
-    "abreojos":     {"name": "Punta Abreojos",   "lng": -113.575, "lat": 26.715},
+    "abreojos":     {"name": "Punta Abreojos",   "lng": -113.575, "lat": 26.700},
     # Sea of Cortez — south (La Paz)
     "cabo-pulmo":   {"name": "Cabo Pulmo",       "lng": -109.424, "lat": 23.434},
     "los-islotes":  {"name": "Los Islotes",      "lng": -110.385, "lat": 24.600},
-    "espiritu-stm": {"name": "Espiritu Santo",   "lng": -110.405, "lat": 24.520},
+    "espiritu-stm": {"name": "Espiritu Santo",   "lng": -110.422, "lat": 24.520},
     # Sea of Cortez — central (Loreto NP)
-    "isla-carmen":  {"name": "Isla Carmen",      "lng": -111.180, "lat": 26.030},
+    "isla-carmen":  {"name": "Isla Carmen",      "lng": -111.198, "lat": 26.030},
     "isla-danzante":{"name": "Isla Danzante",    "lng": -111.251, "lat": 25.786},
     "loreto":       {"name": "Loreto",           "lng": -111.274, "lat": 26.119},
     # Midriff Islands
