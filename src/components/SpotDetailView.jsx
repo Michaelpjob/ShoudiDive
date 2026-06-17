@@ -23,8 +23,9 @@
 //     plus decimal degrees and live depth readout
 //   * Click to drop marks; copy coordinates to clipboard to punch
 //     into a GPS unit
-//   * Observed kelp canopy (CDFW 2016 aerial survey) as a hatch
-//     overlay — actual forest extent, not management rectangles
+//   * Recent kelp canopy (SBC LTER Landsat, last 4 quarters) as a hatch
+//     overlay — where the forest actually is now, not where it stood at
+//     the decade-old 2016 CDFW aerial peak
 //   * Reef / canyon / bank callouts in chart-italic labels
 //
 // Data: pre-computed bundle at public/data/spots/<id>/ (bathy.png,
