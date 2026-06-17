@@ -109,15 +109,25 @@ SPOT_CENTRES = {
     "sannicolas":  {"name": "San Nicolas Is.",   "lng": -119.509, "lat": 33.254},
     "sanclemente": {"name": "San Clemente Is.",  "lng": -118.483, "lat": 32.92},
     # ── Phase 2: popular shore-diving hubs (S→N) ─────────────────────
-    "laguna":      {"name": "Laguna Beach",  "lng": -117.790, "lat": 33.542},
-    "palosverdes": {"name": "Palos Verdes",  "lng": -118.405, "lat": 33.740},
+    # 2026-06-16: 7 of these were re-centred SEAWARD (refugio + malibu
+    # also zoomed in — see SPOT_RADIUS_KM) after user QA ("seeing the same
+    # issue on ca detailed maps", flagged on Refugio): an on-shore centre
+    # put a featureless land block over 40-60% of the chart. Each was
+    # tuned per-spot to ~20-30% land (the build's [mask] %) so the reef /
+    # kelp / depth gradient — the dive — fills the frame, then checked
+    # against a local render; same fix as the Baja spots. The overview-map
+    # pin (REGION_SAVED_SPOTS) stays at the dive site; only the detail
+    # bbox re-frames. redondo / lajolla / monterey / jadecove / mendocino
+    # / pointloma already framed water-dominant and were left as-is.
+    "laguna":      {"name": "Laguna Beach",  "lng": -117.801, "lat": 33.531},
+    "palosverdes": {"name": "Palos Verdes",  "lng": -118.418, "lat": 33.718},
     "redondo":     {"name": "Redondo Beach", "lng": -118.398, "lat": 33.842},
-    "malibu":      {"name": "Malibu",        "lng": -118.806, "lat": 34.001},
-    "refugio":     {"name": "Refugio",       "lng": -120.070, "lat": 34.464},
-    "pointlobos":  {"name": "Point Lobos",   "lng": -121.945, "lat": 36.518},
-    "monastery":   {"name": "Monastery",     "lng": -121.923, "lat": 36.534},
+    "malibu":      {"name": "Malibu",        "lng": -118.787, "lat": 33.996},
+    "refugio":     {"name": "Refugio",       "lng": -120.068, "lat": 34.450},
+    "pointlobos":  {"name": "Point Lobos",   "lng": -121.960, "lat": 36.518},
+    "monastery":   {"name": "Monastery",     "lng": -121.950, "lat": 36.534},
     "jadecove":    {"name": "Jade Cove",     "lng": -121.502, "lat": 35.920},
-    "saltpoint":   {"name": "Salt Point",    "lng": -123.334, "lat": 38.567},
+    "saltpoint":   {"name": "Salt Point",    "lng": -123.352, "lat": 38.562},
     "mendocino":   {"name": "Mendocino",     "lng": -123.793, "lat": 39.275},
     # ── Phase 2: Coronado Islands (Baja, just S of the border) ───────
     # Bathy/contours/soundings come cross-border; kelp comes from the
@@ -161,8 +171,11 @@ SPOT_RADIUS_KM = {
     "laguna":      4,
     "palosverdes": 7,
     "redondo":     3,
-    "malibu":      5,
-    "refugio":     5,
+    # 2026-06-16: malibu 5→4 (zoom past the Santa Monica canyon onto the
+    # Point Dume kelp), refugio 5→3 (gentle straight shelf read as deep-
+    # water-heavy at 10 km; 6 km frames the dive zone).
+    "malibu":      4,
+    "refugio":     3,
     "pointlobos":  3,
     "monastery":   3,
     "jadecove":    3,
