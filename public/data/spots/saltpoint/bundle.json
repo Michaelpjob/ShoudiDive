@@ -2,16 +2,16 @@
   "id": "saltpoint",
   "name": "Salt Point",
   "centre": {
-    "lng": -123.334,
-    "lat": 38.567
+    "lng": -123.352,
+    "lat": 38.562
   },
   "bbox": {
-    "lng_min": -123.3800889793453,
-    "lng_max": -123.2879110206547,
-    "lat_min": 38.53096396396396,
-    "lat_max": 38.60303603603604
+    "lng_min": -123.39808577279679,
+    "lng_max": -123.30591422720322,
+    "lat_min": 38.52596396396396,
+    "lat_max": 38.598036036036035
   },
-  "generated_at": "2026-06-16T06:29:38Z",
+  "generated_at": "2026-06-17T05:59:16Z",
   "layers": {
     "bathy": {
       "url": "bathy.png",
@@ -39,7 +39,7 @@
     },
     "kelp": {
       "url": "kelp.geojson",
-      "features": 2,
+      "features": 1,
       "source": "SBC LTER kelp from Landsat (knb-lter-sbc.74)",
       "canopy_quarter": "2026-02-15",
       "pixel_m": 30
@@ -50,13 +50,13 @@
     },
     "soundings": {
       "url": "soundings.geojson",
-      "features": 344
+      "features": 461
     }
   },
   "sources": {
-    "bathy": "NOAA NCEI DEM global mosaic exportImage (CUDEM/coastal DEMs nearshore, best-available blend)",
+    "bathy": "NOAA NCEI DEM global mosaic exportImage (CUDEM/coastal DEMs nearshore, best-available blend) + GMRT nearshore-shelf depths",
     "coastline": "OSM natural=coastline via fetch_coastline.py \u2014 clipped from global land.geojson",
-    "kelp": "CDFW BIO_CA_Kelp2016 observed aerial-survey canopy (clipped)",
+    "kelp": "SBC LTER kelp from Landsat (knb-lter-sbc.74)",
     "mpa": "CDFW MPA ds582 (clipped)",
     "landmarks": "Curated per-spot dive-site / harbor labels",
     "soundings": "Depth soundings sampled from the spot DEM on a 24x24 lattice"

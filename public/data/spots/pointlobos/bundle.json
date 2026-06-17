@@ -2,16 +2,16 @@
   "id": "pointlobos",
   "name": "Point Lobos",
   "centre": {
-    "lng": -121.945,
+    "lng": -121.96,
     "lat": 36.518
   },
   "bbox": {
-    "lng_min": -121.97862951042826,
-    "lng_max": -121.91137048957172,
+    "lng_min": -121.99362951042826,
+    "lng_max": -121.92637048957172,
     "lat_min": 36.490972972972976,
     "lat_max": 36.545027027027025
   },
-  "generated_at": "2026-06-17T01:39:31Z",
+  "generated_at": "2026-06-17T05:58:35Z",
   "layers": {
     "bathy": {
       "url": "bathy.png",
@@ -31,7 +31,7 @@
         25,
         100
       ],
-      "levels": 39
+      "levels": 41
     },
     "coastline": {
       "url": "coastline.geojson",
@@ -39,16 +39,10 @@
     },
     "kelp": {
       "url": "kelp.geojson",
-      "features": 2,
-      "source": "CDFW aerial kelp surveys 2003-2016 (per-spot, full res)",
-      "canopy_year": 2016,
-      "years_with_data": [
-        2003,
-        2005,
-        2008,
-        2015,
-        2016
-      ]
+      "features": 1,
+      "source": "SBC LTER kelp from Landsat (knb-lter-sbc.74)",
+      "canopy_quarter": "2026-02-15",
+      "pixel_m": 30
     },
     "mpa": {
       "url": "mpa.geojson",
@@ -56,13 +50,13 @@
     },
     "soundings": {
       "url": "soundings.geojson",
-      "features": 214
+      "features": 220
     }
   },
   "sources": {
     "bathy": "NOAA NCEI DEM global mosaic exportImage (CUDEM/coastal DEMs nearshore, best-available blend) + GMRT nearshore-shelf depths",
     "coastline": "OSM natural=coastline via fetch_coastline.py \u2014 clipped from global land.geojson",
-    "kelp": "CDFW aerial kelp surveys 2003-2016 (per-spot, full res)",
+    "kelp": "SBC LTER kelp from Landsat (knb-lter-sbc.74)",
     "mpa": "CDFW MPA ds582 (clipped)",
     "landmarks": "Curated per-spot dive-site / harbor labels",
     "soundings": "Depth soundings sampled from the spot DEM on a 24x24 lattice"
