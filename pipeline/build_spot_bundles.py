@@ -1481,7 +1481,8 @@ def _load_landsat_kelp():
         ds = xr.open_dataset(p)
         _LANDSAT_KELP_CACHE = (
             ds.longitude.values, ds.latitude.values,
-            ds.recent_area.values, ds.attrs.get("recent_quarter", "?"),
+            ds.recent_area.values, ds.ever_area.values,
+            ds.attrs.get("recent_quarter", "?"),
         )
     return _LANDSAT_KELP_CACHE
 
@@ -1500,24 +1501,29 @@ def _round_geom(geom, nd=5):
 
 
 def fetch_spot_kelp_landsat(spot_id: str, bbox: dict):
-    """Per-spot CURRENT kelp canopy from the SBC LTER Landsat extract.
+    """Per-spot kelp from the SBC LTER Landsat extract — two layers:
 
-    Draws one class — "Kelp Canopy": pixels with canopy in the last 3 years
-    (the extract's recent_area — a 12-quarter peak).
+      * "Kelp Canopy"  — pixels with canopy in the last 3 years (recent_area,
+        the 12-quarter peak). The vivid CURRENT bed.
+      * "Kelp Former"  — the all-time (1984→now) ever-kelp extent (ever_area),
+        drawn faint + UNDERNEATH as "kelp was here but not recently". A
+        collapsed bed (La Jolla, Cedros) then reads as a ghost outline with
+        little/no live canopy on top, which is the honest decline story.
 
-    2026-06-16: dropped the old all-time "Kelp Subsurface" extent class. It
-    was both the file-size hog (Santa Rosa's 1984-2026 pixel union hit
-    4.3 MB) and the *least* current metric — it overstated beds that have
-    since thinned. Recent canopy alone is smaller and the honest picture of
-    where kelp actually is now.
+    2026-06-17: re-added the former-extent layer after the recent-only pass
+    made crashed beds look bare — the user wanted the history back, clearly
+    marked as not-current (frontend styles "Kelp Former" as a desaturated
+    ghost, distinct from the green canopy hatch). The former extent is
+    simplified coarsely (it is faint background; the all-time union would
+    otherwise dominate the bundle — Santa Rosa was 4.3 MB); the recent canopy
+    stays crisp.
 
-    Each 30 m pixel becomes a square; squares are unioned + simplified.
     Returns:
-      * (fc, meta) with the canopy feature when there is recent kelp;
-      * (empty fc, meta) when the spot is INSIDE the Landsat footprint but
-        has no recent canopy (a thinned/gone bed) — a real empty layer so
-        the caller does NOT fall back to the stale 2016 CDFW pass; "no
-        kelp" is the accurate current state;
+      * (fc, meta) with [former?, canopy?] features — former FIRST so it draws
+        beneath the canopy;
+      * (empty fc, meta) when the spot is INSIDE the Landsat footprint but has
+        never had kelp — a real empty layer so the caller does NOT fall back
+        to the stale 2016 CDFW pass;
       * None only when the spot is OUTSIDE the Landsat footprint (Sea of
         Cortez, PNW) — then the caller may fall back.
     """
@@ -1530,36 +1536,57 @@ def fetch_spot_kelp_landsat(spot_id: str, bbox: dict):
     except ImportError:
         return None
     try:
-        lon, lat, recent, recent_q = _load_landsat_kelp()
+        lon, lat, recent, ever, recent_q = _load_landsat_kelp()
     except Exception as e:
         print(f"    [kelp] Landsat extract unavailable ({e!s}) — falling back")
         return None
     # The extract's geographic footprint (mirrors BBOX in fetch_kelp_landsat.py).
-    # A spot fully inside it has real "is there kelp here?" coverage, so an
-    # empty result means the bed is gone — not that data is missing — and we
-    # must NOT fall back to the stale survey.
+    # A spot fully inside it has real coverage, so an empty result means the
+    # bed never existed here — not that data is missing — so we must NOT fall
+    # back to the stale survey.
     EXT = {"lat_min": 26.4, "lat_max": 40.5, "lng_min": -125.0, "lng_max": -113.5}
     in_footprint = (bbox["lng_min"] >= EXT["lng_min"] and bbox["lng_max"] <= EXT["lng_max"]
                     and bbox["lat_min"] >= EXT["lat_min"] and bbox["lat_max"] <= EXT["lat_max"])
-    can = None
-    m = ((lon >= bbox["lng_min"]) & (lon <= bbox["lng_max"]) &
-         (lat >= bbox["lat_min"]) & (lat <= bbox["lat_max"]) & (recent > 0))
-    if m.any():
-        lo, la = lon[m], lat[m]
-        latm = (bbox["lat_min"] + bbox["lat_max"]) / 2.0
-        dlat = 15.0 / 110540.0
-        dlon = 15.0 / (111320.0 * math.cos(math.radians(latm)))
+    in_bbox = ((lon >= bbox["lng_min"]) & (lon <= bbox["lng_max"]) &
+               (lat >= bbox["lat_min"]) & (lat <= bbox["lat_max"]))
+    latm = (bbox["lat_min"] + bbox["lat_max"]) / 2.0
+    dlat = 15.0 / 110540.0
+    dlon = 15.0 / (111320.0 * math.cos(math.radians(latm)))
+
+    def _poly(mask, tol, buf=0.0):
+        if not mask.any():
+            return None
         u = unary_union([shp_box(x - dlon, y - dlat, x + dlon, y + dlat)
-                         for x, y in zip(lo, la)])
-        can = u.simplify(0.0003)  # ~33 m — collapse the 30 m pixel staircase
+                         for x, y in zip(lon[mask], lat[mask])])
+        if buf:
+            # Merge the scattered all-time patches into coarse "was-here"
+            # blobs. The raw union is thousands of 30 m specks (Santa Rosa's
+            # ringed extent → multi-MB even after simplify, which only cuts
+            # vertices, not polygon COUNT). Buffer out-then-in closes the
+            # gaps + drops to a handful of polygons.
+            u = u.buffer(buf).buffer(-buf * 0.5)
+        u = u.simplify(tol)
+        return None if u.is_empty else u
+
+    # Former extent: buffer ~70 m to coalesce + simplify hard (faint
+    # background, "roughly where kelp once was"). Recent canopy stays crisp
+    # and exact.
+    former = _poly(in_bbox & (ever > 0), 0.0009, buf=0.0007)
+    canopy = _poly(in_bbox & (recent > 0), 0.0003)
     spot_name = SPOT_CENTRES.get(spot_id, {}).get("name", spot_id)
     feats = []
-    if can is not None and not can.is_empty:
+    if former is not None:
+        feats.append({"type": "Feature",
+                      "properties": {"id": f"{spot_id}-kelp-former",
+                                     "name": f"{spot_name} former kelp extent (pre-decline)",
+                                     "className": "Kelp Former"},
+                      "geometry": _round_geom(mapping(former))})
+    if canopy is not None:
         feats.append({"type": "Feature",
                       "properties": {"id": f"{spot_id}-kelp-canopy",
                                      "name": f"{spot_name} recent kelp canopy",
                                      "className": "Kelp Canopy"},
-                      "geometry": _round_geom(mapping(can))})
+                      "geometry": _round_geom(mapping(canopy))})
     if not feats and not in_footprint:
         return None   # outside the Landsat footprint → caller may fall back
     fc = {"type": "FeatureCollection", "features": feats}
