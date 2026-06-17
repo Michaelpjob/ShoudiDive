@@ -1485,7 +1485,9 @@ export default function SpotDetailView({ spot, onClose, isMobile = false }) {
         <span className="spot-detail-sources">
           Bathy: {bundle?.manifest?.sources?.bathy?.includes("NCEI")
             ? "NOAA NCEI DEM mosaic"
-            : "GMRT"} · Coast: OSM · Kelp: CDFW 2016 aerial survey · Soundings: DEM-derived
+            : "GMRT"} · Coast: OSM · Kelp: {bundle?.manifest?.sources?.kelp?.includes("Landsat")
+            ? "SBC LTER Landsat (3-yr canopy)"
+            : "CDFW 2016 aerial survey"} · Soundings: DEM-derived
         </span>
         {bundleDate && (
           <span className="spot-detail-fresh mono">chart {bundleDate}</span>
