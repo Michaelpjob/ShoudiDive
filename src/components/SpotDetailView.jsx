@@ -80,6 +80,12 @@ const DEPTH_BANDS_FT = [
 // band image doesn't cover reads as deep open water, never as a hole.
 const DEEP_BG = "rgb(248, 252, 254)";
 
+// The shallowest contour (~1 m) traces the waterline and reads as a
+// competing "second coastline" offset from the OSM land fill — which is
+// meant to be the ONE coastline. Hide contours shallower than this so the
+// bathy starts cleanly offshore and the only coast edge is the land fill.
+const SHALLOWEST_CONTOUR_M = 3;
+
 function bandRgbForFt(ft) {
   for (const b of DEPTH_BANDS_FT) {
     if (ft <= b.maxFt) return b.rgb;
@@ -756,12 +762,26 @@ export default function SpotDetailView({ spot, onClose, isMobile = false }) {
 
   const contourPaths = useMemo(() => {
     if (!bbox || !bundle?.contours) return [];
-    return (bundle.contours.features || []).map((f, i) => ({
-      key: `c-${i}-${f.properties.depth_m}`,
-      depth: f.properties.depth_m,
-      d: geometryToPath(f.geometry, bbox, CANVAS_W, CANVAS_H),
-    }));
+    return (bundle.contours.features || [])
+      // Drop the waterline-hugging shallowest contour so it doesn't read
+      // as a second coastline beside the land fill.
+      .filter((f) => !(f.properties.depth_m < SHALLOWEST_CONTOUR_M))
+      .map((f, i) => ({
+        key: `c-${i}-${f.properties.depth_m}`,
+        depth: f.properties.depth_m,
+        d: geometryToPath(f.geometry, bbox, CANVAS_W, CANVAS_H),
+      }));
   }, [bundle, bbox]);
+
+  // Clip path = water only (full canvas with the land polygons punched
+  // out, even-odd). Clipping the depth tint + contours to this makes the
+  // blue stop EXACTLY at the vector coastline, so it lines up with the
+  // land fill instead of bleeding past it as a blocky/offset edge.
+  const waterClipD = useMemo(() => {
+    const rect = `M0 0H${CANVAS_W}V${CANVAS_H}H0Z`;
+    if (!landPaths.length) return rect;
+    return rect + " " + landPaths.map((p) => p.d).join(" ");
+  }, [landPaths]);
 
   const mpaPaths = useMemo(() => {
     if (!bbox || !bundle?.mpa) return [];
@@ -1070,6 +1090,11 @@ export default function SpotDetailView({ spot, onClose, isMobile = false }) {
                 <rect width="6" height="6" fill="rgba(118, 126, 120, 0.20)" />
                 <circle cx="3" cy="3" r="0.85" fill="rgba(84, 92, 86, 0.60)" />
               </pattern>
+              {/* Water-only clip (canvas minus land, even-odd) — keeps the
+                  depth tint + contours from rendering past the coastline. */}
+              <clipPath id="sd-water-clip" clipPathUnits="userSpaceOnUse">
+                <path d={waterClipD} clipRule="evenodd" />
+              </clipPath>
             </defs>
 
             {/* 1. Deep-water background — any uncovered sliver reads as
@@ -1093,13 +1118,14 @@ export default function SpotDetailView({ spot, onClose, isMobile = false }) {
                 x="0" y="0"
                 width={CANVAS_W} height={CANVAS_H}
                 preserveAspectRatio="none"
+                clipPath="url(#sd-water-clip)"
               />
             )}
 
-            {/* 3. Contour lines — drawn under land so any GMRT-side
-                overshoot is buried beneath the opaque land fill. */}
+            {/* 3. Contour lines — clipped to water so the shallow ones
+                never trace a coast on/across the land fill. */}
             {layers.contours && (
-              <g style={{ pointerEvents: "none" }}>
+              <g style={{ pointerEvents: "none" }} clipPath="url(#sd-water-clip)">
                 {contourPaths.map((c) => {
                   const s = contourStyle(c.depth);
                   return (
