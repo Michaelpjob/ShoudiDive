@@ -152,6 +152,11 @@ class ChlSource:
     max_back: int
     fetcher: Callable[[date], Optional[np.ndarray]]
     requires_earthdata: bool = False
+    # A last-resort, lower-quality source (e.g. raw single-sensor vs the
+    # gap-filled primaries). When the blend ends up dominated by a fallback
+    # source, the manifest flags source_fallback so the UI can say "live but
+    # on a backup source" instead of implying primary-quality data.
+    fallback: bool = False
 
 
 # ---- NASA OB.DAAC L3m fetcher ------------------------------------------
@@ -294,9 +299,12 @@ def _make_nasa_fetcher(sensor: str):
 
 # ---- NOAA ERDDAP fetcher (covers DINEOF NRT + DINEOF SCI 2km) -----------
 
-def _make_noaa_erddap_fetcher(host: str, dataset: str, has_altitude: bool = True):
-    """Fetcher closure for any NOAA CoastWatch ERDDAP griddap dataset that
-    serves chlor_a in (time, [altitude,] lat, lng) shape."""
+def _make_noaa_erddap_fetcher(host: str, dataset: str, has_altitude: bool = True,
+                              variable: str = "chlor_a"):
+    """Fetcher closure for any ERDDAP griddap dataset that serves a chl
+    variable in (time, [altitude,] lat, lng) shape. `variable` defaults to
+    chlor_a (the NOAA DINEOF products); pass e.g. "chla" for the pfeg raw
+    VIIRS dataset."""
     def fetcher(d: date) -> Optional[np.ndarray]:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
         slug = dataset.replace("/", "_")
@@ -305,7 +313,7 @@ def _make_noaa_erddap_fetcher(host: str, dataset: str, has_altitude: bool = True
             alt = "[0]" if has_altitude else ""
             url = (
                 f"{host}/{dataset}.nc"
-                f"?chlor_a"
+                f"?{variable}"
                 f"[({d}T00:00:00Z):1:({d}T23:59:59Z)]"
                 f"{alt}"
                 f"[({BBOX['lat_min']}):1:({BBOX['lat_max']})]"
@@ -324,7 +332,7 @@ def _make_noaa_erddap_fetcher(host: str, dataset: str, has_altitude: bool = True
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 with xr.open_dataset(cache_path) as ds:
-                    var = ds["chlor_a"]
+                    var = ds[variable]
                     if "time" in var.dims and var.sizes["time"] > 1:
                         var = var.isel(time=-1)
                     arr = np.asarray(var.values).squeeze()
@@ -411,6 +419,34 @@ CHL_SOURCES: list[ChlSource] = [
             "noaacwNPPN20S3ASCIDINEOF2kmDaily",
             has_altitude=True,
         ),
+    ),
+    ChlSource(
+        # Last-resort, no-auth fallback on a THIRD host. The NASA primaries
+        # (1-3) need EARTHDATA auth; the DINEOF primaries (4-5) live on
+        # coastwatch.noaa.gov, which was down for days in the 2026-06 outage —
+        # leaving chl frozen. This raw VIIRS-SNPP product is the original Bob-
+        # Simons CoastWatch ERDDAP at upwell.pfeg.noaa.gov (a distinct host from
+        # both the down coastwatch.noaa.gov and the MUR-403 coastwatch.pfeg),
+        # no-auth, ~2-day lag. NOT gap-filled, so it's cloudier; priority 6
+        # keeps it last, and source_fallback flags it in the manifest so the UI
+        # shows lower confidence. Live-but-patchy > frozen.
+        # NOTE (2026-06-18): on the day this shipped, *every* no-auth NOAA chl
+        # dataset (this one + the coastwatch.noaa.gov DINEOFs) was unfetchable
+        # at once — upwell's whole ocean-color family 404'd on data queries
+        # while its SST/bathymetry stayed up — so this path could not be live-
+        # validated yet; it is wired to the verified-correct dataset and will be
+        # exercised on the next refresh dispatch once NOAA ocean-color recovers.
+        id="viirs_upwell_nrt",
+        label="VIIRS-SNPP chl-a NRT (raw, upwell fallback)",
+        priority=6,
+        max_back=NOAA_NRT_MAX_BACK,
+        fetcher=_make_noaa_erddap_fetcher(
+            "https://upwell.pfeg.noaa.gov/erddap/griddap",
+            "erdVHNchla1day",
+            has_altitude=True,   # dims (time, altitude, lat, lon)
+            variable="chla",
+        ),
+        fallback=True,
     ),
 ]
 
@@ -663,6 +699,7 @@ def build_blended_chl(end: date) -> dict | None:
     # 2) Blend per cell for each window: 1d/2d/3d differ only in how many
     # within-source frames are nanmean'd before the cross-source merge.
     windows = {}
+    source_stats_1d: dict = {}  # captured from the 1d blend for provenance
     for win, n_frames in [("1d", 1), ("2d", 2), ("3d", 3)]:
         blended, ages, sources, stats = _blend_freshest(per_source, end, n_frames)
         # Mask land cells BEFORE coverage/encoding. ages + sources also get
@@ -697,6 +734,7 @@ def build_blended_chl(end: date) -> dict | None:
             "sources": stats,
         }
         if win == "1d":
+            source_stats_1d = stats
             age_out = OUT_DIR / "chl_1d_age_days.png"
             src_out = OUT_DIR / "chl_1d_source.png"
             _encode_age_png(ages, age_out)
@@ -716,7 +754,12 @@ def build_blended_chl(end: date) -> dict | None:
 
         windows[win] = win_entry
 
-    return {
+    # Honest provenance: the source that owns the most cells in the 1d blend
+    # is "the source you're mostly looking at". If that's a fallback source
+    # (the primaries were unavailable), flag it so confidence.js can drop the
+    # score + show "via <source>". See _make_noaa_erddap_fetcher / CHL_SOURCES.
+    by_id = {s.id: s for s in CHL_SOURCES}
+    manifest_layer = {
         "range": list(CHL_RANGE),
         "scale": CHL_SCALE,
         "unit": CHL_UNIT,
@@ -724,6 +767,15 @@ def build_blended_chl(end: date) -> dict | None:
         "blended": True,
         "windows": windows,
     }
+    owned = {sid: st.get("cells_owned", 0) for sid, st in source_stats_1d.items()}
+    if owned and max(owned.values()) > 0:
+        dom_id = max(owned, key=owned.get)
+        dom = by_id.get(dom_id)
+        if dom is not None:
+            manifest_layer["source"] = dom.label
+            if dom.fallback:
+                manifest_layer["source_fallback"] = True
+    return manifest_layer
 
 
 # ---- CLI for one-off testing ------------------------------------------
