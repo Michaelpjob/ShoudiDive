@@ -179,7 +179,24 @@ LAYERS: dict[str, dict] = {
                 "variable": "analysed_sst",
                 "stride": 1,
                 "source_label": "NOAA Geo-polar blended SST",
-            }
+            },
+            {
+                # Last-resort SST when BOTH MUR (pfeg 403s GitHub-Actions
+                # egress for jplMURSST41 specifically) and the NOAA blended
+                # fallback (coastwatch.noaa.gov, periodically down — 502 for
+                # days in the 2026-06 outage) are unreachable. OISST v2.1 NRT
+                # is coarse (0.25° / ~25 km) but gap-filled, ~2-day lag,
+                # no-auth, and lives on pfeg under a DIFFERENT dataset id than
+                # MUR, so it is NOT caught by the MUR-specific 403. Keeps Temp
+                # LIVE (if low-res) through a multi-source outage instead of
+                # freezing for days. Marked coarse so confidence reflects it.
+                "host": "https://coastwatch.pfeg.noaa.gov/erddap/griddap",
+                "dataset": "ncdcOisst21NrtAgg_LonPM180",
+                "variable": "sst",
+                "stride": 1,
+                "pre_xy_dims": "[0]",  # length-1 zlev axis before lat/lon
+                "source_label": "NOAA OISST v2.1 NRT (0.25°, coarse fallback)",
+            },
         ],
     }),
     "chl": _layer_config("chl", {
