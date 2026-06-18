@@ -122,6 +122,14 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = active_region().data_output_dir(ROOT)
 CACHE_DIR = ROOT / "pipeline" / ".cache"
 
+# Which source actually produced each (layer, date), so build_layer can
+# record it in the manifest and the frontend confidence model can say
+# "via <fallback source>" + lower the score when a coarse/gappier fallback
+# stood in for the primary. {(layer, date): {"label": str, "fallback": bool}}.
+# Module-level + written from the parallel day-walk; keys are unique per
+# (layer, date) so concurrent writes don't collide.
+_LAYER_SOURCE: dict = {}
+
 
 def _layer_config(spec_name: str, encoder_extras: dict) -> dict:
     """Build a LAYERS-dict entry by pulling range/scale/unit from
@@ -216,6 +224,23 @@ LAYERS: dict[str, dict] = {
         "stride": 1,
         # VIIRS gap-filled has a single-element altitude dim at index 0
         "pre_xy_dims": "[0]",
+        "fallbacks": [
+            {
+                # When coastwatch.noaa.gov (the DINEOF gap-filled host) is down
+                # — as it was for days in the 2026-06 outage — fall back to the
+                # raw VIIRS-SNPP chl-a on pfeg, which is reachable from GitHub
+                # Actions (the 403 there is MUR-specific). NOT gap-filled, so
+                # it's cloudier/gappier; the 1/2/3-day composites partially fill
+                # holes and the coverage_frac drop already lowers confidence.
+                # Keeps chl live (if patchier) instead of frozen.
+                "host": "https://coastwatch.pfeg.noaa.gov/erddap/griddap",
+                "dataset": "erdVHNchla1day",
+                "variable": "chla",
+                "stride": 1,
+                "pre_xy_dims": "[0]",  # length-1 altitude axis before lat/lon
+                "source_label": "VIIRS-SNPP chl-a NRT (raw, gappier fallback)",
+            }
+        ],
     }),
     "kd490": _layer_config("kd490", {
         # Diffuse attenuation coefficient at 490 nm — direct light-penetration
@@ -343,6 +368,12 @@ def fetch_day(
             )
             continue
 
+        # Record which source served this day (i == 0 is the primary; any
+        # i > 0 is a fallback) so the manifest can label it honestly.
+        _LAYER_SOURCE[(layer, d)] = {
+            "label": source_cfg.get("source_label") or source_key,
+            "fallback": i > 0,
+        }
         return arr
 
     return None
@@ -722,6 +753,14 @@ def build_layer(layer: str, cfg: dict, end: date, want: int = 3, max_back: int =
         manifest_layer["buoy_correction"] = buoy_correction_summary
     if nearshore_correction_summary is not None:
         manifest_layer["nearshore_correction"] = nearshore_correction_summary
+    # Record the source that served the freshest day, so the frontend can
+    # label a fallback ("via …") and lower confidence when the primary was
+    # unavailable. actual[-1] is the most-recent (newest) composited day.
+    src = _LAYER_SOURCE.get((layer, actual[-1])) if actual else None
+    if src:
+        manifest_layer["source"] = src["label"]
+        if src["fallback"]:
+            manifest_layer["source_fallback"] = True
     for win, st in composites.items():
         if not st:
             continue

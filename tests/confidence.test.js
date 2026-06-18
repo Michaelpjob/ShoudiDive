@@ -146,3 +146,16 @@ test("region confidence is staleness-aware (uses live layer scores)", () => {
   const regionFn = src.split("export function getRegionConfidence")[1] || "";
   assert.match(regionFn, /getLayerConfidence\(/, "getRegionConfidence must use live scores");
 });
+
+test("confidence lowers + labels a fallback source", () => {
+  const src = read("src/lib/confidence.js");
+  assert.match(src, /info\.source_fallback/, "must read the pipeline source_fallback flag");
+  assert.match(src, /via \$\{info\.source/, "must surface which backup source is in use");
+});
+
+test("pipeline records the source + adds a GitHub-reachable chl fallback", () => {
+  const fetchPipeline = read("pipeline/fetch.py");
+  assert.match(fetchPipeline, /erdVHNchla1day/, "chl needs a GH-reachable fallback");
+  assert.match(fetchPipeline, /source_fallback/, "manifest must flag a fallback source");
+  assert.match(fetchPipeline, /_LAYER_SOURCE/, "must record which source served each layer");
+});

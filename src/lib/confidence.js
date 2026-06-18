@@ -175,6 +175,16 @@ function dynamicModulation(layer, manifest) {
     }
   }
 
+  // Fallback source: the pipeline sets source_fallback when the primary
+  // source was unavailable and a coarser/gappier backup stood in (e.g. SST
+  // on OISST 0.25° instead of MUR 1 km, or chl on raw VIIRS instead of the
+  // gap-filled product). It's live, so not "stale" — but lower confidence,
+  // and the user should know which source they're looking at.
+  if (info.source_fallback) {
+    delta -= 1;
+    reasons.push(`via ${info.source || "backup source"} (primary unavailable)`);
+  }
+
   // Layer staleness (observation age vs per-layer budget) is handled by
   // staleness() in getLayerConfidence — it caps the score and supplies the
   // user-facing tag, replacing the old flat "refreshed >24 h ago → −1".
