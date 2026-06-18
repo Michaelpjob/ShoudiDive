@@ -66,6 +66,59 @@ const CONFIDENCE_LABELS = {
   1: { name: "Climatology",  color: "rgb(220, 38, 38)" },   // red-600
 };
 
+// Per-layer freshness budget (days) — the OBSERVATION age beyond which
+// we've "lost confidence" in the live reading. Mirrors the pipeline's
+// LAYER_DATE_MAX_DAYS (pipeline/check_manifest_freshness.py) so the
+// user-facing signal and the CI freshness guard agree on what "stale"
+// means. Within budget the layer reads at its normal ceiling; past it the
+// score is capped so a frozen layer can't keep showing "Observed".
+const LAYER_FRESH_DAYS = {
+  sst: 4, chl: 7, kd490: 14, wind: 1, swell: 2, current: 2, viz: 2,
+};
+
+// Age (days) of a layer's most recent OBSERVATION, from the manifest's
+// window dates — NOT its refresh time, which is what `generated_at`
+// tracks. (During the 2026-06 NOAA outage the refresh kept "running" but
+// the observation dates froze; observation age is the honest signal.)
+// Falls back to generated_at only when a layer carries no date list.
+export function layerDataAgeDays(layer, manifest) {
+  const info = manifest?.layers?.[layer];
+  if (!info) return null;
+  const dates = info.windows?.["1d"]?.dates || info.windows?.["2d"]?.dates;
+  if (Array.isArray(dates) && dates.length) {
+    const t = Date.parse(`${dates[dates.length - 1]}T00:00:00Z`);
+    if (!Number.isNaN(t)) return (Date.now() - t) / 86400000;
+  }
+  const genAt = info.generated_at || info.windows?.["1d"]?.generated_at;
+  if (genAt) {
+    const t = Date.parse(genAt);
+    if (!Number.isNaN(t)) return (Date.now() - t) / 86400000;
+  }
+  return null;
+}
+
+// Translate observation age (+ an explicit pipeline "held/estimated" flag,
+// set when last-good is served because no live source returned) into a
+// confidence CEILING and a short user-facing tag. Quiet inside the
+// freshness budget; caps the score hard once we're past it.
+function staleness(layer, manifest) {
+  const info = manifest?.layers?.[layer];
+  const age = layerDataAgeDays(layer, manifest);
+  const budget = LAYER_FRESH_DAYS[layer];
+  if (info && (info.held === true || info.estimated === true)) {
+    return { cap: 1, ageDays: age, level: "estimated", tag: "estimated",
+             note: "estimated — live source unavailable, showing last good data" };
+  }
+  if (age == null || budget == null) return { cap: 5, ageDays: age, level: "ok", tag: null, note: null };
+  const d = Math.round(age);
+  if (age > budget * 2) return { cap: 1, ageDays: age, level: "stale", tag: `${d}d old`,
+                                 note: `${d} days old — well past the ${budget}-day freshness budget` };
+  if (age > budget)     return { cap: 2, ageDays: age, level: "stale", tag: `${d}d old`,
+                                 note: `${d} days old — past the ${budget}-day freshness budget` };
+  if (age > budget * 0.6) return { cap: 4, ageDays: age, level: "aging", tag: null, note: `${d} days old` };
+  return { cap: 5, ageDays: age, level: "ok", tag: null, note: null };
+}
+
 // Forecast-horizon decay. Skill drops with lead time — HRRR is observed
 // for ~18 h then becomes the GFS forecast, gfswave is reasonable to
 // ~3 days, persistence_decay SST loses faith beyond +3.
@@ -122,16 +175,9 @@ function dynamicModulation(layer, manifest) {
     }
   }
 
-  // Generic per-layer freshness check (generated_at field).
-  const genAt = info.generated_at || info.windows?.["1d"]?.generated_at;
-  if (genAt) {
-    const ageHours = (Date.now() - new Date(genAt).getTime()) / (1000 * 60 * 60);
-    if (ageHours > 24) {
-      delta -= 1;
-      reasons.push(`layer last refreshed ${Math.round(ageHours)} h ago`);
-    }
-  }
-
+  // Layer staleness (observation age vs per-layer budget) is handled by
+  // staleness() in getLayerConfidence — it caps the score and supplies the
+  // user-facing tag, replacing the old flat "refreshed >24 h ago → −1".
   return { delta, reasons };
 }
 
@@ -142,9 +188,14 @@ export function getLayerConfidence(layer, opts = {}) {
   const manifest = getDataState()?.manifest;
   const { delta: dynDelta, reasons: dynReasons } = dynamicModulation(layer, manifest);
   const { delta: horDelta, reason: horReason } = horizonDecay(layer, opts.horizonDays);
+  const st = staleness(layer, manifest);
   const reasons = [...dynReasons];
+  if (st.note) reasons.push(st.note);
   if (horReason) reasons.push(horReason);
-  const score = Math.max(1, Math.min(5, base.score + dynDelta + horDelta));
+  let score = Math.max(1, Math.min(5, base.score + dynDelta + horDelta));
+  // Staleness CAPS the ceiling: a layer past its freshness budget can't
+  // keep reading "Observed" no matter how good its source normally is.
+  score = Math.min(score, st.cap);
   const label = CONFIDENCE_LABELS[score];
   return {
     score,
@@ -154,6 +205,10 @@ export function getLayerConfidence(layer, opts = {}) {
     source: base.source,
     reason: base.reason,
     modReasons: reasons,
+    ageDays: st.ageDays,
+    stale: st.level === "stale" || st.level === "estimated",
+    staleLevel: st.level,        // "ok" | "aging" | "stale" | "estimated"
+    staleTag: st.tag,            // short inline tag, e.g. "5d old" / "estimated"
   };
 }
 
@@ -164,12 +219,19 @@ export function getRegionConfidence() {
   const r = activeRegion();
   const layers = STATIC_CONFIDENCE[r];
   if (!layers) return null;
+  // Weakest LIVE layer score (staleness included), not the static ceiling —
+  // so the top-bar badge drops when a layer has actually gone stale, which
+  // is the whole point of surfacing lost confidence.
   let weakest = 5;
   let weakestLayer = null;
-  for (const [layerId, l] of Object.entries(layers)) {
-    if (l.score < weakest) {
-      weakest = l.score;
+  let stale = false;
+  for (const layerId of Object.keys(layers)) {
+    const c = getLayerConfidence(layerId);
+    if (!c) continue;
+    if (c.score < weakest) {
+      weakest = c.score;
       weakestLayer = layerId;
+      stale = c.stale;
     }
   }
   const label = CONFIDENCE_LABELS[weakest];
@@ -178,5 +240,6 @@ export function getRegionConfidence() {
     label: label.name,
     color: label.color,
     weakestLayer,
+    stale,
   };
 }

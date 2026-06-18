@@ -119,3 +119,30 @@ test("TopBar passes horizonDays into getLayerConfidence", () => {
   const src = read("src/components/TopBar.jsx");
   assert.match(src, /getLayerConfidence\(layer,\s*\{\s*horizonDays\s*\}\)/);
 });
+
+// ---- Staleness awareness (lost-confidence surfacing) --------------------
+
+test("layerDataAgeDays reads observation age from window dates", async () => {
+  const { layerDataAgeDays } = await import("../src/lib/confidence.js");
+  const mk = (date) => ({ layers: { sst: { windows: { "1d": { dates: [date] } } } } });
+  const iso = (dAgo) => new Date(Date.now() - dAgo * 86400000).toISOString().slice(0, 10);
+  assert.ok(layerDataAgeDays("sst", mk(iso(1))) < 2.5, "~1-day-old reads < 2.5 d");
+  assert.ok(layerDataAgeDays("sst", mk(iso(6))) > 5, "~6-day-old reads > 5 d");
+  assert.equal(layerDataAgeDays("sst", null), null, "no manifest → null");
+  assert.equal(layerDataAgeDays("sst", { layers: {} }), null, "no layer → null");
+});
+
+test("confidence defines per-layer freshness budgets + caps the score when stale", () => {
+  const src = read("src/lib/confidence.js");
+  assert.match(src, /LAYER_FRESH_DAYS\s*=/, "missing LAYER_FRESH_DAYS budgets");
+  assert.match(src, /sst:\s*4/, "sst budget should mirror the pipeline (4 d)");
+  assert.match(src, /export function layerDataAgeDays/);
+  // Staleness must CAP the ceiling, not just nudge the score by 1.
+  assert.match(src, /Math\.min\(score,\s*st\.cap\)/);
+});
+
+test("region confidence is staleness-aware (uses live layer scores)", () => {
+  const src = read("src/lib/confidence.js");
+  const regionFn = src.split("export function getRegionConfidence")[1] || "";
+  assert.match(regionFn, /getLayerConfidence\(/, "getRegionConfidence must use live scores");
+});
