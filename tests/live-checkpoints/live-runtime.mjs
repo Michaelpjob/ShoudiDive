@@ -47,11 +47,15 @@ const IGNORED_CONSOLE_PATTERNS = [
   /\bsst5d summary\b/i,
   /\bsst7d summary\b/i,
   /\b(wind5d|swell5d|current5d) summary\b/i,
-  // Cloudflare insights fetch, sometimes 503s on edge nodes. Bound the host
-  // with the scheme + path separator so it can't sub-match a crafted host
-  // (e.g. evil.com/static.cloudflareinsights.com or *.com.evil.com); the real
-  // noise is "...https://static.cloudflareinsights.com/beacon.min.js...".
-  /https:\/\/static\.cloudflareinsights\.com\//i,
+  // Cloudflare insights beacon fetch, sometimes 503s on edge nodes. This is a
+  // console-NOISE allowlist matched against free-form console-error message
+  // TEXT (e.g. "Failed to load resource ... https://static.cloudflareinsights
+  // .com/beacon.min.js"), NOT a bare URL — so a ^-anchored URL regex can't
+  // apply, and a hostname-shaped regex here is inherently unanchorable
+  // (CodeQL js/regex/missing-regexp-anchor). There is no security boundary in
+  // a noise allowlist (worst case a smoke test tolerates one extra log line),
+  // so match the distinctive brand token instead of a hostname pattern.
+  /\bcloudflareinsights\b/i,
   // 2026-05-18: Cloudflare auto-injects an inline <script> tag (for
   // Email Obfuscation / Rocket Loader / similar features that are
   // toggled on at the zone level). Our CSP `script-src 'self'`
