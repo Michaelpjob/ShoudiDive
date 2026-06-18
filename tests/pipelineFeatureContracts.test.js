@@ -16,8 +16,12 @@ test("SST history fallbacks keep a single grid instead of truncating the slider"
   assert.match(fetchPipeline, /def fetch_day\([\s\S]*expected_shape: tuple\[int, int\] \| None = None/);
   assert.match(fetchPipeline, /expected_shape is not None and arr\.shape != expected_shape/);
   assert.match(fetchPipeline, /trying next source/);
-  assert.match(fetchPipeline, /expected_shape = stack_rev\[0\]\.shape if stack_rev else None/);
-  assert.match(fetchPipeline, /fetch_day\(layer, cfg, d, cfg\["stride"\], expected_shape=expected_shape\)/);
+  // Shape consistency is now enforced POST-HOC against the most-recent valid
+  // day: the parallel day-walk can't thread expected_shape through each
+  // fetch_day call, so build_layer drops any day whose grid differs — same
+  // contract (one grid, never truncate/mix), different mechanism.
+  assert.match(fetchPipeline, /a\.shape != stack_rev\[0\]\.shape/);
+  assert.match(fetchPipeline, /ThreadPoolExecutor/);
   assert.match(fetchPipeline, /candidate_configs\(cfg\)/);
 });
 
