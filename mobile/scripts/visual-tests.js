@@ -346,7 +346,11 @@ function tests() {
           result.complete &&
           result.naturalWidth > 0 &&
           result.naturalHeight > 0 &&
-          /shouldidive\.com\/data\//.test(result.src);
+          // Anchor to the origin: an unanchored /shouldidive\.com\/data\//
+          // also matches a crafted src like https://evil.com/?x=shouldidive.com/data/.
+          // The app loads PNGs from REMOTE_BASE = https://shouldidive.com
+          // (mobile/src/lib/dataSource.js); allow an optional subdomain label.
+          /^https:\/\/([a-z0-9-]+\.)?shouldidive\.com\/data\//.test(result.src);
         return {
           passed: ok,
           detail:

@@ -47,8 +47,11 @@ const IGNORED_CONSOLE_PATTERNS = [
   /\bsst5d summary\b/i,
   /\bsst7d summary\b/i,
   /\b(wind5d|swell5d|current5d) summary\b/i,
-  // Cloudflare insights fetch, sometimes 503s on edge nodes.
-  /static\.cloudflareinsights\.com/i,
+  // Cloudflare insights fetch, sometimes 503s on edge nodes. Bound the host
+  // with the scheme + path separator so it can't sub-match a crafted host
+  // (e.g. evil.com/static.cloudflareinsights.com or *.com.evil.com); the real
+  // noise is "...https://static.cloudflareinsights.com/beacon.min.js...".
+  /https:\/\/static\.cloudflareinsights\.com\//i,
   // 2026-05-18: Cloudflare auto-injects an inline <script> tag (for
   // Email Obfuscation / Rocket Loader / similar features that are
   // toggled on at the zone level). Our CSP `script-src 'self'`
