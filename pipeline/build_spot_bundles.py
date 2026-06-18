@@ -1160,16 +1160,33 @@ def _mask_depth_by_land(depth_grid, bbox, land_path):
     return masked
 
 
-def _fill_nearshore_nodata(depth_grid, max_iters: int = 45):
-    """Fill no-data depth cells by smoothly extending the nearest resolved depth
+# Max distance (px) the nearshore no-data fill will bridge. Small on
+# purpose: it closes the thin OSM-coastline↔DEM-land registration sliver
+# and a narrow unresolved shelf — it must NOT paint depth across large
+# data voids. At 480 px / ~16 km (~33 m/px) this is ~200 m.
+#
+# Was an effectively unbounded 45 px (~1.5 km): a coarse-DEM void in the
+# middle of a Baja bay then filled completely with a smooth ramp toward
+# ~0 m, so open water read "0 ft · 0 m" and every island wore a
+# fabricated shallow-shelf halo (issue #202). Capping the reach leaves
+# large voids NaN → they render transparent (deep-water bg) and read "—"
+# (no data) instead of a confident, wrong zero.
+NEARSHORE_FILL_PX = 6
+
+
+def _fill_nearshore_nodata(depth_grid, max_iters: int = NEARSHORE_FILL_PX):
+    """Bridge SMALL no-data gaps by extending the nearest resolved depth
     inward, up to ~max_iters px from valid water.
 
     The coarse NCEI/GEBCO mosaic over Baja marks the shallow subtidal shelf as
-    z≥0 (land elevation), so build_spot turns it into NaN and the kelp zone
-    renders as "land" with a "land" depth readout — the exact bug the user hit.
-    This dilation fills that nearshore band with a smooth ramp off the nearest
-    real depths. It runs BEFORE the OSM land burn, so true above-water land is
-    re-cut to NaN afterwards; only the OSM-water shelf keeps the filled depth.
+    z≥0 (land elevation), so build_spot turns it into NaN and a narrow nearshore
+    band would otherwise render as "land". This dilation ramps the nearest real
+    depths into that band. It runs BEFORE the OSM land burn, so true above-water
+    land is re-cut to NaN afterwards; only the OSM-water shelf keeps the fill.
+
+    The reach is deliberately small (see NEARSHORE_FILL_PX): a large unresolved
+    region is a genuine data void, not a shelf, and must stay NaN rather than be
+    painted with a fabricated ~0 m depth (issue #202).
     """
     import numpy as _np
     d = _np.asarray(depth_grid, dtype=_np.float32).copy()
