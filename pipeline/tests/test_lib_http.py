@@ -343,18 +343,19 @@ def test_breaker_is_per_host(monkeypatch):
     assert calls == ["https://alive.example.net/x"]
 
 
-def test_breaker_resets_on_any_http_response(monkeypatch):
-    """A 5xx is still a LIVE host — only transport failures count."""
+def test_breaker_resets_on_non_gateway_response(monkeypatch):
+    """A normal response (200/404/500) is a LIVE host and resets the breaker;
+    only transport failures + gateway errors (502/503/504) count toward it."""
     monkeypatch.setattr(http_mod, "_sleep", lambda s: None)
     monkeypatch.setattr(SESSION, "get", _transport_boom)
     assert http_get("https://flaky.example.net/x", retries=1) is None  # 1 failure
 
-    monkeypatch.setattr(SESSION, "get", lambda url, **kw: _make_response(503))
-    assert http_get("https://flaky.example.net/x", retries=1).status_code == 503
+    # A 404 (host alive, just no data) resets the failure counter.
+    monkeypatch.setattr(SESSION, "get", lambda url, **kw: _make_response(404))
+    assert http_get("https://flaky.example.net/x", retries=1).status_code == 404
 
-    # Counter was reset by the 503 response; one more transport failure
-    # must NOT open the breaker (threshold is 2 consecutive).
-    monkeypatch.setattr(SESSION, "get", _transport_boom)
+    # Counter was reset by the 404; one more transport failure must NOT open
+    # the breaker (threshold is 2 consecutive).
     calls = []
 
     def boom_counting(url, **kw):
@@ -365,6 +366,28 @@ def test_breaker_resets_on_any_http_response(monkeypatch):
     assert http_get("https://flaky.example.net/x", retries=1) is None
     assert http_get("https://flaky.example.net/x", retries=1) is None
     assert len(calls) == 2  # both calls really attempted (breaker was closed)
+
+
+def test_breaker_trips_on_persistent_gateway_error(monkeypatch):
+    """A host returning 502/503/504 is effectively dead — repeated gateway
+    errors must trip the breaker so we stop hammering it. (NOAA
+    coastwatch.noaa.gov outage 2026-06-14+ returned all-503 and, under the
+    old 'any response resets' rule, reset the breaker every call and ground
+    the whole refresh for 75 min.)"""
+    monkeypatch.setattr(http_mod, "_sleep", lambda s: None)
+    calls = []
+
+    def gateway_dead(url, **kw):
+        calls.append(url)
+        return _make_response(503)
+
+    monkeypatch.setattr(SESSION, "get", gateway_dead)
+    # Two consecutive 503s open the breaker (threshold 2).
+    assert http_get("https://dead-gw.example.net/x", retries=1).status_code == 503
+    assert http_get("https://dead-gw.example.net/x", retries=1).status_code == 503
+    # Third call short-circuits — breaker open, no real network attempt.
+    assert http_get("https://dead-gw.example.net/x", retries=1) is None
+    assert len(calls) == 2  # only the first two reached the network
 
 
 def test_breaker_half_opens_after_cooldown(monkeypatch):
