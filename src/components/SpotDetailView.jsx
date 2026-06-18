@@ -181,9 +181,17 @@ function pixelToDepthM(pixel, depthRangeM) {
 //      neighbour's value — the GMRT raster's own coastline vanishes,
 //      so the band field extends seamlessly under the land polygon.
 //   2. Quantize each cell's depth into DEPTH_BANDS_FT via a 256-entry
-//      LUT and write an opaque RGBA canvas.
+//      LUT and write an RGBA canvas.
+//
+// landMask ({mask, w} aligned 1:1 with px, 1 = land) keeps the BFS-fill
+// honest: a NaN cell is painted only if it carries real data or sits
+// under the opaque land polygon (where the fill just hides the coast
+// seam). A NaN cell in open WATER is an unresolved data void — it's left
+// transparent so the deep-water background shows instead of a fabricated
+// shallow-shelf halo (issue #202). Without a mask, every cell is painted
+// (prior behaviour).
 // Returns a dataURL, or null when the grid has no valid cells at all.
-function buildDepthBandImage(px, depthRangeM) {
+function buildDepthBandImage(px, depthRangeM, landMask = null) {
   const { gray, w, h } = px;
   const n = w * h;
   const filled = new Uint8ClampedArray(gray);
@@ -218,7 +226,14 @@ function buildDepthBandImage(px, depthRangeM) {
   const ctx = cv.getContext("2d");
   const img = ctx.createImageData(w, h);
   const data = img.data;
+  const lm = landMask?.mask;
   for (let i = 0; i < n; i++) {
+    // Open-water void (no real data here AND not under land) → transparent
+    // so the deep-water bg shows through, not a fabricated shallow halo.
+    if (lm && gray[i] === 0 && lm[i] !== 1) {
+      data[i * 4 + 3] = 0;
+      continue;
+    }
     const p = filled[i];
     data[i * 4]     = lut[p * 3];
     data[i * 4 + 1] = lut[p * 3 + 1];
@@ -326,6 +341,18 @@ function formatDecimal(lat, lng) {
   return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
 }
 
+// Format a depthAt() result for the readout. A finite depth that rounds
+// to 0 ft is a shoal, never a literal "0 ft · 0 m"; an unresolved bathy
+// void in open water reads "—" (no data), distinct from true "land"
+// (issue #202).
+function depthText(d, withMeters) {
+  if (d == null || d.noData) return "—";
+  if (d.onLand) return "land";
+  const ft = Math.round(d.depthFt);
+  if (ft <= 0) return "<1 ft";
+  return withMeters ? `${ft} ft · ${d.depthM.toFixed(0)} m` : `${ft} ft`;
+}
+
 // ---------------------------------------------------------------------------
 // Contour styling — one blue-gray family, never near-black. Index
 // contours (every 50 m) heavier; everything else whispers.
@@ -414,12 +441,53 @@ export default function SpotDetailView({ spot, onClose, isMobile = false }) {
     return () => { cancelled = true; };
   }, [bundle]);
 
+  // Land mask aligned 1:1 with the bathy grid, rasterised from the OSM
+  // coastline. Shared by the band image (keep open-water voids transparent)
+  // and depthAt (a void in open water reads "—", not "land") — issue #202.
+  const spotLandMask = useMemo(() => {
+    if (!bathyPixels || !bbox || !bundle?.coastline || typeof document === "undefined") {
+      return null;
+    }
+    const { w, h } = bathyPixels;
+    const toX = (lng) => ((lng - bbox.lng_min) / (bbox.lng_max - bbox.lng_min)) * w;
+    const toY = (lat) => ((bbox.lat_max - lat) / (bbox.lat_max - bbox.lat_min)) * h;
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext("2d", { willReadFrequently: true });
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = "black";
+    for (const f of bundle.coastline.features || []) {
+      const geom = f.geometry;
+      if (!geom) continue;
+      const polys =
+        geom.type === "Polygon" ? [geom.coordinates] :
+        geom.type === "MultiPolygon" ? geom.coordinates : null;
+      if (!polys) continue;
+      for (const poly of polys) {
+        ctx.beginPath();
+        for (const ring of poly) {
+          if (!ring.length) continue;
+          ctx.moveTo(toX(ring[0][0]), toY(ring[0][1]));
+          for (let i = 1; i < ring.length; i++) ctx.lineTo(toX(ring[i][0]), toY(ring[i][1]));
+          ctx.closePath();
+        }
+        ctx.fill("evenodd");
+      }
+    }
+    const id = ctx.getImageData(0, 0, w, h).data;
+    const mask = new Uint8Array(w * h);
+    for (let i = 0; i < mask.length; i++) mask[i] = id[i * 4] < 128 ? 1 : 0; // 1 = land
+    return { mask, w };
+  }, [bathyPixels, bbox, bundle]);
+
   // Depth-band tint image (BFS-filled + quantized) — built once per bundle.
   const bandImageUrl = useMemo(() => {
     if (!bathyPixels) return null;
     const dr = bundle?.manifest?.layers?.bathy?.depth_range_m || [0, 500];
-    return buildDepthBandImage(bathyPixels, dr);
-  }, [bathyPixels, bundle]);
+    return buildDepthBandImage(bathyPixels, dr, spotLandMask);
+  }, [bathyPixels, bundle, spotLandMask]);
 
   // Wheel zoom — attached manually with passive:false so preventDefault
   // actually stops the page scroll (React's synthetic wheel listener is
@@ -661,9 +729,10 @@ export default function SpotDetailView({ spot, onClose, isMobile = false }) {
   // ---- Marks ----------------------------------------------------------------
   function addMark(lng, lat) {
     const d = depthAt(lng, lat);
+    const ft = d && !d.onLand && !d.noData ? Math.round(d.depthFt) : null;
     setMarks([{
       lng, lat,
-      depthFt: d && !d.onLand ? Math.round(d.depthFt) : null,
+      depthFt: ft && ft > 0 ? ft : null,
     }]);
   }
 
@@ -814,18 +883,23 @@ export default function SpotDetailView({ spot, onClose, isMobile = false }) {
     const px = Math.max(0, Math.min(w - 1, Math.floor(fx * w)));
     const py = Math.max(0, Math.min(h - 1, Math.floor(fy * h)));
     const pixel = gray[py * w + px];
-    if (pixel === 0) return { onLand: true, depthM: null, depthFt: null };
+    if (pixel === 0) {
+      // Transparent bathy cell: true land if under the OSM coastline,
+      // else an unresolved data void in open water — report distinctly so
+      // the readout never calls open water "land" (issue #202). Without a
+      // mask (e.g. SSR), fall back to the prior land assumption.
+      const isLand = spotLandMask ? spotLandMask.mask[py * spotLandMask.w + px] === 1 : true;
+      return isLand
+        ? { onLand: true, noData: false, depthM: null, depthFt: null }
+        : { onLand: false, noData: true, depthM: null, depthFt: null };
+    }
     const dr = bundle?.manifest?.layers?.bathy?.depth_range_m || [0, 500];
     const dM = pixelToDepthM(pixel, dr);
-    return { onLand: false, depthM: dM, depthFt: dM * 3.28084 };
+    return { onLand: false, noData: false, depthM: dM, depthFt: dM * 3.28084 };
   }
 
   const cursorDepth = cursor ? depthAt(cursor.lng, cursor.lat) : null;
-  const depthLabel = cursorDepth == null
-    ? "—"
-    : cursorDepth.onLand
-      ? "land"
-      : `${Math.round(cursorDepth.depthFt)} ft · ${cursorDepth.depthM.toFixed(0)} m`;
+  const depthLabel = depthText(cursorDepth, true);
 
   // ---- Water column at the cursor (PRD water-column V2, micro form) -------
   // The regional column rasters give cliff/below vis; the bundle DEM
@@ -1371,10 +1445,7 @@ export default function SpotDetailView({ spot, onClose, isMobile = false }) {
           })()}
 
           <div className="sd-m-conds">
-            <div className="sd-m-cond"><span>Depth</span><strong>{cursor ? depthLabel : (() => {
-              const d = depthAt(spot.lng, spot.lat);
-              return d && !d.onLand ? `${Math.round(d.depthFt)} ft` : "—";
-            })()}</strong></div>
+            <div className="sd-m-cond"><span>Depth</span><strong>{cursor ? depthLabel : depthText(depthAt(spot.lng, spot.lat), false)}</strong></div>
             <div className="sd-m-cond"><span>Temp</span><strong>{conditions.sstStr}</strong></div>
             <div className="sd-m-cond"><span>Wind</span><strong>{conditions.windStr}</strong></div>
             <div className="sd-m-cond"><span>Swell</span><strong>{conditions.swellStr}</strong></div>
@@ -1415,10 +1486,7 @@ export default function SpotDetailView({ spot, onClose, isMobile = false }) {
         </div>
         <div className="sdc-row sdc-coord">
           <span>Depth</span>
-          <strong>{cursor ? depthLabel : (() => {
-            const d = depthAt(spot.lng, spot.lat);
-            return d && !d.onLand ? `${Math.round(d.depthFt)} ft · ${d.depthM.toFixed(0)} m` : "—";
-          })()}</strong>
+          <strong>{cursor ? depthLabel : depthText(depthAt(spot.lng, spot.lat), true)}</strong>
         </div>
         {lastMark && (
           <div className="sdc-row sdc-mark">
