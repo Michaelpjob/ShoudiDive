@@ -377,11 +377,11 @@
       ],
       "unit": "kt",
       "vector_convention": "direction_to",
-      "generated_at": "2026-06-19T02:22:48Z",
+      "generated_at": "2026-06-19T08:21:05Z",
       "best_window": {
-        "day": 0,
-        "bucket": "morning",
-        "mean_kt": 0.49
+        "day": 3,
+        "bucket": "midday",
+        "mean_kt": 0.41
       }
     },
     "wind": {
@@ -398,36 +398,118 @@
         "width": 140,
         "height": 110
       },
-      "source": "NOAA HRRR + GFS",
+      "source": "NOAA HRRR + GFS blended with ECMWF",
       "windows": {
         "now": {
           "speed_url": "/data/wind_speed_now.png",
           "uv_url": "/data/wind_uv_now.png",
-          "valid_at": "2026-06-18T18:00:00Z",
-          "fcst_hour": 0,
-          "source": "GFS"
+          "valid_at": "2026-06-19T08:00:00Z",
+          "fcst_hour": 8,
+          "source": "GFS+ECMWF+buoy"
         },
         "p6h": {
           "speed_url": "/data/wind_speed_p6h.png",
           "uv_url": "/data/wind_uv_p6h.png",
-          "valid_at": "2026-06-19T00:00:00Z",
-          "fcst_hour": 6,
-          "source": "GFS"
+          "valid_at": "2026-06-19T14:00:00Z",
+          "fcst_hour": 14,
+          "source": "GFS+ECMWF"
         },
         "p24h": {
           "speed_url": "/data/wind_speed_p24h.png",
           "uv_url": "/data/wind_uv_p24h.png",
-          "valid_at": "2026-06-19T18:00:00Z",
-          "fcst_hour": 24,
-          "source": "GFS"
+          "valid_at": "2026-06-20T08:00:00Z",
+          "fcst_hour": 32,
+          "source": "GFS+ECMWF"
         },
         "p72h": {
           "speed_url": "/data/wind_speed_p72h.png",
           "uv_url": "/data/wind_uv_p72h.png",
-          "valid_at": "2026-06-21T18:00:00Z",
-          "fcst_hour": 72,
-          "source": "GFS"
+          "valid_at": "2026-06-22T08:00:00Z",
+          "fcst_hour": 80,
+          "source": "GFS+ECMWF"
         }
+      },
+      "buoy_correction": {
+        "method": "buoy_kriging_uv",
+        "length_km": 45.0,
+        "anemometer_height_m": 5.0,
+        "n_anchors_total": 6,
+        "n_anchors_active": 0,
+        "mean_resid_ms": null,
+        "anchors": [
+          {
+            "stn": "46086",
+            "name": "San Clemente Basin",
+            "lat": 32.499,
+            "lng": -118.034,
+            "buoy_spd_kt": 10.2,
+            "n_samples": 13,
+            "age_hours": 0.8,
+            "model_spd_kt": null,
+            "resid_ms": null,
+            "skipped": "no model coverage at buoy"
+          },
+          {
+            "stn": "46047",
+            "name": "Tanner Bank",
+            "lat": 32.418,
+            "lng": -119.535,
+            "buoy_spd_kt": 10.3,
+            "n_samples": 14,
+            "age_hours": 0.7,
+            "model_spd_kt": null,
+            "resid_ms": null,
+            "skipped": "no model coverage at buoy"
+          },
+          {
+            "stn": "46025",
+            "name": "Santa Monica Basin",
+            "lat": 33.765,
+            "lng": -119.077,
+            "buoy_spd_kt": 7.0,
+            "n_samples": 14,
+            "age_hours": 0.7,
+            "model_spd_kt": null,
+            "resid_ms": null,
+            "skipped": "no model coverage at buoy"
+          },
+          {
+            "stn": "46011",
+            "name": "Santa Maria",
+            "lat": 34.937,
+            "lng": -120.999,
+            "buoy_spd_kt": 3.3,
+            "n_samples": 14,
+            "age_hours": 0.7,
+            "model_spd_kt": null,
+            "resid_ms": null,
+            "skipped": "no model coverage at buoy"
+          },
+          {
+            "stn": "46028",
+            "name": "Cape San Martin",
+            "lat": 35.763,
+            "lng": -121.893,
+            "buoy_spd_kt": 3.9,
+            "n_samples": 14,
+            "age_hours": 0.7,
+            "model_spd_kt": null,
+            "resid_ms": null,
+            "skipped": "no model coverage at buoy"
+          },
+          {
+            "stn": "46042",
+            "name": "Monterey",
+            "lat": 36.787,
+            "lng": -122.408,
+            "buoy_spd_kt": 11.5,
+            "n_samples": 13,
+            "age_hours": 1.0,
+            "model_spd_kt": null,
+            "resid_ms": null,
+            "skipped": "no model coverage at buoy"
+          }
+        ]
       },
       "history": {
         "d-1": {
@@ -451,7 +533,7 @@
           "source": "GFS"
         }
       },
-      "generated_at": "2026-06-19T02:21:39Z"
+      "generated_at": "2026-06-19T08:19:18Z"
     },
     "wind5d": {
       "summary_url": "/data/wind/summary.json",
@@ -468,11 +550,11 @@
         30.0
       ],
       "tz": "America/Los_Angeles",
-      "generated_at": "2026-06-19T02:22:10Z",
+      "generated_at": "2026-06-19T08:20:10Z",
       "best_window": {
         "day": 6,
         "bucket": "midday",
-        "mean_kt": 11.7
+        "mean_kt": 11.3
       }
     },
     "swell5d": {
@@ -490,7 +572,7 @@
         25.0
       ],
       "tz": "America/Los_Angeles",
-      "generated_at": "2026-06-19T02:22:46Z"
+      "generated_at": "2026-06-19T08:20:59Z"
     },
     "viz": {
       "range_ft": [
