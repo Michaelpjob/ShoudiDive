@@ -145,6 +145,7 @@ export default function DesktopLayout({
   activeSpot, setActiveSpot,
   // MPA/bathy toggles (state owned by App, side-effect wrappers in MapShell)
   mpaOn, bathyOn, updateMpaOn, updateBathyOn,
+  closuresOn, updateClosuresOn,
   // Map viewport (zoom +/− buttons + recenter)
   size, zoomAt, resetView,
   // Manifest data state (legend "no data" indicator)
@@ -233,6 +234,15 @@ export default function DesktopLayout({
               aria-pressed={bathyOn}
             >
               Bottom
+            </button>
+            <button
+              type="button"
+              className={"mpa-pill" + (closuresOn ? " active" : "")}
+              onClick={(e) => { e.stopPropagation(); updateClosuresOn(!closuresOn); }}
+              title={closuresOn ? "Navy closures visible · click to hide" : "Navy closures hidden · click to show"}
+              aria-pressed={closuresOn}
+            >
+              Navy
             </button>
             <Chevron open={controlsOpen} />
           </span>

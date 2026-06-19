@@ -90,6 +90,10 @@ jobs:
         timeout-minutes: 75
         env:
           EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
+          # Copernicus Marine (EU) chl backstop in chl_blend.py — dormant until
+          # these secrets are added; harmless empty strings otherwise.
+          COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
+          COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
         run: python pipeline/fetch.py
 
       - name: Sentinel — fail loudly if ocean fetch produced no fresh output
@@ -139,6 +143,11 @@ jobs:
         continue-on-error: true
         timeout-minutes: 5
         run: python pipeline/fetch_mpa.py
+
+      - name: Fetch SCI Navy closures (scisland.org)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_sci_closures.py
 
       - name: Probe all external feeds
         continue-on-error: true

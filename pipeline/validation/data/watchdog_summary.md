@@ -1,4 +1,4 @@
-# Validation watchdog — 2026-06-18T18:59Z
+# Validation watchdog — 2026-06-19T14:43Z
 
 **3 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
@@ -10,15 +10,15 @@ Multiple scrapers may be silently broken.
 
 **Suggested action:** Open the latest hourly ingest workflow run; look for `FAILED` lines per scraper.
 
-### ⚠️ 2. 4 non-critical external feed(s) are red
+### ⚠️ 2. 1 non-critical external feed(s) are red
 
-Red feeds: chl_dineof_nrt_4km, chl_dineof_sci_2km, kd490_dineof_2km, nasa_obdaac_search. Fallbacks may keep the model running, but redundancy is degraded.
+Red feeds: nasa_obdaac_search. Fallbacks may keep the model running, but redundancy is degraded.
 
 **Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
 
-### 🔴 3. Published-data freshness gate found 2 issue(s)
+### 🔴 3. Published-data freshness gate found 1 issue(s)
 
-Freshness/completeness failures: kd490:layer_date_stale, wave:layer_date_stale.
+Freshness/completeness failures: wave:layer_date_stale.
 
 **Suggested action:** Open `pipeline/validation/data/freshness_health.json`; fix the failing fetcher or rerun the matching workflow before trusting the deploy.
 
@@ -26,16 +26,16 @@ Freshness/completeness failures: kd490:layer_date_stale, wave:layer_date_stale.
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_nearshore` | 4 | 8.05 | -4.06 | 75% | 0.91 |
-| `central_nearshore` | 1 | 2.93 | -2.93 | 100% | — |
+| `bight_nearshore` | 4 | 7.42 | +1.99 | 0% | 0.91 |
+| `central_nearshore` | 1 | 2.16 | -2.16 | 100% | — |
 
 ## Per-source bias (informational)
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `cencoos` | 1 | -2.93 ft |
-| `dive-shop-diveviz` | 1 | -14.88 ft |
-| `dive-shop-justgetwet` | 3 | -0.46 ft |
+| `cencoos` | 1 | -2.16 ft |
+| `dive-shop-diveviz` | 1 | -9.21 ft |
+| `dive-shop-justgetwet` | 3 | +5.72 ft |
 
 ## How to act on this issue
 
