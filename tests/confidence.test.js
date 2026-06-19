@@ -146,3 +146,39 @@ test("region confidence is staleness-aware (uses live layer scores)", () => {
   const regionFn = src.split("export function getRegionConfidence")[1] || "";
   assert.match(regionFn, /getLayerConfidence\(/, "getRegionConfidence must use live scores");
 });
+
+// ---- Source provenance (fallback awareness) -----------------------------
+
+test("confidence drops the score + names the source on a fallback", () => {
+  const src = read("src/lib/confidence.js");
+  // dynamicModulation must read the pipeline's source_fallback flag, drop the
+  // score by 1, and tell the user which backup source they're looking at.
+  assert.match(
+    src,
+    /info\.source_fallback[\s\S]{0,80}delta\s*-=\s*1[\s\S]{0,140}via \$\{info\.source/,
+    "source_fallback must drop the score and surface the source name",
+  );
+});
+
+test("pipeline records source provenance (blender + build_layer)", () => {
+  // chl: provenance lives in the BLENDER (build_blended_chl), not build_layer —
+  // a fallback added to LAYERS["chl"].fallbacks would be a silent no-op.
+  const chlBlend = read("pipeline/chl_blend.py");
+  assert.match(chlBlend, /erdVHNchla1day/, "chl needs a no-auth blender fallback source");
+  assert.match(chlBlend, /upwell\.pfeg\.noaa\.gov/, "raw-VIIRS chl fallback lives on upwell, not coastwatch.pfeg");
+  assert.match(chlBlend, /source_fallback/, "blender must flag a fallback-dominated chl blend");
+
+  // sst/kd490: build_layer records which source served the freshest day.
+  const fetchPy = read("pipeline/fetch.py");
+  assert.match(fetchPy, /_LAYER_SOURCE/, "build_layer must record the serving source");
+  assert.match(fetchPy, /source_fallback/, "build_layer must flag a fallback source");
+  // The retired OISST id must not be USED as a dataset (it 404s -> silent
+  // no-op fallback); the explanatory comment may still mention it.
+  assert.doesNotMatch(
+    fetchPy,
+    /"dataset":\s*"ncdcOisst21NrtAgg_LonPM180"/,
+    "use the live base OISST id + lng_offset_360, not the retired _LonPM180",
+  );
+  assert.match(fetchPy, /"dataset":\s*"ncdcOisst21NrtAgg"/, "OISST last-resort SST fallback present");
+  assert.match(fetchPy, /lng_offset_360/, "base OISST (0..360) needs the longitude offset");
+});
