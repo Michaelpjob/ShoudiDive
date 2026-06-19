@@ -84,7 +84,7 @@ function jsonResponse(body, init) {
   });
 }
 
-export async function onRequestPost({ request }) {
+export async function onRequestPost({ request, env }) {
   // ---- defense-in-depth guard rails ---------------------------------
   // Each of these checks is cheap (header read or constant-time string
   // compare) and short-circuits before we spend any CPU on body parsing.
@@ -212,24 +212,37 @@ export async function onRequestPost({ request }) {
     );
   }
 
-  // Phase 2 hook: when ANALYTICS_KV is bound, also persist.
-  // (Comment out for Phase 1 — uncomment + bind the namespace
-  // when you're ready to add the dashboard.)
-  // const env = arguments[0].env;
-  // if (env && env.ANALYTICS_KV) {
-  //   const day = receivedAt.slice(0, 10);          // YYYY-MM-DD bucket
-  //   const key = `${day}/${sessionId}/${Date.now()}`;
-  //   await env.ANALYTICS_KV.put(key, JSON.stringify(accepted), {
-  //     expirationTtl: 60 * 60 * 24 * 90,           // 90-day retention
-  //   });
-  // }
+  // Phase 2 storage: persist ONE KV key per accepted event so /stats can
+  // aggregate from key names alone (no per-value reads). The event name +
+  // session id live in the KEY — `ev/<day>/<name>/<session>/<uuid>` — so a
+  // prefix list yields both totals and unique-session counts cheaply. The
+  // value carries country + props for optional breakdowns later.
+  //
+  // No-op (zero KV cost) until ANALYTICS_KV is bound to the Pages project,
+  // so this ships safely ahead of the binding. Failures here must never
+  // break ingest — they're swallowed (the event already logged above).
+  if (env && env.ANALYTICS_KV && accepted.length) {
+    const day = receivedAt.slice(0, 10); // YYYY-MM-DD bucket
+    const ttl = 60 * 60 * 24 * 90; // 90-day retention
+    try {
+      await Promise.all(
+        accepted.map((ev) => {
+          const key = `ev/${day}/${ev.name}/${sessionId}/${crypto.randomUUID()}`;
+          const val = JSON.stringify({ cc: country, vp: viewport, props: ev.props, ts: ev.ts });
+          return env.ANALYTICS_KV.put(key, val, { expirationTtl: ttl });
+        })
+      );
+    } catch {
+      // swallow — ingest stays healthy even if KV write fails
+    }
+  }
 
   return jsonResponse({ ok: true, accepted: accepted.length });
 }
 
 // Reject anything that's not a POST so the endpoint surface is tiny.
-export async function onRequest({ request }) {
-  if (request.method === "POST") return onRequestPost({ request });
+export async function onRequest({ request, env }) {
+  if (request.method === "POST") return onRequestPost({ request, env });
   if (request.method === "OPTIONS") {
     // No CORS; reject preflight. Same-origin only.
     return new Response(null, { status: 405, headers: { Allow: "POST" } });
