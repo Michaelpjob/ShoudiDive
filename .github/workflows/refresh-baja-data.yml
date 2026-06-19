@@ -66,6 +66,9 @@ jobs:
         timeout-minutes: 25
         env:
           EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
+          # Copernicus Marine (EU) chl backstop — dormant until secrets added.
+          COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
+          COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
         run: python pipeline/fetch.py
 
       - name: Sentinel — fail loudly if ocean fetch produced no fresh output
