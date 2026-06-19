@@ -18,6 +18,15 @@
   user-select: none;
 }
 
+/* When the active layer has a bottom-center scrubber (SST-with-timeline /
+   wind / swell / current on desktop), lift the strip above the scrubber AND
+   its floating playhead value badge (which tops out ~120px from the bottom)
+   so the two no longer overlap. Neutralized in the mobile block below, where
+   the scrubber moves to the top of the map. */
+.closures-timeline.above-scrubber {
+  bottom: 132px;
+}
+
 .closures-tl-head {
   display: flex;
   align-items: baseline;
@@ -90,6 +99,11 @@
   .closures-timeline {
     bottom: 96px;
     max-width: 96%;
+  }
+  /* The scrubber sits at the top here, so there's nothing to clear at the
+     bottom — keep the strip at the same height as the no-scrubber case. */
+  .closures-timeline.above-scrubber {
+    bottom: 96px;
   }
 }
 
