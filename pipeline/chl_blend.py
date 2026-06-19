@@ -152,6 +152,10 @@ class ChlSource:
     max_back: int
     fetcher: Callable[[date], Optional[np.ndarray]]
     requires_earthdata: bool = False
+    # Needs Copernicus Marine creds (COPERNICUSMARINE_SERVICE_USERNAME/PASSWORD).
+    # Skipped upstream when unset, so the source lies dormant until the secrets
+    # exist — then it activates with no further code change.
+    requires_cmems: bool = False
 
 
 # ---- NASA OB.DAAC L3m fetcher ------------------------------------------
@@ -363,6 +367,59 @@ def _resize_nan(arr: np.ndarray, target_h: int, target_w: int) -> np.ndarray:
     return np.asarray(out.values)[::-1, :]  # back to descending
 
 
+# ---- Copernicus Marine (CMEMS) fetcher --------------------------------
+
+def _make_cmems_fetcher(dataset_id: str, variable: str = "CHL"):
+    """Fetcher for a Copernicus Marine gridded dataset via the
+    `copernicusmarine` toolbox. CMEMS (EU / Mercator Ocean — GlobColour by
+    ACRI-ST) is independent infrastructure from every NOAA/NASA source, so it
+    survives a US-federal-infra outage. Auth is read from the
+    COPERNICUSMARINE_SERVICE_USERNAME / _PASSWORD env vars (GitHub secrets);
+    the source is skipped upstream when they're unset, so this never blocks a
+    run. `open_dataset` returns a lazy xarray Dataset (subset by bbox+time);
+    `.values` pulls only the SoCal window."""
+    def fetcher(d: date) -> Optional[np.ndarray]:
+        try:
+            import copernicusmarine  # optional dep — only imported when used
+        except ImportError:
+            print("  cmems: copernicusmarine not installed — skipping", flush=True)
+            return None
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                ds = copernicusmarine.open_dataset(
+                    dataset_id=dataset_id,
+                    variables=[variable],
+                    minimum_longitude=BBOX["lng_min"],
+                    maximum_longitude=BBOX["lng_max"],
+                    minimum_latitude=BBOX["lat_min"],
+                    maximum_latitude=BBOX["lat_max"],
+                    start_datetime=f"{d.isoformat()}T00:00:00",
+                    end_datetime=f"{d.isoformat()}T23:59:59",
+                )
+                var = ds[variable]
+                if "time" in var.dims:
+                    var = var.isel(time=-1)
+                # Orient row 0 = lat_max, col 0 = lng_min so _resize_nan's
+                # implicit BBOX frame matches (CMEMS lat is usually ascending).
+                lat = next((c for c in ("latitude", "lat") if c in var.dims), None)
+                lon = next((c for c in ("longitude", "lon") if c in var.dims), None)
+                if lat:
+                    var = var.sortby(lat, ascending=False)
+                if lon:
+                    var = var.sortby(lon, ascending=True)
+                arr = np.asarray(var.values).squeeze()
+        except Exception as exc:  # noqa: BLE001
+            print(f"  cmems {dataset_id} {d}: {exc.__class__.__name__}: {exc}", flush=True)
+            return None
+        if arr.ndim != 2 or not np.isfinite(arr).any():
+            return None
+        if arr.shape != (OUT_H, OUT_W):
+            arr = _resize_nan(arr, OUT_H, OUT_W)
+        return arr
+    return fetcher
+
+
 # ---- Source roster -----------------------------------------------------
 
 CHL_SOURCES: list[ChlSource] = [
@@ -411,6 +468,21 @@ CHL_SOURCES: list[ChlSource] = [
             "noaacwNPPN20S3ASCIDINEOF2kmDaily",
             has_altitude=True,
         ),
+    ),
+    ChlSource(
+        # Independent cross-provider backstop. Every source above is NOAA or
+        # NASA — they can share a US-federal-infra outage (the 2026-06 freeze).
+        # Copernicus Marine (EU / Mercator Ocean — GlobColour) is a separate
+        # provider + infrastructure, and its L4 product is daily gap-free
+        # (space-time interpolated), 4 km, multi-sensor. Priority 6 = last
+        # (a backstop, not a primary); dormant until the COPERNICUSMARINE_*
+        # secrets exist, then it activates automatically.
+        id="cmems_globcolour",
+        label="Copernicus Marine GlobColour L4 (EU, gap-free)",
+        priority=6,
+        max_back=NOAA_NRT_MAX_BACK,
+        fetcher=_make_cmems_fetcher("cmems_obs-oc_glo_bgc-plankton_nrt_l4-gapfree-multi-4km_P1D"),
+        requires_cmems=True,
     ),
 ]
 
@@ -633,12 +705,20 @@ def build_blended_chl(end: date) -> dict | None:
     if not have_token:
         print(f"  EARTHDATA_TOKEN unset — NASA OB.DAAC sources will be skipped, "
               f"falling back to NOAA-only blend (~4 day lag floor)", flush=True)
+    have_cmems = bool(os.environ.get("COPERNICUSMARINE_SERVICE_USERNAME")
+                      and os.environ.get("COPERNICUSMARINE_SERVICE_PASSWORD"))
+    if not have_cmems:
+        print(f"  COPERNICUSMARINE_SERVICE_* unset — Copernicus Marine source "
+              f"dormant (add the secrets to activate the EU backstop)", flush=True)
 
     # 1) Walk every source up to its max_back to gather up to 3 frames each.
     per_source: list[_SourceResult] = []
     for source in CHL_SOURCES:
         if source.requires_earthdata and not have_token:
             print(f"  [{source.id}] skipped (requires EARTHDATA_TOKEN)", flush=True)
+            continue
+        if source.requires_cmems and not have_cmems:
+            print(f"  [{source.id}] skipped (requires COPERNICUSMARINE_SERVICE_*)", flush=True)
             continue
         res = _walk_source(source, end, want=3)
         if not res.frames:
