@@ -252,6 +252,14 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
   // rather than borrowing a layer scrubber's.
   const [closuresDay, setClosuresDay] = useState(0);
 
+  // On desktop the active layer's scrubber (SST-with-timeline / wind / swell /
+  // current) sits bottom-center; the closures day-strip lives there too, so we
+  // lift the strip above it when one is present (see .above-scrubber). On
+  // mobile the scrubber moves to top-center, so the lift is neutralized there.
+  const hasBottomScrubber =
+    (layer === "sst" && hasSstTimeline) ||
+    layer === "wind" || layer === "swell" || layer === "current";
+
   // The readout pin holds across layer switches by design (drop it once,
   // read temp → chl → wind → current → viz at the SAME point). Safe because
   // the pin stores only lng/lat — each layer's value is recomputed from the
@@ -815,7 +823,7 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
           .below-timeline class shifts the moon down to clear it. */}
       <MoonWidget
         date={viewingDate}
-        className={((layer === "sst" && hasSstTimeline) || layer === "wind" || layer === "swell" || layer === "current") ? "below-timeline" : ""}
+        className={hasBottomScrubber ? "below-timeline" : ""}
       />
 
       {/* Timeline scrubbers. Wind/swell/current are forecasts; SST can show
@@ -837,7 +845,7 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
       {/* Closures day-strip — overlay forecast selector, shown alongside any
           heatmap layer (bottom-center, clear of the top scrubbers). */}
       {closuresOn && activeRegion() === "ca" && (
-        <ClosuresTimeline selectedDay={closuresDay} setSelectedDay={setClosuresDay} />
+        <ClosuresTimeline selectedDay={closuresDay} setSelectedDay={setClosuresDay} aboveScrubber={hasBottomScrubber} />
       )}
 
       <DesktopLayout
