@@ -11,22 +11,40 @@ function brg(a,b){var y=Math.sin(toR(b[1]-a[1]))*Math.cos(toR(b[0]));
  return (toD(Math.atan2(y,x))+360)%360;}
 var CMP=["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
 function comp(b){return CMP[Math.floor((b+11.25)/22.5)%16];}
+function _ddm(v,pos,neg){var h=v>=0?pos:neg;v=Math.abs(v);var d=Math.floor(v);return d+'°'+((v-d)*60).toFixed(3)+"' "+h;}
+function _fmt(ll){return {dd:ll.lat.toFixed(5)+', '+ll.lng.toFixed(5),dm:_ddm(ll.lat,'N','S')+'  '+_ddm(ll.lng,'E','W')};}
 
-var D,S,LCH,map,coneLayer,hdrLayer,launchMarker,measLine,measHandle;
+var D,S,LCH,map,coneLayer,hdrLayer,launchMarker,measLine,measHandle,wpMarker,coordbox;
+
+function setReadout(ll){var f=_fmt(ll);coordbox.innerHTML='<b>'+f.dd+'</b><br/>'+f.dm
+ +'<div class="hint">click map to drop a GPS waypoint</div>';}
+function openWp(ll){var f=_fmt(ll);
+ wpMarker.setPopupContent('<div class="wpc"><b>'+f.dd+'</b><br/>'+f.dm+'</div>'
+  +'<button class="copybtn" data-c="'+f.dd+'">Copy GPS</button>');
+ wpMarker.openPopup();}
+function dropWp(ll){
+ if(!wpMarker){wpMarker=L.marker(ll,{draggable:true,zIndexOffset:1100,icon:L.divIcon({className:'',
+  html:'<div class=wp>⌖</div>',iconSize:[24,24],iconAnchor:[12,12]})}).addTo(map);
+  wpMarker.bindPopup('');wpMarker.on('drag',function(){openWp(wpMarker.getLatLng());});}
+ else wpMarker.setLatLng(ll);
+ openWp(ll);}
+function wireCopy(e){var el=e.popup.getElement();if(!el)return;var b=el.querySelector('.copybtn');
+ if(!b||b._wired)return;b._wired=1;b.addEventListener('click',function(){var t=b.getAttribute('data-c');
+  function done(ok){b.textContent=ok?'Copied!':t;}
+  function legacy(){try{var a=document.createElement('textarea');a.value=t;a.style.position='fixed';a.style.opacity=0;
+   document.body.appendChild(a);a.select();var ok=document.execCommand('copy');document.body.removeChild(a);done(ok);}catch(_){done(false);}}
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(function(){done(true);},legacy);else legacy();});}
 
 function drawBase(){coneLayer.clearLayers();
- L.geoJSON({type:'FeatureCollection',features:D.scenarios[S].cones},{style:function(f){return {color:'#f59e0b',weight:1,
-  opacity:.2+.3*f.properties.opacity,fillColor:'#f59e0b',fillOpacity:.03+.14*f.properties.opacity};}})
-  .bindPopup(function(l){var p=l.feature.properties;return '<b>'+p.bed+'</b><br/>kelp drifting <b>'+p.compass
-   +'</b> ('+p.bearing+'°), reach ~'+p.reach_nm+' nm';}).addTo(coneLayer);}
+ L.geoJSON({type:'FeatureCollection',features:D.scenarios[S].cones},{interactive:false,style:function(f){return {color:'#f59e0b',weight:1,
+  opacity:.2+.3*f.properties.opacity,fillColor:'#f59e0b',fillOpacity:.03+.14*f.properties.opacity};}}).addTo(coneLayer);}
 function drawHDR(){hdrLayer.clearLayers();var h=D.scenarios[S].hdr;if(!h||!h.regions)return;
  h.regions.slice().sort(function(a,b){return b.level-a.level;}).forEach(function(r){
   var core=r.level<=0.35,mid=r.level>0.35&&r.level<=0.6;
   var st=core?{color:'#86efac',weight:2,fillColor:'#22c55e',fillOpacity:.55}
          :mid?{color:'#4ade80',weight:1.5,fillColor:'#16a34a',fillOpacity:.22}
          :{color:'#4ade80',weight:1,fillColor:'#16a34a',fillOpacity:.08,dashArray:'4 4'};
-  L.geoJSON(r.fc,{style:st}).bindTooltip(core?'densest (~'+Math.round(r.level*100)+'% of paddies)'
-   :Math.round(r.level*100)+'% of paddies').addTo(hdrLayer);});}
+  L.geoJSON(r.fc,{style:st,interactive:false}).addTo(hdrLayer);});}
 function updateMeas(){var a=D.launches[LCH],h=measHandle.getLatLng(),b=[h.lat,h.lng];
  measLine.setLatLngs([a,b]);measHandle.setTooltipContent(nm(a,b).toFixed(1)+' nm '+comp(brg(a,b)));}
 function reanchorMeas(){updateMeas();}
@@ -90,6 +108,10 @@ function boot(d){D=d;S=D.order[0];LCH=D.default_launch;
   html:'<div class=ruler>⊕</div>',iconSize:[26,26],iconAnchor:[13,13]})}).addTo(map);
  measHandle.bindTooltip('',{permanent:true,direction:'top',offset:[0,-10],className:'meas-label'});
  measHandle.on('drag',updateMeas);
+ coordbox=document.getElementById('coordbox');setReadout(map.getCenter());
+ map.on('mousemove',function(e){setReadout(e.latlng);});
+ map.on('click',function(e){dropWp(e.latlng);});
+ map.on('popupopen',wireCopy);
  var tabs=document.getElementById('tabs');
  D.order.forEach(function(s){var b=document.createElement('button');b.dataset.s=s;b.textContent=LABEL[s]||s;
   b.onclick=function(){setS(s);};tabs.appendChild(b);});
