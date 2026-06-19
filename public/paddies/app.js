@@ -14,7 +14,7 @@ function comp(b){return CMP[Math.floor((b+11.25)/22.5)%16];}
 function _ddm(v,pos,neg){var h=v>=0?pos:neg;v=Math.abs(v);var d=Math.floor(v);return d+'°'+((v-d)*60).toFixed(3)+"' "+h;}
 function _fmt(ll){return {dd:ll.lat.toFixed(5)+', '+ll.lng.toFixed(5),dm:_ddm(ll.lat,'N','S')+'  '+_ddm(ll.lng,'E','W')};}
 
-var D,S,LCH,map,coneLayer,hdrLayer,launchMarker,measLine,measHandle,wpMarker,coordbox;
+var D,F,LCH,map,coneLayer,hdrLayer,launchMarker,measLine,measHandle,wpMarker,coordbox;
 
 function setReadout(ll){var f=_fmt(ll);coordbox.innerHTML='<b>'+f.dd+'</b><br/>'+f.dm
  +'<div class="hint">click map to drop a GPS waypoint</div>';}
@@ -36,9 +36,9 @@ function wireCopy(e){var el=e.popup.getElement();if(!el)return;var b=el.querySel
   if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(function(){done(true);},legacy);else legacy();});}
 
 function drawBase(){coneLayer.clearLayers();
- L.geoJSON({type:'FeatureCollection',features:D.scenarios[S].cones},{interactive:false,style:function(f){return {color:'#f59e0b',weight:1,
+ L.geoJSON({type:'FeatureCollection',features:D.frames[F].cones},{interactive:false,style:function(f){return {color:'#f59e0b',weight:1,
   opacity:.2+.3*f.properties.opacity,fillColor:'#f59e0b',fillOpacity:.03+.14*f.properties.opacity};}}).addTo(coneLayer);}
-function drawHDR(){hdrLayer.clearLayers();var h=D.scenarios[S].hdr;if(!h||!h.regions)return;
+function drawHDR(){hdrLayer.clearLayers();var h=D.frames[F].hdr;if(!h||!h.regions)return;
  h.regions.slice().sort(function(a,b){return b.level-a.level;}).forEach(function(r){
   var core=r.level<=0.35,mid=r.level>0.35&&r.level<=0.6;
   var st=core?{color:'#86efac',weight:2,fillColor:'#22c55e',fillOpacity:.55}
@@ -48,9 +48,12 @@ function drawHDR(){hdrLayer.clearLayers();var h=D.scenarios[S].hdr;if(!h||!h.reg
 function updateMeas(){var a=D.launches[LCH],h=measHandle.getLatLng(),b=[h.lat,h.lng];
  measLine.setLatLngs([a,b]);measHandle.setTooltipContent(nm(a,b).toFixed(1)+' nm '+comp(brg(a,b)));}
 function reanchorMeas(){updateMeas();}
-function drawPanel(){var m=D.scenarios[S].meta;
+function drawPanel(){var m=D.frames[F].meta;
  var fl=Math.round(m.frac_floating*100),be=Math.round(m.frac_beached*100),sk=Math.round(m.frac_sunk*100);
- var tl=D.scenarios[S].timeline||[];
+ var tl=D.frames[F].timeline||[];
+ var tHdr='<div style="margin-bottom:7px;font-size:13px">'+m.date+' &middot; <b style="color:#fbbf24">'+m.rel+'</b>'
+  +'<span class="conf '+(m.confidence==='forecast'?'fc':'obs')+'">'+(m.confidence==='forecast'?'FORECAST':'OBSERVED')+'</span></div>'
+  +(m.confidence==='forecast'?'<div class=mut style="font-size:11px;margin:-4px 0 7px">forecast drift &mdash; coarse currents, no radar; lower confidence</div>':'');
  var mx=Math.max.apply(null,[0.1].concat(tl.map(function(t){return t.shed;})));
  var tlb=tl.slice().reverse().map(function(t){return '<div style="flex:1;text-align:center" title="Hs '+t.hs_m+' m">'
   +'<div style="height:'+Math.round(26*t.shed/mx)+'px;background:#38bdf8;border-radius:2px 2px 0 0"></div>'
@@ -64,7 +67,7 @@ function drawPanel(){var m=D.scenarios[S].meta;
    +'<br/><span class=mut>primary patch ~'+(m.core_area_km2||0)+' km²'
    +((m.n_patches>1)?' &middot; +'+(m.n_patches-1)+' more patches':'')
    +' &middot; ±'+(m.pos_pm_nm||0)+' nm &middot; widen to ~'+(m.area50_km2||0)+' km² if slow</span></div>';}
- document.getElementById('panel').innerHTML=best
+ document.getElementById('panel').innerHTML=tHdr+best
   +'<div class=mut style="margin:-2px 0 7px">Drag the <b style="color:#38bdf8">⊕</b> to measure nm from your port.</div>'
   +'<div class=mut>est. floating paddies in the Bight</div>'
   +'<div class=score>~'+m.est_floating_paddies.toLocaleString()+'</div>'
@@ -86,12 +89,13 @@ function drawPanel(){var m=D.scenarios[S].meta;
   +' <span class="sw" style="background:#facc15"></span>your port'
   +' <span class="sw" style="background:#38bdf8"></span>ruler (drag ⊕)'
   +'<div class=mut style="margin-top:6px;font-size:11px">'+(D.current_note?D.current_note+'<br/>':'')+D.src_note+'</div></div>';}
-function setS(s){S=s;
- document.querySelectorAll('#tabs button').forEach(function(b){b.classList.toggle('active',b.dataset.s===s);});
+function setFrame(i){F=Math.max(0,Math.min(D.frames.length-1,i|0));var m=D.frames[F].meta;
+ document.getElementById('tlabel').innerHTML='<b>'+m.date+'</b> &middot; '+m.rel
+  +'<span class="conf '+(m.confidence==='forecast'?'fc':'obs')+'">'+(m.confidence==='forecast'?'FC':'OBS')+'</span>';
  drawBase();drawHDR();drawPanel();}
 function setL(l){LCH=l;launchMarker.setLatLng(D.launches[LCH]);reanchorMeas();drawHDR();drawPanel();}
 
-function boot(d){D=d;S=D.order[0];LCH=D.default_launch;
+function boot(d){D=d;F=D.default_frame;LCH=D.default_launch;
  map=L.map('map',{zoomControl:true,attributionControl:false}).setView([33.2,-118.5],8);
  var landLayer=L.layerGroup().addTo(map);
  fetch(LAND_URL).then(function(r){return r.ok?r.json():null;}).then(function(g){
@@ -112,14 +116,13 @@ function boot(d){D=d;S=D.order[0];LCH=D.default_launch;
  map.on('mousemove',function(e){setReadout(e.latlng);});
  map.on('click',function(e){dropWp(e.latlng);});
  map.on('popupopen',wireCopy);
- var tabs=document.getElementById('tabs');
- D.order.forEach(function(s){var b=document.createElement('button');b.dataset.s=s;b.textContent=LABEL[s]||s;
-  b.onclick=function(){setS(s);};tabs.appendChild(b);});
+ var tsl=document.getElementById('tslider');
+ tsl.max=D.frames.length-1;tsl.value=D.default_frame;
+ tsl.oninput=function(){setFrame(parseInt(tsl.value,10));};
  var sel=document.getElementById('launch');
  Object.keys(D.launches).forEach(function(n){var o=document.createElement('option');o.value=n;o.textContent=n;sel.appendChild(o);});
  sel.value=LCH;sel.onchange=function(e){setL(e.target.value);};
- var hsh=(location.hash||'').replace('#','');setS(D.order.indexOf(hsh)>=0?hsh:S);
- window.addEventListener('hashchange',function(){var x=(location.hash||'').replace('#','');if(D.order.indexOf(x)>=0)setS(x);});
+ setFrame(D.default_frame);
  updateMeas();}
 
 fetch('data.json',{cache:'no-cache'}).then(function(r){return r.json();}).then(boot).catch(function(){
