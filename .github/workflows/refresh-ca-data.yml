@@ -144,6 +144,11 @@ jobs:
         timeout-minutes: 5
         run: python pipeline/fetch_mpa.py
 
+      - name: Fetch SCI Navy closures (scisland.org)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_sci_closures.py
+
       - name: Probe all external feeds
         continue-on-error: true
         timeout-minutes: 5
