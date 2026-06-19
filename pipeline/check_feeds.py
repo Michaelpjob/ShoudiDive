@@ -130,7 +130,7 @@ FEEDS: list[FeedSpec] = [
         feed_id="nasa_obdaac_search",
         category="satellite",
         consumer="fetch.py blender sources #1-3 (AQUA/SNPP/S3A_OLCI)",
-        probe_url="https://oceandata.sci.gsfc.nasa.gov/api/file_search?subType=1&search=AQUA_MODIS*L3m*CHL*chlor_a*4km*NRT*&sdate=2026-04-30&edate=2026-04-30&results_as_file=1",
+        probe_url="https://oceandata.sci.gsfc.nasa.gov/api/file_search?search=AQUA_MODIS*L3m.DAY.CHL.chlor_a.4km.NRT*&sdate=2026-04-30&edate=2026-04-30&dtype=L3m&results_as_file=1",
         method="HEAD",
         expect_status=(200, 206, 401, 403),  # auth-gated; 401/403 = up but unauthorized
         critical=False,

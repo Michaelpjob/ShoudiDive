@@ -170,11 +170,17 @@ _NASA_FILENAME_RE = re.compile(
 def _nasa_search_files(session: requests.Session, sensor: str, d: date) -> list[str]:
     """Find the L3m daily 4km NRT chl file(s) for this sensor + date.
     Returns 0 or 1 filenames (the search matches a single date)."""
+    # OB.DAAC migrated its file_search API (2026): the old `subType=1` +
+    # loose-wildcard `search` now 422s, silently killing all 3 NASA chl
+    # primaries (verified DEAD via the feed-health probe; chl fell back to a
+    # single NOAA host). The current contract wants `dtype=L3m` + a search
+    # glob matching the dotted filename. Bare filenames are still returned
+    # (no addurl) so _NASA_FILENAME_RE parses them unchanged.
     params = {
-        "subType": 1,
-        "search": f"{sensor}*L3m*CHL*chlor_a*4km*NRT*",
+        "search": f"{sensor}*L3m.DAY.CHL.chlor_a.4km.NRT*",
         "sdate": d.isoformat(),
         "edate": d.isoformat(),
+        "dtype": "L3m",
         "results_as_file": 1,
     }
     # Stage 6a (2026-05-24): http_get adds retries on the EARTHDATA
