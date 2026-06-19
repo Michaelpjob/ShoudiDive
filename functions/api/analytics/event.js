@@ -66,6 +66,7 @@ const ALLOWED_NAMES = new Set([
   "zoom",
   "share_click",
   "tip_click",
+  "whatsnew_open",
   "column_open",
   "column_depth_set",
 ]);

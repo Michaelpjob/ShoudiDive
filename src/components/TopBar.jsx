@@ -63,6 +63,9 @@ export default function TopBar({ onSettings, settingsOpen, dataState, layer, hor
     catch { return false; }
   });
   const openWhatsNew = () => {
+    // `unread` captures whether the dot was driving the open (vs. the user
+    // just exploring); `latest` is the changelog version they're seeing.
+    track("whatsnew_open", { unread: hasUnread, latest: LATEST_CHANGELOG_ID });
     setWhatsNewOpen(true);
     setHasUnread(false);
     try { localStorage.setItem(WHATSNEW_SEEN_KEY, LATEST_CHANGELOG_ID); } catch { /* ignore quota */ }
