@@ -130,6 +130,7 @@ export default function MobileShell({
   setMpaOn,
   setBathyOn,
   setKelpOn,
+  setClosuresOn,
   kelpAvailable,
   bundledSpots,
   openSpotDetail,
@@ -146,7 +147,7 @@ export default function MobileShell({
   // wraps them with a popup-clearing side effect before passing them in
   // (see updateMpaOn/updateBathyOn there).
   const { prefs } = usePrefs();
-  const { units, mpaOn, bathyOn, kelpOn } = prefs;
+  const { units, mpaOn, bathyOn, kelpOn, closuresOn } = prefs;
   // wind + swell + current use slot keys; sst uses history/forecast slots
   // when loaded; chl/viz use integer composites.
   //
@@ -277,6 +278,17 @@ export default function MobileShell({
                   Kelp Beds
                 </button>
               )}
+              <button
+                type="button"
+                className={"mpa-pill" + (closuresOn ? " active" : "")}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setClosuresOn(!closuresOn);
+                }}
+                aria-pressed={closuresOn}
+              >
+                Navy Closures
+              </button>
             </div>
           </section>
 
@@ -389,6 +401,17 @@ export default function MobileShell({
             Kelp
           </button>
         )}
+        <button
+          type="button"
+          className={"mpa-pill" + (closuresOn ? " active" : "")}
+          onClick={(e) => {
+            e.stopPropagation();
+            setClosuresOn(!closuresOn);
+          }}
+          aria-pressed={closuresOn}
+        >
+          Navy
+        </button>
       </div>
 
       {/* Always-visible peek strip ------------------------------------- */}

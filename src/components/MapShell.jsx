@@ -50,6 +50,9 @@ import CurrentTimeline, { currentSelToSlotKey } from "./CurrentTimeline.jsx";
 import SstTimeline, { sstSelToSlotKey } from "./SstTimeline.jsx";
 import { MoonWidget } from "./MoonIcon.jsx";
 import DesktopLayout from "./DesktopLayout.jsx";
+import ClosuresLayer from "./ClosuresLayer.jsx";
+import ClosuresPopup from "./ClosuresPopup.jsx";
+import ClosuresTimeline from "./ClosuresTimeline.jsx";
 
 import { useMapViewport } from "../hooks/useMapViewport.js";
 import { usePopupState } from "../hooks/usePopupState.js";
@@ -138,10 +141,11 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
   // PrefsContext — extracted in Stage 5c (2026-05-23) so they no
   // longer have to be drilled through App → MapShell as props.
   const { prefs, setPref } = usePrefs();
-  const { opacity, units, mpaOn, bathyOn, kelpOn } = prefs;
+  const { opacity, units, mpaOn, bathyOn, kelpOn, closuresOn } = prefs;
   const setMpaOn = (v) => setPref("mpaOn", v);
   const setBathyOn = (v) => setPref("bathyOn", v);
   const setKelpOn = (v) => setPref("kelpOn", v);
+  const setClosuresOn = (v) => setPref("closuresOn", v);
 
   // Kelp Bed Zones is California-only today — CDFW ds3135 covers CA
   // commercial kelp harvest boundaries, which are CA state-water
@@ -204,8 +208,9 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
     selectedMpa, setSelectedMpa,
     selectedBathy, setSelectedBathy,
     selectedKelp, setSelectedKelp,
+    selectedClosure, setSelectedClosure,
     bathyFeatures,
-  } = usePopupState({ mpaOn, bathyOn, kelpOn });
+  } = usePopupState({ mpaOn, bathyOn, kelpOn, closuresOn });
 
   // updateMpaOn / updateBathyOn stay here — they wrap mpaOn/bathyOn
   // setters (which are App-level state, not hook-managed) AND
@@ -227,6 +232,13 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
     if (!value) setSelectedKelp(null);
     setKelpOn(value);
   };
+  const updateClosuresOn = (next) => {
+    const value = typeof next === "function" ? next(closuresOn) : next;
+    if (!value) setSelectedClosure(null);
+    setClosuresOn(value);
+  };
+  // Selected day index (0..6) for the closures overlay's own day-strip.
+  const [closuresDay, setClosuresDay] = useState(0);
 
   // The readout pin holds across layer switches by design (drop it once,
   // read temp → chl → wind → current → viz at the SAME point). Safe because
@@ -734,6 +746,21 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
           }}
         />
 
+        {/* Navy closures — SCI safety zones + offshore ops areas, recolored
+            by the day picked on the closures strip. CA region only. */}
+        {activeRegion() === "ca" && (
+          <ClosuresLayer
+            width={size.w}
+            height={size.h}
+            active={closuresOn}
+            selectedDay={closuresDay}
+            onSelect={(payload) => {
+              track("popup_open", { kind: "closure" });
+              setSelectedClosure(payload);
+            }}
+          />
+        )}
+
         <g className="spot-pins">
           {SAVED_SPOTS.map((s) => {
             const [x, y] = project(s.lng, s.lat, size.w, size.h);
@@ -892,6 +919,12 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
         <CurrentTimeline sel={currentSel} setSel={setCurrentSel} hover={hoverForUI} />
       )}
 
+      {/* Closures day-strip — overlay forecast selector, shown alongside any
+          heatmap layer (bottom-center, clear of the top scrubbers). */}
+      {closuresOn && activeRegion() === "ca" && (
+        <ClosuresTimeline selectedDay={closuresDay} setSelectedDay={setClosuresDay} />
+      )}
+
       <DesktopLayout
         layer={layer} setLayer={setLayer}
         composite={composite} setComposite={setComposite}
@@ -913,9 +946,9 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
         timeOpts={timeOpts}
         layerIsReal={layerIsReal}
         activeSpot={activeSpot} setActiveSpot={setActiveSpot}
-        mpaOn={mpaOn} bathyOn={bathyOn} kelpOn={kelpOn}
+        mpaOn={mpaOn} bathyOn={bathyOn} kelpOn={kelpOn} closuresOn={closuresOn}
         kelpAvailable={kelpAvailable}
-        updateMpaOn={updateMpaOn} updateBathyOn={updateBathyOn} updateKelpOn={updateKelpOn}
+        updateMpaOn={updateMpaOn} updateBathyOn={updateBathyOn} updateKelpOn={updateKelpOn} updateClosuresOn={updateClosuresOn}
         size={size} zoomAt={zoomAt} resetView={resetView}
         dataState={dataState}
         isMobile={isMobile}
@@ -945,6 +978,10 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
 
       {selectedBathy && (
         <BathyPopup feature={selectedBathy} onClose={() => setSelectedBathy(null)} />
+      )}
+
+      {selectedClosure && (
+        <ClosuresPopup data={selectedClosure} onClose={() => setSelectedClosure(null)} />
       )}
     </div>
     {/* MobileShell sits OUTSIDE .map-stage so the map can shrink to
@@ -980,6 +1017,7 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
         setBathyOn={updateBathyOn}
         setKelpOn={updateKelpOn}
         kelpAvailable={kelpAvailable}
+        setClosuresOn={updateClosuresOn}
         bundledSpots={bundledSpots}
         openSpotDetail={openSpotDetail}
         activeSpot={activeSpot} setActiveSpot={setActiveSpot}

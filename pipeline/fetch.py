@@ -19,8 +19,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import warnings
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -88,6 +90,30 @@ REQUEST_HEADERS = {
     "User-Agent": "shouldidive-data-pipeline/1.0 (+https://shouldidive.com)",
 }
 
+# ERDDAP per-request budget. History: 180→90 s on 2026-06-16 to stop a
+# dead source grinding the 75-min step budget. 90 s then proved too tight
+# for a *live-but-throttled* source: NOAA throttles GitHub-Actions egress
+# for jplMURSST41, so the wide-CA-bbox query consistently overran 90 s and
+# RequestException'd every day, freezing SST (2026-06-14+ incident). Now
+# 150 s — a dead source no longer relies on the timeout to be bounded: the
+# per-host circuit breaker trips on 2 consecutive transport OR gateway
+# (502/503/504) failures (see lib/http.py), so a longer budget only buys a
+# slow LIVE source room to finish without re-opening the grind.
+ERDDAP_TIMEOUT = 150
+ERDDAP_RETRIES = 2
+
+# Day-walk parallelism. The per-layer walk back over `max_back` days is
+# I/O-bound on ERDDAP; fetching candidate days concurrently keeps the wall
+# time near a single request instead of summing the walk, which is what let
+# a slow source (or a long host-fallback chain) blow the step budget. Pool
+# is bounded so we don't hammer one upstream; each day still flows through
+# fetch_day's host-fallback + the shared circuit breaker. Override via
+# OCEAN_FETCH_WORKERS for tuning.
+try:
+    FETCH_WORKERS = max(1, int(os.environ.get("OCEAN_FETCH_WORKERS", "4")))
+except ValueError:
+    FETCH_WORKERS = 4
+
 ROOT = Path(__file__).resolve().parents[1]
 # Region-aware output dir. CA stays at `public/data/` (frontend-visible
 # path the React app expects). PNW + tropical land under
@@ -153,7 +179,24 @@ LAYERS: dict[str, dict] = {
                 "variable": "analysed_sst",
                 "stride": 1,
                 "source_label": "NOAA Geo-polar blended SST",
-            }
+            },
+            {
+                # Last-resort SST when BOTH MUR (pfeg 403s GitHub-Actions
+                # egress for jplMURSST41 specifically) and the NOAA blended
+                # fallback (coastwatch.noaa.gov, periodically down — 502 for
+                # days in the 2026-06 outage) are unreachable. OISST v2.1 NRT
+                # is coarse (0.25° / ~25 km) but gap-filled, ~2-day lag,
+                # no-auth, and lives on pfeg under a DIFFERENT dataset id than
+                # MUR, so it is NOT caught by the MUR-specific 403. Keeps Temp
+                # LIVE (if low-res) through a multi-source outage instead of
+                # freezing for days. Marked coarse so confidence reflects it.
+                "host": "https://coastwatch.pfeg.noaa.gov/erddap/griddap",
+                "dataset": "ncdcOisst21NrtAgg_LonPM180",
+                "variable": "sst",
+                "stride": 1,
+                "pre_xy_dims": "[0]",  # length-1 zlev axis before lat/lon
+                "source_label": "NOAA OISST v2.1 NRT (0.25°, coarse fallback)",
+            },
         ],
     }),
     "chl": _layer_config("chl", {
@@ -255,15 +298,12 @@ def fetch_day(
         if not nc_path.exists():
             url = erddap_url(source_cfg, d, source_stride)
             print(f"  GET {layer} {d}{suffix}", flush=True)
-            # Stage 6 — replaced the bare `requests.get(url, timeout=180,
-            # headers=REQUEST_HEADERS)` with the shared `http_get`. Same
-            # User-Agent, same 180s timeout, BUT now exponential-backoff
-            # retries the call on transient transport failures and 5xx /
-            # 429 responses (~2/4s sleeps between attempts). 4xx (incl.
-            # the dataset-403 case the legacy comments document at PFEG)
-            # is returned without retry — same as before. The host-
-            # fallback above is unchanged.
-            r = http_get(url, timeout=180)
+            # Shared http_get adds exponential-backoff retries on transient
+            # transport failures + 5xx/429; 4xx returns without retry. Uses
+            # the tightened ERDDAP budget (90 s + 1 retry) so a slow-503 or
+            # dead source fails fast instead of grinding the whole day-walk
+            # — the host-fallback above + the coverage guard handle the rest.
+            r = http_get(url, timeout=ERDDAP_TIMEOUT, retries=ERDDAP_RETRIES)
             if r is None:
                 # http_get returns None when every retry attempt raised
                 # a transport exception. Match the legacy log line so
@@ -597,18 +637,36 @@ def build_layer(layer: str, cfg: dict, end: date, want: int = 3, max_back: int =
     print(f"[{layer}] looking for {want_fetch} day(s) ending {end} (stride={cfg['stride']}, max_back={max_back})")
     stack_rev: list[np.ndarray] = []
     actual_rev: list[date] = []
-    for i in range(max_back):
-        d = end - timedelta(days=i)
-        expected_shape = stack_rev[0].shape if stack_rev else None
-        a = fetch_day(layer, cfg, d, cfg["stride"], expected_shape=expected_shape)
-        if a is not None:
-            if stack_rev and a.shape != stack_rev[0].shape:
-                print(f"  {layer} {d}: shape {a.shape} differs from {stack_rev[0].shape} - skipping", flush=True)
-                continue
-            stack_rev.append(a)
-            actual_rev.append(d)
-            if len(stack_rev) >= want_fetch:
-                break
+
+    # Fetch all candidate days concurrently, then assemble the most-recent
+    # valid ones below. Parallel because the walk is I/O-bound; bounded pool
+    # so we don't overload one upstream. Shape consistency (don't mix a 1 km
+    # primary grid with a coarser fallback grid) is enforced post-hoc against
+    # the most-recent valid day, replacing fetch_day's expected_shape thread
+    # which a parallel fan-out can't share.
+    days = [end - timedelta(days=i) for i in range(max_back)]
+    results: dict[date, np.ndarray | None] = {}
+    with ThreadPoolExecutor(max_workers=FETCH_WORKERS) as ex:
+        futs = {ex.submit(fetch_day, layer, cfg, d, cfg["stride"]): d for d in days}
+        for fut in as_completed(futs):
+            d = futs[fut]
+            try:
+                results[d] = fut.result()
+            except Exception as exc:  # defensive: fetch_day swallows its own errors
+                print(f"  {layer} {d}: fetch error {type(exc).__name__} - skipping", flush=True)
+                results[d] = None
+
+    for d in days:  # most-recent first
+        a = results.get(d)
+        if a is None:
+            continue
+        if stack_rev and a.shape != stack_rev[0].shape:
+            print(f"  {layer} {d}: shape {a.shape} differs from {stack_rev[0].shape} - skipping", flush=True)
+            continue
+        stack_rev.append(a)
+        actual_rev.append(d)
+        if len(stack_rev) >= want_fetch:
+            break
 
     if not stack_rev:
         print(f"[{layer}] no data fetched, skipping layer")

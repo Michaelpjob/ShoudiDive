@@ -90,6 +90,16 @@ for, success or fail."""
 # permanent answer that retrying won't fix.
 _RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
 
+# Gateway/service statuses that count toward the circuit breaker when a
+# host returns them. Distinct from _RETRY_STATUSES: a one-off 500/429 is
+# retried but does NOT trip the breaker (likely query-specific); a
+# repeated 502/503/504 means the ERDDAP backend is effectively dead even
+# though the fronting gateway answers, so it SHOULD trip — otherwise an
+# all-5xx host resets the breaker on every call and grinds the whole
+# day-walk × layer fan-out (NOAA coastwatch.noaa.gov outage 2026-06-14+
+# burned the full 75-min refresh budget this way).
+_BREAKER_DEAD_STATUSES = frozenset({502, 503, 504})
+
 
 CONNECT_TIMEOUT = 10.0
 """TCP-connect timeout in seconds, split out from the read timeout.
@@ -109,9 +119,11 @@ into a ~12-minute-per-date retry stall, blowing refresh-ca-data's
 
 
 CIRCUIT_BREAKER_THRESHOLD = 2
-"""Consecutive fully-failed ``http_get`` calls (every attempt raised a
-transport exception) against one host before the breaker opens for
-that host."""
+"""Consecutive failed ``http_get`` calls against one host before the
+breaker opens for that host. A call counts as failed when every attempt
+raised a transport exception OR returned a gateway/service status
+(:data:`_BREAKER_DEAD_STATUSES` — 502/503/504); any other response
+(200/404/500/429) resets the host."""
 
 CIRCUIT_BREAKER_COOLDOWN = 300.0
 """Seconds an open breaker short-circuits calls to a dead host before
@@ -154,7 +166,7 @@ def _breaker_record_failure(host: str) -> None:
         state["open_until"] = _now() + CIRCUIT_BREAKER_COOLDOWN
         print(
             f"  [lib.http] circuit breaker OPEN for {host} — "
-            f"{int(state['failures'])} consecutive transport failures; "
+            f"{int(state['failures'])} consecutive transport/gateway failures; "
             f"skipping calls for {CIRCUIT_BREAKER_COOLDOWN:.0f}s",
             flush=True,
         )
@@ -324,9 +336,15 @@ def http_get(
         break
 
     if use_breaker and host:
-        if last_response is not None:
-            # Any HTTP response — even a 5xx — means the host is alive;
-            # the breaker only guards against transport-dead hosts.
+        # A persistent gateway/service error (502/503/504) counts as a host
+        # failure: the backend is down even though the gateway answered.
+        # Other responses (200/404/500/429) mean the host is alive and reset
+        # the breaker. A pure transport exception (no response) also fails.
+        gateway_dead = (
+            last_response is not None
+            and last_response.status_code in _BREAKER_DEAD_STATUSES
+        )
+        if last_response is not None and not gateway_dead:
             _breaker_record_success(host)
         else:
             _breaker_record_failure(host)

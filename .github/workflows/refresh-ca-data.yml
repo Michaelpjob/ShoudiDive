@@ -124,6 +124,11 @@ jobs:
         timeout-minutes: 5
         run: python pipeline/fetch_mpa.py
 
+      - name: Fetch SCI Navy closures (scisland.org)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_sci_closures.py
+
       - name: Fetch CDFW Administrative Kelp Beds
         # ArcGIS FeatureServer (ds3135). 87 reference polygons; rarely
         # changes — most days emits byte-identical output. continue-on-

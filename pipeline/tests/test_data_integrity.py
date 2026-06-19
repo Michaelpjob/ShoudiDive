@@ -379,6 +379,106 @@ def test_wind_speed_in_plausible_range(region):
     )
 
 
+def test_coverage_guard_floors_match_gate():
+    """The producer-side coverage guard (check_coverage_guard.FLOORS) exists to
+    keep test_no_nan_floods green by refusing to commit a layer below the gate's
+    floor — restoring last-good instead. If the two drift apart, the guard
+    protects the wrong threshold. Every (artifact, region) pair the guard knows
+    about that the gate also covers must match exactly; baja is guard-only (the
+    gate doesn't parametrize it yet)."""
+    try:
+        from pipeline.check_coverage_guard import FLOORS as GUARD_FLOORS
+    except ModuleNotFoundError:
+        from check_coverage_guard import FLOORS as GUARD_FLOORS
+
+    for region, layers in GUARD_FLOORS.items():
+        for artifact, guard_floor in layers.items():
+            key = (artifact, region)
+            if key in LAYER_VALID_FRAC_FLOOR:
+                assert guard_floor == LAYER_VALID_FRAC_FLOOR[key], (
+                    f"coverage-guard floor {key}={guard_floor} has drifted from "
+                    f"gate floor {LAYER_VALID_FRAC_FLOOR[key]} — keep "
+                    f"check_coverage_guard.FLOORS in sync with "
+                    f"LAYER_VALID_FRAC_FLOOR"
+                )
+            else:
+                # Guard-only region/layer (baja isn't in the gate yet). The
+                # guard must still only claim layers it can decode + restore.
+                assert artifact in {"sst_1d.png", "chl_1d.png"}, (
+                    f"coverage guard has an unexpected guard-only entry {key}"
+                )
+
+
+def test_coverage_guard_runs_on_prior_failure():
+    """The coverage guard MUST carry always() in the refresh workflows.
+    Without it a FAILED earlier step (e.g. the post-fetch freshness sentinel
+    firing on a degraded chl_1d) skips the guard via the implicit success(),
+    yet the commit step runs with always() and lands the degraded layer —
+    exactly what stranded a 9%-valid chl_1d on main (run 27666503612),
+    breaking test_no_nan_floods for every open PR. Regression guard for that.
+    """
+    root = Path(__file__).resolve().parents[2]
+    for wf in ("refresh-ca-data.yml", "refresh-baja-data.yml"):
+        lines = (root / ".github" / "workflows" / wf).read_text(
+            encoding="utf-8").splitlines()
+        starts = [i for i, l in enumerate(lines) if "name: Coverage guard" in l]
+        assert starts, f"{wf}: no Coverage guard step found"
+        block = []
+        for l in lines[starts[0] + 1:]:
+            if l.lstrip().startswith("- name:"):
+                break
+            block.append(l)
+        if_lines = [l for l in block if l.lstrip().startswith("if:")]
+        assert if_lines, f"{wf}: Coverage guard step needs an if: with always()"
+        assert any("always()" in l for l in if_lines), (
+            f"{wf}: the Coverage guard step's if: must contain always() so a "
+            f"prior-step failure can't skip it before the always-commit lands "
+            f"a degraded layer"
+        )
+
+
+def test_coverage_guard_restores_degraded_layer(tmp_path, monkeypatch):
+    """End-to-end: a degraded layer on disk + a good one in git HEAD → the
+    guard restores HEAD. This is the behaviour that keeps a hung ERDDAP fetch
+    from landing a near-empty PNG (the chl_1d incident)."""
+    import os
+    import subprocess
+    import numpy as np
+    from PIL import Image
+
+    data = tmp_path / "public" / "data"
+    data.mkdir(parents=True)
+    png = data / "chl_1d.png"
+    # Commit an all-valid frame as last-good.
+    Image.fromarray(np.full((110, 140), 200, dtype=np.uint8)).save(png)
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+           "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+
+    def git(*a):
+        subprocess.run(["git", *a], cwd=tmp_path, env=env, check=True,
+                       capture_output=True)
+
+    git("init", "-q")
+    git("add", "-A")
+    git("commit", "-qm", "good")
+    # Degrade the working copy to ~5% valid (below the 10% chl floor).
+    bad = np.zeros((110, 140), dtype=np.uint8)
+    bad[:5, :] = 200
+    Image.fromarray(bad).save(png)
+
+    try:
+        import pipeline.check_coverage_guard as cg
+    except ModuleNotFoundError:
+        import check_coverage_guard as cg
+    monkeypatch.setattr(cg, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(cg, "OUT_DIR", data)
+    monkeypatch.setattr(cg, "REGION_NAME", "ca")
+
+    assert cg.valid_frac(png) < 0.10, "test precondition: degraded frame"
+    cg.main()
+    assert cg.valid_frac(png) > 0.10, "guard did not restore last-good chl_1d"
+
+
 @pytest.mark.parametrize("region", REGIONS)
 def test_bathy_depth_in_plausible_range(region):
     """Bathy depth: 0 = shoreline, 6000 = deep abyss. Encoded as 1..255

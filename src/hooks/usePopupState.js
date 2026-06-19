@@ -26,10 +26,11 @@ import { useEffect, useState } from "react";
 
 import { loadBathyFeatures } from "../components/BathyLayer.jsx";
 
-export function usePopupState({ mpaOn, bathyOn, kelpOn }) {
+export function usePopupState({ mpaOn, bathyOn, kelpOn, closuresOn }) {
   const [selectedMpa, setSelectedMpa] = useState(null);
   const [selectedBathy, setSelectedBathy] = useState(null);
   const [selectedKelp, setSelectedKelp] = useState(null);
+  const [selectedClosure, setSelectedClosure] = useState(null);
   const [bathyFeatures, setBathyFeatures] = useState(null);
 
   // Close MPA popup when the MPA layer is turned off.
@@ -46,6 +47,11 @@ export function usePopupState({ mpaOn, bathyOn, kelpOn }) {
   useEffect(() => {
     if (!kelpOn) setSelectedKelp(null);
   }, [kelpOn]);
+
+  // Close closures popup when the closures layer is turned off.
+  useEffect(() => {
+    if (!closuresOn) setSelectedClosure(null);
+  }, [closuresOn]);
 
   // Lazy-load bathy features whenever the layer flips on (used for
   // both the SVG markers and the screen-space labels). Cancel on
@@ -65,6 +71,7 @@ export function usePopupState({ mpaOn, bathyOn, kelpOn }) {
     selectedMpa, setSelectedMpa,
     selectedBathy, setSelectedBathy,
     selectedKelp, setSelectedKelp,
+    selectedClosure, setSelectedClosure,
     bathyFeatures, setBathyFeatures,
   };
 }

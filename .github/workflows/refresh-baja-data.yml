@@ -40,7 +40,7 @@ jobs:
       actions: write   # for `gh workflow run deploy-baja-beta.yml` at the end
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           # Baja promoted to prod 2026-05-20: scheduled cron now targets
           # main (matches refresh-ca-*.yml). Manual workflow_dispatch can
@@ -48,7 +48,7 @@ jobs:
           ref: ${{ inputs.branch || (github.event_name == 'schedule' && 'main' || github.ref) }}
           token: ${{ secrets.BOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: "3.11"
           cache: pip
@@ -73,6 +73,21 @@ jobs:
         # is inherited from the job env, so the sentinel looks at
         # public/data/baja/ automatically.
         run: python pipeline/check_fetch_freshness.py --layer sst
+
+      - name: Coverage guard — keep last-good for any near-empty layer
+        # always() so a failed earlier step (e.g. the SST freshness sentinel
+        # above) can't skip the guard before the always-commit lands a
+        # degraded layer — without it a custom/implicit success() drops the
+        # guard on any prior failure. See refresh-ca-data.yml for the full
+        # post-mortem (chl_1d stranded at 9% valid, run 27666503612).
+        if: ${{ always() }}
+        continue-on-error: true
+        # Restores the prior good PNG from HEAD for any ocean layer that came
+        # out below its valid floor (a dead ERDDAP source emits a near-empty
+        # 1-day composite). SHOULDIDIVE_REGION=baja is inherited from the job
+        # env, so it checks public/data/baja/ with the baja floors. See
+        # refresh-ca-data.yml + check_coverage_guard.py for the full rationale.
+        run: python pipeline/check_coverage_guard.py
 
       - name: Fetch 7-day precipitation
         continue-on-error: true
@@ -110,7 +125,7 @@ jobs:
         timeout-minutes: 8
         run: python pipeline/fetch_coastline.py
 
-      - name: Fetch MPA boundaries (empty for baja until PR-BAJA-3 wires CONANP)
+      - name: Fetch MPA boundaries (CONANP federal ANPs — marine + island)
         continue-on-error: true
         timeout-minutes: 5
         run: python pipeline/fetch_mpa.py

@@ -145,6 +145,7 @@ export default function DesktopLayout({
   activeSpot, setActiveSpot,
   // MPA/bathy/kelp toggles (state owned by App, side-effect wrappers in MapShell)
   mpaOn, bathyOn, kelpOn, updateMpaOn, updateBathyOn, updateKelpOn,
+  closuresOn, updateClosuresOn,
   // Kelp Bed Zones are CA-only today; hide the chip in beta regions.
   kelpAvailable,
   // Phase 1B Spot Detail: bundledSpots is Set of ids that have a
@@ -247,6 +248,15 @@ export default function DesktopLayout({
                 Kelp
               </button>
             )}
+            <button
+              type="button"
+              className={"mpa-pill" + (closuresOn ? " active" : "")}
+              onClick={(e) => { e.stopPropagation(); updateClosuresOn(!closuresOn); }}
+              title={closuresOn ? "Navy closures visible · click to hide" : "Navy closures hidden · click to show"}
+              aria-pressed={closuresOn}
+            >
+              Navy
+            </button>
             <Chevron open={controlsOpen} />
           </span>
         </div>

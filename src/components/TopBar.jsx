@@ -110,7 +110,7 @@ export default function TopBar({ onSettings, settingsOpen, dataState, layer, hor
                 gap: 6,
                 padding: "2px 8px",
                 borderRadius: 999,
-                border: "1px solid var(--line, rgba(0,0,0,0.12))",
+                border: `1px solid ${lc.stale ? lc.color : "var(--line, rgba(0,0,0,0.12))"}`,
                 fontSize: 12,
               }}
             >
@@ -127,6 +127,9 @@ export default function TopBar({ onSettings, settingsOpen, dataState, layer, hor
               <span style={{ opacity: 0.72 }}>{layerName}</span>
               <strong>{lc.label}</strong>
               <span style={{ opacity: 0.65 }}>{lc.score}/5</span>
+              {lc.stale && lc.staleTag && (
+                <span style={{ fontWeight: 700, color: lc.color }}>· {lc.staleTag}</span>
+              )}
             </span>
           );
         })()}
