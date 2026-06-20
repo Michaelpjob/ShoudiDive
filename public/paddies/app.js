@@ -14,7 +14,50 @@ function comp(b){return CMP[Math.floor((b+11.25)/22.5)%16];}
 function _ddm(v,pos,neg){var h=v>=0?pos:neg;v=Math.abs(v);var d=Math.floor(v);return d+'°'+((v-d)*60).toFixed(3)+"' "+h;}
 function _fmt(ll){return {dd:ll.lat.toFixed(5)+', '+ll.lng.toFixed(5),dm:_ddm(ll.lat,'N','S')+'  '+_ddm(ll.lng,'E','W')};}
 
-var D,F,LCH,map,coneLayer,hdrLayer,launchMarker,measLine,measHandle,wpMarker,coordbox;
+var D,F,LCH,map,coneLayer,hdrLayer,launchMarker,measLine,measHandle,wpMarker,coordbox,repLayer;
+
+var SPECIES=['yellowtail','dorado','bluefin','yellowfin','white seabass','bonito','barracuda','calico bass','paddy'];
+var REPORTS=[];
+function _cap(s){return s?(s.charAt(0).toUpperCase()+s.slice(1)):s;}
+function _dev(){try{var d=localStorage.getItem('sd:paddies:dev');if(!d){d=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():(String(Date.now())+Math.random().toString(16).slice(2));localStorage.setItem('sd:paddies:dev',d);}return d;}catch(e){return 'anon';}}
+function _mine(){try{return JSON.parse(localStorage.getItem('sd:paddies:mine')||'[]');}catch(e){return [];}}
+function _saveMine(a){try{localStorage.setItem('sd:paddies:mine',JSON.stringify(a));}catch(e){}}
+function _today(){return new Date().toISOString().slice(0,10);}
+function _snap(v){return Math.round(v/0.02)*0.02;}
+function toast(msg){var t=document.getElementById('toast');if(!t){t=document.createElement('div');t.id='toast';t.className='toast';document.body.appendChild(t);}
+ t.textContent=msg;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(function(){t.style.display='none';},4000);}
+function renderReports(){if(!repLayer)return;repLayer.clearLayers();
+ REPORTS.forEach(function(r){var lab=(r.species&&r.species.toLowerCase()!=='paddy')?_cap(r.species):'Reported paddy';
+  L.circleMarker([r.lat,r.lng],{radius:6,weight:1.5,color:'#fff',fillColor:'#ef4444',fillOpacity:.95})
+   .bindTooltip(lab,{direction:'top',offset:[0,-4],className:'rep-tip'}).addTo(repLayer);});
+ _mine().forEach(function(r){var lab=(r.species&&r.species.toLowerCase()!=='paddy')?_cap(r.species):'Paddy';
+  L.circleMarker([r.lat,r.lng],{radius:6,weight:1.5,color:'#fbbf24',fillColor:'#f59e0b',fillOpacity:.45})
+   .bindTooltip(lab+' · pending review',{direction:'top',offset:[0,-4],className:'rep-tip'}).addTo(repLayer);});}
+function fetchReports(){fetch('/api/paddies/reports',{cache:'no-cache'}).then(function(r){return r.ok?r.json():null;}).then(function(j){
+  if(!j||!j.reports)return;REPORTS=j.reports;var ap={};REPORTS.forEach(function(r){ap[r.id]=1;});
+  _saveMine(_mine().filter(function(m){return !ap[m.id]&&(Date.now()-(m.ts||0))<12096e5;}));
+  renderReports();}).catch(function(){});}
+function logCatch(){if(!wpMarker){toast('Tap the map where you caught fish, then Log a catch.');return;}
+ var ll=wpMarker.getLatLng();var box=document.getElementById('picker');
+ if(!box){box=document.createElement('div');box.id='picker';box.className='picker';document.body.appendChild(box);}
+ var opts=SPECIES.map(function(s){return '<option value="'+s+'">'+(s==='paddy'?'Paddy (no fish)':_cap(s))+'</option>';}).join('');
+ box.innerHTML='<div class=ph>Log a catch</div><div class=pr>at <b>'+ll.lat.toFixed(3)+', '+ll.lng.toFixed(3)+'</b></div>'
+  +'<select id=spsel>'+opts+'</select><div class=pb><button id=psub class=sub>Submit</button><button id=pcan class=can>Cancel</button></div>'
+  +'<div class=pn>Snapped to ~1 nm for privacy · shows on the map after review.</div>';
+ box.style.display='block';
+ document.getElementById('pcan').onclick=function(){box.style.display='none';};
+ document.getElementById('psub').onclick=function(){box.style.display='none';submitReport(ll,document.getElementById('spsel').value);};}
+function submitReport(ll,species){
+ var body=JSON.stringify({lat:ll.lat,lng:ll.lng,species:species,date:_today(),deviceId:_dev()});
+ fetch('/api/paddies/report',{method:'POST',headers:{'content-type':'application/json'},body:body})
+  .then(function(r){return r.json().then(function(j){return {s:r.status,j:j};},function(){return {s:r.status,j:null};});})
+  .then(function(o){
+   if(o.j&&o.j.ok){var mine=_mine();mine.push({id:o.j.id,lat:_snap(ll.lat),lng:_snap(ll.lng),species:species,ts:Date.now()});_saveMine(mine);
+    renderReports();toast('Thanks — your report is pending review.');}
+   else if(o.s===429)toast('Easy — too many reports for now. Try again later.');
+   else if(o.s===422)toast('That spot or species looks off — not logged.');
+   else toast('Could not log that — please try again.');
+  }).catch(function(){toast('Network error — not logged.');});}
 
 function setReadout(ll){var f=_fmt(ll);coordbox.innerHTML='<b>'+f.dd+'</b><br/>'+f.dm
  +'<div class="hint">click map to drop a GPS waypoint</div>';}
@@ -68,7 +111,7 @@ function drawPanel(){var m=D.frames[F].meta;
    +((m.n_patches>1)?' &middot; +'+(m.n_patches-1)+' more patches':'')
    +' &middot; ±'+(m.pos_pm_nm||0)+' nm &middot; widen to ~'+(m.area50_km2||0)+' km² if slow</span></div>';}
  document.getElementById('panel').innerHTML='<div class="panel-head"><span class="chev">▾</span>'+tHdr+best+'</div><div class="panel-body">'
-  +'<div class=mut style="margin:-2px 0 7px">Drag the <b style="color:#38bdf8">⊕</b> to measure nm from your port.</div>'
+  +'<div class=mut style="margin:-2px 0 7px">Drag the <b style="color:#38bdf8">⊕</b> to measure nm. <b style="color:#fca5a5">Red dots</b> = angler catch reports; tap the map then <b style="color:#fca5a5">Log a catch</b> to add yours (shows after review).</div>'
   +'<div class=mut>est. floating paddies in the Bight</div>'
   +'<div class=score>~'+m.est_floating_paddies.toLocaleString()+'</div>'
   +'<div style="margin:5px 0"><span class=band style="background:'+(BAND[m.abundance_band]||'#64748b')
@@ -88,6 +131,8 @@ function drawPanel(){var m=D.frames[F].meta;
   +' <span class="sw" style="background:#16a34a"></span>bed'
   +' <span class="sw" style="background:#facc15"></span>your port'
   +' <span class="sw" style="background:#38bdf8"></span>ruler (drag ⊕)'
+  +' <span class="sw" style="background:#ef4444;border-radius:50%"></span>catch report'
+  +' <span class="sw" style="background:#f59e0b;border-radius:50%;opacity:.5"></span>your pending'
   +'<div class=mut style="margin-top:6px;font-size:11px">'+(D.current_note?D.current_note+'<br/>':'')+D.src_note+'</div></div></div>';}
 function setFrame(i){F=Math.max(0,Math.min(D.frames.length-1,i|0));var m=D.frames[F].meta;
  document.getElementById('tlabel').innerHTML='<b>'+m.date+'</b> &middot; '+m.rel
@@ -118,6 +163,8 @@ function boot(d){D=d;F=D.default_frame;LCH=D.default_launch;
  map.on('popupopen',wireCopy);
  var panelEl=document.getElementById('panel');panelEl.classList.add('min');
  panelEl.addEventListener('click',function(e){if(e.target.closest('.panel-head'))panelEl.classList.toggle('min');});
+ repLayer=L.layerGroup().addTo(map);renderReports();fetchReports();
+ document.getElementById('logbtn').onclick=logCatch;
  var tsl=document.getElementById('tslider');
  tsl.max=D.frames.length-1;tsl.value=D.default_frame;
  tsl.oninput=function(){setFrame(parseInt(tsl.value,10));};
