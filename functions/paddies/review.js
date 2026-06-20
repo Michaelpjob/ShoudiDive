@@ -1,7 +1,7 @@
 // GET/POST /paddies/review?key=<MODERATION_TOKEN>
 // Server-rendered moderation queue. No client JS (POST-form buttons) so it
 // stays clean under the site CSP (script-src 'self'). Mirrors /stats gating.
-import { modGate, listPending, applyModeration } from "../api/paddies/_lib.js";
+import { modGate, listPending, applyModeration, listEmails } from "../api/paddies/_lib.js";
 
 const CSS = `
   :root{color-scheme:dark}
@@ -19,6 +19,14 @@ const CSS = `
   .ok{background:#16a34a}
   .no{background:#b91c1c}
   form{display:flex;align-items:center;gap:8px;margin:0}
+  .rep{color:#cbd5e1;font-size:12px;margin-top:3px}
+  .rep .em{color:#7dd3fc}
+  .rep .nt{color:#fcd34d;font-style:italic}
+  .nav{margin:0 0 14px;font-size:13px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #1e293b}
+  th{color:#94a3b8;font-weight:600}
+  td.em{color:#7dd3fc}
 `;
 
 function esc(s) {
@@ -47,6 +55,7 @@ function page(pending, key, flash) {
         <span class=mut>&middot; ${r.lat}, ${r.lng}
           &middot; <a href="https://www.google.com/maps?q=${r.lat},${r.lng}" target=_blank rel=noopener>map</a>
           &middot; ${esc(r.date)} &middot; ${ago(r.submittedAt)} ago</span>
+        <div class=rep>${esc(r.name || "Anonymous")} &middot; <span class=em>${esc(r.email || "—")}</span>${r.notes ? ` &middot; <span class=nt>&ldquo;${esc(r.notes)}&rdquo;</span>` : ""}</div>
       </div>
       <form method=POST>
         <input type=hidden name=key value="${k}">
@@ -56,7 +65,20 @@ function page(pending, key, flash) {
       </form>
     </div>`).join("") : `<div class=empty>No reports waiting. 🎉</div>`;
   return `<div class=wrap><h1>Paddy reports — review</h1>` +
-    `<p class=sub>${pending.length} waiting${flash ? ` &middot; ${esc(flash)}` : ""}</p>${rows}</div>`;
+    `<p class=sub>${pending.length} waiting${flash ? ` &middot; ${esc(flash)}` : ""}</p>` +
+    `<div class=nav><a href="?key=${k}&amp;view=log">Reporter email log &rarr;</a></div>${rows}</div>`;
+}
+
+function emailLogPage(emails, key) {
+  const k = esc(key);
+  const rows = emails.length ? emails.map((e) => `
+    <tr><td>${esc(e.name || "—")}</td><td class=em>${esc(e.email)}</td>
+      <td>${e.count || 1}</td><td style="text-transform:capitalize">${esc(e.lastSpecies || "")}</td><td>${esc(e.lastDate || "")}</td></tr>`).join("")
+    : `<tr><td colspan=5 class=mut>No emails collected yet.</td></tr>`;
+  return `<div class=wrap><h1>Reporter email log</h1>` +
+    `<p class=sub>${emails.length} unique reporter${emails.length === 1 ? "" : "s"} &middot; saved permanently (survives report expiry)</p>` +
+    `<div class=nav><a href="?key=${k}">&larr; back to review queue</a></div>` +
+    `<table><tr><th>Name</th><th>Email</th><th>Reports</th><th>Last species</th><th>Last date</th></tr>${rows}</table></div>`;
 }
 
 function denied(reason) {
@@ -68,7 +90,9 @@ export async function onRequestGet({ request, env }) {
   const d = modGate(request, env);
   if (d) return denied(d);
   if (!env.REPORTS_KV) return htmlResponse(`<div class=wrap><h1>Review</h1><p class=sub>Reports backend not enabled.</p></div>`, 503);
-  const key = new URL(request.url).searchParams.get("key");
+  const url = new URL(request.url);
+  const key = url.searchParams.get("key");
+  if (url.searchParams.get("view") === "log") return htmlResponse(emailLogPage(await listEmails(env), key));
   return htmlResponse(page(await listPending(env), key));
 }
 

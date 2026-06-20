@@ -2,7 +2,8 @@
 // DELETE /api/paddies/report?id=<id> — remove a report (owner via x-device-id, or admin via ?key=)
 import {
   jsonResponse, bboxOk, snap, normSpecies, dateOk, clientIp, sha256hex,
-  rateOk, readApproved, writeApproved, PENDING_PREFIX, MAX_AGE_DAYS,
+  rateOk, readApproved, writeApproved, recordEmail, clip, emailOk,
+  PENDING_PREFIX, MAX_AGE_DAYS,
 } from "./_lib.js";
 
 export async function onRequestPost({ request, env }) {
@@ -21,6 +22,11 @@ export async function onRequestPost({ request, env }) {
   const date = String(body.date || "").slice(0, 10);
   if (!dateOk(date, nowMs)) return jsonResponse({ ok: false, error: "date out of range" }, { status: 422 });
 
+  const email = clip(body.email, 120);
+  if (!emailOk(email)) return jsonResponse({ ok: false, error: "valid email required" }, { status: 422 });
+  const name = clip(body.name, 60);     // optional reporter name
+  const notes = clip(body.notes, 280);  // optional free-text notes
+
   const deviceId = (String(body.deviceId || "").slice(0, 64)) || "anon";
   const ipHash = (await sha256hex((clientIp(request) || "noip") + "|paddies")).slice(0, 16);
 
@@ -35,6 +41,7 @@ export async function onRequestPost({ request, env }) {
     id,
     lat: snap(lat0), lng: snap(lng0),   // coarse-snapped before it's ever stored
     species, date,
+    name, email, notes,                 // PII: moderator-only, never in publicView
     deviceId, ipHash,
     submittedAt: nowMs,
     expiresAt: nowMs + MAX_AGE_DAYS * 86400000,
@@ -42,6 +49,8 @@ export async function onRequestPost({ request, env }) {
   };
   // Pending key auto-expires if it's never moderated, so the queue can't rot forever.
   await env.REPORTS_KV.put(PENDING_PREFIX + id, JSON.stringify(rec), { expirationTtl: MAX_AGE_DAYS * 86400 });
+  // Durable email log for the moderator (survives report expiry / rejection).
+  await recordEmail(env, email, name, species, date, nowMs);
   return jsonResponse({ ok: true, id, status: "pending" });
 }
 

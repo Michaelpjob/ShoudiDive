@@ -1,6 +1,11 @@
 // Shared helpers for the /paddies/ crowdsourced catch-report API.
 // Mirrors functions/api/analytics/_lib.js conventions: env bindings are
-// dashboard-only, no CORS (same-origin), no PII stored in clear.
+// dashboard-only, same-origin (no CORS).
+//
+// NOTE on PII: unlike the anonymous analytics path, the catch-report form
+// deliberately collects a reporter email (+ optional name) that the submitter
+// types in knowingly. That PII is stored server-side for the moderator only —
+// it is NEVER returned by the public /reports feed (see publicView).
 //
 // Bindings used: REPORTS_KV (KV namespace), MODERATION_TOKEN (secret).
 
@@ -55,6 +60,17 @@ export function dateOk(s, nowMs) {
   if (isNaN(t)) return false;
   const ageDays = (nowMs - t) / 86400000;
   return ageDays >= -1 && ageDays <= MAX_AGE_DAYS;
+}
+
+// Collapse whitespace, trim, hard-cap length (user free-text fields).
+export function clip(s, n) {
+  return String(s == null ? "" : s).replace(/\s+/g, " ").trim().slice(0, n);
+}
+
+// Soft email check — enough to reject obvious junk, not RFC-perfect.
+export function emailOk(s) {
+  s = String(s || "").trim();
+  return s.length >= 5 && s.length <= 120 && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s);
 }
 
 export function clientIp(request) {
@@ -122,6 +138,38 @@ export async function applyModeration(env, id, action) {
   arr.push(rec);
   await writeApproved(env, arr);
   return { ok: true, action: "approve", id };
+}
+
+// Durable reporter-email log (no TTL) — the moderator's saved list, kept even
+// after a report expires/is rejected. Keyed by a hash of the email so re-submits
+// update one entry (race-free across distinct emails).
+export async function recordEmail(env, email, name, species, date, ts) {
+  const key = "paddies:email:" + (await sha256hex(email.toLowerCase())).slice(0, 16);
+  let rec = {};
+  try { const raw = await env.REPORTS_KV.get(key); if (raw) rec = JSON.parse(raw); } catch { /* new */ }
+  rec.email = email;
+  rec.name = name || rec.name || "";
+  rec.lastSpecies = species;
+  rec.lastDate = date;
+  rec.lastTs = ts;
+  rec.firstTs = rec.firstTs || ts;
+  rec.count = (rec.count || 0) + 1;
+  await env.REPORTS_KV.put(key, JSON.stringify(rec));
+}
+
+export async function listEmails(env) {
+  const out = [];
+  let cursor;
+  do {
+    const res = await env.REPORTS_KV.list({ prefix: "paddies:email:", cursor, limit: 1000 });
+    for (const k of res.keys) {
+      const raw = await env.REPORTS_KV.get(k.name);
+      if (raw) { try { out.push(JSON.parse(raw)); } catch { /* skip */ } }
+    }
+    cursor = res.list_complete ? null : res.cursor;
+  } while (cursor);
+  out.sort((a, b) => (b.lastTs || 0) - (a.lastTs || 0));
+  return out;
 }
 
 // Admin gate — same shape as analytics gate(), but its own token.
