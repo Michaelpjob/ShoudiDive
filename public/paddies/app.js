@@ -14,7 +14,19 @@ function comp(b){return CMP[Math.floor((b+11.25)/22.5)%16];}
 function _ddm(v,pos,neg){var h=v>=0?pos:neg;v=Math.abs(v);var d=Math.floor(v);return d+'°'+((v-d)*60).toFixed(3)+"' "+h;}
 function _fmt(ll){return {dd:ll.lat.toFixed(5)+', '+ll.lng.toFixed(5),dm:_ddm(ll.lat,'N','S')+'  '+_ddm(ll.lng,'E','W')};}
 
-var D,F,LCH,map,coneLayer,hdrLayer,launchMarker,measLine,measHandle,wpMarker,coordbox;
+var D,F,LCH,map,coneLayer,hdrLayer,launchMarker,measLine,measHandle,wpMarker,coordbox,repLayer;
+
+function _catches(){try{return JSON.parse(localStorage.getItem('sd:paddies:catches')||'[]');}catch(e){return [];}}
+function renderReports(){if(!repLayer)return;repLayer.clearLayers();
+ (D.reports||[]).concat(_catches()).forEach(function(r){var mine=r.source==='you';
+  L.marker([r.lat,r.lng],{icon:L.divIcon({className:'',html:'<div class=catch>'+(mine?'🎣':'🐟')+'</div>',iconSize:[18,18],iconAnchor:[9,9]})})
+   .bindPopup('<div class=rep><b>'+(r.species||'catch')+'</b>'+(r.note?' &middot; '+r.note:'')+'<br/>'+(r.date||'')+(mine?' &middot; your log':' &middot; reported')+'</div>').addTo(repLayer);});}
+function logCatch(){var ll=wpMarker?wpMarker.getLatLng():map.getCenter();
+ var sp=window.prompt('Species caught at this kelp paddy? (tap the map first to set the exact spot)','yellowtail');if(sp===null)return;
+ var note=(window.prompt('Size / note (optional)','')||'');
+ var c=_catches();c.push({lat:+ll.lat.toFixed(4),lng:+ll.lng.toFixed(4),date:new Date().toISOString().slice(0,10),species:(sp||'catch'),note:note,source:'you'});
+ try{localStorage.setItem('sd:paddies:catches',JSON.stringify(c));}catch(e){}
+ renderReports();}
 
 function setReadout(ll){var f=_fmt(ll);coordbox.innerHTML='<b>'+f.dd+'</b><br/>'+f.dm
  +'<div class="hint">click map to drop a GPS waypoint</div>';}
@@ -67,8 +79,10 @@ function drawPanel(){var m=D.frames[F].meta;
    +'<br/><span class=mut>primary patch ~'+(m.core_area_km2||0)+' km²'
    +((m.n_patches>1)?' &middot; +'+(m.n_patches-1)+' more patches':'')
    +' &middot; ±'+(m.pos_pm_nm||0)+' nm &middot; widen to ~'+(m.area50_km2||0)+' km² if slow</span></div>';}
- document.getElementById('panel').innerHTML=tHdr+best
-  +'<div class=mut style="margin:-2px 0 7px">Drag the <b style="color:#38bdf8">⊕</b> to measure nm from your port.</div>'
+ var repNote=(m.n_reports>0?'<div class=mut style="margin:-2px 0 7px;color:#fca5a5">🎣 pin reflects '+m.n_reports+' recent catch report'+(m.n_reports>1?'s':'')+'</div>':'');
+ document.getElementById('panel').innerHTML='<div class="panel-head"><span class="chev">▾</span>'+tHdr+best+'</div><div class="panel-body">'
+  +repNote
+  +'<div class=mut style="margin:-2px 0 7px">Drag the <b style="color:#38bdf8">⊕</b> to measure nm from your port. Tap a spot &amp; <b style="color:#fca5a5">Log a catch</b> to add yours.</div>'
   +'<div class=mut>est. floating paddies in the Bight</div>'
   +'<div class=score>~'+m.est_floating_paddies.toLocaleString()+'</div>'
   +'<div style="margin:5px 0"><span class=band style="background:'+(BAND[m.abundance_band]||'#64748b')
@@ -88,7 +102,7 @@ function drawPanel(){var m=D.frames[F].meta;
   +' <span class="sw" style="background:#16a34a"></span>bed'
   +' <span class="sw" style="background:#facc15"></span>your port'
   +' <span class="sw" style="background:#38bdf8"></span>ruler (drag ⊕)'
-  +'<div class=mut style="margin-top:6px;font-size:11px">'+(D.current_note?D.current_note+'<br/>':'')+D.src_note+'</div></div>';}
+  +'<div class=mut style="margin-top:6px;font-size:11px">'+(D.current_note?D.current_note+'<br/>':'')+D.src_note+'</div></div></div>';}
 function setFrame(i){F=Math.max(0,Math.min(D.frames.length-1,i|0));var m=D.frames[F].meta;
  document.getElementById('tlabel').innerHTML='<b>'+m.date+'</b> &middot; '+m.rel
   +'<span class="conf '+(m.confidence==='forecast'?'fc':'obs')+'">'+(m.confidence==='forecast'?'FC':'OBS')+'</span>';
@@ -116,6 +130,10 @@ function boot(d){D=d;F=D.default_frame;LCH=D.default_launch;
  map.on('mousemove',function(e){setReadout(e.latlng);});
  map.on('click',function(e){dropWp(e.latlng);});
  map.on('popupopen',wireCopy);
+ var panelEl=document.getElementById('panel');panelEl.classList.add('min');
+ panelEl.addEventListener('click',function(e){if(e.target.closest('.panel-head'))panelEl.classList.toggle('min');});
+ repLayer=L.layerGroup().addTo(map);renderReports();
+ document.getElementById('logbtn').onclick=logCatch;
  var tsl=document.getElementById('tslider');
  tsl.max=D.frames.length-1;tsl.value=D.default_frame;
  tsl.oninput=function(){setFrame(parseInt(tsl.value,10));};

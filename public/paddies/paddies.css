@@ -35,3 +35,21 @@ select{background:#1e293b;color:#cbd5e1;border:1px solid #334155;border-radius:6
 .wp{color:#f472b6;font-size:20px;line-height:22px;text-align:center;text-shadow:0 0 4px #000,0 0 3px #000;cursor:grab}
 .copybtn{background:#0e7490;color:#e0f2fe;border:none;border-radius:5px;padding:3px 9px;cursor:pointer;font:600 11px system-ui;margin-top:5px}
 .leaflet-popup-content .wpc{font:12px/1.4 ui-monospace,Menlo,Consolas,monospace;color:#0b1220}
+.catch{font-size:16px;line-height:18px;text-align:center;filter:drop-shadow(0 0 2px #000)}
+.logbtn{background:#dc2626;color:#fff;border:none;border-radius:6px;padding:3px 10px;cursor:pointer;font:600 12px system-ui}
+.leaflet-popup-content .rep{font:12px/1.4 system-ui;color:#0b1220}
+.panel-head .chev{display:none}
+/* Phone: the panel becomes a collapsible bottom sheet so it never buries the
+   map. Collapsed by default (header only); tap the header to expand. */
+@media (max-width:680px),(hover:none) and (pointer:coarse){
+ .bar{left:6px;right:6px;flex-wrap:wrap;gap:6px 8px;padding:6px 8px}
+ .time{margin-left:0}
+ .time input[type=range]{width:108px}
+ #tlabel{min-width:0;font-size:11px}
+ .coordbox{display:none}
+ .panel{top:auto;bottom:6px;left:6px;right:6px;width:auto;max-height:52vh;font-size:12px}
+ .panel-head{cursor:pointer;position:relative;padding-right:18px}
+ .panel-head .chev{display:block;position:absolute;top:0;right:0;color:#94a3b8;font-size:15px;transition:transform .15s}
+ .panel.min .panel-body{display:none}
+ .panel.min .panel-head .chev{transform:rotate(-90deg)}
+}
