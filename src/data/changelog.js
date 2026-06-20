@@ -15,6 +15,22 @@
 
 export const CHANGELOG = [
   {
+    id: "2026-06-20",
+    date: "June 20, 2026",
+    highlight: true,
+    title: "Report your catches on the Paddy Finder",
+    items: [
+      {
+        type: "new",
+        text:
+          "Found a paddy holding fish? Log it on the Kelp Paddy Finder — tap the " +
+          "spot, pick the species, and add it to the map for everyone. New reports " +
+          "stay faint until they’re confirmed by multiple anglers, so the crowd " +
+          "keeps the map honest.",
+      },
+    ],
+  },
+  {
     id: "2026-06-19-2",
     date: "June 19, 2026",
     highlight: true,
