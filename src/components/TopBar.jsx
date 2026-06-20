@@ -100,6 +100,43 @@ export default function TopBar({ onSettings, settingsOpen, dataState, layer, hor
       </div>
       <div className="topbar-meta">
         <RegionSwitcher />
+        {/* Standalone beta tool — the kelp-paddy drift finder. SCB-only, so
+            shown on the CA region only. Separate page (public/paddies/),
+            outside the overlay; full-nav link, tool carries its own back-link. */}
+        {activeRegion() === "ca" && (
+        <a
+          href="/paddies/"
+          className="tool-link"
+          title="Kelp Paddy Finder — where drifting kelp paddies are offshore (beta)"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
+            padding: "2px 9px",
+            borderRadius: 999,
+            border: "1px solid var(--line, rgba(0,0,0,0.14))",
+            fontSize: 12,
+            textDecoration: "none",
+            color: "inherit",
+          }}
+        >
+          <span aria-hidden="true">🪸</span>
+          Paddy Finder
+          <span
+            style={{
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: ".04em",
+              background: "#0e7490",
+              color: "#e0f2fe",
+              padding: "1px 5px",
+              borderRadius: 5,
+            }}
+          >
+            BETA
+          </span>
+        </a>
+        )}
         {(() => {
           // Active-layer confidence badge. Updates as the user clicks
           // between layer chips (Temp / Chl / Wind / Swell / Current /
