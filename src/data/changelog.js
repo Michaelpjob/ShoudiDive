@@ -15,6 +15,30 @@
 
 export const CHANGELOG = [
   {
+    id: "2026-06-19-2",
+    date: "June 19, 2026",
+    highlight: true,
+    title: "New tool: Kelp Paddy Finder (beta)",
+    items: [
+      {
+        type: "new",
+        text:
+          "A new beta tool maps where drifting kelp paddies — the floating rafts " +
+          "that hold yellowtail, dorado, and tuna — are most likely concentrating " +
+          "offshore in Southern California right now. Open it from the “🪸 Paddy " +
+          "Finder” link at the top.",
+      },
+      {
+        type: "new",
+        text:
+          "Scrub a time slider from the last 3 days through a 2-day forecast to see " +
+          "how the paddies have drifted and where they’re heading. Drag a ruler from " +
+          "your launch to measure the run in nautical miles, and tap anywhere to drop " +
+          "a waypoint and copy its GPS coordinates.",
+      },
+    ],
+  },
+  {
     id: "2026-06-19",
     date: "June 19, 2026",
     highlight: true,
