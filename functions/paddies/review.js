@@ -85,7 +85,7 @@ export async function onRequestPost({ request, env }) {
   let flash = "";
   if (id && (action === "approve" || action === "reject")) {
     const r = await applyModeration(env, id, action);
-    flash = r.ok ? `${action}d` : `error: ${r.error}`;
+    flash = r.ok ? (action === "approve" ? "approved" : "rejected") : `error: ${r.error}`;
   }
   return htmlResponse(page(await listPending(env), key, flash));
 }
