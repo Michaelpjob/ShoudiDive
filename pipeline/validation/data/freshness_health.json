@@ -1,5 +1,5 @@
 {
-  "computed_at": "2026-06-19T10:58:13Z",
+  "computed_at": "2026-06-20T09:38:04Z",
   "manifest": "public/data/manifest.json",
   "layers_checked": [
     "sst",
@@ -18,17 +18,17 @@
   "findings": [
     {
       "severity": "high",
-      "code": "layer_date_stale",
-      "title": "Layer wave is 26.0d old",
-      "layer": "wave",
-      "detail": "threshold=2d window=now"
+      "code": "summary_days_short",
+      "title": "Layer sst7d has too few days",
+      "layer": "sst7d",
+      "detail": "got=1 expected>=3"
     },
     {
-      "severity": "medium",
-      "code": "sst_source_query_failed",
-      "title": "Could not query latest MUR SST source time",
-      "layer": "sst",
-      "detail": "HTTPError: 403 Client Error:  for url: https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.csv?analysed_sst%5B(last)%5D%5B(32.93)%5D%5B(-118.49)%5D"
+      "severity": "high",
+      "code": "layer_date_stale",
+      "title": "Layer wave is 26.9d old",
+      "layer": "wave",
+      "detail": "threshold=2d window=now"
     }
   ]
 }
