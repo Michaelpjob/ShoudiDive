@@ -27,9 +27,13 @@ function _snap(v){return Math.round(v/0.02)*0.02;}
 function toast(msg){var t=document.getElementById('toast');if(!t){t=document.createElement('div');t.id='toast';t.className='toast';document.body.appendChild(t);}
  t.textContent=msg;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(function(){t.style.display='none';},4000);}
 function renderReports(){if(!repLayer)return;repLayer.clearLayers();
- REPORTS.forEach(function(r){var lab=(r.species&&r.species.toLowerCase()!=='paddy')?_cap(r.species):'Reported paddy';
-  L.circleMarker([r.lat,r.lng],{radius:6,weight:1.5,color:'#fff',fillColor:'#ef4444',fillOpacity:.95})
-   .bindTooltip(lab,{direction:'top',offset:[0,-4],className:'rep-tip'}).addTo(repLayer);});
+ REPORTS.forEach(function(r){
+  var sp=(r.species&&r.species.toLowerCase()!=='paddy')?_cap(r.species):'Reported paddy';
+  var conf=r.confidence||'unconfirmed',n=r.sources||1,st,lab;
+  if(conf==='unconfirmed'){st={radius:5,weight:1,color:'#fca5a5',fillColor:'#ef4444',fillOpacity:.22,dashArray:'2 3'};lab=sp+' · 1 report · unconfirmed';}
+  else if(conf==='strong'){st={radius:8,weight:2.5,color:'#fff',fillColor:'#ef4444',fillOpacity:1};lab=sp+' · confirmed · '+n+' anglers';}
+  else{st={radius:6,weight:1.5,color:'#fff',fillColor:'#ef4444',fillOpacity:.92};lab=sp+' · confirmed · '+n+' anglers';}
+  L.circleMarker([r.lat,r.lng],st).bindTooltip(lab,{direction:'top',offset:[0,-4],className:'rep-tip'}).addTo(repLayer);});
  _mine().forEach(function(r){var lab=(r.species&&r.species.toLowerCase()!=='paddy')?_cap(r.species):'Paddy';
   L.circleMarker([r.lat,r.lng],{radius:6,weight:1.5,color:'#fbbf24',fillColor:'#f59e0b',fillOpacity:.45})
    .bindTooltip(lab+' · pending review',{direction:'top',offset:[0,-4],className:'rep-tip'}).addTo(repLayer);});}
@@ -124,7 +128,7 @@ function drawPanel(){var m=D.frames[F].meta;
    +((m.n_patches>1)?' &middot; +'+(m.n_patches-1)+' more patches':'')
    +' &middot; ±'+(m.pos_pm_nm||0)+' nm &middot; widen to ~'+(m.area50_km2||0)+' km² if slow</span></div>';}
  document.getElementById('panel').innerHTML='<div class="panel-head"><span class="chev">▾</span>'+tHdr+best+'</div><div class="panel-body">'
-  +'<div class=mut style="margin:-2px 0 7px">Drag the <b style="color:#38bdf8">⊕</b> to measure nm. <b style="color:#fca5a5">Red dots</b> = angler catch reports; tap the map then <b style="color:#fca5a5">Log a catch</b> to add yours (shows after review).</div>'
+  +'<div class=mut style="margin:-2px 0 7px">Drag the <b style="color:#38bdf8">⊕</b> to measure nm. <b style="color:#fca5a5">Red dots</b> = catch reports — faint until <b>confirmed by multiple anglers</b>. Tap the map then <b style="color:#fca5a5">Log a catch</b> to add yours.</div>'
   +'<div class=mut>est. floating paddies in the Bight</div>'
   +'<div class=score>~'+m.est_floating_paddies.toLocaleString()+'</div>'
   +'<div style="margin:5px 0"><span class=band style="background:'+(BAND[m.abundance_band]||'#64748b')
@@ -144,7 +148,8 @@ function drawPanel(){var m=D.frames[F].meta;
   +' <span class="sw" style="background:#16a34a"></span>bed'
   +' <span class="sw" style="background:#facc15"></span>your port'
   +' <span class="sw" style="background:#38bdf8"></span>ruler (drag ⊕)'
-  +' <span class="sw" style="background:#ef4444;border-radius:50%"></span>catch report'
+  +' <span class="sw" style="background:#ef4444;border-radius:50%"></span>confirmed catch'
+  +' <span class="sw" style="background:#ef4444;border-radius:50%;opacity:.28"></span>unconfirmed'
   +' <span class="sw" style="background:#f59e0b;border-radius:50%;opacity:.5"></span>your pending'
   +'<div class=mut style="margin-top:6px;font-size:11px">'+(D.current_note?D.current_note+'<br/>':'')+D.src_note+'</div></div></div>';}
 function setFrame(i){F=Math.max(0,Math.min(D.frames.length-1,i|0));var m=D.frames[F].meta;
