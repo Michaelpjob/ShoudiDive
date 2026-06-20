@@ -67,7 +67,7 @@ function drawPanel(){var m=D.frames[F].meta;
    +'<br/><span class=mut>primary patch ~'+(m.core_area_km2||0)+' km²'
    +((m.n_patches>1)?' &middot; +'+(m.n_patches-1)+' more patches':'')
    +' &middot; ±'+(m.pos_pm_nm||0)+' nm &middot; widen to ~'+(m.area50_km2||0)+' km² if slow</span></div>';}
- document.getElementById('panel').innerHTML=tHdr+best
+ document.getElementById('panel').innerHTML='<div class="panel-head"><span class="chev">▾</span>'+tHdr+best+'</div><div class="panel-body">'
   +'<div class=mut style="margin:-2px 0 7px">Drag the <b style="color:#38bdf8">⊕</b> to measure nm from your port.</div>'
   +'<div class=mut>est. floating paddies in the Bight</div>'
   +'<div class=score>~'+m.est_floating_paddies.toLocaleString()+'</div>'
@@ -88,7 +88,7 @@ function drawPanel(){var m=D.frames[F].meta;
   +' <span class="sw" style="background:#16a34a"></span>bed'
   +' <span class="sw" style="background:#facc15"></span>your port'
   +' <span class="sw" style="background:#38bdf8"></span>ruler (drag ⊕)'
-  +'<div class=mut style="margin-top:6px;font-size:11px">'+(D.current_note?D.current_note+'<br/>':'')+D.src_note+'</div></div>';}
+  +'<div class=mut style="margin-top:6px;font-size:11px">'+(D.current_note?D.current_note+'<br/>':'')+D.src_note+'</div></div></div>';}
 function setFrame(i){F=Math.max(0,Math.min(D.frames.length-1,i|0));var m=D.frames[F].meta;
  document.getElementById('tlabel').innerHTML='<b>'+m.date+'</b> &middot; '+m.rel
   +'<span class="conf '+(m.confidence==='forecast'?'fc':'obs')+'">'+(m.confidence==='forecast'?'FC':'OBS')+'</span>';
@@ -116,6 +116,8 @@ function boot(d){D=d;F=D.default_frame;LCH=D.default_launch;
  map.on('mousemove',function(e){setReadout(e.latlng);});
  map.on('click',function(e){dropWp(e.latlng);});
  map.on('popupopen',wireCopy);
+ var panelEl=document.getElementById('panel');panelEl.classList.add('min');
+ panelEl.addEventListener('click',function(e){if(e.target.closest('.panel-head'))panelEl.classList.toggle('min');});
  var tsl=document.getElementById('tslider');
  tsl.max=D.frames.length-1;tsl.value=D.default_frame;
  tsl.oninput=function(){setFrame(parseInt(tsl.value,10));};
