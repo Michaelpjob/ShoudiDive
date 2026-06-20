@@ -1,13 +1,15 @@
-// GET /api/paddies/reports — public list of APPROVED reports for the map.
-// Single fast read of the approved blob; short edge cache so the map doesn't hammer KV.
-import { jsonResponse, readApproved, publicView } from "./_lib.js";
+// GET /api/paddies/reports — public list of APPROVED reports for the map, each
+// tagged with a (non-PII) trust tier from corroboration + reporter reputation.
+import { jsonResponse, readApproved, listEmails, buildRepMap, attachConfidence, publicView } from "./_lib.js";
 
 export async function onRequestGet({ env }) {
   if (!env || !env.REPORTS_KV) return jsonResponse({ reports: [] });
   const nowMs = Date.now();
-  const arr = await readApproved(env, nowMs);
+  const approved = await readApproved(env, nowMs);
+  const repMap = buildRepMap(await listEmails(env));
+  const withConf = attachConfidence(approved, repMap);
   return jsonResponse(
-    { reports: arr.map(publicView), updated: nowMs },
+    { reports: withConf.map(publicView), updated: nowMs },
     { cache: "public, max-age=60" } // approvals show within ~a minute
   );
 }

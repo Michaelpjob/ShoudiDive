@@ -24,6 +24,19 @@ export const SPECIES = [
   "bonito", "barracuda", "calico bass", "paddy",
 ];
 
+// --- Trust / corroboration ----------------------------------------------
+// A report is only "confirmed" once corroborated by genuinely DISTINCT sources
+// (different IP AND different email) in the same zone+window, OR it comes from a
+// reporter who's earned reputation. New/lone reports stay skeptical (faint).
+// Weight is capped so even a trusted source can never dominate the model.
+export const CORROBORATE_NM = 6;       // reports within this share a "zone"
+export const CORROBORATE_DAYS = 4;     // ...and this time window
+export const CONFIRM_MIN_SOURCES = 2;  // distinct (IP & email) sources to confirm
+export const TRUSTED_REP = 0.6;        // a reporter at/above this confirms solo
+export const REP_PRIOR_A = 1;          // Beta prior — skeptical: prior mean 0.2
+export const REP_PRIOR_B = 4;
+export const WEIGHT_CAP = 1.0;         // a single report's weight never exceeds this
+
 export function jsonResponse(obj, init = {}) {
   return new Response(JSON.stringify(obj), {
     status: init.status || 200,
@@ -130,13 +143,30 @@ export async function applyModeration(env, id, action) {
   if (!raw) return { ok: false, error: "not found", status: 404 };
   const rec = JSON.parse(raw);
   await env.REPORTS_KV.delete(pkey);
-  if (action === "reject") return { ok: true, action: "reject", id };
+  if (action === "reject") {
+    await bumpReputation(env, rec.email, { rejected: 1 });
+    return { ok: true, action: "reject", id };
+  }
   const nowMs = Date.now();
   const arr = await readApproved(env, nowMs);
+  // Corroboration on arrival: approved reports in the same zone+window from
+  // genuinely DISTINCT sources (different IP AND different email).
+  const myEmail = (rec.email || "").toLowerCase();
+  const near = isPositive(rec) ? arr.filter((o) => isPositive(o)
+    && (o.email || "").toLowerCase() !== myEmail && o.ipHash !== rec.ipHash
+    && nmBetween(o, rec) <= CORROBORATE_NM && withinDays(o, rec, CORROBORATE_DAYS)) : [];
   rec.status = "approved";
   rec.approvedAt = nowMs;
   arr.push(rec);
   await writeApproved(env, arr);
+  // Credit the reporter for the approval (+ a corroboration if independently
+  // confirmed), and credit each distinct source it just corroborated.
+  await bumpReputation(env, rec.email, { approved: 1, corroborated: near.length ? 1 : 0 });
+  const credited = new Set();
+  for (const o of near) {
+    const e = (o.email || "").toLowerCase();
+    if (e && !credited.has(e)) { credited.add(e); await bumpReputation(env, o.email, { corroborated: 1 }); }
+  }
   return { ok: true, action: "approve", id };
 }
 
@@ -172,6 +202,68 @@ export async function listEmails(env) {
   return out;
 }
 
+// --- Trust math ----------------------------------------------------------
+function toRad(d) { return d * Math.PI / 180; }
+export function nmBetween(a, b) {
+  const R = 3440.065; // Earth radius in nautical miles
+  const dLat = toRad(b.lat - a.lat), dLng = toRad(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+export function withinDays(a, b, d) {
+  const ta = Date.parse((a.date || "") + "T12:00:00Z"), tb = Date.parse((b.date || "") + "T12:00:00Z");
+  if (isNaN(ta) || isNaN(tb)) return true;
+  return Math.abs(ta - tb) <= d * 86400000;
+}
+export function isPositive(r) { return !!r && r.species !== "no-paddies"; }
+
+// Reporter reputation = Beta posterior mean with a deliberately skeptical prior.
+// Successes = moderator approvals + independent corroborations; failures =
+// rejections. New/anonymous reporters sit at the prior (~0.2) and must EARN trust.
+export function repScore(rec) {
+  const succ = (rec.approved || 0) + (rec.corroborated || 0);
+  const fail = (rec.rejected || 0);
+  return (succ + REP_PRIOR_A) / (succ + fail + REP_PRIOR_A + REP_PRIOR_B);
+}
+
+export function buildRepMap(emailRecs) {
+  const m = {};
+  for (const e of emailRecs) { if (e.email) m[e.email.toLowerCase()] = repScore(e); }
+  return m;
+}
+
+// Attach a confidence tier + corroboration count + capped weight to each
+// approved report. Corroboration counts only genuinely-distinct sources
+// (min of distinct IPs and distinct emails in the zone), so one person can't
+// self-corroborate by resubmitting. A high-rep reporter can confirm solo.
+export function attachConfidence(approved, repMap) {
+  return approved.map((r) => {
+    const cluster = approved.filter((o) => isPositive(o) && nmBetween(o, r) <= CORROBORATE_NM && withinDays(o, r, CORROBORATE_DAYS));
+    const ips = new Set(cluster.map((o) => o.ipHash).filter(Boolean));
+    const emails = new Set(cluster.map((o) => (o.email || "").toLowerCase()).filter(Boolean));
+    const sources = Math.min(ips.size, emails.size);   // distinct IP *and* email
+    const maxRep = cluster.reduce((mx, o) => Math.max(mx, repMap[(o.email || "").toLowerCase()] || 0), 0);
+    const confirmed = sources >= CONFIRM_MIN_SOURCES || maxRep >= TRUSTED_REP;
+    const weight = Math.min(WEIGHT_CAP, 0.3 + 0.25 * Math.max(0, sources - 1) + 0.4 * maxRep);
+    const tier = weight >= 0.75 ? "strong" : (confirmed ? "confirmed" : "unconfirmed");
+    return { ...r, _sources: sources, _weight: Math.round(weight * 100) / 100, _tier: tier };
+  });
+}
+
+// Update a reporter's reputation counters on the durable email record
+// (preserves the name/last-seen fields recordEmail wrote).
+export async function bumpReputation(env, email, deltas) {
+  if (!email) return;
+  const key = "paddies:email:" + (await sha256hex(email.toLowerCase())).slice(0, 16);
+  let rec = {};
+  try { const raw = await env.REPORTS_KV.get(key); if (raw) rec = JSON.parse(raw); } catch { /* new */ }
+  rec.email = email;
+  rec.approved = (rec.approved || 0) + (deltas.approved || 0);
+  rec.rejected = (rec.rejected || 0) + (deltas.rejected || 0);
+  rec.corroborated = (rec.corroborated || 0) + (deltas.corroborated || 0);
+  await env.REPORTS_KV.put(key, JSON.stringify(rec));
+}
+
 // Admin gate — same shape as analytics gate(), but its own token.
 export function modGate(request, env) {
   const expected = env && env.MODERATION_TOKEN;
@@ -182,7 +274,13 @@ export function modGate(request, env) {
   return null;
 }
 
-// What the public map gets — never leak deviceId / ipHash.
+// What the public map gets — never leak deviceId / ipHash / email. Includes
+// the derived (non-PII) trust signal: tier, distinct-source count, capped weight.
 export function publicView(r) {
-  return { id: r.id, lat: r.lat, lng: r.lng, species: r.species, date: r.date, source: "reported" };
+  return {
+    id: r.id, lat: r.lat, lng: r.lng, species: r.species, date: r.date, source: "reported",
+    confidence: r._tier || "unconfirmed",
+    sources: r._sources || 1,
+    weight: r._weight != null ? r._weight : 0.3,
+  };
 }

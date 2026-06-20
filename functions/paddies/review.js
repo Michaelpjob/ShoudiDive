@@ -1,7 +1,7 @@
 // GET/POST /paddies/review?key=<MODERATION_TOKEN>
 // Server-rendered moderation queue. No client JS (POST-form buttons) so it
 // stays clean under the site CSP (script-src 'self'). Mirrors /stats gating.
-import { modGate, listPending, applyModeration, listEmails } from "../api/paddies/_lib.js";
+import { modGate, listPending, applyModeration, listEmails, repScore } from "../api/paddies/_lib.js";
 
 const CSS = `
   :root{color-scheme:dark}
@@ -27,6 +27,12 @@ const CSS = `
   th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #1e293b}
   th{color:#94a3b8;font-weight:600}
   td.em{color:#7dd3fc}
+  .trust{margin-top:3px;font-size:11px}
+  .rb{display:inline-block;border-radius:5px;padding:1px 6px;font-weight:700;margin-right:6px}
+  .rb-hi{background:#14532d;color:#86efac}
+  .rb-mid{background:#3f2d14;color:#fcd34d}
+  .rb-lo{background:#3f1d2e;color:#fca5a5}
+  .rb-new{color:#94a3b8;font-style:italic}
 `;
 
 function esc(s) {
@@ -52,7 +58,16 @@ function htmlResponse(body, status = 200) {
     } });
 }
 
-function page(pending, key, flash) {
+function repBadge(er) {
+  const seen = er ? (er.approved || 0) + (er.rejected || 0) + (er.corroborated || 0) : 0;
+  if (!seen) return `<span class=rb-new>new reporter &middot; unproven</span>`;
+  const rep = repScore(er);
+  const cls = rep >= 0.6 ? "rb-hi" : (rep >= 0.35 ? "rb-mid" : "rb-lo");
+  return `<span class="rb ${cls}">rep ${rep.toFixed(2)}</span>` +
+    `<span class=mut>${er.approved || 0} approved &middot; ${er.corroborated || 0} corroborated &middot; ${er.rejected || 0} rejected</span>`;
+}
+
+function page(pending, key, flash, repByEmail) {
   const k = esc(key);
   const rows = pending.length ? pending.map((r) => `
     <div class=row>
@@ -62,6 +77,7 @@ function page(pending, key, flash) {
           &middot; <a href="https://www.google.com/maps?q=${r.lat},${r.lng}" target=_blank rel="noopener noreferrer">map</a>
           &middot; ${esc(r.date)} &middot; ${ago(r.submittedAt)} ago</span>
         <div class=rep>${esc(r.name || "Anonymous")} &middot; <span class=em>${esc(r.email || "—")}</span>${r.notes ? ` &middot; <span class=nt>&ldquo;${esc(r.notes)}&rdquo;</span>` : ""}</div>
+        <div class=trust>${repBadge((repByEmail || {})[(r.email || "").toLowerCase()])}</div>
       </div>
       <form method=POST>
         <input type=hidden name=key value="${k}">
@@ -98,8 +114,11 @@ export async function onRequestGet({ request, env }) {
   if (!env.REPORTS_KV) return htmlResponse(`<div class=wrap><h1>Review</h1><p class=sub>Reports backend not enabled.</p></div>`, 503);
   const url = new URL(request.url);
   const key = url.searchParams.get("key");
-  if (url.searchParams.get("view") === "log") return htmlResponse(emailLogPage(await listEmails(env), key));
-  return htmlResponse(page(await listPending(env), key));
+  const emailRecs = await listEmails(env);
+  if (url.searchParams.get("view") === "log") return htmlResponse(emailLogPage(emailRecs, key));
+  const repByEmail = {};
+  emailRecs.forEach((e) => { if (e.email) repByEmail[e.email.toLowerCase()] = e; });
+  return htmlResponse(page(await listPending(env), key, null, repByEmail));
 }
 
 export async function onRequestPost({ request, env }) {
@@ -117,7 +136,10 @@ export async function onRequestPost({ request, env }) {
     const r = await applyModeration(env, id, action);
     flash = r.ok ? (action === "approve" ? "approved" : "rejected") : `error: ${r.error}`;
   }
-  return htmlResponse(page(await listPending(env), key, flash));
+  const emailRecs = await listEmails(env);
+  const repByEmail = {};
+  emailRecs.forEach((e) => { if (e.email) repByEmail[e.email.toLowerCase()] = e; });
+  return htmlResponse(page(await listPending(env), key, flash, repByEmail));
 }
 
 export async function onRequest({ request, env }) {
