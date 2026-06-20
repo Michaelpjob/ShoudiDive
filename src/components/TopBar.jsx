@@ -3,10 +3,15 @@
 // split. Lives outside the ErrorBoundary so the status indicator + gear
 // stay reachable even if DesktopView crashes during render.
 
+import { useState } from "react";
 import RegionSwitcher from "./RegionSwitcher.jsx";
+import WhatsNew from "./WhatsNew.jsx";
+import { LATEST_CHANGELOG_ID } from "../data/changelog.js";
 import { activeRegion } from "../lib/region.js";
 import { getLayerConfidence } from "../lib/confidence.js";
 import { track } from "../lib/analytics.js";
+
+const WHATSNEW_SEEN_KEY = "sd:whatsnew:seen";
 
 const LAYER_NAMES = {
   sst:     "Sea Temp",
@@ -49,6 +54,22 @@ function FreediverLogo() {
 }
 
 export default function TopBar({ onSettings, settingsOpen, dataState, layer, horizonDays }) {
+  // "What's New" panel + unread dot. The dot shows when the newest changelog
+  // entry hasn't been seen (tracked in localStorage, same pattern as prefs);
+  // opening the panel marks it seen.
+  const [whatsNewOpen, setWhatsNewOpen] = useState(false);
+  const [hasUnread, setHasUnread] = useState(() => {
+    try { return (localStorage.getItem(WHATSNEW_SEEN_KEY) || "") < LATEST_CHANGELOG_ID; }
+    catch { return false; }
+  });
+  const openWhatsNew = () => {
+    // `unread` captures whether the dot was driving the open (vs. the user
+    // just exploring); `latest` is the changelog version they're seeing.
+    track("whatsnew_open", { unread: hasUnread, latest: LATEST_CHANGELOG_ID });
+    setWhatsNewOpen(true);
+    setHasUnread(false);
+    try { localStorage.setItem(WHATSNEW_SEEN_KEY, LATEST_CHANGELOG_ID); } catch { /* ignore quota */ }
+  };
   const generated = dataState?.manifest?.generated_at;
   const lastUpdate = generated
     ? new Date(generated).toLocaleString("en-US", {
@@ -212,6 +233,18 @@ export default function TopBar({ onSettings, settingsOpen, dataState, layer, hor
             mirrors MOBILE_QUERY in App.jsx so JS and CSS agree on what
             counts as "mobile"). */}
         <button
+          className="icon-btn whatsnew-btn"
+          aria-label={hasUnread ? "What's new (new updates)" : "What's new"}
+          aria-pressed={whatsNewOpen}
+          title="What's new"
+          onClick={openWhatsNew}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />
+          </svg>
+          {hasUnread && <span className="whatsnew-dot" aria-hidden="true" />}
+        </button>
+        <button
           className="icon-btn"
           aria-label="Settings"
           aria-pressed={settingsOpen}
@@ -223,6 +256,7 @@ export default function TopBar({ onSettings, settingsOpen, dataState, layer, hor
           </svg>
         </button>
       </div>
+      {whatsNewOpen && <WhatsNew onClose={() => setWhatsNewOpen(false)} />}
     </div>
   );
 }
