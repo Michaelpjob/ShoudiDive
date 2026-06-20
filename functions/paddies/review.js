@@ -43,7 +43,13 @@ function htmlResponse(body, status = 200) {
   return new Response(`<!doctype html><html lang=en><head><meta charset=utf-8>` +
     `<meta name=viewport content="width=device-width,initial-scale=1">` +
     `<title>Paddy reports — review</title><style>${CSS}</style></head><body>${body}</body></html>`,
-    { status, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+    { status, headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-store",
+      // The token lives in this page's URL — never send it anywhere as a Referer
+      // (e.g. when the moderator clicks a "map" link out to Google).
+      "Referrer-Policy": "no-referrer",
+    } });
 }
 
 function page(pending, key, flash) {
@@ -53,7 +59,7 @@ function page(pending, key, flash) {
       <div class=meta>
         <span class=sp>${esc(r.species)}</span>
         <span class=mut>&middot; ${r.lat}, ${r.lng}
-          &middot; <a href="https://www.google.com/maps?q=${r.lat},${r.lng}" target=_blank rel=noopener>map</a>
+          &middot; <a href="https://www.google.com/maps?q=${r.lat},${r.lng}" target=_blank rel="noopener noreferrer">map</a>
           &middot; ${esc(r.date)} &middot; ${ago(r.submittedAt)} ago</span>
         <div class=rep>${esc(r.name || "Anonymous")} &middot; <span class=em>${esc(r.email || "—")}</span>${r.notes ? ` &middot; <span class=nt>&ldquo;${esc(r.notes)}&rdquo;</span>` : ""}</div>
       </div>
