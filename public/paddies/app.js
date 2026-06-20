@@ -37,25 +37,38 @@ function fetchReports(){fetch('/api/paddies/reports',{cache:'no-cache'}).then(fu
   if(!j||!j.reports)return;REPORTS=j.reports;var ap={};REPORTS.forEach(function(r){ap[r.id]=1;});
   _saveMine(_mine().filter(function(m){return !ap[m.id]&&(Date.now()-(m.ts||0))<12096e5;}));
   renderReports();}).catch(function(){});}
+function _reporter(){try{return JSON.parse(localStorage.getItem('sd:paddies:reporter')||'{}');}catch(e){return {};}}
 function logCatch(){if(!wpMarker){toast('Tap the map where you caught fish, then Log a catch.');return;}
  var ll=wpMarker.getLatLng();var box=document.getElementById('picker');
  if(!box){box=document.createElement('div');box.id='picker';box.className='picker';document.body.appendChild(box);}
+ var who=_reporter();var v=function(s){return (s||'').replace(/"/g,'&quot;');};
  var opts=SPECIES.map(function(s){return '<option value="'+s+'">'+(s==='paddy'?'Paddy (no fish)':_cap(s))+'</option>';}).join('');
  box.innerHTML='<div class=ph>Log a catch</div><div class=pr>at <b>'+ll.lat.toFixed(3)+', '+ll.lng.toFixed(3)+'</b></div>'
-  +'<select id=spsel>'+opts+'</select><div class=pb><button id=psub class=sub>Submit</button><button id=pcan class=can>Cancel</button></div>'
-  +'<div class=pn>Snapped to ~1 nm for privacy · shows on the map after review.</div>';
+  +'<label class=pl>Email <span class=req>*</span></label><input id=pemail type=email autocomplete=email placeholder="you@example.com" value="'+v(who.email)+'">'
+  +'<label class=pl>Name</label><input id=pname maxlength=60 placeholder="optional" value="'+v(who.name)+'">'
+  +'<label class=pl>Species</label><select id=spsel>'+opts+'</select>'
+  +'<label class=pl>Notes</label><input id=pnotes maxlength=280 placeholder="size, conditions… (optional)">'
+  +'<div class=pb><button id=psub class=sub>Submit</button><button id=pcan class=can>Cancel</button></div>'
+  +'<div class=pn>Snapped to ~1 nm. Email stays private (moderator only); your pin shows after review.</div>';
  box.style.display='block';
  document.getElementById('pcan').onclick=function(){box.style.display='none';};
- document.getElementById('psub').onclick=function(){box.style.display='none';submitReport(ll,document.getElementById('spsel').value);};}
-function submitReport(ll,species){
- var body=JSON.stringify({lat:ll.lat,lng:ll.lng,species:species,date:_today(),deviceId:_dev()});
+ document.getElementById('psub').onclick=function(){
+  var email=(document.getElementById('pemail').value||'').trim();
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){toast('Please enter a valid email.');return;}
+  var name=(document.getElementById('pname').value||'').trim();
+  var notes=(document.getElementById('pnotes').value||'').trim();
+  try{localStorage.setItem('sd:paddies:reporter',JSON.stringify({email:email,name:name}));}catch(e){}
+  box.style.display='none';
+  submitReport(ll,document.getElementById('spsel').value,email,name,notes);};}
+function submitReport(ll,species,email,name,notes){
+ var body=JSON.stringify({lat:ll.lat,lng:ll.lng,species:species,date:_today(),deviceId:_dev(),email:email,name:name,notes:notes});
  fetch('/api/paddies/report',{method:'POST',headers:{'content-type':'application/json'},body:body})
   .then(function(r){return r.json().then(function(j){return {s:r.status,j:j};},function(){return {s:r.status,j:null};});})
   .then(function(o){
    if(o.j&&o.j.ok){var mine=_mine();mine.push({id:o.j.id,lat:_snap(ll.lat),lng:_snap(ll.lng),species:species,ts:Date.now()});_saveMine(mine);
     renderReports();toast('Thanks — your report is pending review.');}
    else if(o.s===429)toast('Easy — too many reports for now. Try again later.');
-   else if(o.s===422)toast('That spot or species looks off — not logged.');
+   else if(o.s===422)toast((o.j&&o.j.error==='valid email required')?'Please enter a valid email.':'That spot or species looks off — not logged.');
    else toast('Could not log that — please try again.');
   }).catch(function(){toast('Network error — not logged.');});}
 
