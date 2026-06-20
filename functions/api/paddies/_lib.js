@@ -31,7 +31,7 @@ export function jsonResponse(obj, init = {}) {
 }
 
 export function snap(v) {
-  return Math.round(v / SNAP_DEG) * SNAP_DEG;
+  return Math.round((Math.round(v / SNAP_DEG) * SNAP_DEG) * 1e6) / 1e6; // grid + drop FP noise
 }
 
 export function bboxOk(lat, lng) {
@@ -88,6 +88,40 @@ export async function readApproved(env, nowMs) {
 export async function writeApproved(env, arr) {
   const trimmed = arr.slice(-CAP); // ring-buffer: keep the newest CAP
   await env.REPORTS_KV.put(APPROVED_KEY, JSON.stringify(trimmed));
+}
+
+// Read every pending report (admin-only path, low volume).
+export async function listPending(env) {
+  const out = [];
+  let cursor;
+  do {
+    const res = await env.REPORTS_KV.list({ prefix: PENDING_PREFIX, cursor, limit: 1000 });
+    for (const k of res.keys) {
+      const raw = await env.REPORTS_KV.get(k.name);
+      if (raw) { try { out.push(JSON.parse(raw)); } catch { /* skip */ } }
+    }
+    cursor = res.list_complete ? null : res.cursor;
+  } while (cursor);
+  out.sort((a, b) => b.submittedAt - a.submittedAt);
+  return out;
+}
+
+// Approve (move pending -> approved blob) or reject (drop pending). Shared by
+// the JSON moderate API and the server-rendered review page.
+export async function applyModeration(env, id, action) {
+  const pkey = PENDING_PREFIX + id;
+  const raw = await env.REPORTS_KV.get(pkey);
+  if (!raw) return { ok: false, error: "not found", status: 404 };
+  const rec = JSON.parse(raw);
+  await env.REPORTS_KV.delete(pkey);
+  if (action === "reject") return { ok: true, action: "reject", id };
+  const nowMs = Date.now();
+  const arr = await readApproved(env, nowMs);
+  rec.status = "approved";
+  rec.approvedAt = nowMs;
+  arr.push(rec);
+  await writeApproved(env, arr);
+  return { ok: true, action: "approve", id };
 }
 
 // Admin gate — same shape as analytics gate(), but its own token.
