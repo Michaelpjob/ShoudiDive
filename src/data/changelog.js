@@ -15,6 +15,29 @@
 
 export const CHANGELOG = [
   {
+    id: "2026-06-21",
+    date: "June 21, 2026",
+    highlight: true,
+    title: "Get your bearings on the Paddy Finder",
+    items: [
+      {
+        type: "new",
+        text:
+          "The Kelp Paddy Finder now plots reference points right on the map — your " +
+          "launch harbors, the named offshore banks (9-Mile, 14-Mile, Cortes, " +
+          "Tanner…), and nearby dive spots — so you can orient at a glance and measure " +
+          "a run against landmarks you know. They stay quiet at the overview; zoom into " +
+          "an area and the names fade in. Toggle each set from the layers button.",
+      },
+      {
+        type: "improved",
+        text:
+          "Catch reports now fade as they age, so the map leans on the freshest " +
+          "paddies and stale intel quietly drops off.",
+      },
+    ],
+  },
+  {
     id: "2026-06-20",
     date: "June 20, 2026",
     highlight: true,
