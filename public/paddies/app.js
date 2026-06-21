@@ -14,7 +14,7 @@ function comp(b){return CMP[Math.floor((b+11.25)/22.5)%16];}
 function _ddm(v,pos,neg){var h=v>=0?pos:neg;v=Math.abs(v);var d=Math.floor(v);return d+'°'+((v-d)*60).toFixed(3)+"' "+h;}
 function _fmt(ll){return {dd:ll.lat.toFixed(5)+', '+ll.lng.toFixed(5),dm:_ddm(ll.lat,'N','S')+'  '+_ddm(ll.lng,'E','W')};}
 
-var D,F,LCH,map,coneLayer,hdrLayer,launchMarker,measLine,measHandle,wpMarker,coordbox,repLayer;
+var D,F,LCH,map,coneLayer,hdrLayer,launchMarker,measLine,measHandle,wpMarker,coordbox,repLayer,spotLayer,bankLayer,portLayer;
 
 var SPECIES=['yellowtail','dorado','bluefin','yellowfin','white seabass','bonito','barracuda','calico bass','paddy'];
 var REPORTS=[];
@@ -27,19 +27,31 @@ function _snap(v){return Math.round(v/0.02)*0.02;}
 function toast(msg){var t=document.getElementById('toast');if(!t){t=document.createElement('div');t.id='toast';t.className='toast';document.body.appendChild(t);}
  t.textContent=msg;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(function(){t.style.display='none';},4000);}
 function renderReports(){if(!repLayer)return;repLayer.clearLayers();
+ var nowMs=Date.now(),REPMAXAGE=7;  // days a catch stays on the map (matches server MAX_AGE_DAYS)
  REPORTS.forEach(function(r){
+  // Age in days since the catch (r.date). Kelp paddies drift, so reports age
+  // out: skip anything past the window (the server caps the feed too — this
+  // also covers any cached/in-flight older point), then fade + shrink the rest.
+  var ageD=r.date?Math.max(0,(nowMs-Date.parse(r.date+'T12:00:00Z'))/864e5):0;
+  if(ageD>REPMAXAGE)return;
   var sp=(r.species&&r.species.toLowerCase()!=='paddy')?_cap(r.species):'Reported paddy';
   var conf=r.confidence||'unconfirmed',n=r.sources||1,st,lab;
   if(conf==='unconfirmed'){st={radius:5,weight:1,color:'#fca5a5',fillColor:'#ef4444',fillOpacity:.22,dashArray:'2 3'};lab=sp+' · 1 report · unconfirmed';}
   else if(conf==='strong'){st={radius:8,weight:2.5,color:'#fff',fillColor:'#ef4444',fillOpacity:1};lab=sp+' · confirmed · '+n+' anglers';}
   else{st={radius:6,weight:1.5,color:'#fff',fillColor:'#ef4444',fillOpacity:.92};lab=sp+' · confirmed · '+n+' anglers';}
+  // Full strength for ~2 days, then fade + shrink toward the 7-day edge so the
+  // freshest catches read loudest.
+  var fade=ageD<=2?1:Math.max(.12,1-(ageD-2)/4*.88);
+  st.fillOpacity=Math.round(st.fillOpacity*fade*100)/100;
+  st.radius=Math.max(3,+(st.radius*(ageD<=2?1:Math.max(.6,1-(ageD-2)/4*.4))).toFixed(1));
+  lab+=' · '+(ageD<1?'today':(ageD<2?'1d ago':Math.round(ageD)+'d ago'));
   L.circleMarker([r.lat,r.lng],st).bindTooltip(lab,{direction:'top',offset:[0,-4],className:'rep-tip'}).addTo(repLayer);});
  _mine().forEach(function(r){var lab=(r.species&&r.species.toLowerCase()!=='paddy')?_cap(r.species):'Paddy';
   L.circleMarker([r.lat,r.lng],{radius:6,weight:1.5,color:'#fbbf24',fillColor:'#f59e0b',fillOpacity:.45})
    .bindTooltip(lab+' · pending review',{direction:'top',offset:[0,-4],className:'rep-tip'}).addTo(repLayer);});}
 function fetchReports(){fetch('/api/paddies/reports',{cache:'no-cache'}).then(function(r){return r.ok?r.json():null;}).then(function(j){
   if(!j||!j.reports)return;REPORTS=j.reports;var ap={};REPORTS.forEach(function(r){ap[r.id]=1;});
-  _saveMine(_mine().filter(function(m){return !ap[m.id]&&(Date.now()-(m.ts||0))<12096e5;}));
+  _saveMine(_mine().filter(function(m){return !ap[m.id]&&(Date.now()-(m.ts||0))<6048e5;}));
   renderReports();}).catch(function(){});}
 function _reporter(){try{return JSON.parse(localStorage.getItem('sd:paddies:reporter')||'{}');}catch(e){return {};}}
 function logCatch(){if(!wpMarker){toast('Tap the map where you caught fish, then Log a catch.');return;}
@@ -147,6 +159,9 @@ function drawPanel(){var m=D.frames[F].meta;
   +'<span class="sw" style="background:#f59e0b"></span>drift direction'
   +' <span class="sw" style="background:#16a34a"></span>bed'
   +' <span class="sw" style="background:#facc15"></span>your port'
+  +' <span class="sw" style="background:#d97706;border-radius:50%"></span>harbor'
+  +' <span class="sw" style="background:#06b6d4;border-radius:50%"></span>dive spot'
+  +' <span class="sw" style="background:transparent;border:1.5px solid #8b5cf6;border-radius:50%"></span>bank'
   +' <span class="sw" style="background:#38bdf8"></span>ruler (drag ⊕)'
   +' <span class="sw" style="background:#ef4444;border-radius:50%"></span>confirmed catch'
   +' <span class="sw" style="background:#ef4444;border-radius:50%;opacity:.28"></span>unconfirmed'
@@ -157,6 +172,20 @@ function setFrame(i){F=Math.max(0,Math.min(D.frames.length-1,i|0));var m=D.frame
   +'<span class="conf '+(m.confidence==='forecast'?'fc':'obs')+'">'+(m.confidence==='forecast'?'FC':'OBS')+'</span>';
  drawBase();drawHDR();drawPanel();}
 function setL(l){LCH=l;launchMarker.setLatLng(D.launches[LCH]);reanchorMeas();drawHDR();drawPanel();}
+function drawReference(){
+ // Frame-of-reference overlays — dive spots, harbors/ports, offshore banks.
+ // Each in its own layerGroup so the bottom-right layers control toggles them.
+ if(spotLayer){spotLayer.clearLayers();((D.reference&&D.reference.spots)||[]).forEach(function(s){
+  L.circleMarker([s.lat,s.lng],{radius:3,weight:1,color:'#a5f3fc',fillColor:'#06b6d4',fillOpacity:.6})
+   .bindTooltip(s.name,{direction:'top',offset:[0,-3],className:'rep-tip'}).addTo(spotLayer);});}
+ if(bankLayer){bankLayer.clearLayers();((D.reference&&D.reference.banks)||[]).forEach(function(b){
+  L.circleMarker([b.lat,b.lng],{radius:4,weight:1.5,color:'#c4b5fd',fillColor:'#8b5cf6',fillOpacity:0})
+   .bindTooltip(b.name,{direction:'top',offset:[0,-4],className:'rep-tip'}).addTo(bankLayer);});}
+ if(portLayer){portLayer.clearLayers();Object.keys(D.launches||{}).forEach(function(n){
+  L.circleMarker(D.launches[n],{radius:3.5,weight:1,color:'#fde68a',fillColor:'#d97706',fillOpacity:.7})
+   .bindTooltip(n,{direction:'top',offset:[0,-3],className:'rep-tip'})
+   .on('click',function(){setL(n);var s=document.getElementById('launch');if(s)s.value=n;}).addTo(portLayer);});}
+}
 
 function boot(d){D=d;F=D.default_frame;LCH=D.default_launch;
  map=L.map('map',{zoomControl:true,attributionControl:false}).setView([33.2,-118.5],8);
@@ -168,6 +197,9 @@ function boot(d){D=d;F=D.default_frame;LCH=D.default_launch;
  hdrLayer=L.layerGroup().addTo(map);
  L.geoJSON(D.beds,{pointToLayer:function(f,ll){return L.circleMarker(ll,{radius:f.properties.island?5:3,
   color:'#052e16',weight:1,fillColor:f.properties.island?'#16a34a':'#4d7c4d',fillOpacity:1}).bindTooltip(f.properties.bed);}}).addTo(map);
+ spotLayer=L.layerGroup().addTo(map);bankLayer=L.layerGroup().addTo(map);portLayer=L.layerGroup().addTo(map);
+ drawReference();
+ L.control.layers(null,{'Dive spots':spotLayer,'Harbors / ports':portLayer,'Offshore banks':bankLayer},{position:'bottomright',collapsed:false}).addTo(map);
  launchMarker=L.circleMarker(D.launches[LCH],{radius:6,color:'#0b1220',weight:2,fillColor:'#facc15',fillOpacity:1}).addTo(map);
  var st=D.launches[LCH];var measEnd=[st[0]-0.05,st[1]-0.35];
  measLine=L.polyline([st,measEnd],{color:'#38bdf8',weight:3,dashArray:'7 6',opacity:.9}).addTo(map);
