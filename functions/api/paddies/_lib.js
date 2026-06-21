@@ -13,7 +13,7 @@
 export const BBOX = { latMin: 31.0, latMax: 34.8, lngMin: -121.5, lngMax: -116.8 };
 
 export const SNAP_DEG = 0.02;       // ~1.2 nm grid — honey-hole protection + dedupe
-export const MAX_AGE_DAYS = 14;     // a catch must be within this; pending + approved expire on it too
+export const MAX_AGE_DAYS = 7;      // a catch must be within this; pending + approved expire on it (anchored to the CATCH date, not submission — paddies drift, so old intel ages out fast)
 export const CAP = 500;             // ring-buffer: keep at most this many approved reports
 export const APPROVED_KEY = "paddies:approved";
 export const PENDING_PREFIX = "paddies:pending:";
@@ -111,7 +111,14 @@ export async function readApproved(env, nowMs) {
   const raw = await env.REPORTS_KV.get(APPROVED_KEY);
   let arr = [];
   try { arr = raw ? JSON.parse(raw) : []; } catch { arr = []; }
-  return arr.filter((r) => !r.expiresAt || r.expiresAt > nowMs);
+  // Drop anything past its hard expiry OR whose CATCH is older than the window.
+  // The catch-age cap also retires legacy records written under the old
+  // submission-anchored expiry, so nothing older than MAX_AGE_DAYS ever shows.
+  return arr.filter((r) => {
+    if (r.expiresAt && r.expiresAt <= nowMs) return false;
+    const t = r.date ? Date.parse(r.date + "T12:00:00Z") : 0;
+    return !t || (nowMs - t) / 86400000 <= MAX_AGE_DAYS;
+  });
 }
 
 export async function writeApproved(env, arr) {

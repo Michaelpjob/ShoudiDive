@@ -27,19 +27,31 @@ function _snap(v){return Math.round(v/0.02)*0.02;}
 function toast(msg){var t=document.getElementById('toast');if(!t){t=document.createElement('div');t.id='toast';t.className='toast';document.body.appendChild(t);}
  t.textContent=msg;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(function(){t.style.display='none';},4000);}
 function renderReports(){if(!repLayer)return;repLayer.clearLayers();
+ var nowMs=Date.now(),REPMAXAGE=7;  // days a catch stays on the map (matches server MAX_AGE_DAYS)
  REPORTS.forEach(function(r){
+  // Age in days since the catch (r.date). Kelp paddies drift, so reports age
+  // out: skip anything past the window (the server caps the feed too — this
+  // also covers any cached/in-flight older point), then fade + shrink the rest.
+  var ageD=r.date?Math.max(0,(nowMs-Date.parse(r.date+'T12:00:00Z'))/864e5):0;
+  if(ageD>REPMAXAGE)return;
   var sp=(r.species&&r.species.toLowerCase()!=='paddy')?_cap(r.species):'Reported paddy';
   var conf=r.confidence||'unconfirmed',n=r.sources||1,st,lab;
   if(conf==='unconfirmed'){st={radius:5,weight:1,color:'#fca5a5',fillColor:'#ef4444',fillOpacity:.22,dashArray:'2 3'};lab=sp+' · 1 report · unconfirmed';}
   else if(conf==='strong'){st={radius:8,weight:2.5,color:'#fff',fillColor:'#ef4444',fillOpacity:1};lab=sp+' · confirmed · '+n+' anglers';}
   else{st={radius:6,weight:1.5,color:'#fff',fillColor:'#ef4444',fillOpacity:.92};lab=sp+' · confirmed · '+n+' anglers';}
+  // Full strength for ~2 days, then fade + shrink toward the 7-day edge so the
+  // freshest catches read loudest.
+  var fade=ageD<=2?1:Math.max(.12,1-(ageD-2)/4*.88);
+  st.fillOpacity=Math.round(st.fillOpacity*fade*100)/100;
+  st.radius=Math.max(3,+(st.radius*(ageD<=2?1:Math.max(.6,1-(ageD-2)/4*.4))).toFixed(1));
+  lab+=' · '+(ageD<1?'today':(ageD<2?'1d ago':Math.round(ageD)+'d ago'));
   L.circleMarker([r.lat,r.lng],st).bindTooltip(lab,{direction:'top',offset:[0,-4],className:'rep-tip'}).addTo(repLayer);});
  _mine().forEach(function(r){var lab=(r.species&&r.species.toLowerCase()!=='paddy')?_cap(r.species):'Paddy';
   L.circleMarker([r.lat,r.lng],{radius:6,weight:1.5,color:'#fbbf24',fillColor:'#f59e0b',fillOpacity:.45})
    .bindTooltip(lab+' · pending review',{direction:'top',offset:[0,-4],className:'rep-tip'}).addTo(repLayer);});}
 function fetchReports(){fetch('/api/paddies/reports',{cache:'no-cache'}).then(function(r){return r.ok?r.json():null;}).then(function(j){
   if(!j||!j.reports)return;REPORTS=j.reports;var ap={};REPORTS.forEach(function(r){ap[r.id]=1;});
-  _saveMine(_mine().filter(function(m){return !ap[m.id]&&(Date.now()-(m.ts||0))<12096e5;}));
+  _saveMine(_mine().filter(function(m){return !ap[m.id]&&(Date.now()-(m.ts||0))<6048e5;}));
   renderReports();}).catch(function(){});}
 function _reporter(){try{return JSON.parse(localStorage.getItem('sd:paddies:reporter')||'{}');}catch(e){return {};}}
 function logCatch(){if(!wpMarker){toast('Tap the map where you caught fish, then Log a catch.');return;}
