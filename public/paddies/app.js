@@ -175,16 +175,18 @@ function setL(l){LCH=l;launchMarker.setLatLng(D.launches[LCH]);reanchorMeas();dr
 function drawReference(){
  // Frame-of-reference overlays — dive spots, harbors/ports, offshore banks.
  // Each in its own layerGroup so the bottom-right layers control toggles them.
- // Labels are PERMANENT (always-on, no hover needed); toggle a layer to declutter.
+ // Deliberately low-key: small, muted markers (cf. the main app's quiet pins).
+ // Labels are subtle + zoom-gated (.ref-lbl hidden until refz() adds .refz at
+ // zoom ≥ 9) so the overview stays calm and names appear when you zoom in.
  var LBL={permanent:true,direction:'right',offset:[5,0],className:'ref-lbl'};
  if(spotLayer){spotLayer.clearLayers();((D.reference&&D.reference.spots)||[]).forEach(function(s){
-  L.circleMarker([s.lat,s.lng],{radius:3,weight:1,color:'#a5f3fc',fillColor:'#06b6d4',fillOpacity:.6})
+  L.circleMarker([s.lat,s.lng],{radius:2.5,weight:1,opacity:.5,color:'#7dd3fc',fillColor:'#0e7490',fillOpacity:.35})
    .bindTooltip(s.name,LBL).addTo(spotLayer);});}
  if(bankLayer){bankLayer.clearLayers();((D.reference&&D.reference.banks)||[]).forEach(function(b){
-  L.circleMarker([b.lat,b.lng],{radius:4,weight:1.5,color:'#c4b5fd',fillColor:'#8b5cf6',fillOpacity:0})
+  L.circleMarker([b.lat,b.lng],{radius:3,weight:1,opacity:.6,color:'#a78bfa',fillColor:'#8b5cf6',fillOpacity:0})
    .bindTooltip(b.name,LBL).addTo(bankLayer);});}
  if(portLayer){portLayer.clearLayers();Object.keys(D.launches||{}).forEach(function(n){
-  L.circleMarker(D.launches[n],{radius:3.5,weight:1,color:'#fde68a',fillColor:'#d97706',fillOpacity:.7})
+  L.circleMarker(D.launches[n],{radius:2.5,weight:1,opacity:.5,color:'#fbbf24',fillColor:'#b45309',fillOpacity:.35})
    .bindTooltip(n,LBL)
    .on('click',function(){setL(n);var s=document.getElementById('launch');if(s)s.value=n;}).addTo(portLayer);});}
 }
@@ -201,7 +203,9 @@ function boot(d){D=d;F=D.default_frame;LCH=D.default_launch;
   color:'#052e16',weight:1,fillColor:f.properties.island?'#16a34a':'#4d7c4d',fillOpacity:1}).bindTooltip(f.properties.bed);}}).addTo(map);
  spotLayer=L.layerGroup().addTo(map);bankLayer=L.layerGroup().addTo(map);portLayer=L.layerGroup().addTo(map);
  drawReference();
- L.control.layers(null,{'Dive spots':spotLayer,'Harbors / ports':portLayer,'Offshore banks':bankLayer},{position:'bottomright',collapsed:false}).addTo(map);
+ L.control.layers(null,{'Dive spots':spotLayer,'Harbors / ports':portLayer,'Offshore banks':bankLayer},{position:'bottomright',collapsed:true}).addTo(map);
+ var refz=function(){map.getContainer().classList.toggle('refz',map.getZoom()>=9);};
+ map.on('zoomend',refz);refz();
  launchMarker=L.circleMarker(D.launches[LCH],{radius:6,color:'#0b1220',weight:2,fillColor:'#facc15',fillOpacity:1}).addTo(map);
  var st=D.launches[LCH];var measEnd=[st[0]-0.05,st[1]-0.35];
  measLine=L.polyline([st,measEnd],{color:'#38bdf8',weight:3,dashArray:'7 6',opacity:.9}).addTo(map);
