@@ -67,6 +67,23 @@ def test_session_accepts_any_content_type():
     assert SESSION.headers.get("Accept") == "*/*"
 
 
+def test_pins_ipv4_address_family_at_import():
+    """GitHub runners have no IPv6 egress; dual-stack hosts (e.g. NASA
+    OB.DAAC) must connect over IPv4 or the connect raises ENETUNREACH. The
+    module pins urllib3's address family at import; prefer_ipv4 toggles it."""
+    import socket
+    import urllib3.util.connection as u3
+
+    # Applied at import.
+    assert u3.allowed_gai_family() == socket.AF_INET
+    # Reversible…
+    http_mod.prefer_ipv4(False)
+    assert u3.allowed_gai_family is http_mod._ORIGINAL_GAI_FAMILY
+    # …and idempotently re-applied (leaves the process pinned to IPv4).
+    http_mod.prefer_ipv4(True)
+    assert u3.allowed_gai_family() == socket.AF_INET
+
+
 # ---------------------------------------------------------------------------
 # Single-call behavior
 # ---------------------------------------------------------------------------

@@ -43,11 +43,46 @@ Tests live in ``pipeline/tests/test_lib_http.py``.
 """
 from __future__ import annotations
 
+import socket
 import time
 from typing import Any
 from urllib.parse import urlparse
 
 import requests
+import urllib3.util.connection as _urllib3_connection
+
+
+# ---------------------------------------------------------------------------
+# Force IPv4 — GitHub Actions runners have no IPv6 egress
+# ---------------------------------------------------------------------------
+# Several upstream hosts are dual-stack (A + AAAA records). On GitHub-hosted
+# runners there is no usable IPv6 route, so when the resolver hands urllib3 an
+# AAAA address first the connect fails with `[Errno 101] Network is
+# unreachable` (a no-route error, NOT a timeout) before it ever falls through
+# to the working IPv4 address. NASA OB.DAAC (oceandata.sci.gsfc.nasa.gov) is
+# the chronic victim: it publishes both 169.154.128.84 and
+# 2001:4d0:2418:128::84, and the IPv6 attempt black-holes the daily chl fetch
+# (the circuit breaker then trips and chl silently degrades to NOAA / CMEMS
+# fallbacks). Pinning urllib3's address family to IPv4 sidesteps it. Every
+# pipeline upstream is reachable over IPv4, so this is a no-op everywhere
+# except where it rescues a dual-stack / no-IPv6 combination.
+_ORIGINAL_GAI_FAMILY = _urllib3_connection.allowed_gai_family
+
+
+def _ipv4_only_gai_family() -> int:
+    return socket.AF_INET
+
+
+def prefer_ipv4(enable: bool = True) -> None:
+    """Pin (``enable=True``) or restore (``False``) urllib3's connect address
+    family to IPv4. Applied process-wide at import; exposed so callers/tests
+    can toggle it explicitly. Idempotent."""
+    _urllib3_connection.allowed_gai_family = (
+        _ipv4_only_gai_family if enable else _ORIGINAL_GAI_FAMILY
+    )
+
+
+prefer_ipv4(True)
 
 
 DEFAULT_USER_AGENT = "shouldidive-data-pipeline/1.0 (+https://shouldidive.com)"
