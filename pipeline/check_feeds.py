@@ -35,6 +35,16 @@ from typing import Optional
 
 import requests
 
+# Pin connections to IPv4. GitHub runners have no IPv6 route, and several
+# probed hosts are dual-stack (notably NASA OB.DAAC) — without this the probe
+# reports them DEAD with `[Errno 101] Network is unreachable` even though they
+# answer fine over IPv4. See pipeline/lib/http.py for the full rationale.
+try:
+    from pipeline.lib.http import prefer_ipv4
+except ModuleNotFoundError:  # python check_feeds.py (cwd=pipeline)
+    from lib.http import prefer_ipv4
+prefer_ipv4()
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 OUT_PATH = REPO_ROOT / "pipeline" / "validation" / "data" / "feed_health.json"
