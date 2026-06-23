@@ -37,8 +37,8 @@ function renderReports(){if(!repLayer)return;repLayer.clearLayers();
   var sp=(r.species&&r.species.toLowerCase()!=='paddy')?_cap(r.species):'Reported paddy';
   var conf=r.confidence||'unconfirmed',n=r.sources||1,st,lab;
   if(conf==='unconfirmed'){st={radius:5,weight:1,color:'#fca5a5',fillColor:'#ef4444',fillOpacity:.22,dashArray:'2 3'};lab=sp+' · 1 report · unconfirmed';}
-  else if(conf==='strong'){st={radius:8,weight:2.5,color:'#fff',fillColor:'#ef4444',fillOpacity:1};lab=sp+' · confirmed · '+n+' anglers';}
-  else{st={radius:6,weight:1.5,color:'#fff',fillColor:'#ef4444',fillOpacity:.92};lab=sp+' · confirmed · '+n+' anglers';}
+  else if(conf==='strong'){st={radius:8,weight:2.5,color:'#fff',fillColor:'#ef4444',fillOpacity:1};lab=sp+' · confirmed · '+n+' report'+(n>1?'s':'');}
+  else{st={radius:6,weight:1.5,color:'#fff',fillColor:'#ef4444',fillOpacity:.92};lab=sp+' · confirmed · '+n+' report'+(n>1?'s':'');}
   // Fade + shrink CONTINUOUSLY with catch age (no full-strength plateau) so a
   // day-old report already reads dimmer than a fresh one — full at age 0,
   // ~0.15 floor by the 7-day edge. A flat plateau made the fade invisible
@@ -126,8 +126,11 @@ function drawPanel(){var m=D.frames[F].meta;
  var fl=Math.round(m.frac_floating*100),be=Math.round(m.frac_beached*100),sk=Math.round(m.frac_sunk*100);
  var tl=D.frames[F].timeline||[];
  var tHdr='<div style="margin-bottom:7px;font-size:13px">'+m.date+' &middot; <b style="color:#fbbf24">'+m.rel+'</b>'
-  +'<span class="conf '+(m.confidence==='forecast'?'fc':'obs')+'">'+(m.confidence==='forecast'?'FORECAST':'OBSERVED')+'</span></div>'
-  +(m.confidence==='forecast'?'<div class=mut style="font-size:11px;margin:-4px 0 7px">forecast drift &mdash; coarse currents, no radar; lower confidence</div>':'');
+  +'<span class="conf '+(m.confidence==='forecast'?'fc':'obs')+'">'+(m.confidence==='forecast'?'FORECAST':'HINDCAST')+'</span></div>'
+  +'<div class=mut style="font-size:11px;margin:-4px 0 7px">'+(m.confidence==='forecast'
+    ?'forecast drift &mdash; coarse currents, no radar; lower confidence'
+    :'model estimate from observed HFR + Open-Meteo hindcast inputs')
+   +(m.build_utc?' &middot; built '+m.build_utc.slice(0,16).replace('T',' ')+' UTC':'')+'</div>';
  var mx=Math.max.apply(null,[0.1].concat(tl.map(function(t){return t.shed;})));
  var tlb=tl.slice().reverse().map(function(t){return '<div style="flex:1;text-align:center" title="Hs '+t.hs_m+' m">'
   +'<div style="height:'+Math.round(26*t.shed/mx)+'px;background:#38bdf8;border-radius:2px 2px 0 0"></div>'
@@ -137,12 +140,12 @@ function drawPanel(){var m=D.frames[F].meta;
    +'<b style="color:#fcd34d">Paddies scattered today</b>'
    +'<br/><span class=mut>no tight concentration &mdash; work a wide area &middot; position ±'+(m.pos_pm_nm||0)+' nm</span></div>';}
  else{best='<div style="background:#14532d;border-radius:7px;padding:7px 9px;margin-bottom:8px">'
-   +'<b style="color:#86efac">Densest paddies'+(m.feature?' near '+m.feature:'')+'</b>'
+   +'<b style="color:#86efac">Highest paddy-likelihood'+(m.feature?' near '+m.feature:'')+'</b>'
    +'<br/><span class=mut>primary patch ~'+(m.core_area_km2||0)+' km²'
    +((m.n_patches>1)?' &middot; +'+(m.n_patches-1)+' more patches':'')
    +' &middot; ±'+(m.pos_pm_nm||0)+' nm &middot; widen to ~'+(m.area50_km2||0)+' km² if slow</span></div>';}
  document.getElementById('panel').innerHTML='<div class="panel-head"><span class="chev">▾</span>'+tHdr+best+'</div><div class="panel-body">'
-  +'<div class=mut style="margin:-2px 0 7px">Drag the <b style="color:#38bdf8">⊕</b> to measure nm. <b style="color:#fca5a5">Red dots</b> = catch reports — faint until <b>confirmed by multiple anglers</b>. Tap the map then <b style="color:#fca5a5">Log a catch</b> to add yours.</div>'
+  +'<div class=mut style="margin:-2px 0 7px">Green = <b>model-estimated paddy likelihood</b>, not confirmed paddies. Drag the <b style="color:#38bdf8">⊕</b> to measure nm. <b style="color:#fca5a5">Red dots</b> = catch reports — faint until <b>confirmed by corroboration or a trusted reporter</b>. Tap the map then <b style="color:#fca5a5">Log a catch</b> to add yours.</div>'
   +'<div class=mut>est. floating paddies in the Bight</div>'
   +'<div class=score>~'+m.est_floating_paddies.toLocaleString()+'</div>'
   +'<div style="margin:5px 0"><span class=band style="background:'+(BAND[m.abundance_band]||'#64748b')
@@ -155,7 +158,7 @@ function drawPanel(){var m=D.frames[F].meta;
   +'<div style="margin:8px 0">'+m.why+'</div>'
   +'<div class=mut>Shedding intensity (days ago &rarr;):</div>'
   +'<div style="display:flex;align-items:flex-end;height:34px;gap:2px;margin:3px 0">'+tlb+'</div>'
-  +'<div class=leg><span class="sw" style="background:#22c55e"></span>densest'
+  +'<div class=leg><span class="sw" style="background:#22c55e"></span>likeliest'
   +' <span class="sw" style="background:#16a34a;opacity:.55"></span>50%'
   +' <span class="sw" style="background:#16a34a;opacity:.22"></span>80%<br/>'
   +'<span class="sw" style="background:#f59e0b"></span>drift direction'
@@ -168,10 +171,11 @@ function drawPanel(){var m=D.frames[F].meta;
   +' <span class="sw" style="background:#ef4444;border-radius:50%"></span>confirmed catch'
   +' <span class="sw" style="background:#ef4444;border-radius:50%;opacity:.28"></span>unconfirmed'
   +' <span class="sw" style="background:#f59e0b;border-radius:50%;opacity:.5"></span>your pending'
-  +'<div class=mut style="margin-top:6px;font-size:11px">'+(D.current_note?D.current_note+'<br/>':'')+D.src_note+'</div></div></div>';}
+  +'<div class=mut style="margin-top:6px;font-size:11px">'+(D.current_note?D.current_note+'<br/>':'')+D.src_note+'</div>'
+  +'<div class=mut style="margin-top:6px;font-size:11px;color:#fbbf24">⚠ Planning aid only &mdash; check weather, swell, fuel range, and closures before heading offshore.</div></div></div>';}
 function setFrame(i){F=Math.max(0,Math.min(D.frames.length-1,i|0));var m=D.frames[F].meta;
  document.getElementById('tlabel').innerHTML='<b>'+m.date+'</b> &middot; '+m.rel
-  +'<span class="conf '+(m.confidence==='forecast'?'fc':'obs')+'">'+(m.confidence==='forecast'?'FC':'OBS')+'</span>';
+  +'<span class="conf '+(m.confidence==='forecast'?'fc':'obs')+'">'+(m.confidence==='forecast'?'FC':'HIND')+'</span>';
  drawBase();drawHDR();drawPanel();}
 function setL(l){LCH=l;launchMarker.setLatLng(D.launches[LCH]);reanchorMeas();drawHDR();drawPanel();}
 function drawReference(){

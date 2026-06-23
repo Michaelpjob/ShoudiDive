@@ -15,6 +15,23 @@
 
 export const CHANGELOG = [
   {
+    id: "2026-06-23",
+    date: "June 23, 2026",
+    highlight: true,
+    title: "Clearer about what the Paddy Finder knows",
+    items: [
+      {
+        type: "improved",
+        text:
+          "The Kelp Paddy Finder now spells out exactly what you're looking at. " +
+          "The green zones are labeled as model-estimated paddy likelihood, not " +
+          "confirmed paddy sightings. The panel shows when the model was last built " +
+          "so you can judge how fresh it is, and a quick reminder nudges you to " +
+          "check weather, swell, fuel range, and closures before heading offshore.",
+      },
+    ],
+  },
+  {
     id: "2026-06-22",
     date: "June 22, 2026",
     highlight: true,
