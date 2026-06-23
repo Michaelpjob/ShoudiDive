@@ -39,11 +39,13 @@ function renderReports(){if(!repLayer)return;repLayer.clearLayers();
   if(conf==='unconfirmed'){st={radius:5,weight:1,color:'#fca5a5',fillColor:'#ef4444',fillOpacity:.22,dashArray:'2 3'};lab=sp+' · 1 report · unconfirmed';}
   else if(conf==='strong'){st={radius:8,weight:2.5,color:'#fff',fillColor:'#ef4444',fillOpacity:1};lab=sp+' · confirmed · '+n+' anglers';}
   else{st={radius:6,weight:1.5,color:'#fff',fillColor:'#ef4444',fillOpacity:.92};lab=sp+' · confirmed · '+n+' anglers';}
-  // Full strength for ~2 days, then fade + shrink toward the 7-day edge so the
-  // freshest catches read loudest.
-  var fade=ageD<=2?1:Math.max(.12,1-(ageD-2)/4*.88);
+  // Fade + shrink CONTINUOUSLY with catch age (no full-strength plateau) so a
+  // day-old report already reads dimmer than a fresh one — full at age 0,
+  // ~0.15 floor by the 7-day edge. A flat plateau made the fade invisible
+  // whenever every report was <2 days old.
+  var fade=Math.max(.15,1-ageD/7*.85);
   st.fillOpacity=Math.round(st.fillOpacity*fade*100)/100;
-  st.radius=Math.max(3,+(st.radius*(ageD<=2?1:Math.max(.6,1-(ageD-2)/4*.4))).toFixed(1));
+  st.radius=Math.max(3,+(st.radius*Math.max(.6,1-ageD/7*.4)).toFixed(1));
   lab+=' · '+(ageD<1?'today':(ageD<2?'1d ago':Math.round(ageD)+'d ago'));
   L.circleMarker([r.lat,r.lng],st).bindTooltip(lab,{direction:'top',offset:[0,-4],className:'rep-tip'}).addTo(repLayer);});
  _mine().forEach(function(r){var lab=(r.species&&r.species.toLowerCase()!=='paddy')?_cap(r.species):'Paddy';
