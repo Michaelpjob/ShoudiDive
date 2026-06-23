@@ -15,6 +15,25 @@
 
 export const CHANGELOG = [
   {
+    id: "2026-06-22",
+    date: "June 22, 2026",
+    highlight: true,
+    title: "A smarter Kelp Paddy Finder",
+    items: [
+      {
+        type: "improved",
+        text:
+          "The Paddy Finder's forecast is rebuilt on real satellite kelp-canopy " +
+          "data for the whole Southern California Bight, from the Northern Channel " +
+          "Islands down to the San Diego banks, so it shows where the kelp actually " +
+          "is instead of a hand-drawn guess. Your community catch reports now " +
+          "actively shape the map too, pulling the forecast toward the spots that " +
+          "are producing, and paddies sitting over the named banks and breaks " +
+          "score higher.",
+      },
+    ],
+  },
+  {
     id: "2026-06-21",
     date: "June 21, 2026",
     highlight: true,
