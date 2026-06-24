@@ -56,12 +56,16 @@ function fetchReports(){fetch('/api/paddies/reports',{cache:'no-cache'}).then(fu
   _saveMine(_mine().filter(function(m){return !ap[m.id]&&(Date.now()-(m.ts||0))<6048e5;}));
   renderReports();}).catch(function(){});}
 function _reporter(){try{return JSON.parse(localStorage.getItem('sd:paddies:reporter')||'{}');}catch(e){return {};}}
-function logCatch(){if(!wpMarker){toast('Tap the map where you caught fish, then Log a catch.');return;}
- var ll=wpMarker.getLatLng();var box=document.getElementById('picker');
+function _parseCoord(s){s=(s||'').trim();if(!s)return NaN;var neg=/[swSW]/.test(s)||/^-/.test(s);var n=s.replace(/[^0-9.]+/g,' ').trim().split(' ').map(parseFloat).filter(function(x){return isFinite(x);});if(!n.length)return NaN;var d=n[0]+(n.length>1?n[1]/60:0)+(n.length>2?n[2]/3600:0);return neg?-d:d;}
+function logCatch(){
+ var ll=wpMarker?wpMarker.getLatLng():null;var box=document.getElementById('picker');
  if(!box){box=document.createElement('div');box.id='picker';box.className='picker';document.body.appendChild(box);}
  var who=_reporter();var v=function(s){return (s||'').replace(/"/g,'&quot;');};
  var opts=SPECIES.map(function(s){return '<option value="'+s+'">'+(s==='paddy'?'Paddy (no fish)':_cap(s))+'</option>';}).join('');
- box.innerHTML='<div class=ph>Log a catch</div><div class=pr>at <b>'+ll.lat.toFixed(3)+', '+ll.lng.toFixed(3)+'</b></div>'
+ box.innerHTML='<div class=ph>Log a catch</div>'
+  +'<label class=pl>GPS coordinates <span class=req>*</span></label>'
+  +'<div class=pcoord><input id=plat placeholder="lat 32.853" value="'+(ll?ll.lat.toFixed(5):'')+'"><input id=plng placeholder="lng -117.270" value="'+(ll?ll.lng.toFixed(5):'')+'"></div>'
+  +'<div class=pr>Tap the map to fill these, or type them in: decimal degrees, or deg&nbsp;min like 32 51.18.</div>'
   +'<label class=pl>Email <span class=req>*</span></label><input id=pemail type=email autocomplete=email placeholder="you@example.com" value="'+v(who.email)+'">'
   +'<label class=pl>Name</label><input id=pname maxlength=60 placeholder="optional" value="'+v(who.name)+'">'
   +'<label class=pl>Species</label><select id=spsel>'+opts+'</select>'
@@ -71,13 +75,18 @@ function logCatch(){if(!wpMarker){toast('Tap the map where you caught fish, then
  box.style.display='block';
  document.getElementById('pcan').onclick=function(){box.style.display='none';};
  document.getElementById('psub').onclick=function(){
+  var lat=_parseCoord(document.getElementById('plat').value),lng=_parseCoord(document.getElementById('plng').value);
+  if(!isFinite(lat)||!isFinite(lng)){toast('Enter your GPS coordinates (lat and lng).');return;}
+  if(lat<-90||lat>90||lng<-180||lng>180){toast('Those GPS coordinates look invalid.');return;}
+  var b=D.bounds;
+  if(b&&(lat<b[0][0]||lat>b[1][0]||lng<b[0][1]||lng>b[1][1])){toast('Outside the map area. SoCal longitude is negative, e.g. -117.27.');return;}
   var email=(document.getElementById('pemail').value||'').trim();
   if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){toast('Please enter a valid email.');return;}
   var name=(document.getElementById('pname').value||'').trim();
   var notes=(document.getElementById('pnotes').value||'').trim();
   try{localStorage.setItem('sd:paddies:reporter',JSON.stringify({email:email,name:name}));}catch(e){}
   box.style.display='none';
-  submitReport(ll,document.getElementById('spsel').value,email,name,notes);};}
+  submitReport({lat:lat,lng:lng},document.getElementById('spsel').value,email,name,notes);};}
 function submitReport(ll,species,email,name,notes){
  var body=JSON.stringify({lat:ll.lat,lng:ll.lng,species:species,date:_today(),deviceId:_dev(),email:email,name:name,notes:notes});
  fetch('/api/paddies/report',{method:'POST',headers:{'content-type':'application/json'},body:body})
