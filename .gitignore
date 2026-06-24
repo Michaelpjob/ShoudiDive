@@ -33,6 +33,12 @@ __pycache__/
 # ARE committed (small, durable signal).
 pipeline/validation/data/archive/
 
+# Hindcast harness outputs — regenerable on demand via
+# `python -m validation.hindcast` (residuals replay deterministically from
+# git history; the report is just a render of them).
+pipeline/validation/data/hindcast_residuals.jsonl
+pipeline/validation/data/hindcast_report.html
+
 # Ingest-side download caches. The RCCA zip (~30 MB) is a historical
 # agency dataset; we cache it on the runner's disk between cron ticks
 # rather than re-downloading every hour. Anything that lives under
