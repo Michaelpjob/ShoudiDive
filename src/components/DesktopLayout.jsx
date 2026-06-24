@@ -38,6 +38,8 @@ import {
   getWindSpeed,
   getCurrentSpeed,
   getVizFt,
+  getVizP10Ft,
+  getVizP90Ft,
   getColumnAt,
   getColumnSpot,
   windCardinal,
@@ -115,12 +117,17 @@ function hoverReadout(layer, hover, activeComposite, units, sels = {}) {
   if (layer === "viz") {
     const ft = getVizFt(lng, lat, activeComposite);
     if (!Number.isFinite(ft)) return null;
-    const cat =
-      ft < 10 ? "Poor"
-      : ft < 20 ? "Fair"
-      : ft < 30 ? "Good"
-      : ft < 50 ? "Very Good"
-      : "Excellent";
+    const vcat = (v) =>
+      v < 10 ? "Poor" : v < 20 ? "Fair" : v < 30 ? "Good" : v < 50 ? "Very Good" : "Excellent";
+    const cat = vcat(ft);
+    // Surface the model's p10–p90 uncertainty band: the range, plus a category
+    // span when the band straddles a clarity boundary (e.g. "Fair–Good").
+    const lo = getVizP10Ft(lng, lat, activeComposite);
+    const hi = getVizP90Ft(lng, lat, activeComposite);
+    if (Number.isFinite(lo) && Number.isFinite(hi) && hi - lo >= 1) {
+      const span = vcat(lo) === vcat(hi) ? cat : `${vcat(lo)}–${vcat(hi)}`;
+      return `~${Math.round(ft)} ft (${Math.round(lo)}–${Math.round(hi)}) · ${span}`;
+    }
     return `~${Math.round(ft)} ft · ${cat}`;
   }
   return null;
