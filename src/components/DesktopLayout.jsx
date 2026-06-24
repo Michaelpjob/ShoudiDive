@@ -877,7 +877,7 @@ export default function DesktopLayout({
               : layer === "wind" ? "Wind Speed (10 m)"
               : layer === "swell" ? "Swell · Hs / Tp / Dp"
               : layer === "current" ? "Surface Current"
-              : "Predicted Visibility · surface"}
+              : "Predicted Visibility (Secchi-ft) · surface"}
             {layer === "viz" && <span className="predicted-badge">PREDICTED</span>}
             {layer === "current" && <span className="beta-badge">BETA</span>}
           </span>
