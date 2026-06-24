@@ -191,12 +191,12 @@ export default function TopBar({ onSettings, settingsOpen, dataState, layer, hor
             </span>
           );
         })()}
-        <span>
+        <span className="topbar-status">
           <span className="dot"></span>
           <strong>{status}</strong> · Last update{" "}
           <span className="mono">{lastUpdate}</span>
         </span>
-        <span>
+        <span className="topbar-sources">
           Sources: <strong>NOAA · IOOS · NASA OB.DAAC · Copernicus</strong>
         </span>
         {/* Tip jar — visible on every layer, every device. The WSB

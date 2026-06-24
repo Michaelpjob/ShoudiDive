@@ -81,6 +81,18 @@
   font-weight: 500;
 }
 
+/* Keep decorative topbar text on one line so a squeezed flex item can't wrap
+   and spill below the fixed-height bar onto the map, and drop the
+   non-essential bits progressively at narrow-desktop widths (between the
+   760px mobile breakpoint and the width where the full bar fits). These are
+   a layer recap + source attribution, not controls. */
+.brand-tag,
+.topbar-meta .topbar-sources,
+.topbar-meta .topbar-status { white-space: nowrap; }
+@media (max-width: 1240px) { .brand-tag { display: none; } }
+@media (max-width: 1080px) { .topbar-meta .topbar-sources { display: none; } }
+@media (max-width: 940px)  { .topbar-meta .topbar-status { display: none; } }
+
 /* Region switcher chip — sits at the left of the topbar-meta cluster.
  * Same visual weight as the status pill so it doesn't dominate, but
  * always-visible to make multi-region discoverable. */
