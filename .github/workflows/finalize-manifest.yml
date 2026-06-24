@@ -1,0 +1,60 @@
+name: finalize-manifest
+
+# Auto-heal manifest<->PNG grid desyncs.
+#
+# The per-region refresh-*-data.yml workflows commit manifest.json + PNGs
+# straight to main, bypassing the PR gate. A partial / timed-out refresh can
+# leave a layer's manifest grid disagreeing with its actual PNG (e.g. SST
+# 234x206 manifest vs 586x511 MUR PNG) — which trips
+# test_manifest_grid_dims_match_png_dims and turns the dev gate red on the
+# NEXT PR, blocking every open PR until it's reconciled by hand. That happened
+# on 2026-06-24 (fixed in #254).
+#
+# This runs the reconcile every 2h (and on demand) and commits any fix, so
+# main self-heals instead of blocking PRs. It is a second workflow that
+# commits to main directly, alongside the refresh crons — kept narrowly
+# scoped to manifest grid metadata only (it can only set a grid to its PNG's
+# real dimensions).
+
+on:
+  schedule:
+    - cron: "20 */2 * * *" # every 2h at :20, offset from the refresh crons
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: finalize-manifest
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: "3.11"
+      - name: Install Pillow
+        run: pip install Pillow
+      - name: Reconcile manifest grids to PNGs
+        run: python -m pipeline.finalize_manifest --region all
+      - name: Commit any fixes
+        run: |
+          if [ -z "$(git status --porcelain -- public/data)" ]; then
+            echo "manifests already consistent — nothing to commit"
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/data
+          git commit -m "finalize: reconcile manifest grid dims to PNGs [skip ci]"
+          for i in 1 2 3 4 5; do
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then
+              exit 0
+            fi
+            sleep $((i * 3))
+          done
+          echo "push failed after retries"
+          exit 1
