@@ -27,15 +27,20 @@ export function moonPhase(when) {
   return p < 0 ? p + 1 : p;
 }
 
-/** Standard 8-band phase label. */
+/** 8-phase label. The 4 cardinal phases (new / quarters / full) are brief
+ *  events, so they get NARROW windows (~±1.8 days); the crescent + gibbous
+ *  bands fill the wide spans between. The old scheme gave each of the 8 an
+ *  equal 1/8 band, which labelled a 38%-lit waxing moon "First quarter" (it's
+ *  3 days short of the real quarter). This keeps the name consistent with the
+ *  illumination — that moon now reads "Waxing crescent". */
 export function moonPhaseName(phase) {
-  if (phase < 1 / 16 || phase >= 15 / 16) return "New moon";
-  if (phase < 3 / 16) return "Waxing crescent";
-  if (phase < 5 / 16) return "First quarter";
-  if (phase < 7 / 16) return "Waxing gibbous";
-  if (phase < 9 / 16) return "Full moon";
-  if (phase < 11 / 16) return "Waning gibbous";
-  if (phase < 13 / 16) return "Last quarter";
+  if (phase < 0.03 || phase >= 0.97) return "New moon";
+  if (phase < 0.22) return "Waxing crescent";
+  if (phase < 0.28) return "First quarter";
+  if (phase < 0.47) return "Waxing gibbous";
+  if (phase < 0.53) return "Full moon";
+  if (phase < 0.72) return "Waning gibbous";
+  if (phase < 0.78) return "Last quarter";
   return "Waning crescent";
 }
 
