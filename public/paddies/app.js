@@ -28,6 +28,11 @@ function toast(msg){var t=document.getElementById('toast');if(!t){t=document.cre
  t.textContent=msg;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(function(){t.style.display='none';},4000);}
 function renderReports(){if(!repLayer)return;repLayer.clearLayers();
  var nowMs=Date.now(),REPMAXAGE=7;  // days a catch stays on the map (matches server MAX_AGE_DAYS)
+ var TOUCH=!!(L.Browser&&L.Browser.touch);
+ var TAPR=TOUCH?18:12;  // invisible tap-target radius: report dots are tiny + hard to hit, esp. on phones
+ // One label per report: hover TOOLTIP on desktop, tap POPUP on touch. Binding
+ // both showed two identical boxes on phones (the tooltip toggles on tap too).
+ function bindRep(m,text){TOUCH?m.bindPopup(text):m.bindTooltip(text,{direction:'top',offset:[0,-4],className:'rep-tip'});return m;}
  REPORTS.forEach(function(r){
   // Age in days since the catch (r.date). Kelp paddies drift, so reports age
   // out: skip anything past the window (the server caps the feed too — this
@@ -47,21 +52,28 @@ function renderReports(){if(!repLayer)return;repLayer.clearLayers();
   st.fillOpacity=Math.round(st.fillOpacity*fade*100)/100;
   st.radius=Math.max(3,+(st.radius*Math.max(.6,1-ageD/7*.4)).toFixed(1));
   lab+=' · '+(ageD<1?'today':(ageD<2?'1d ago':Math.round(ageD)+'d ago'));
-  L.circleMarker([r.lat,r.lng],st).bindTooltip(lab,{direction:'top',offset:[0,-4],className:'rep-tip'}).addTo(repLayer);});
+  var rll=[r.lat,r.lng];
+  bindRep(L.circleMarker(rll,{radius:TAPR,stroke:false,fillOpacity:0}),lab).addTo(repLayer);
+  st.interactive=false;L.circleMarker(rll,st).addTo(repLayer);});
  _mine().forEach(function(r){var lab=(r.species&&r.species.toLowerCase()!=='paddy')?_cap(r.species):'Paddy';
-  L.circleMarker([r.lat,r.lng],{radius:6,weight:1.5,color:'#fbbf24',fillColor:'#f59e0b',fillOpacity:.45})
-   .bindTooltip(lab+' · pending review',{direction:'top',offset:[0,-4],className:'rep-tip'}).addTo(repLayer);});}
+  var mll=[r.lat,r.lng];
+  bindRep(L.circleMarker(mll,{radius:TAPR,stroke:false,fillOpacity:0}),lab+' · pending review').addTo(repLayer);
+  L.circleMarker(mll,{radius:6,weight:1.5,color:'#fbbf24',fillColor:'#f59e0b',fillOpacity:.45,interactive:false}).addTo(repLayer);});}
 function fetchReports(){fetch('/api/paddies/reports',{cache:'no-cache'}).then(function(r){return r.ok?r.json():null;}).then(function(j){
   if(!j||!j.reports)return;REPORTS=j.reports;var ap={};REPORTS.forEach(function(r){ap[r.id]=1;});
   _saveMine(_mine().filter(function(m){return !ap[m.id]&&(Date.now()-(m.ts||0))<6048e5;}));
   renderReports();}).catch(function(){});}
 function _reporter(){try{return JSON.parse(localStorage.getItem('sd:paddies:reporter')||'{}');}catch(e){return {};}}
-function logCatch(){if(!wpMarker){toast('Tap the map where you caught fish, then Log a catch.');return;}
- var ll=wpMarker.getLatLng();var box=document.getElementById('picker');
+function _parseCoord(s){s=(s||'').trim();if(!s)return NaN;var neg=/[swSW]/.test(s)||/^-/.test(s);var n=s.replace(/[^0-9.]+/g,' ').trim().split(' ').map(parseFloat).filter(function(x){return isFinite(x);});if(!n.length)return NaN;var d=n[0]+(n.length>1?n[1]/60:0)+(n.length>2?n[2]/3600:0);return neg?-d:d;}
+function logCatch(){
+ var ll=wpMarker?wpMarker.getLatLng():null;var box=document.getElementById('picker');
  if(!box){box=document.createElement('div');box.id='picker';box.className='picker';document.body.appendChild(box);}
  var who=_reporter();var v=function(s){return (s||'').replace(/"/g,'&quot;');};
  var opts=SPECIES.map(function(s){return '<option value="'+s+'">'+(s==='paddy'?'Paddy (no fish)':_cap(s))+'</option>';}).join('');
- box.innerHTML='<div class=ph>Log a catch</div><div class=pr>at <b>'+ll.lat.toFixed(3)+', '+ll.lng.toFixed(3)+'</b></div>'
+ box.innerHTML='<div class=ph>Log a catch</div>'
+  +'<label class=pl>GPS coordinates <span class=req>*</span></label>'
+  +'<div class=pcoord><input id=plat placeholder="lat 32.853" value="'+(ll?ll.lat.toFixed(5):'')+'"><input id=plng placeholder="lng -117.270" value="'+(ll?ll.lng.toFixed(5):'')+'"></div>'
+  +'<div class=pr>Tap the map to fill these, or type them in: decimal degrees, or deg&nbsp;min like 32 51.18.</div>'
   +'<label class=pl>Email <span class=req>*</span></label><input id=pemail type=email autocomplete=email placeholder="you@example.com" value="'+v(who.email)+'">'
   +'<label class=pl>Name</label><input id=pname maxlength=60 placeholder="optional" value="'+v(who.name)+'">'
   +'<label class=pl>Species</label><select id=spsel>'+opts+'</select>'
@@ -71,13 +83,18 @@ function logCatch(){if(!wpMarker){toast('Tap the map where you caught fish, then
  box.style.display='block';
  document.getElementById('pcan').onclick=function(){box.style.display='none';};
  document.getElementById('psub').onclick=function(){
+  var lat=_parseCoord(document.getElementById('plat').value),lng=_parseCoord(document.getElementById('plng').value);
+  if(!isFinite(lat)||!isFinite(lng)){toast('Enter your GPS coordinates (lat and lng).');return;}
+  if(lat<-90||lat>90||lng<-180||lng>180){toast('Those GPS coordinates look invalid.');return;}
+  var b=D.bounds;
+  if(b&&(lat<b[0][0]||lat>b[1][0]||lng<b[0][1]||lng>b[1][1])){toast('Outside the map area. SoCal longitude is negative, e.g. -117.27.');return;}
   var email=(document.getElementById('pemail').value||'').trim();
   if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){toast('Please enter a valid email.');return;}
   var name=(document.getElementById('pname').value||'').trim();
   var notes=(document.getElementById('pnotes').value||'').trim();
   try{localStorage.setItem('sd:paddies:reporter',JSON.stringify({email:email,name:name}));}catch(e){}
   box.style.display='none';
-  submitReport(ll,document.getElementById('spsel').value,email,name,notes);};}
+  submitReport({lat:lat,lng:lng},document.getElementById('spsel').value,email,name,notes);};}
 function submitReport(ll,species,email,name,notes){
  var body=JSON.stringify({lat:ll.lat,lng:ll.lng,species:species,date:_today(),deviceId:_dev(),email:email,name:name,notes:notes});
  fetch('/api/paddies/report',{method:'POST',headers:{'content-type':'application/json'},body:body})
