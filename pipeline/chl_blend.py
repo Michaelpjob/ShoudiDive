@@ -38,6 +38,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 import warnings
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
@@ -534,14 +535,29 @@ class _SourceResult:
     dates: list[date] = field(default_factory=list)         # parallel to frames
 
 
+# Wall-clock budget per source's age-walk. A source that stays ALIVE but
+# responds slowly (NOAA DINEOF ERDDAP can crawl) would otherwise walk its full
+# max_back at HTTP_TIMEOUT each and stack toward the 75-min job limit, killing
+# the whole refresh before the manifest is finalized — the http breaker only
+# catches transport-DEAD hosts, not slow-but-alive ones (2026-06-24/25 SST
+# outage: chl walked NOAA SCI 18 dates and timed the job out before finalize).
+WALK_BUDGET_S = 300.0
+
+
 def _walk_source(source: ChlSource, end: date, want: int) -> _SourceResult:
     """Walk back from `end` for up to source.max_back days, collecting up
     to `want` valid (non-all-NaN) frames. The first valid frame is the
     source's freshest; subsequent frames are used for 2d/3d nanmean
-    smoothing of the same source's contribution."""
+    smoothing of the same source's contribution. Bounded by WALK_BUDGET_S so a
+    single slow source can't consume the whole refresh's time budget."""
     res = _SourceResult(source=source)
+    walk_start = time.monotonic()
     for i in range(source.max_back):
         if len(res.frames) >= want:
+            break
+        if time.monotonic() - walk_start > WALK_BUDGET_S:
+            print(f"  {source.id}: {WALK_BUDGET_S:.0f}s walk budget spent at day -{i}; "
+                  f"moving on with {len(res.frames)} frame(s)", flush=True)
             break
         d = end - timedelta(days=i)
         try:
