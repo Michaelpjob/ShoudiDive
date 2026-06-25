@@ -49,11 +49,11 @@ function renderReports(){if(!repLayer)return;repLayer.clearLayers();
   st.radius=Math.max(3,+(st.radius*Math.max(.6,1-ageD/7*.4)).toFixed(1));
   lab+=' · '+(ageD<1?'today':(ageD<2?'1d ago':Math.round(ageD)+'d ago'));
   var rll=[r.lat,r.lng];
-  L.circleMarker(rll,{radius:TAPR,stroke:false,fillOpacity:0}).bindTooltip(lab,{direction:'top',offset:[0,-4],className:'rep-tip'}).addTo(repLayer);
+  L.circleMarker(rll,{radius:TAPR,stroke:false,fillOpacity:0}).bindTooltip(lab,{direction:'top',offset:[0,-4],className:'rep-tip'}).bindPopup(lab).addTo(repLayer);
   st.interactive=false;L.circleMarker(rll,st).addTo(repLayer);});
  _mine().forEach(function(r){var lab=(r.species&&r.species.toLowerCase()!=='paddy')?_cap(r.species):'Paddy';
   var mll=[r.lat,r.lng];
-  L.circleMarker(mll,{radius:TAPR,stroke:false,fillOpacity:0}).bindTooltip(lab+' · pending review',{direction:'top',offset:[0,-4],className:'rep-tip'}).addTo(repLayer);
+  L.circleMarker(mll,{radius:TAPR,stroke:false,fillOpacity:0}).bindTooltip(lab+' · pending review',{direction:'top',offset:[0,-4],className:'rep-tip'}).bindPopup(lab+' · pending review').addTo(repLayer);
   L.circleMarker(mll,{radius:6,weight:1.5,color:'#fbbf24',fillColor:'#f59e0b',fillOpacity:.45,interactive:false}).addTo(repLayer);});}
 function fetchReports(){fetch('/api/paddies/reports',{cache:'no-cache'}).then(function(r){return r.ok?r.json():null;}).then(function(j){
   if(!j||!j.reports)return;REPORTS=j.reports;var ap={};REPORTS.forEach(function(r){ap[r.id]=1;});
