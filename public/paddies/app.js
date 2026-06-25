@@ -28,7 +28,11 @@ function toast(msg){var t=document.getElementById('toast');if(!t){t=document.cre
  t.textContent=msg;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(function(){t.style.display='none';},4000);}
 function renderReports(){if(!repLayer)return;repLayer.clearLayers();
  var nowMs=Date.now(),REPMAXAGE=7;  // days a catch stays on the map (matches server MAX_AGE_DAYS)
- var TAPR=(L.Browser&&L.Browser.touch)?18:12;  // invisible tap-target radius: report dots are tiny + hard to hit, esp. on phones
+ var TOUCH=!!(L.Browser&&L.Browser.touch);
+ var TAPR=TOUCH?18:12;  // invisible tap-target radius: report dots are tiny + hard to hit, esp. on phones
+ // One label per report: hover TOOLTIP on desktop, tap POPUP on touch. Binding
+ // both showed two identical boxes on phones (the tooltip toggles on tap too).
+ function bindRep(m,text){TOUCH?m.bindPopup(text):m.bindTooltip(text,{direction:'top',offset:[0,-4],className:'rep-tip'});return m;}
  REPORTS.forEach(function(r){
   // Age in days since the catch (r.date). Kelp paddies drift, so reports age
   // out: skip anything past the window (the server caps the feed too — this
@@ -49,11 +53,11 @@ function renderReports(){if(!repLayer)return;repLayer.clearLayers();
   st.radius=Math.max(3,+(st.radius*Math.max(.6,1-ageD/7*.4)).toFixed(1));
   lab+=' · '+(ageD<1?'today':(ageD<2?'1d ago':Math.round(ageD)+'d ago'));
   var rll=[r.lat,r.lng];
-  L.circleMarker(rll,{radius:TAPR,stroke:false,fillOpacity:0}).bindTooltip(lab,{direction:'top',offset:[0,-4],className:'rep-tip'}).bindPopup(lab).addTo(repLayer);
+  bindRep(L.circleMarker(rll,{radius:TAPR,stroke:false,fillOpacity:0}),lab).addTo(repLayer);
   st.interactive=false;L.circleMarker(rll,st).addTo(repLayer);});
  _mine().forEach(function(r){var lab=(r.species&&r.species.toLowerCase()!=='paddy')?_cap(r.species):'Paddy';
   var mll=[r.lat,r.lng];
-  L.circleMarker(mll,{radius:TAPR,stroke:false,fillOpacity:0}).bindTooltip(lab+' · pending review',{direction:'top',offset:[0,-4],className:'rep-tip'}).bindPopup(lab+' · pending review').addTo(repLayer);
+  bindRep(L.circleMarker(mll,{radius:TAPR,stroke:false,fillOpacity:0}),lab+' · pending review').addTo(repLayer);
   L.circleMarker(mll,{radius:6,weight:1.5,color:'#fbbf24',fillColor:'#f59e0b',fillOpacity:.45,interactive:false}).addTo(repLayer);});}
 function fetchReports(){fetch('/api/paddies/reports',{cache:'no-cache'}).then(function(r){return r.ok?r.json():null;}).then(function(j){
   if(!j||!j.reports)return;REPORTS=j.reports;var ap={};REPORTS.forEach(function(r){ap[r.id]=1;});
