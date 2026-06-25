@@ -222,8 +222,15 @@ function boot(d){D=d;F=D.default_frame;LCH=D.default_launch;
  }).catch(function(){});
  coneLayer=L.layerGroup().addTo(map);
  hdrLayer=L.layerGroup().addTo(map);
- L.geoJSON(D.beds,{pointToLayer:function(f,ll){return L.circleMarker(ll,{radius:f.properties.island?5:3,
-  color:'#052e16',weight:1,fillColor:f.properties.island?'#16a34a':'#4d7c4d',fillOpacity:1}).bindTooltip(f.properties.bed);}}).addTo(map);
+ // Kelp source beds, sized by how much each is shedding right now (detach_now)
+ // so the actively-shedding forests read loudest. Shore (mainland) beds get a
+ // bright emerald + a floor size so the local shoreline kelp (Palos Verdes,
+ // La Jolla, Laguna) is actually visible, not a tiny grey dot.
+ L.geoJSON(D.beds,{pointToLayer:function(f,ll){var p=f.properties,sh=p.detach_now||0;
+  var r=(p.island?4:4.5)+Math.min(4,sh*7);
+  var lab=(p.island?'Island':'Shore')+' kelp bed · shedding '+(sh<0.2?'low':sh<0.4?'moderate':'high');
+  return L.circleMarker(ll,{radius:r,color:'#052e16',weight:1,
+   fillColor:p.island?'#16a34a':'#34d399',fillOpacity:.92}).bindTooltip(lab);}}).addTo(map);
  spotLayer=L.layerGroup().addTo(map);bankLayer=L.layerGroup().addTo(map);portLayer=L.layerGroup().addTo(map);
  drawReference();
  L.control.layers(null,{'Dive spots':spotLayer,'Harbors / ports':portLayer,'Offshore banks':bankLayer},{position:'bottomright',collapsed:true}).addTo(map);
