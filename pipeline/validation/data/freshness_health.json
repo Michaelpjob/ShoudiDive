@@ -1,5 +1,5 @@
 {
-  "computed_at": "2026-06-24T09:54:23Z",
+  "computed_at": "2026-06-25T09:44:17Z",
   "manifest": "public/data/manifest.json",
   "layers_checked": [
     "sst",
@@ -12,14 +12,21 @@
     "precip"
   ],
   "summary": {
-    "total_findings": 1,
+    "total_findings": 2,
     "healthy": false
   },
   "findings": [
     {
       "severity": "high",
+      "code": "summary_days_short",
+      "title": "Layer sst7d has too few days",
+      "layer": "sst7d",
+      "detail": "got=1 expected>=3"
+    },
+    {
+      "severity": "high",
       "code": "layer_date_stale",
-      "title": "Layer wave is 30.9d old",
+      "title": "Layer wave is 31.9d old",
       "layer": "wave",
       "detail": "threshold=2d window=now"
     }
