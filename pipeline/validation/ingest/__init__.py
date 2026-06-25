@@ -144,9 +144,28 @@ def run_all() -> list[dict]:
             })
             print(f"  {sid}: FAILED — {exc.__class__.__name__}: {exc}")
 
-    # Dedup: load existing obs_ids, drop any duplicates from this run.
+    # Dedup, two layers:
+    #   1. obs_id ({source}-{date}-{spot}-{seq}) — same source, same UTC day.
+    #   2. exact content (every field but obs_id + timestamp) for NON-sensor
+    #      sources — a blog/forum that re-publishes an unchanged post (or a
+    #      scraper that re-stamps it with a fresh date) is a duplicate even
+    #      though its obs_id differs. Sensor feeds (buoys, turbidity) report the
+    #      same value on different days legitimately, so they are NEVER
+    #      content-deduped.
     existing_ids = _existing_obs_ids()
-    fresh = [o for o in new_obs if o.get("obs_id") and o["obs_id"] not in existing_ids]
+    existing_content = _existing_content_keys()
+    fresh: list[dict] = []
+    seen_content: set[str] = set()
+    for o in new_obs:
+        oid = o.get("obs_id")
+        if not oid or oid in existing_ids:
+            continue
+        if _is_resample_source(o.get("source")):
+            ck = _content_key(o)
+            if ck in existing_content or ck in seen_content:
+                continue
+            seen_content.add(ck)
+        fresh.append(o)
 
     # Append in append-mode so we never rewrite the whole table.
     with OBS_PATH.open("a", encoding="utf-8") as f:
@@ -185,6 +204,45 @@ def _existing_obs_ids() -> set[str]:
             obs_id = o.get("obs_id")
             if obs_id:
                 out.add(obs_id)
+    return out
+
+
+# --- exact-content dedup for re-scraped prose/forum posts ----------------
+# obs_id dedup misses the case where a scraper re-stamps an UNCHANGED post with
+# a fresh date each run (one stale blog post became 64 "daily" observations in
+# 2026-06). Blog/forum/prose sources re-scrape a post, so byte-identical content
+# is a duplicate. Sensor feeds (cdip/ndbc buoys, cencoos turbidity) re-READ the
+# same value on different days legitimately, so they are excluded.
+_SENSOR_PREFIXES = ("cdip", "ndbc", "cencoos")
+
+
+def _is_resample_source(source) -> bool:
+    return not str(source or "").startswith(_SENSOR_PREFIXES)
+
+
+def _content_key(o: dict) -> str:
+    """Everything that defines the observation EXCEPT when it was scraped."""
+    return json.dumps(
+        {k: v for k, v in o.items() if k not in ("obs_id", "timestamp_utc")},
+        sort_keys=True,
+    )
+
+
+def _existing_content_keys() -> set[str]:
+    if not OBS_PATH.exists():
+        return set()
+    out: set[str] = set()
+    with OBS_PATH.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                o = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if _is_resample_source(o.get("source")):
+                out.add(_content_key(o))
     return out
 
 
