@@ -17,7 +17,7 @@ on:
   schedule:
     # Hourly at :15 — clear of the :00 NOAA refresh cron and the
     # :30 wind refresh.
-    - cron: "15 * * * *"
+    - cron: "15 */6 * * *"
   workflow_dispatch:
 
 jobs:
