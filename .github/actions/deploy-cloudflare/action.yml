@@ -62,6 +62,12 @@ runs:
       # waits 20 / 40 / 60 s. Only fails the job if all three attempts
       # error out — a real Cloudflare outage will still surface, but
       # routine flakiness is invisible.
+      # inputs passed via env, never interpolated directly into the shell
+      # (Semgrep run-shell-injection hardening). Values are unchanged.
+      env:
+        WRANGLER_VERSION: ${{ inputs.wrangler-version }}
+        PROJECT_NAME: ${{ inputs.project-name }}
+        BRANCH: ${{ inputs.branch }}
       run: |
         # SC2155: declare + export on separate lines so the
         # substitution's exit status isn't masked by `export`.
@@ -72,9 +78,9 @@ runs:
         export CLOUDFLARE_API_TOKEN
         for attempt in 1 2 3; do
           echo "::group::wrangler pages deploy attempt ${attempt}/3"
-          if npx wrangler@${{ inputs.wrangler-version }} pages deploy dist \
-              --project-name=${{ inputs.project-name }} \
-              --branch=${{ inputs.branch }} \
+          if npx wrangler@"${WRANGLER_VERSION}" pages deploy dist \
+              --project-name="${PROJECT_NAME}" \
+              --branch="${BRANCH}" \
               --commit-dirty=true; then
             echo "::endgroup::"
             echo "Deploy succeeded on attempt ${attempt}."
