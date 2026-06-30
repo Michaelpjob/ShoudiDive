@@ -50,14 +50,47 @@ CURRENT_DIR_TOWARD = True
 LAND_MASK_STEP_DEG = 0.01
 
 # --- Detachment: amount of kelp entering the system -----------------------
-# detach = BASE_SHED + K_WAVE*relu(Hs-HS0)^HS_POW + K_WARM*relu(SST-T0)
+# Two mechanistically-distinct drivers, recalibrated 2026-06-30 against the
+# SCB kelp-temperature literature (5-strand deep-research pass):
+#   detach = BASE_SHED
+#          + K_WAVE * relu(Hs - HS0)^HS_POW            # SWELL: instantaneous
+#          + K_WARM * dose^WARM_POW                     # WARM: cumulative dose
+#
+# WHY the asymmetry: storms rip kelp loose ON the day (instantaneous), but
+# warm-water canopy loss is CUMULATIVE over ~weeks (N-reserve buffer ~2-3 wk
+# Gerard 1982; frond turnover 1-3 mo Reed/Rodriguez; staggered MHW minima
+# Cavanaugh 2019). `dose` = trailing-window MEAN of max(0, SST - T0_C) in degC
+# (a degree-week-style thermal dose), computed by forcing.ThermalHistory.
 BASE_SHED = 0.10
-HS0_M = 1.5
+# Swell term. Threshold raised 1.5 -> 2.5 m: SCB canopy loss turns sharply
+# negative only above Hs ~2.5 m (Bell et al. 2015, JBI; destructive breaking
+# ~3 m, Seymour et al. 1989) -- SCB median winter Hs is only ~1.23 m, so 1.5 m
+# was over-shedding on routine swells. Quadratic kept (mortality 2-9% benign ->
+# 66-94% in storms, Seymour 1989).
+HS0_M = 2.5
 HS_POW = 2.0
 K_WAVE = 1.00
-T0_C = 19.0
-K_WARM = 0.30
-ABUND_SCALE = 1.20
+# Warm term. Threshold 20 degC = field-effective stress onset (Cavanaugh 2019;
+# nitrate ~0 above ~14.5 degC so SST is a defensible nutrient proxy, Snyder 2020
+# / Konotchick 2012 NO3=-5.8T+81.7). Convex (POW=2) to match the observed
+# threshold-then-cliff: gentle 20-22 degC, steep toward the ~23-24 degC near-
+# total-loss cliff. K_WARM gain set ~1.3:1 wave:warm SCB-wide (Bell 2015:
+# waves 37% vs nitrate 29% of SCB sites) -- but per-bed SST sampling lets warmth
+# dominate at the sheltered island beds (Catalina/Clemente), which is correct.
+# Gain to be finalized by the catch-report skill sweep (model_sweep.py).
+T0_C = 20.0
+WARM_POW = 2.0
+K_WARM = 0.13
+WARM_DOSE_WINDOW_DAYS = 42   # ~6-week trailing thermal-dose window
+# ABUND_SCALE recentred 1.20 -> 0.50 for the recalibrated (lower-magnitude,
+# more peaked) terms so the band still spans: a calm/mild week reads "Low"
+# (idx ~18), a storm/warm-spell climbs to Moderate/High, a sustained 24 degC
+# MHW dose reaches Extreme. index = 100*(1-exp(-mean_detach/ABUND_SCALE)).
+# NOTE/limitation: warm water ALSO shrinks the standing canopy, but the kelp
+# SOURCE here is a fixed Landsat snapshot (kelp_source.py) -- so in a long warm
+# spell the model can over-credit a source that is actually dying back. A
+# dynamic canopy-decay feedback is a separate follow-up.
+ABUND_SCALE = 0.50
 
 # --- Sinking: epibiont-ballast model --------------------------------------
 # Mechanism (Graiff/Rothausler 2016, "Epibiont load causes sinking of viable

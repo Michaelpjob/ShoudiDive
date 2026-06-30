@@ -277,3 +277,76 @@ def make_forcing(raw, scenario="live", hfr=None):
 
 def build_forcing(scenario="live"):
     return make_forcing(fetch_raw(), scenario)
+
+
+# ---------------------------------------------------------------------------
+# Trailing thermal history -> cumulative warm-shed DOSE (detachment warm term)
+# ---------------------------------------------------------------------------
+# Warm-water canopy loss is cumulative over ~weeks, not same-day (see config
+# detachment notes). We need SST further back than the 21-day drift window: the
+# oldest release cohort (age ~21 d) needs its prior ~6-week dose, i.e. SST to
+# ~63 d ago. This is an SST-ONLY, decoupled fetch so the main forcing stays lean.
+THERMAL_DAYS_BACK = 70
+
+
+class ThermalHistory:
+    """Daily-mean SST on the coarse grid, with a trailing-window thermal-dose
+    sampler. `dose(...)` returns the MEAN of max(0, SST - thresh) over the
+    `window_days` ending `age_days` before now (degC) -- a degree-week-style
+    dose that rewards SUSTAINED warmth, not a 2-day blip."""
+
+    def __init__(self, lats, lngs, sst_daily, step):
+        self.lats, self.lngs, self.sst_daily, self.step = lats, lngs, sst_daily, step
+        self.ndays = sst_daily.shape[0]   # sst_daily[0]=today, [d]=d days ago
+
+    def dose(self, lat, lng, thresh, age_days, window_days):
+        d0 = int(round(age_days))
+        d1 = min(self.ndays, d0 + int(round(window_days)))
+        if d0 >= self.ndays:
+            return 0.0
+        j0, i0, tj, ti_ = _bil_weights(self.lats, self.lngs, lat, lng, self.step)
+        ws = ((1 - tj) * (1 - ti_), (1 - tj) * ti_, tj * (1 - ti_), tj * ti_)
+        ij = ((j0, i0), (j0, i0 + 1), (j0 + 1, i0), (j0 + 1, i0 + 1))
+        excess = []
+        for d in range(d0, d1):
+            num = den = 0.0
+            for (jj, ii), w in zip(ij, ws):
+                v = self.sst_daily[d, jj, ii]
+                if v == v:
+                    num += v * w
+                    den += w
+            if den > 0:
+                excess.append(max(0.0, num / den - thresh))
+        return float(np.mean(excess)) if excess else 0.0
+
+
+def fetch_thermal_history(days_back=THERMAL_DAYS_BACK):
+    """SST-only coarse-grid daily history for the cumulative warm-shed dose.
+    Returns a ThermalHistory, or None on failure (detachment then falls back to
+    the instantaneous warm proxy so a fetch outage can't break the run)."""
+    try:
+        print(f"fetching {days_back}d SST history (cumulative warm-shed dose)...")
+        lats, lngs, hours, t0, cubes = _fetch_field(
+            config.MARINE_URL, ["sea_surface_temperature"],
+            extra={"past_days": days_back, "forecast_days": 1})
+    except Exception as e:
+        print(f"  thermal-history fetch failed ({e}); warm term -> instantaneous fallback")
+        return None
+    sst = cubes["sea_surface_temperature"]
+    now = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
+    now_h = (now - t0).total_seconds() / 3600.0
+    days_ago = np.floor((now_h - hours) / 24.0 + 1e-9).astype(int)   # 0=today, +into past
+    ndays = days_back + 1
+    nlat, nlng = len(lats), len(lngs)
+    sst_daily = np.full((ndays, nlat, nlng), np.nan)
+    with np.errstate(invalid="ignore"):
+        for d in range(ndays):
+            sel = days_ago == d
+            if sel.any():
+                import warnings
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", category=RuntimeWarning)
+                    sst_daily[d] = np.nanmean(sst[sel], axis=0)
+    cov = float(np.isfinite(sst_daily).mean())
+    print(f"  SST history: {ndays} daily layers, {cov*100:.0f}% filled")
+    return ThermalHistory(lats, lngs, sst_daily, config.GRID_STEP_DEG)

@@ -25,11 +25,16 @@ import numpy as np
 import config
 
 
-def detach_value(hs_max, sst_mean):
+def detach_value(hs_max, warm_dose):
+    """detach = BASE + K_WAVE*relu(Hs-HS0)^HS_POW + K_WARM*dose^WARM_POW.
+    `warm_dose` is already the trailing-window MEAN of max(0, SST-T0) in degC
+    (cumulative thermal dose); with no SST history it's the instantaneous
+    max(0, SST-T0) fallback. Both are non-negative excess-degrees, so the same
+    convex warm term applies."""
     hs = 0.0 if (hs_max is None or hs_max != hs_max) else hs_max
-    sst = None if (sst_mean is None or sst_mean != sst_mean) else sst_mean
     wave = config.K_WAVE * max(0.0, hs - config.HS0_M) ** config.HS_POW
-    warm = 0.0 if sst is None else config.K_WARM * max(0.0, sst - config.T0_C)
+    dose = 0.0 if (warm_dose is None or warm_dose != warm_dose) else max(0.0, warm_dose)
+    warm = config.K_WARM * dose ** config.WARM_POW
     return config.BASE_SHED + wave + warm
 
 
@@ -74,9 +79,13 @@ def _why(band, dominant, peak_hs, peak_sst):
             f"firing beds.")
 
 
-def compute(forcing, beds, now_h, ages):
+def compute(forcing, beds, now_h, ages, thermal=None):
+    """`thermal` = a forcing.ThermalHistory for the cumulative warm-shed dose.
+    If None (e.g. the SST-history fetch failed, or in the sweep harness), the
+    warm term degrades to the instantaneous max(0, SST-T0) proxy."""
     per_bed = {}
     peak_hs = peak_sst = float("nan")
+    peak_warm_dose = 0.0
     age_hs = {a: [] for a in ages}      # for the shedding-event timeline
     age_w = {a: [] for a in ages}
     for bed in beds:
@@ -84,8 +93,14 @@ def compute(forcing, beds, now_h, ages):
         wmap = {}
         for age in ages:
             hs_max, sst_mean = _bed_day(forcing, blng, blat, now_h, age)
-            wmap[age] = detach_value(hs_max, sst_mean)
+            if thermal is not None:
+                warm_dose = thermal.dose(blat, blng, config.T0_C, age,
+                                         config.WARM_DOSE_WINDOW_DAYS)
+            else:
+                warm_dose = max(0.0, sst_mean - config.T0_C) if sst_mean == sst_mean else 0.0
+            wmap[age] = detach_value(hs_max, warm_dose)
             age_w[age].append(wmap[age])
+            peak_warm_dose = max(peak_warm_dose, warm_dose)
             if hs_max == hs_max:
                 age_hs[age].append(hs_max)
                 peak_hs = hs_max if peak_hs != peak_hs else max(peak_hs, hs_max)
@@ -105,8 +120,7 @@ def compute(forcing, beds, now_h, ages):
 
     wave_term = (config.K_WAVE * max(0.0, peak_hs - config.HS0_M) ** config.HS_POW
                  if peak_hs == peak_hs else 0.0)
-    warm_term = (config.K_WARM * max(0.0, peak_sst - config.T0_C)
-                 if peak_sst == peak_sst else 0.0)
+    warm_term = config.K_WARM * peak_warm_dose ** config.WARM_POW
     dominant = "swell" if wave_term >= warm_term else "warm water"
     band = _band(index)
     ph = round(peak_hs, 2) if peak_hs == peak_hs else None
