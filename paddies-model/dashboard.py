@@ -98,6 +98,10 @@ def build():
         "hfr_coverage": round(float(hfr["coverage"]), 3) if hfr is not None else None,
         "model_git_sha": _model_git_sha(),
         "report_count": len(reports),
+        # Fraction of the bbox the land mask covers. 0.0 means land.geojson
+        # failed to load -> no water-clipping + no beaching (green renders on
+        # land). build_site.py fails loud on this when PADDIES_REQUIRE_REAL_KELP.
+        "landmask_cov": round(float(landmask.coverage), 4),
     }
     frames, overview_items, beds_fc = [], [], None
     for off in config.TIMELINE_OFFSETS_DAYS:
