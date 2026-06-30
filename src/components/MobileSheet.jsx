@@ -27,6 +27,8 @@ import {
   getCurrentSpeed,
   getCurrentUV,
   getVizFt,
+  getVizP10Ft,
+  getVizP90Ft,
   getColumnAt,
   getColumnSpot,
   getSwell5dStats,
@@ -100,7 +102,11 @@ function valueAt(layer, lng, lat, composite, units) {
   }
   if (layer === "viz") {
     const ft = getVizFt(lng, lat, composite);
-    return Number.isFinite(ft) ? `~${Math.round(ft)} ft` : "—";
+    if (!Number.isFinite(ft)) return "—";
+    const lo = getVizP10Ft(lng, lat, composite), hi = getVizP90Ft(lng, lat, composite);
+    return (Number.isFinite(lo) && Number.isFinite(hi) && hi - lo >= 1)
+      ? `~${Math.round(ft)} ft (${Math.round(lo)}–${Math.round(hi)})`
+      : `~${Math.round(ft)} ft`;
   }
   return "—";
 }

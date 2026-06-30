@@ -342,6 +342,16 @@ export function getVizFt(lng, lat, composite = 1) {
   return bilinear(state.layers.viz?.[slotKey("viz", composite)], lng, lat);
 }
 
+// p10/p90 of the predicted-visibility band (turbid / clear ends). NaN when the
+// band isn't loaded (older manifests, or a layer that didn't publish it), so
+// callers fall back to the median alone.
+export function getVizP10Ft(lng, lat, composite = 1) {
+  return bilinear(state.layers.viz?.[slotKey("viz", composite)]?.bandP10, lng, lat);
+}
+export function getVizP90Ft(lng, lat, composite = 1) {
+  return bilinear(state.layers.viz?.[slotKey("viz", composite)]?.bandP90, lng, lat);
+}
+
 const FT_PER_M = 3.28084;
 
 // Water-column profile at a point (PRD water-column V2 tap-to-slice).

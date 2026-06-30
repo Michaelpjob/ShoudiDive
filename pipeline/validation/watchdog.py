@@ -61,11 +61,16 @@ CORR_LOW                = 0.30  # pearson r < this → R3 fires
 MIN_N_BIAS              = 30    # min obs/zone for R1 + R2
 MIN_N_CORR              = 50    # min obs/zone for R3 (correlation needs more)
 
-# Data-flow expectations. With CDIP × 6 + NDBC × 6 + Just Get Wet × ~3
-# + DiveViz × ~1 = ~16 obs/cron × 24 crons = ~384/day, but dedup and
-# weather knock that down. Floor at 50/day = anything below means
-# multiple scrapers are silently broken.
-EXPECTED_DAILY_OBS_FLOOR = 50
+# Data-flow expectations. The clarity sources are intrinsically sparse:
+# buoys don't measure clarity, and the dive-shop / blog / forum / Reddit
+# scrapers post only a few reports a day each. After dedup the REAL combined
+# yield is ~20-30 new obs/day (verified against ingest_health.json), so the
+# previous floor of 50 fired "scrapers may be broken" every day on perfectly
+# healthy ingestion. Floor at 10 = below this means a genuine collapse (most
+# sources silent at once), not the normal sparse cadence. The low-volume
+# ceiling itself is a real constraint, but it's addressed by backfill + adding
+# sources, not by this data-flow alarm.
+EXPECTED_DAILY_OBS_FLOOR = 10
 
 # Sources we expect to ALWAYS be contributing. CDIP buoys are the most
 # reliable so a 24h gap from any of them is real signal that something

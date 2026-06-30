@@ -180,10 +180,32 @@ def score_all_observations() -> list[dict]:
         })
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    # Accumulate residuals across runs (was overwrite). The archive is
+    # ephemeral/same-day, so this committed file is the ONLY longitudinal
+    # record — and a residual history is what lets sigma be fit from coverage
+    # instead of assumed (the validation loop's keystone). Dedup by obs_id,
+    # keeping the most recently scored row so a re-score with new coefficients
+    # supersedes the old one (filter by coeff_hash downstream when fitting).
+    accumulated: dict[str, dict] = {}
+    if RESIDUALS_PATH.exists():
+        for line in RESIDUALS_PATH.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            oid = row.get("obs_id")
+            if oid is not None:
+                accumulated[oid] = row
+    for r in residuals:
+        accumulated[r["obs_id"]] = r
+    merged = sorted(accumulated.values(), key=lambda r: r.get("scored_at") or "")
     with RESIDUALS_PATH.open("w", encoding="utf-8") as f:
-        for r in residuals:
+        for r in merged:
             f.write(json.dumps(r) + "\n")
-    print(f"score: wrote {len(residuals)} residuals to {RESIDUALS_PATH}")
+    print(f"score: wrote {len(residuals)} new + {len(merged)} total residuals to {RESIDUALS_PATH}")
     return residuals
 
 
