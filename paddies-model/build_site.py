@@ -15,6 +15,7 @@ import os
 import sys
 import time
 
+import beds
 import dashboard
 import reference
 import sitegen
@@ -36,6 +37,18 @@ def main():
     target = sys.argv[1] if len(sys.argv) > 1 else _default_target()
     target = os.path.abspath(target)
     data, _overview, _zones = dashboard.build()
+    # Guard the foundation: the model MUST seed from the real Landsat canopy.
+    # beds.py silently drops to coarse hand-placed beds (mostly mainland points)
+    # if the canopy extract can't be read — which sheds paddies from the coast
+    # and ships "kelp on land" data with no red check. Fail loud in CI
+    # (PADDIES_REQUIRE_REAL_KELP) rather than committing the degraded fallback.
+    print(f"  kelp source: {beds.KELP_SOURCE} ({len(beds.SCB_BEDS)} seed cells)")
+    if beds.KELP_SOURCE.startswith("hand-fallback"):
+        msg = (f"kelp seeding fell back to hand beds ({beds.KELP_SOURCE}); "
+               "bundle paddies-model/data/landsat_kelp_ca.nc")
+        if os.environ.get("PADDIES_REQUIRE_REAL_KELP"):
+            raise SystemExit(f"FATAL: {msg}")
+        print(f"  WARNING: {msg}")
     # Bake the static reference overlays (dive spots / banks / harbors) into the
     # bundle. repo_root = the sd-kelp-paddies root holding public/data/spots.
     reference.apply(data, os.path.dirname(os.path.dirname(target)))
