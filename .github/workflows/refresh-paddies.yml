@@ -49,6 +49,8 @@ jobs:
         # ~5 min on a healthy day. NOT continue-on-error: a hard failure (e.g.
         # HFRNet down) should fail the run rather than commit a stale snapshot.
         timeout-minutes: 15
+        env:
+          PADDIES_LOCAL_DATA: ${{ github.workspace }}/public
         run: python paddies-model/build_site.py "public/paddies"
 
       - name: Sentinel — data.json must be today's build

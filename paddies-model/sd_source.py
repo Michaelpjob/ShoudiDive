@@ -20,6 +20,7 @@ import datetime as dt
 import io
 import json
 import math
+import os
 import warnings
 
 import numpy as np
@@ -32,7 +33,18 @@ from forcing import Forcing, grid_axes
 BASE = "https://shouldidive.com"
 
 
+_LOCAL = os.environ.get("PADDIES_LOCAL_DATA", "").strip()
+
+
 def _get(path):
+    # Prefer the local published-data checkout when PADDIES_LOCAL_DATA is set
+    # so the CI runner does not fetch shouldidive.com (Cloudflare blocks the
+    # datacenter IP). Same fresh data; HTTP stays the fallback for local dev.
+    if _LOCAL:
+        lp = os.path.join(_LOCAL, path.lstrip("/"))
+        if os.path.exists(lp):
+            with open(lp, "rb") as f:
+                return f.read()
     r = requests.get(BASE + path, timeout=60)
     r.raise_for_status()
     return r.content
