@@ -1,0 +1,94 @@
+name: Semgrep
+# Static-analysis security scan — the free, private-repo-compatible
+# replacement for the old codeql.yml.
+#
+# Why this exists (and why it isn't CodeQL):
+# CodeQL is free ONLY on public repositories. On a PRIVATE repo,
+# uploading code-scanning results requires GitHub Advanced Security,
+# which cannot be enabled on a repo owned by a personal account.
+# ShoudiDive is private + personal-account-owned, so codeql.yml ran the
+# full scan on every commit and then died at the upload step
+# ("Code scanning is not enabled for this repository") — 0 of 100 runs
+# ever succeeded. It was pure red noise + wasted Actions minutes.
+#
+# Semgrep OSS needs no GitHub Advanced Security and no account/token:
+# it runs the analysis locally in the job and FAILS THE JOB on findings
+# (--error), so security regressions surface as a red check on the PR
+# and in the job log instead of GitHub's Security tab. It catches the
+# same class the 2026-05-13 hardening pass + codeql.yml targeted:
+# XSS via dangerouslySetInnerHTML (p/react), eval / injection
+# (p/default), and hardcoded secrets (p/secrets), across JS + Python.
+#
+# Advisory, NOT a required check — same posture codeql.yml had (it was
+# never in scripts/setup-branch-protection.sh). It runs on every PR for
+# visibility but does not gate merge. To promote it to a merge-blocking
+# gate once the false-positive rate is understood: add "semgrep" to
+# REQUIRED_CHECKS in scripts/setup-branch-protection.sh and re-run it.
+on:
+  push:
+    branches: [main, dev]
+    # Bot data refreshes (refresh-*-data.yml committing PNGs/manifests
+    # to main, the main->dev syncs) only touch public/data/** — they
+    # carry no code to scan, so skip them. This is what kept the old
+    # CodeQL workflow burning a full scan on every hourly data push.
+    # A push is skipped only when EVERY changed file matches; any code
+    # change still runs the scan.
+    paths-ignore:
+      - "public/data/**"
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly re-scan — Semgrep's registry rulesets gain new rules over
+    # time; this re-checks unchanged code against the latest packs.
+    # Monday 10:30 UTC, matching the cadence codeql.yml used.
+    - cron: "30 10 * * 1"
+# Least-privilege: read-only. No security-events:write needed because
+# we deliberately do NOT upload to GitHub code scanning (that path is
+# the one that requires Advanced Security on private repos).
+permissions:
+  contents: read
+# Cancel an in-flight scan when a newer commit lands on the same ref.
+concurrency:
+  group: semgrep-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  semgrep:
+    name: semgrep
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: "3.11"
+      - name: Install Semgrep
+        # Bounded range rather than an exact == pin: the exact latest
+        # patch can't be verified from the Windows dev host, and a wrong
+        # exact pin would 404 on install. Any 1.9x release works — the
+        # rules themselves are fetched fresh from the registry at scan
+        # time regardless of CLI version. Tighten to an exact pin once a
+        # known-good version is confirmed locally.
+        run: pip install "semgrep>=1.90,<2"
+      - name: Scan
+        # --error      -> exit non-zero (red check) when a rule fires.
+        # --oss-only   -> never attempt the paid Pro engine / login.
+        # --metrics=off-> no telemetry, matching the repo's no-tracker
+        #                 privacy stance.
+        # Rulesets (fetched from the public registry, no token needed):
+        #   p/default -> curated, low-false-positive security baseline
+        #                across JS/TS + Python (eval, injection, etc.)
+        #   p/secrets -> hardcoded credentials (complements the existing
+        #                grep-based secrets-scan job in dev-checks.yml)
+        #   p/react   -> React-specific, incl. dangerouslySetInnerHTML
+        # Add p/security-audit or p/owasp-top-ten here to broaden later.
+        run: |
+          semgrep scan \
+            --config p/default \
+            --config p/secrets \
+            --config p/react \
+            --exclude public/data \
+            --error \
+            --oss-only \
+            --metrics=off
