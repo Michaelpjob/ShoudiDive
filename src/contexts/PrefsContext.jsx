@@ -24,8 +24,8 @@ const OVERLAY_DEFAULTS_MIGRATION_KEY = "ca-coast-conditions:prefs:migrations:ove
 // waterColumnOn gates the depth-resolved visibility readout (PRD
 // water-column D2) — ON by default with a BETA badge, matching how
 // Current/Vis ship as visible-with-BETA-tag; the settings toggle is
-// the off-switch. kelpOn is dev's kelp-overlay preview pref.
-const DEFAULT_PREFS = { theme: "light", opacity: 0.62, units: "F", mpaOn: true, bathyOn: true, kelpOn: true, waterColumnOn: true, closuresOn: true };
+// the off-switch.
+const DEFAULT_PREFS = { theme: "light", opacity: 0.62, units: "F", mpaOn: true, bathyOn: true, waterColumnOn: true, closuresOn: true };
 
 function loadPrefs() {
   try {

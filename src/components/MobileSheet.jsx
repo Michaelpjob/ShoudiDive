@@ -129,11 +129,7 @@ export default function MobileShell({
   dataState,
   setMpaOn,
   setBathyOn,
-  setKelpOn,
   setClosuresOn,
-  kelpAvailable,
-  bundledSpots,
-  openSpotDetail,
   activeSpot, setActiveSpot,
   timeOpts,
   compositeText,
@@ -147,7 +143,7 @@ export default function MobileShell({
   // wraps them with a popup-clearing side effect before passing them in
   // (see updateMpaOn/updateBathyOn there).
   const { prefs } = usePrefs();
-  const { units, mpaOn, bathyOn, kelpOn, closuresOn } = prefs;
+  const { units, mpaOn, bathyOn, closuresOn } = prefs;
   // wind + swell + current use slot keys; sst uses history/forecast slots
   // when loaded; chl/viz use integer composites.
   //
@@ -265,19 +261,6 @@ export default function MobileShell({
               >
                 Bottom Detail
               </button>
-              {kelpAvailable && (
-                <button
-                  type="button"
-                  className={"mpa-pill" + (kelpOn ? " active" : "")}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setKelpOn(!kelpOn);
-                  }}
-                  aria-pressed={kelpOn}
-                >
-                  Kelp Beds
-                </button>
-              )}
               <button
                 type="button"
                 className={"mpa-pill" + (closuresOn ? " active" : "")}
@@ -388,19 +371,6 @@ export default function MobileShell({
         >
           Bottom
         </button>
-        {kelpAvailable && (
-          <button
-            type="button"
-            className={"mpa-pill" + (kelpOn ? " active" : "")}
-            onClick={(e) => {
-              e.stopPropagation();
-              setKelpOn(!kelpOn);
-            }}
-            aria-pressed={kelpOn}
-          >
-            Kelp
-          </button>
-        )}
         <button
           type="button"
           className={"mpa-pill" + (closuresOn ? " active" : "")}

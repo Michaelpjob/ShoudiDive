@@ -38,6 +38,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 import warnings
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
@@ -152,6 +153,11 @@ class ChlSource:
     max_back: int
     fetcher: Callable[[date], Optional[np.ndarray]]
     requires_earthdata: bool = False
+    # A last-resort, lower-quality source (e.g. raw single-sensor vs the
+    # gap-filled primaries). When the blend ends up dominated by a fallback
+    # source, the manifest flags source_fallback so the UI can say "live but
+    # on a backup source" instead of implying primary-quality data.
+    fallback: bool = False
     # Needs Copernicus Marine creds (COPERNICUSMARINE_SERVICE_USERNAME/PASSWORD).
     # Skipped upstream when unset, so the source lies dormant until the secrets
     # exist — then it activates with no further code change.
@@ -170,11 +176,17 @@ _NASA_FILENAME_RE = re.compile(
 def _nasa_search_files(session: requests.Session, sensor: str, d: date) -> list[str]:
     """Find the L3m daily 4km NRT chl file(s) for this sensor + date.
     Returns 0 or 1 filenames (the search matches a single date)."""
+    # OB.DAAC migrated its file_search API (2026): the old `subType=1` +
+    # loose-wildcard `search` now 422s, silently killing all 3 NASA chl
+    # primaries (verified DEAD via the feed-health probe; chl fell back to a
+    # single NOAA host). The current contract wants `dtype=L3m` + a search
+    # glob matching the dotted filename. Bare filenames are still returned
+    # (no addurl) so _NASA_FILENAME_RE parses them unchanged.
     params = {
-        "subType": 1,
-        "search": f"{sensor}*L3m*CHL*chlor_a*4km*NRT*",
+        "search": f"{sensor}*L3m.DAY.CHL.chlor_a.4km.NRT*",
         "sdate": d.isoformat(),
         "edate": d.isoformat(),
+        "dtype": "L3m",
         "results_as_file": 1,
     }
     # Stage 6a (2026-05-24): http_get adds retries on the EARTHDATA
@@ -298,9 +310,12 @@ def _make_nasa_fetcher(sensor: str):
 
 # ---- NOAA ERDDAP fetcher (covers DINEOF NRT + DINEOF SCI 2km) -----------
 
-def _make_noaa_erddap_fetcher(host: str, dataset: str, has_altitude: bool = True):
-    """Fetcher closure for any NOAA CoastWatch ERDDAP griddap dataset that
-    serves chlor_a in (time, [altitude,] lat, lng) shape."""
+def _make_noaa_erddap_fetcher(host: str, dataset: str, has_altitude: bool = True,
+                              variable: str = "chlor_a"):
+    """Fetcher closure for any ERDDAP griddap dataset that serves a chl
+    variable in (time, [altitude,] lat, lng) shape. `variable` defaults to
+    chlor_a (the NOAA DINEOF products); pass e.g. "chla" for the pfeg raw
+    VIIRS dataset."""
     def fetcher(d: date) -> Optional[np.ndarray]:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
         slug = dataset.replace("/", "_")
@@ -309,7 +324,7 @@ def _make_noaa_erddap_fetcher(host: str, dataset: str, has_altitude: bool = True
             alt = "[0]" if has_altitude else ""
             url = (
                 f"{host}/{dataset}.nc"
-                f"?chlor_a"
+                f"?{variable}"
                 f"[({d}T00:00:00Z):1:({d}T23:59:59Z)]"
                 f"{alt}"
                 f"[({BBOX['lat_min']}):1:({BBOX['lat_max']})]"
@@ -328,7 +343,7 @@ def _make_noaa_erddap_fetcher(host: str, dataset: str, has_altitude: bool = True
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 with xr.open_dataset(cache_path) as ds:
-                    var = ds["chlor_a"]
+                    var = ds[variable]
                     if "time" in var.dims and var.sizes["time"] > 1:
                         var = var.isel(time=-1)
                     arr = np.asarray(var.values).squeeze()
@@ -474,15 +489,36 @@ CHL_SOURCES: list[ChlSource] = [
         # NASA — they can share a US-federal-infra outage (the 2026-06 freeze).
         # Copernicus Marine (EU / Mercator Ocean — GlobColour) is a separate
         # provider + infrastructure, and its L4 product is daily gap-free
-        # (space-time interpolated), 4 km, multi-sensor. Priority 6 = last
-        # (a backstop, not a primary); dormant until the COPERNICUSMARINE_*
-        # secrets exist, then it activates automatically.
+        # (space-time interpolated), 4 km, multi-sensor. Priority 6 = first of
+        # the two independent backstops (gap-free beats raw on ties); dormant
+        # until the COPERNICUSMARINE_* secrets exist, then activates auto.
         id="cmems_globcolour",
         label="Copernicus Marine GlobColour L4 (EU, gap-free)",
         priority=6,
         max_back=NOAA_NRT_MAX_BACK,
         fetcher=_make_cmems_fetcher("cmems_obs-oc_glo_bgc-plankton_nrt_l4-gapfree-multi-4km_P1D"),
         requires_cmems=True,
+    ),
+    ChlSource(
+        # Truly-last-resort, no-auth fallback on a THIRD host. NASA primaries
+        # (1-3) need EARTHDATA; the DINEOF primaries (4-5) live on
+        # coastwatch.noaa.gov (down for days in the 2026-06 outage). This raw
+        # VIIRS-SNPP product is the original Bob-Simons CoastWatch ERDDAP at
+        # upwell.pfeg.noaa.gov — a distinct host, no-auth, ~2-day lag. NOT
+        # gap-filled (cloudier), so priority 7 keeps it last, behind the
+        # gap-free CMEMS backstop; source_fallback flags it so the UI shows
+        # lower confidence. Live-but-patchy > frozen.
+        id="viirs_upwell_nrt",
+        label="VIIRS-SNPP chl-a NRT (raw, upwell fallback)",
+        priority=7,
+        max_back=NOAA_NRT_MAX_BACK,
+        fetcher=_make_noaa_erddap_fetcher(
+            "https://upwell.pfeg.noaa.gov/erddap/griddap",
+            "erdVHNchla1day",
+            has_altitude=True,   # dims (time, altitude, lat, lon)
+            variable="chla",
+        ),
+        fallback=True,
     ),
 ]
 
@@ -499,14 +535,29 @@ class _SourceResult:
     dates: list[date] = field(default_factory=list)         # parallel to frames
 
 
+# Wall-clock budget per source's age-walk. A source that stays ALIVE but
+# responds slowly (NOAA DINEOF ERDDAP can crawl) would otherwise walk its full
+# max_back at HTTP_TIMEOUT each and stack toward the 75-min job limit, killing
+# the whole refresh before the manifest is finalized — the http breaker only
+# catches transport-DEAD hosts, not slow-but-alive ones (2026-06-24/25 SST
+# outage: chl walked NOAA SCI 18 dates and timed the job out before finalize).
+WALK_BUDGET_S = 300.0
+
+
 def _walk_source(source: ChlSource, end: date, want: int) -> _SourceResult:
     """Walk back from `end` for up to source.max_back days, collecting up
     to `want` valid (non-all-NaN) frames. The first valid frame is the
     source's freshest; subsequent frames are used for 2d/3d nanmean
-    smoothing of the same source's contribution."""
+    smoothing of the same source's contribution. Bounded by WALK_BUDGET_S so a
+    single slow source can't consume the whole refresh's time budget."""
     res = _SourceResult(source=source)
+    walk_start = time.monotonic()
     for i in range(source.max_back):
         if len(res.frames) >= want:
+            break
+        if time.monotonic() - walk_start > WALK_BUDGET_S:
+            print(f"  {source.id}: {WALK_BUDGET_S:.0f}s walk budget spent at day -{i}; "
+                  f"moving on with {len(res.frames)} frame(s)", flush=True)
             break
         d = end - timedelta(days=i)
         try:
@@ -743,6 +794,7 @@ def build_blended_chl(end: date) -> dict | None:
     # 2) Blend per cell for each window: 1d/2d/3d differ only in how many
     # within-source frames are nanmean'd before the cross-source merge.
     windows = {}
+    source_stats_1d: dict = {}  # captured from the 1d blend for provenance
     for win, n_frames in [("1d", 1), ("2d", 2), ("3d", 3)]:
         blended, ages, sources, stats = _blend_freshest(per_source, end, n_frames)
         # Mask land cells BEFORE coverage/encoding. ages + sources also get
@@ -777,6 +829,7 @@ def build_blended_chl(end: date) -> dict | None:
             "sources": stats,
         }
         if win == "1d":
+            source_stats_1d = stats
             age_out = OUT_DIR / "chl_1d_age_days.png"
             src_out = OUT_DIR / "chl_1d_source.png"
             _encode_age_png(ages, age_out)
@@ -796,7 +849,12 @@ def build_blended_chl(end: date) -> dict | None:
 
         windows[win] = win_entry
 
-    return {
+    # Honest provenance: the source that owns the most cells in the 1d blend
+    # is "the source you're mostly looking at". If that's a fallback source
+    # (the primaries were unavailable), flag it so confidence.js can drop the
+    # score + show "via <source>". See _make_noaa_erddap_fetcher / CHL_SOURCES.
+    by_id = {s.id: s for s in CHL_SOURCES}
+    manifest_layer = {
         "range": list(CHL_RANGE),
         "scale": CHL_SCALE,
         "unit": CHL_UNIT,
@@ -804,6 +862,15 @@ def build_blended_chl(end: date) -> dict | None:
         "blended": True,
         "windows": windows,
     }
+    owned = {sid: st.get("cells_owned", 0) for sid, st in source_stats_1d.items()}
+    if owned and max(owned.values()) > 0:
+        dom_id = max(owned, key=owned.get)
+        dom = by_id.get(dom_id)
+        if dom is not None:
+            manifest_layer["source"] = dom.label
+            if dom.fallback:
+                manifest_layer["source_fallback"] = True
+    return manifest_layer
 
 
 # ---- CLI for one-off testing ------------------------------------------

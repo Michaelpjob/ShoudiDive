@@ -141,20 +141,10 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
   // PrefsContext — extracted in Stage 5c (2026-05-23) so they no
   // longer have to be drilled through App → MapShell as props.
   const { prefs, setPref } = usePrefs();
-  const { opacity, units, mpaOn, bathyOn, kelpOn, closuresOn } = prefs;
+  const { opacity, units, mpaOn, bathyOn, closuresOn } = prefs;
   const setMpaOn = (v) => setPref("mpaOn", v);
   const setBathyOn = (v) => setPref("bathyOn", v);
-  const setKelpOn = (v) => setPref("kelpOn", v);
   const setClosuresOn = (v) => setPref("closuresOn", v);
-
-  // Kelp Bed Zones is California-only today — CDFW ds3135 covers CA
-  // commercial kelp harvest boundaries, which are CA state-water
-  // constructs. Baja / PNW / tropical regions either have no analog
-  // (Baja: SEMARNAT manages a different scheme) or the data isn't
-  // published as a featureserver. The chip + layer hide outside CA so
-  // we don't show a useless toggle.
-  const REGIONS_WITH_KELP = new Set(["ca"]);
-  const kelpAvailable = REGIONS_WITH_KELP.has(activeRegion());
   // Timeline layers use a slot-key string derived from their selection
   // state; helpers fall back to a valid slot if the requested one has no
   // data. Chl/viz keep the legacy integer composite.
@@ -274,6 +264,54 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
     const s = SAVED_SPOTS.find((x) => x.id === spotId);
     if (s) setSpotDetailFor(s);
   }
+  // MPA/bathy popup state extracted into usePopupState (2026-05-23,
+  // Stage 3 of the refactor). The hook owns the selected* state +
+  // the toggle-off effects + the bathy lazy-load. See
+  // src/hooks/usePopupState.js.
+  const {
+    selectedMpa, setSelectedMpa,
+    selectedBathy, setSelectedBathy,
+    selectedClosure, setSelectedClosure,
+    bathyFeatures,
+  } = usePopupState({ mpaOn, bathyOn, closuresOn });
+
+  // updateMpaOn / updateBathyOn stay here — they wrap mpaOn/bathyOn
+  // setters (which are App-level state, not hook-managed) AND
+  // synchronously clear the selected popup. The hook's toggle-off
+  // effect is the safety-net catch-all for any other path that
+  // disables the layer.
+  const updateMpaOn = (next) => {
+    const value = typeof next === "function" ? next(mpaOn) : next;
+    if (!value) setSelectedMpa(null);
+    setMpaOn(value);
+  };
+  const updateBathyOn = (next) => {
+    const value = typeof next === "function" ? next(bathyOn) : next;
+    if (!value) setSelectedBathy(null);
+    setBathyOn(value);
+  };
+  const updateClosuresOn = (next) => {
+    const value = typeof next === "function" ? next(closuresOn) : next;
+    if (!value) setSelectedClosure(null);
+    setClosuresOn(value);
+  };
+  // Selected day index (0..6) for the closures overlay's own day-strip — it's
+  // an overlay shown alongside any heatmap layer, so it owns its day state
+  // rather than borrowing a layer scrubber's.
+  const [closuresDay, setClosuresDay] = useState(0);
+
+  // On desktop the active layer's scrubber (SST-with-timeline / wind / swell /
+  // current) sits bottom-center; the closures day-strip lives there too, so we
+  // lift the strip above it when one is present (see .above-scrubber). On
+  // mobile the scrubber moves to top-center, so the lift is neutralized there.
+  const hasBottomScrubber =
+    (layer === "sst" && hasSstTimeline) ||
+    layer === "wind" || layer === "swell" || layer === "current";
+
+  // The readout pin holds across layer switches by design (drop it once,
+  // read temp → chl → wind → current → viz at the SAME point). Safe because
+  // the pin stores only lng/lat — each layer's value is recomputed from the
+  // coordinate, never a cached per-layer shape.
 
   function onWheel(e) {
     // No preventDefault — body has overflow:hidden so there's nothing to
@@ -900,7 +938,7 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
           .below-timeline class shifts the moon down to clear it. */}
       <MoonWidget
         date={viewingDate}
-        className={((layer === "sst" && hasSstTimeline) || layer === "wind" || layer === "swell" || layer === "current") ? "below-timeline" : ""}
+        className={hasBottomScrubber ? "below-timeline" : ""}
       />
 
       {/* Timeline scrubbers. Wind/swell/current are forecasts; SST can show
@@ -922,7 +960,7 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
       {/* Closures day-strip — overlay forecast selector, shown alongside any
           heatmap layer (bottom-center, clear of the top scrubbers). */}
       {closuresOn && activeRegion() === "ca" && (
-        <ClosuresTimeline selectedDay={closuresDay} setSelectedDay={setClosuresDay} />
+        <ClosuresTimeline selectedDay={closuresDay} setSelectedDay={setClosuresDay} aboveScrubber={hasBottomScrubber} />
       )}
 
       <DesktopLayout
@@ -946,9 +984,8 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
         timeOpts={timeOpts}
         layerIsReal={layerIsReal}
         activeSpot={activeSpot} setActiveSpot={setActiveSpot}
-        mpaOn={mpaOn} bathyOn={bathyOn} kelpOn={kelpOn} closuresOn={closuresOn}
-        kelpAvailable={kelpAvailable}
-        updateMpaOn={updateMpaOn} updateBathyOn={updateBathyOn} updateKelpOn={updateKelpOn} updateClosuresOn={updateClosuresOn}
+        mpaOn={mpaOn} bathyOn={bathyOn} closuresOn={closuresOn}
+        updateMpaOn={updateMpaOn} updateBathyOn={updateBathyOn} updateClosuresOn={updateClosuresOn}
         size={size} zoomAt={zoomAt} resetView={resetView}
         dataState={dataState}
         isMobile={isMobile}
@@ -1015,9 +1052,8 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
         dataState={dataState}
         setMpaOn={updateMpaOn}
         setBathyOn={updateBathyOn}
-        setKelpOn={updateKelpOn}
-        kelpAvailable={kelpAvailable}
         setClosuresOn={updateClosuresOn}
+        activeSpot={activeSpot} setActiveSpot={setActiveSpot}
         bundledSpots={bundledSpots}
         openSpotDetail={openSpotDetail}
         activeSpot={activeSpot} setActiveSpot={setActiveSpot}

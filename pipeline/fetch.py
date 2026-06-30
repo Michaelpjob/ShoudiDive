@@ -122,6 +122,14 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = active_region().data_output_dir(ROOT)
 CACHE_DIR = ROOT / "pipeline" / ".cache"
 
+# Which source actually served each (layer, date), so build_layer can record
+# it in the manifest and the frontend confidence model can say "via <source>"
+# + lower the score when a coarse/backup fallback (e.g. SST on OISST 0.25°
+# instead of MUR 1 km) stood in for the primary. Keys are unique per
+# (layer, date) so the parallel day-walk's threads don't collide.
+# {(layer, date): {"label": str, "fallback": bool}}
+_LAYER_SOURCE: dict = {}
+
 
 def _layer_config(spec_name: str, encoder_extras: dict) -> dict:
     """Build a LAYERS-dict entry by pulling range/scale/unit from
@@ -165,6 +173,9 @@ LAYERS: dict[str, dict] = {
         "stride": 2,
         "history_days": 7,
         "max_back": 10,
+        # Readable provenance: build_layer records this into manifest .source so
+        # the UI can name the source (and a fallback below sets source_fallback).
+        "source_label": "MUR L4 SST (1 km)",
         # dims after time and before (lat, lng); for MUR there are none
         "pre_xy_dims": "",
         "fallbacks": [
@@ -190,11 +201,19 @@ LAYERS: dict[str, dict] = {
                 # MUR, so it is NOT caught by the MUR-specific 403. Keeps Temp
                 # LIVE (if low-res) through a multi-source outage instead of
                 # freezing for days. Marked coarse so confidence reflects it.
+                #
+                # NOTE (2026-06-18): the original `ncdcOisst21NrtAgg_LonPM180`
+                # id 404s on pfeg (the -180..180 variant was retired) — that
+                # made #205's fallback a silent no-op. The base aggregation
+                # `ncdcOisst21NrtAgg` IS live (verified maxTime 2026-06-16) but
+                # indexes longitude 0..360, so we request it with
+                # lng_offset_360 (CA bbox -125.5..-117 -> 234.5..243).
                 "host": "https://coastwatch.pfeg.noaa.gov/erddap/griddap",
-                "dataset": "ncdcOisst21NrtAgg_LonPM180",
+                "dataset": "ncdcOisst21NrtAgg",
                 "variable": "sst",
                 "stride": 1,
                 "pre_xy_dims": "[0]",  # length-1 zlev axis before lat/lon
+                "lng_offset_360": True,
                 "source_label": "NOAA OISST v2.1 NRT (0.25°, coarse fallback)",
             },
         ],
@@ -257,13 +276,20 @@ def erddap_url(cfg: dict, d: date, stride: int) -> str:
     IPs for that specific dataset (other layers on pfeg.noaa.gov work
     fine; the blocking is dataset-specific, not host-wide)."""
     base = cfg.get("host", ERDDAP_BASE)
+    # Some datasets index longitude 0..360 instead of -180..180 (e.g. the
+    # base OISST aggregation). lng_offset_360 rewrites the (negative) CA/Baja
+    # bbox bounds into that frame so the query lands on real grid cells
+    # instead of 404ing out of range.
+    lng_min, lng_max = BBOX["lng_min"], BBOX["lng_max"]
+    if cfg.get("lng_offset_360"):
+        lng_min, lng_max = lng_min + 360.0, lng_max + 360.0
     return (
         f"{base}/{cfg['dataset']}.nc"
         f"?{cfg['variable']}"
         f"[({d}T00:00:00Z):1:({d}T23:59:59Z)]"
         f"{cfg.get('pre_xy_dims', '')}"
         f"[({BBOX['lat_min']}):{stride}:({BBOX['lat_max']})]"
-        f"[({BBOX['lng_min']}):{stride}:({BBOX['lng_max']})]"
+        f"[({lng_min}):{stride}:({lng_max})]"
     )
 
 
@@ -343,6 +369,12 @@ def fetch_day(
             )
             continue
 
+        # Record which source served this day (i == 0 = primary, i > 0 =
+        # fallback) so build_layer can label it + flag a fallback honestly.
+        _LAYER_SOURCE[(layer, d)] = {
+            "label": source_cfg.get("source_label") or source_key,
+            "fallback": i > 0,
+        }
         return arr
 
     return None
@@ -722,6 +754,14 @@ def build_layer(layer: str, cfg: dict, end: date, want: int = 3, max_back: int =
         manifest_layer["buoy_correction"] = buoy_correction_summary
     if nearshore_correction_summary is not None:
         manifest_layer["nearshore_correction"] = nearshore_correction_summary
+    # Record the source that served the freshest (newest) composited day, so
+    # the frontend can label a fallback ("via …") + lower confidence when the
+    # primary was unavailable (e.g. SST on OISST instead of MUR).
+    src = _LAYER_SOURCE.get((layer, actual[-1])) if actual else None
+    if src:
+        manifest_layer["source"] = src["label"]
+        if src["fallback"]:
+            manifest_layer["source_fallback"] = True
     for win, st in composites.items():
         if not st:
             continue

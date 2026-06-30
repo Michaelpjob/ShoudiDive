@@ -1,0 +1,81 @@
+/* What's New panel + top-bar trigger. The modal shell is .mpa-popup*
+   (popups.css); this adds the changelog list styling + the unread dot. */
+
+/* Portaled to <body>, so it must position against the viewport (the
+   shared .mpa-popup-overlay is position:absolute, scoped to the map shell). */
+.wn-overlay { position: fixed; }
+
+.wn-popup {
+  max-width: 560px;
+  width: min(560px, 92vw);
+  max-height: 80vh;
+  /* override .mpa-popup's overflow-y:auto — here the header + "Got it"
+     stay pinned and only the entries list (below) scrolls. */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.wn-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.wn-spark {
+  font-size: 20px;
+  color: var(--accent, #2563eb);
+  line-height: 1;
+}
+
+.wn-entries {
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0; /* let the list shrink + scroll instead of the whole popup */
+  margin: 2px -4px 10px;
+  padding: 0 4px;
+}
+
+.wn-entry { padding: 12px 0; border-top: 1px solid var(--line, rgba(0, 0, 0, 0.1)); }
+.wn-entry:first-child { border-top: none; padding-top: 2px; }
+
+.wn-entry-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.wn-entry-title { font-size: 14px; font-weight: 700; color: var(--ink, #111); margin: 0; }
+.wn-entry-date { font-size: 11.5px; color: var(--ink-3, #888); white-space: nowrap; }
+
+.wn-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.wn-item { display: flex; align-items: flex-start; gap: 9px; }
+.wn-item-text { font-size: 13px; line-height: 1.45; color: var(--ink-2, #444); }
+
+.wn-tag {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  margin-top: 1px;
+}
+.wn-tag-new      { color: #16a34a; background: rgba(22, 163, 74, 0.13); }
+.wn-tag-improved { color: #2563eb; background: rgba(37, 99, 235, 0.13); }
+.wn-tag-fixed    { color: #d97706; background: rgba(217, 119, 6, 0.14); }
+
+/* ---- Top-bar trigger + unread dot ---- */
+.whatsnew-btn { position: relative; }
+.whatsnew-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent, #2563eb);
+  box-shadow: 0 0 0 2px var(--bg-panel-solid, #fff);
+}

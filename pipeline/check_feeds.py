@@ -35,6 +35,16 @@ from typing import Optional
 
 import requests
 
+# Pin connections to IPv4. GitHub runners have no IPv6 route, and several
+# probed hosts are dual-stack (notably NASA OB.DAAC) — without this the probe
+# reports them DEAD with `[Errno 101] Network is unreachable` even though they
+# answer fine over IPv4. See pipeline/lib/http.py for the full rationale.
+try:
+    from pipeline.lib.http import prefer_ipv4
+except ModuleNotFoundError:  # python check_feeds.py (cwd=pipeline)
+    from lib.http import prefer_ipv4
+prefer_ipv4()
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 OUT_PATH = REPO_ROOT / "pipeline" / "validation" / "data" / "feed_health.json"
@@ -130,7 +140,7 @@ FEEDS: list[FeedSpec] = [
         feed_id="nasa_obdaac_search",
         category="satellite",
         consumer="fetch.py blender sources #1-3 (AQUA/SNPP/S3A_OLCI)",
-        probe_url="https://oceandata.sci.gsfc.nasa.gov/api/file_search?subType=1&search=AQUA_MODIS*L3m*CHL*chlor_a*4km*NRT*&sdate=2026-04-30&edate=2026-04-30&results_as_file=1",
+        probe_url="https://oceandata.sci.gsfc.nasa.gov/api/file_search?search=AQUA_MODIS*L3m.DAY.CHL.chlor_a.4km.NRT*&sdate=2026-04-30&edate=2026-04-30&dtype=L3m&results_as_file=1",
         method="HEAD",
         expect_status=(200, 206, 401, 403),  # auth-gated; 401/403 = up but unauthorized
         critical=False,

@@ -143,15 +143,9 @@ export default function DesktopLayout({
   activeComposite, compositeText, timeOpts, layerIsReal,
   // Saved-spots panel state (analytics-wrapped setter lives in MapShell)
   activeSpot, setActiveSpot,
-  // MPA/bathy/kelp toggles (state owned by App, side-effect wrappers in MapShell)
-  mpaOn, bathyOn, kelpOn, updateMpaOn, updateBathyOn, updateKelpOn,
+  // MPA/bathy toggles (state owned by App, side-effect wrappers in MapShell)
+  mpaOn, bathyOn, updateMpaOn, updateBathyOn,
   closuresOn, updateClosuresOn,
-  // Kelp Bed Zones are CA-only today; hide the chip in beta regions.
-  kelpAvailable,
-  // Phase 1B Spot Detail: bundledSpots is Set of ids that have a
-  // /data/spots/<id>/bundle.json; openSpotDetail(id) mounts the
-  // SpotDetailView overlay in MapShell.
-  bundledSpots, openSpotDetail,
   // Map viewport (zoom +/− buttons + recenter)
   size, zoomAt, resetView,
   // Manifest data state (legend "no data" indicator)
@@ -237,17 +231,6 @@ export default function DesktopLayout({
             >
               Bottom
             </button>
-            {kelpAvailable && (
-              <button
-                type="button"
-                className={"mpa-pill" + (kelpOn ? " active" : "")}
-                onClick={(e) => { e.stopPropagation(); updateKelpOn(!kelpOn); }}
-                title={kelpOn ? "Kelp bed zones visible · click to hide" : "Kelp bed zones hidden · click to show"}
-                aria-pressed={kelpOn}
-              >
-                Kelp
-              </button>
-            )}
             <button
               type="button"
               className={"mpa-pill" + (closuresOn ? " active" : "")}

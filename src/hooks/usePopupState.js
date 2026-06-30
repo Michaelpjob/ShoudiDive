@@ -26,10 +26,9 @@ import { useEffect, useState } from "react";
 
 import { loadBathyFeatures } from "../components/BathyLayer.jsx";
 
-export function usePopupState({ mpaOn, bathyOn, kelpOn, closuresOn }) {
+export function usePopupState({ mpaOn, bathyOn, closuresOn }) {
   const [selectedMpa, setSelectedMpa] = useState(null);
   const [selectedBathy, setSelectedBathy] = useState(null);
-  const [selectedKelp, setSelectedKelp] = useState(null);
   const [selectedClosure, setSelectedClosure] = useState(null);
   const [bathyFeatures, setBathyFeatures] = useState(null);
 
@@ -42,11 +41,6 @@ export function usePopupState({ mpaOn, bathyOn, kelpOn, closuresOn }) {
   useEffect(() => {
     if (!bathyOn) setSelectedBathy(null);
   }, [bathyOn]);
-
-  // Close kelp popup when the kelp layer is turned off.
-  useEffect(() => {
-    if (!kelpOn) setSelectedKelp(null);
-  }, [kelpOn]);
 
   // Close closures popup when the closures layer is turned off.
   useEffect(() => {
@@ -70,7 +64,6 @@ export function usePopupState({ mpaOn, bathyOn, kelpOn, closuresOn }) {
   return {
     selectedMpa, setSelectedMpa,
     selectedBathy, setSelectedBathy,
-    selectedKelp, setSelectedKelp,
     selectedClosure, setSelectedClosure,
     bathyFeatures, setBathyFeatures,
   };

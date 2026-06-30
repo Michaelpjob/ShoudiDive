@@ -14,7 +14,7 @@ function weekday(iso) {
   return new Date(iso + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" });
 }
 
-export default function ClosuresTimeline({ selectedDay, setSelectedDay }) {
+export default function ClosuresTimeline({ selectedDay, setSelectedDay, aboveScrubber }) {
   const [fc, setFc] = useState(null);
   useEffect(() => {
     let cancelled = false;
@@ -31,7 +31,11 @@ export default function ClosuresTimeline({ selectedDay, setSelectedDay }) {
     ).length;
 
   return (
-    <div className="closures-timeline" role="group" aria-label="Navy closure 7-day forecast">
+    <div
+      className={"closures-timeline" + (aboveScrubber ? " above-scrubber" : "")}
+      role="group"
+      aria-label="Navy closure 7-day forecast"
+    >
       <div className="closures-tl-head">
         <span className="closures-tl-title">⚓ Navy closures</span>
         <span className="closures-tl-sub">San Clemente Island · tap a day</span>

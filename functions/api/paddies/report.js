@@ -37,6 +37,10 @@ export async function onRequestPost({ request, env }) {
     return jsonResponse({ ok: false, error: "rate limited" }, { status: 429 });
 
   const id = crypto.randomUUID();
+  // Age the report from the CATCH date, not submission — a late-reported old
+  // catch shouldn't get a fresh full-length lease on the map.
+  const catchMs = Date.parse(date + "T12:00:00Z");
+  const expiresAt = catchMs + MAX_AGE_DAYS * 86400000;
   const rec = {
     id,
     lat: snap(lat0), lng: snap(lng0),   // coarse-snapped before it's ever stored
@@ -44,11 +48,13 @@ export async function onRequestPost({ request, env }) {
     name, email, notes,                 // PII: moderator-only, never in publicView
     deviceId, ipHash,
     submittedAt: nowMs,
-    expiresAt: nowMs + MAX_AGE_DAYS * 86400000,
+    expiresAt,
     status: "pending",
   };
-  // Pending key auto-expires if it's never moderated, so the queue can't rot forever.
-  await env.REPORTS_KV.put(PENDING_PREFIX + id, JSON.stringify(rec), { expirationTtl: MAX_AGE_DAYS * 86400 });
+  // Pending key auto-expires (catch-date-anchored, min 60s) so the queue can't
+  // rot forever and an old catch's entry can't outlive the display window.
+  const pendingTtl = Math.max(60, Math.floor((expiresAt - nowMs) / 1000));
+  await env.REPORTS_KV.put(PENDING_PREFIX + id, JSON.stringify(rec), { expirationTtl: pendingTtl });
   // Durable email log for the moderator (survives report expiry / rejection).
   await recordEmail(env, email, name, species, date, nowMs);
   return jsonResponse({ ok: true, id, status: "pending" });

@@ -118,6 +118,13 @@
 /data/*/*.json
   Cache-Control: public, max-age=300, must-revalidate
 
+# Kelp Paddy Finder tool. Ships UNHASHED files (app.js, paddies.css,
+# data.json) that change on every deploy — so they must revalidate, not sit in
+# Cloudflare's 4-hour default cache (which left mobile users stuck on the old
+# UI after a fix shipped). Revalidate every load; ETag makes the 304s cheap.
+/paddies/*
+  Cache-Control: public, max-age=0, must-revalidate
+
 # Catch-all `/*` rule REMOVED 2026-05-08 for Cache-Control reasons:
 # Cloudflare Pages MERGES every matching `_headers` rule into a
 # single response, so a fallback /* combined with the more specific
