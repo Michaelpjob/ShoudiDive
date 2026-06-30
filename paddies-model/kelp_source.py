@@ -16,9 +16,18 @@ import numpy as np
 
 import config
 
-KELP_NC = os.path.normpath(os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    "..", "sd-kelp-paddies", "pipeline", "data", "landsat_kelp_ca.nc"))
+# Landsat canopy source. Prefer the copy BUNDLED into this model dir (data/) —
+# the ShoudiDive pipeline checkout has no sibling sd-kelp-paddies repo — and fall
+# back to that sibling path for local proto dev. If neither exists, beds.py drops
+# to a coarse hand-placed fallback (build_site.py fails loud when CI requires the
+# real source, so degraded seeds can't silently ship to prod again).
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_NC_CANDIDATES = (
+    os.path.join(_HERE, "data", "landsat_kelp_ca.nc"),
+    os.path.normpath(os.path.join(
+        _HERE, "..", "sd-kelp-paddies", "pipeline", "data", "landsat_kelp_ca.nc")),
+)
+KELP_NC = next((p for p in _NC_CANDIDATES if os.path.exists(p)), _NC_CANDIDATES[0])
 
 # Known offshore island centers (lng, lat) — a cell near one is flagged island
 # (island-sourced paddies get sea room to drift; mainland kelp beaches fast).

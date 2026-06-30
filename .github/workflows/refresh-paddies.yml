@@ -51,6 +51,7 @@ jobs:
         timeout-minutes: 15
         env:
           PADDIES_LOCAL_DATA: ${{ github.workspace }}/public
+          PADDIES_REQUIRE_REAL_KELP: "1"   # fail loud if seeds aren't the real Landsat canopy (no silent hand-bed fallback to prod)
         run: python paddies-model/build_site.py "public/paddies"
 
       - name: Sentinel — data.json must be today's build
