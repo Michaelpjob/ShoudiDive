@@ -70,6 +70,9 @@ async function waitForBundle() {
 
 async function startMetro() {
   log(`booting metro on :${PORT}`);
+  // shell:true is needed for the Windows npx.cmd shim; command + args are
+  // hardcoded literals (no user input), so there is no injection vector.
+  // nosemgrep: javascript.lang.security.audit.spawn-shell-true.spawn-shell-true
   metro = spawn(
     process.platform === "win32" ? "npx.cmd" : "npx",
     ["expo", "start", "--web", "--port", String(PORT)],

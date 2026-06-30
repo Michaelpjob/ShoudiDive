@@ -48,9 +48,16 @@ jobs:
     # AND failure, so we have to gate explicitly. A direct data-only
     # `push` (no workflow_run payload) carries no code gate to satisfy,
     # so it deploys unconditionally.
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' || github.event.workflow_run.conclusion == 'success' }}
+    # Same-repo origin guard on the workflow_run branch: only deploy when
+    # the triggering run came from THIS repo (not a fork). The push +
+    # workflow_dispatch branches carry no untrusted ref and are unaffected.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_repository.full_name == github.repository) }}
     runs-on: ubuntu-latest
     steps:
+      # head_sha checkout is guarded by the same-repo `if:` above + the repo
+      # takes no external PRs, so the ref is trusted. The residual static
+      # pattern is the intended, reviewed behavior.
+      # nosemgrep: yaml.github-actions.security.workflow-run-target-code-checkout.workflow-run-target-code-checkout
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           # workflow_run runs on the default branch's HEAD by default;

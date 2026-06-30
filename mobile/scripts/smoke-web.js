@@ -66,7 +66,9 @@ async function startMetro() {
   log(`booting metro on :${PORT}`);
   // Windows needs shell: true to invoke .cmd shims; without it the
   // spawn fails immediately with EINVAL. shell: true is fine on
-  // POSIX too, just slightly less direct.
+  // POSIX too, just slightly less direct. Command + args are hardcoded
+  // literals (no user input), so shell:true carries no injection vector.
+  // nosemgrep: javascript.lang.security.audit.spawn-shell-true.spawn-shell-true
   metro = spawn(
     process.platform === "win32" ? "npx.cmd" : "npx",
     ["expo", "start", "--web", "--port", String(PORT)],

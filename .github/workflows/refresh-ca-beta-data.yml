@@ -89,8 +89,12 @@ jobs:
 
       - name: Refresh climatology if needed
         continue-on-error: true
+        # inputs.force_climo passed via env, never interpolated directly
+        # into the shell (Semgrep run-shell-injection hardening).
+        env:
+          FORCE_CLIMO: ${{ inputs.force_climo }}
         run: |
-          if [ "${{ inputs.force_climo }}" = "true" ]; then
+          if [ "$FORCE_CLIMO" = "true" ]; then
             python pipeline/fetch_climatology.py --force
           else
             python pipeline/fetch_climatology.py

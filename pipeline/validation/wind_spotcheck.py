@@ -47,6 +47,10 @@ KT = 1.94384  # m/s → knots
 def _read_bytes(source: str, rel: str) -> bytes:
     if source.startswith("http"):
         req = urllib.request.Request(f"{source}/data/{rel}", headers=UA)
+        # `source` is an owner-supplied CLI/dispatch arg (defaults to
+        # shouldidive.com), not untrusted request input — this is an offline
+        # validation tool, not a server endpoint.
+        # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
         return urllib.request.urlopen(req, timeout=30).read()
     return (OUT_DIR / rel).read_bytes()
 
@@ -89,6 +93,9 @@ def open_meteo(lat, lng, date):
             "models": "ecmwf_ifs025,gfs_seamless",
             "start_date": date, "end_date": date, "timezone": "UTC"})
         req = urllib.request.Request(url, headers=UA)
+        # Fixed Open-Meteo API endpoint built from numeric coords — not
+        # untrusted request input. Offline validation tool, not a server.
+        # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
         _OM_CACHE[key] = json.load(urllib.request.urlopen(req, timeout=30))["hourly"]
     return _OM_CACHE[key]
 

@@ -43,7 +43,11 @@ def _load_cache(path):
     if (time.time() - os.path.getmtime(path)) / 3600.0 > CACHE_TTL_H:
         return None
     try:
-        z = np.load(path, allow_pickle=True)
+        # allow_pickle=False: the cache holds only numeric arrays + a unicode
+        # source string (see _save_cache), none of which need pickle — and
+        # disabling it removes the deserialization risk. A stale pickled cache
+        # just fails here and is treated as a miss (recomputed) by the except.
+        z = np.load(path, allow_pickle=False)
         return {"lats": z["lats"], "lngs": z["lngs"], "hours": z["hours"],
                 "u": z["u"], "v": z["v"], "coverage": float(z["coverage"]),
                 "source": str(z["source"]), "step_deg": float(z["step_deg"])}

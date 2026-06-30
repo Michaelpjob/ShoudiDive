@@ -83,12 +83,28 @@ jobs:
         #                grep-based secrets-scan job in dev-checks.yml)
         #   p/react   -> React-specific, incl. dangerouslySetInnerHTML
         # Add p/security-audit or p/owasp-top-ten here to broaden later.
+        #
+        # Path exclusions (committed, non-source data + vendored libs):
+        #   public/data  -> generated PNGs/manifests, not code
+        #   leaflet.js   -> vendored third-party Leaflet bundle (minified);
+        #                   scanning it only yields noise (a non-literal
+        #                   RegExp deep inside the library, not our code)
+        #
+        # Rule exclusion (documented false positive for this codebase):
+        #   unsafe-formatstring -> a Node util.format / log-forging rule.
+        #     Every hit here is a browser `console.warn(`…${id}`, e)` in
+        #     src/lib/loaders/* with trusted internal identifiers — there is
+        #     no util.format format-string sink and no security-log parser,
+        #     so the rule is categorically inapplicable. Per-site suppression
+        #     of 8 benign log calls would be pure churn; exclude the rule.
         run: |
           semgrep scan \
             --config p/default \
             --config p/secrets \
             --config p/react \
             --exclude public/data \
+            --exclude leaflet.js \
+            --exclude-rule javascript.lang.security.audit.unsafe-formatstring.unsafe-formatstring \
             --error \
             --oss-only \
             --metrics=off
