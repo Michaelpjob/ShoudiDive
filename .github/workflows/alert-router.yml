@@ -179,7 +179,15 @@ jobs:
               elif (workflow | startswith("Refresh ")) then
                 if count >= 3 then "p2" else "p3" end
               elif workflow == "Sync dev with main" then
-                if count >= 3 then "p2" else "p3" end
+                # A SUSTAINED sync failure means dev is FROZEN: fresh
+                # data and workflow updates on main never reach the dev
+                # branch, so dev.shouldidive.pages.dev silently rots.
+                # That is exactly what happened 2026-06-24..30 (6 days)
+                # while this sat as a MUTED p2. Escalate to p1 so it
+                # emails instead of dangling unseen in the Issues tab.
+                # (Keep this jq comment free of apostrophes — the program
+                # is wrapped in a shell single-quoted string.)
+                if count >= 3 then "p1" else "p3" end
               else
                 if count >= 3 then "p2" else "p3" end
               end;

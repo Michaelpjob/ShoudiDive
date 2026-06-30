@@ -20,6 +20,18 @@ on:
     workflows: ["Dev checks"]
     types: [completed]
     branches: [dev]
+  # Data-only pushes to dev (the main→dev data sync, the hourly beta
+  # refreshes) are `paths-ignore`'d out of Dev checks, so WITHOUT this
+  # trigger they never redeploy the dev site — the preview would serve
+  # fresh code but STALE DATA. That's the second half of the 2026-06-24
+  # dev-freshness freeze: even once data reached the `dev` branch, the
+  # site only rebuilt when a CODE change happened to ride along. A
+  # data-only change doesn't need the code gate (prod's refresh-data
+  # deploys data directly too), so deploy straight from the dev push.
+  push:
+    branches: [dev]
+    paths:
+      - "public/data/**"
   workflow_dispatch:
 
 # Don't pile up deploys on rapid-fire dev pushes.
@@ -33,8 +45,10 @@ permissions:
 jobs:
   deploy:
     # Only run if dev-checks succeeded — workflow_run fires on success
-    # AND failure, so we have to gate explicitly.
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    # AND failure, so we have to gate explicitly. A direct data-only
+    # `push` (no workflow_run payload) carries no code gate to satisfy,
+    # so it deploys unconditionally.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
