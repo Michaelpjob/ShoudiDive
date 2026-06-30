@@ -29,10 +29,19 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 OUT_PATH = REPO_ROOT / "pipeline" / "data" / "landsat_kelp_ca.nc"
 PASTA = "https://pasta.lternet.edu/package"
 SCOPE, PKG_ID = "knb-lter-sbc", "74"
-# Generous CA+Baja box covering every CA/Baja spot bundle (Coronados
-# 32.4N -> Mendocino 39.3N; lon -124 -> -117). Margin on all sides.
-BBOX = (31.0, 40.5, -125.0, -116.0)   # lat_min, lat_max, lon_min, lon_max
-RECENT_QUARTERS = 4                    # last year defines the "canopy" class
+# CA + Baja Pacific kelp box. Reaches down to 26.4N / -113.5 so the Baja
+# Pacific kelp forests (Isla Cedros ~28.2N, Islas San Benito ~28.3N,
+# Bahia Tortugas ~27.7N, Punta Abreojos ~26.7N) are captured alongside the
+# full CA coast (to ~40.5N). 2026-06-16: southern edge dropped 27.0 → 26.4
+# to bring Abreojos inside coverage. The California-Current kelp dataset
+# carries no Sea-of-Cortez stations, so the eastern margin harmlessly spans
+# the peninsula. Margin on all sides.
+BBOX = (26.4, 40.5, -125.0, -113.5)   # lat_min, lat_max, lon_min, lon_max
+# 2026-06-16: 4 → 12 quarters. A single year's canopy was hostage to one
+# bad season (La Jolla read 0.02 km² off the 4-quarter window); the last
+# 3 years' PEAK is a steadier "current bed" while still excluding the
+# decade-old pre-collapse extent.
+RECENT_QUARTERS = 12                   # last 3 years' peak = the "canopy" class
 
 
 def latest_netcdf_url():
@@ -76,7 +85,7 @@ def extract(nc_path, rev=None):
     print("  loading area grid (decompresses the source)…")
     area = ds.area.values                       # (time, station) m^2/pixel
     ever = np.nanmax(area, axis=0)              # peak over all years
-    recent = np.nanmax(area[-RECENT_QUARTERS:, :], axis=0)  # last year peak
+    recent = np.nanmax(area[-RECENT_QUARTERS:, :], axis=0)  # last 3 yr peak
     la_min, la_max, lo_min, lo_max = BBOX
     keep = (
         (lat >= la_min) & (lat <= la_max)

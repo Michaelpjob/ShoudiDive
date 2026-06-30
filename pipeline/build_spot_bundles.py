@@ -109,15 +109,25 @@ SPOT_CENTRES = {
     "sannicolas":  {"name": "San Nicolas Is.",   "lng": -119.509, "lat": 33.254},
     "sanclemente": {"name": "San Clemente Is.",  "lng": -118.483, "lat": 32.92},
     # ── Phase 2: popular shore-diving hubs (S→N) ─────────────────────
-    "laguna":      {"name": "Laguna Beach",  "lng": -117.790, "lat": 33.542},
-    "palosverdes": {"name": "Palos Verdes",  "lng": -118.405, "lat": 33.740},
+    # 2026-06-16: 7 of these were re-centred SEAWARD (refugio + malibu
+    # also zoomed in — see SPOT_RADIUS_KM) after user QA ("seeing the same
+    # issue on ca detailed maps", flagged on Refugio): an on-shore centre
+    # put a featureless land block over 40-60% of the chart. Each was
+    # tuned per-spot to ~20-30% land (the build's [mask] %) so the reef /
+    # kelp / depth gradient — the dive — fills the frame, then checked
+    # against a local render; same fix as the Baja spots. The overview-map
+    # pin (REGION_SAVED_SPOTS) stays at the dive site; only the detail
+    # bbox re-frames. redondo / lajolla / monterey / jadecove / mendocino
+    # / pointloma already framed water-dominant and were left as-is.
+    "laguna":      {"name": "Laguna Beach",  "lng": -117.801, "lat": 33.531},
+    "palosverdes": {"name": "Palos Verdes",  "lng": -118.418, "lat": 33.718},
     "redondo":     {"name": "Redondo Beach", "lng": -118.398, "lat": 33.842},
-    "malibu":      {"name": "Malibu",        "lng": -118.806, "lat": 34.001},
-    "refugio":     {"name": "Refugio",       "lng": -120.070, "lat": 34.464},
-    "pointlobos":  {"name": "Point Lobos",   "lng": -121.945, "lat": 36.518},
-    "monastery":   {"name": "Monastery",     "lng": -121.923, "lat": 36.534},
+    "malibu":      {"name": "Malibu",        "lng": -118.787, "lat": 33.996},
+    "refugio":     {"name": "Refugio",       "lng": -120.068, "lat": 34.450},
+    "pointlobos":  {"name": "Point Lobos",   "lng": -121.960, "lat": 36.518},
+    "monastery":   {"name": "Monastery",     "lng": -121.950, "lat": 36.534},
     "jadecove":    {"name": "Jade Cove",     "lng": -121.502, "lat": 35.920},
-    "saltpoint":   {"name": "Salt Point",    "lng": -123.334, "lat": 38.567},
+    "saltpoint":   {"name": "Salt Point",    "lng": -123.352, "lat": 38.562},
     "mendocino":   {"name": "Mendocino",     "lng": -123.793, "lat": 39.275},
     # ── Phase 2: Coronado Islands (Baja, just S of the border) ───────
     # Bathy/contours/soundings come cross-border; kelp comes from the
@@ -161,8 +171,11 @@ SPOT_RADIUS_KM = {
     "laguna":      4,
     "palosverdes": 7,
     "redondo":     3,
-    "malibu":      5,
-    "refugio":     5,
+    # 2026-06-16: malibu 5→4 (zoom past the Santa Monica canyon onto the
+    # Point Dume kelp), refugio 5→3 (gentle straight shelf read as deep-
+    # water-heavy at 10 km; 6 km frames the dive zone).
+    "malibu":      4,
+    "refugio":     3,
     "pointlobos":  3,
     "monastery":   3,
     "jadecove":    3,
@@ -172,6 +185,63 @@ SPOT_RADIUS_KM = {
     # Coronado); 9 km radius covers all four islets + the deep channel.
     "coronados":   6,
 }
+
+# ── Baja region spot bundles ─────────────────────────────────────────────
+# When SHOULDIDIVE_REGION=baja the builder swaps the CA dicts above for
+# these. Coords mirror REGION_SAVED_SPOTS.baja in src/lib/mapData.js (the
+# frontend's saved-spot pins); radii sized to the feature + a water margin
+# (islands large; reefs / seamounts / points small). Re-check each against
+# the render and bump if clipped, same as the CA islands.
+# 2026-06-16 re-tune + QA pass: centres re-anchored on the actual dive feature
+# (research + Landsat kelp-centroid cross-check), radii tightened, and framing
+# offset toward the dive water so a big island doesn't fill the frame. Dropped
+# from the DETAIL set (kept as main-map points only, no bundle): marisla
+# (= el-bajo dup) and — per user QA on the live maps — cabo / gordo-banks /
+# el-bajo / cerralvo (deep seamounts/pinnacles + a land-heavy cape the coarse
+# Mexico DEM can't render as useful dive charts). "loreto" → Isla Coronado.
+BAJA_SPOT_CENTRES = {
+    # 2026-06-16: same seaward re-framing pass as the CA shore spots —
+    # abreojos (mainland point) shifted S off its land block; espiritu-stm /
+    # isla-carmen (big islands) shifted W onto the dive coast so the island
+    # sits ~1/3 of the frame and the reef water dominates. Each checked
+    # against a render. The rest were already water-dominant (islands/reefs
+    # framed with water around them; salsipuedes' kelp coast frames fine).
+    # Pacific side — kelp coast (California Current)
+    "salsipuedes":  {"name": "Salsipuedes",      "lng": -116.787, "lat": 31.974},
+    "sacramento":   {"name": "Sacramento Reef",  "lng": -115.790, "lat": 29.760},
+    "san-benito":   {"name": "Islas San Benito", "lng": -115.575, "lat": 28.306},
+    "cedros":       {"name": "Isla Cedros",      "lng": -115.165, "lat": 28.080},
+    "bahia-tort":   {"name": "Bahia Tortugas",   "lng": -114.896, "lat": 27.655},
+    "abreojos":     {"name": "Punta Abreojos",   "lng": -113.575, "lat": 26.700},
+    # Sea of Cortez — south (La Paz)
+    "cabo-pulmo":   {"name": "Cabo Pulmo",       "lng": -109.424, "lat": 23.434},
+    "los-islotes":  {"name": "Los Islotes",      "lng": -110.385, "lat": 24.600},
+    "espiritu-stm": {"name": "Espiritu Santo",   "lng": -110.422, "lat": 24.520},
+    # Sea of Cortez — central (Loreto NP)
+    "isla-carmen":  {"name": "Isla Carmen",      "lng": -111.198, "lat": 26.030},
+    "isla-danzante":{"name": "Isla Danzante",    "lng": -111.251, "lat": 25.786},
+    "loreto":       {"name": "Loreto",           "lng": -111.274, "lat": 26.119},
+    # Midriff Islands
+    "bahia-angel":  {"name": "Bahia de los Angeles", "lng": -113.510, "lat": 29.035},
+}
+
+BAJA_SPOT_RADIUS_KM = {
+    "salsipuedes": 5, "sacramento": 6, "san-benito": 5,
+    "cedros": 7,         # SE dive coast, island pushed to the W edge
+    "bahia-tort": 7,
+    "abreojos": 6,
+    "cabo-pulmo": 7,     # the reef park
+    "los-islotes": 4,    # sea-lion islets (Partida pushed to the edge)
+    "espiritu-stm": 6,   # W dive coast, island to one side
+    "isla-carmen": 6,    # NW dive coast (Punta Lobos), island to one side
+    "isla-danzante": 6,
+    "loreto": 6,         # Isla Coronado (dive area N of town)
+    "bahia-angel": 8,    # the bay's dive islands
+}
+
+if REGION.name == "baja":
+    SPOT_CENTRES = BAJA_SPOT_CENTRES
+    SPOT_RADIUS_KM = BAJA_SPOT_RADIUS_KM
 
 # Max sounding depth (ft) kept in a spot bundle. 330 ft ≈ 100 m, the
 # technical-diving floor; deeper lattice samples are open-ocean noise
@@ -1090,6 +1160,118 @@ def _mask_depth_by_land(depth_grid, bbox, land_path):
     return masked
 
 
+# Max distance (px) the nearshore no-data fill will bridge. Small on
+# purpose: it closes the thin OSM-coastline↔DEM-land registration sliver
+# and a narrow unresolved shelf — it must NOT paint depth across large
+# data voids. At 480 px / ~16 km (~33 m/px) this is ~200 m.
+#
+# Was an effectively unbounded 45 px (~1.5 km): a coarse-DEM void in the
+# middle of a Baja bay then filled completely with a smooth ramp toward
+# ~0 m, so open water read "0 ft · 0 m" and every island wore a
+# fabricated shallow-shelf halo (issue #202). Capping the reach leaves
+# large voids NaN → they render transparent (deep-water bg) and read "—"
+# (no data) instead of a confident, wrong zero.
+NEARSHORE_FILL_PX = 6
+
+
+def _fill_nearshore_nodata(depth_grid, max_iters: int = NEARSHORE_FILL_PX):
+    """Bridge SMALL no-data gaps by extending the nearest resolved depth
+    inward, up to ~max_iters px from valid water.
+
+    The coarse NCEI/GEBCO mosaic over Baja marks the shallow subtidal shelf as
+    z≥0 (land elevation), so build_spot turns it into NaN and a narrow nearshore
+    band would otherwise render as "land". This dilation ramps the nearest real
+    depths into that band. It runs BEFORE the OSM land burn, so true above-water
+    land is re-cut to NaN afterwards; only the OSM-water shelf keeps the fill.
+
+    The reach is deliberately small (see NEARSHORE_FILL_PX): a large unresolved
+    region is a genuine data void, not a shelf, and must stay NaN rather than be
+    painted with a fabricated ~0 m depth (issue #202).
+    """
+    import numpy as _np
+    d = _np.asarray(depth_grid, dtype=_np.float32).copy()
+    for _ in range(max_iters):
+        nan = ~_np.isfinite(d)
+        if not nan.any():
+            break
+        acc = _np.zeros_like(d)
+        cnt = _np.zeros_like(d)
+        for axis, shift in ((0, 1), (0, -1), (1, 1), (1, -1)):
+            rolled = _np.roll(d, shift, axis=axis)
+            valid = _np.isfinite(rolled)
+            acc += _np.where(valid, _np.nan_to_num(rolled), 0.0)
+            cnt += valid
+        fillable = nan & (cnt > 0)
+        if not fillable.any():
+            break
+        d[fillable] = (acc[fillable] / cnt[fillable])
+    return d
+
+
+def _clip_kelp_to_water(kelp_fc: dict, land_path, bbox: dict) -> dict:
+    """Subtract the OSM land polygon from kelp polygons so kelp never paints
+    over land. Landsat kelp false-positives on the wet rocky shore (surf /
+    shadow read as canopy); against the bathy's OSM land mask that shows up as
+    "kelp on land" with a "land" depth readout. Uses the SAME land.geojson the
+    bathy mask uses, so kelp ⊆ water by construction.
+    """
+    if kelp_fc is None or not land_path.exists():
+        return kelp_fc
+    try:
+        import json as _json
+        from shapely.geometry import shape as _shape, box as _box, mapping as _mapping
+        from shapely.ops import unary_union as _unary_union
+        from shapely.validation import make_valid as _make_valid
+    except ImportError:
+        return kelp_fc
+    with land_path.open("r", encoding="utf-8") as f:
+        fc = _json.load(f)
+    spot_box = _box(bbox["lng_min"], bbox["lat_min"], bbox["lng_max"], bbox["lat_max"])
+    geoms = []
+    for feat in fc.get("features", []) or []:
+        try:
+            g = _shape(feat["geometry"])
+            if g.is_empty:
+                continue
+            if not g.is_valid:
+                g = _make_valid(g)
+                if g.is_empty:
+                    continue
+            if g.intersects(spot_box):
+                geoms.append(g)
+        except Exception:
+            continue
+    if not geoms:
+        return kelp_fc  # offshore spot — no land to subtract
+    land_union = _unary_union(geoms)
+    out_feats = []
+    dropped = 0
+    for feat in kelp_fc.get("features", []) or []:
+        try:
+            g = _shape(feat["geometry"])
+            if not g.is_valid:
+                g = _make_valid(g)
+            cut = g.difference(land_union)
+            if cut.is_empty:
+                dropped += 1
+                continue
+            if cut.geom_type not in ("Polygon", "MultiPolygon"):
+                polys = [gg for gg in getattr(cut, "geoms", [cut])
+                         if gg.geom_type in ("Polygon", "MultiPolygon")]
+                if not polys:
+                    dropped += 1
+                    continue
+                cut = _unary_union(polys)
+            out_feats.append({"type": "Feature",
+                              "properties": feat.get("properties", {}),
+                              "geometry": _mapping(cut)})
+        except Exception:
+            out_feats.append(feat)  # keep original if the clip errors
+    if dropped:
+        print(f"    [kelp] clipped {dropped} all-on-land kelp feature(s) to water")
+    return {"type": "FeatureCollection", "features": out_feats}
+
+
 def fetch_overpass_coastline_for_bbox(bbox: dict) -> dict | None:
     """Pull native-resolution OSM coastline ways for a single spot bbox.
 
@@ -1289,6 +1471,20 @@ KELP_SURVEY_LAYERS = [  # (service layer index, survey year)
 KELP_SOURCES_LANDSAT = {
     "coronados", "jadecove", "malibu", "palosverdes",
     "mendocino", "saltpoint", "sanclemente", "sannicolas",
+    # Baja Pacific kelp coast (California Current). The widened Landsat
+    # extract now reaches 27N, so these draw real canopy. Gulf-side Baja
+    # spots are deliberately absent — there is no kelp in the Sea of Cortez.
+    "salsipuedes", "sacramento", "san-benito", "cedros", "bahia-tort", "abreojos",
+    # 2026-06-16: moved ALL remaining CA spots off the CDFW BIO_CA_Kelp2016
+    # aerial survey (10 yr stale — it overstates canopy that has since
+    # thinned, often to a small fraction of the all-time extent) onto the
+    # Landsat recent_area (the last 3 years' peak canopy). Verified per-spot
+    # against a render. Every kelp layer is now current; fetch_spot_kelp
+    # (CDFW) stays only as the fallback for when the Landsat extract has a
+    # gap at a spot.
+    "lajolla", "pointloma", "catalina", "monterey",
+    "anacapa", "santacruz", "santarosa", "sanmiguel", "sbisland",
+    "laguna", "redondo", "refugio", "pointlobos", "monastery",
 }
 _LANDSAT_KELP_CACHE = None
 
@@ -1302,20 +1498,51 @@ def _load_landsat_kelp():
         ds = xr.open_dataset(p)
         _LANDSAT_KELP_CACHE = (
             ds.longitude.values, ds.latitude.values,
-            ds.recent_area.values, ds.attrs.get("recent_quarter", "?"),
+            ds.recent_area.values, ds.ever_area.values,
+            ds.attrs.get("recent_quarter", "?"),
         )
     return _LANDSAT_KELP_CACHE
 
 
-def fetch_spot_kelp_landsat(spot_id: str, bbox: dict):
-    """Per-spot kelp from the SBC LTER Landsat extract.
+def _round_geom(geom, nd=5):
+    """Round a GeoJSON geometry's coordinates to nd decimals (~1 m at
+    nd=5), in place. Landsat kelp is a 30 m pixel grid, so full-precision
+    floats only bloat the file — rounding trims kelp.geojson ~40% with no
+    visible change at the spot-detail zoom."""
+    def _r(c):
+        if isinstance(c, (list, tuple)) and c and isinstance(c[0], (int, float)):
+            return [round(c[0], nd), round(c[1], nd)]
+        return [_r(x) for x in c]
+    geom["coordinates"] = _r(geom["coordinates"])
+    return geom
 
-    Emits the same two classes fetch_spot_kelp does, so the builder and
-    frontend treat both sources identically:
-      * "Kelp Subsurface" — every ever-kelp pixel in the bbox (extent).
-      * "Kelp Canopy"     — pixels with canopy in the most recent year.
-    Each 30 m pixel becomes a square; squares are unioned + lightly
-    simplified. Returns (feature_collection, meta) or None.
+
+def fetch_spot_kelp_landsat(spot_id: str, bbox: dict):
+    """Per-spot kelp from the SBC LTER Landsat extract — two layers:
+
+      * "Kelp Canopy"  — pixels with canopy in the last 3 years (recent_area,
+        the 12-quarter peak). The vivid CURRENT bed.
+      * "Kelp Former"  — the all-time (1984→now) ever-kelp extent (ever_area),
+        drawn faint + UNDERNEATH as "kelp was here but not recently". A
+        collapsed bed (La Jolla, Cedros) then reads as a ghost outline with
+        little/no live canopy on top, which is the honest decline story.
+
+    2026-06-17: re-added the former-extent layer after the recent-only pass
+    made crashed beds look bare — the user wanted the history back, clearly
+    marked as not-current (frontend styles "Kelp Former" as a desaturated
+    ghost, distinct from the green canopy hatch). The former extent is
+    simplified coarsely (it is faint background; the all-time union would
+    otherwise dominate the bundle — Santa Rosa was 4.3 MB); the recent canopy
+    stays crisp.
+
+    Returns:
+      * (fc, meta) with [former?, canopy?] features — former FIRST so it draws
+        beneath the canopy;
+      * (empty fc, meta) when the spot is INSIDE the Landsat footprint but has
+        never had kelp — a real empty layer so the caller does NOT fall back
+        to the stale 2016 CDFW pass;
+      * None only when the spot is OUTSIDE the Landsat footprint (Sea of
+        Cortez, PNW) — then the caller may fall back.
     """
     if os.environ.get("BUILD_SKIP_KELP") == "1":
         return None
@@ -1326,45 +1553,59 @@ def fetch_spot_kelp_landsat(spot_id: str, bbox: dict):
     except ImportError:
         return None
     try:
-        lon, lat, recent, recent_q = _load_landsat_kelp()
+        lon, lat, recent, ever, recent_q = _load_landsat_kelp()
     except Exception as e:
         print(f"    [kelp] Landsat extract unavailable ({e!s}) — falling back")
         return None
-    m = ((lon >= bbox["lng_min"]) & (lon <= bbox["lng_max"]) &
-         (lat >= bbox["lat_min"]) & (lat <= bbox["lat_max"]))
-    if not m.any():
-        return None
-    lo, la, re = lon[m], lat[m], recent[m]
+    # The extract's geographic footprint (mirrors BBOX in fetch_kelp_landsat.py).
+    # A spot fully inside it has real coverage, so an empty result means the
+    # bed never existed here — not that data is missing — so we must NOT fall
+    # back to the stale survey.
+    EXT = {"lat_min": 26.4, "lat_max": 40.5, "lng_min": -125.0, "lng_max": -113.5}
+    in_footprint = (bbox["lng_min"] >= EXT["lng_min"] and bbox["lng_max"] <= EXT["lng_max"]
+                    and bbox["lat_min"] >= EXT["lat_min"] and bbox["lat_max"] <= EXT["lat_max"])
+    in_bbox = ((lon >= bbox["lng_min"]) & (lon <= bbox["lng_max"]) &
+               (lat >= bbox["lat_min"]) & (lat <= bbox["lat_max"]))
     latm = (bbox["lat_min"] + bbox["lat_max"]) / 2.0
     dlat = 15.0 / 110540.0
     dlon = 15.0 / (111320.0 * math.cos(math.radians(latm)))
 
-    def _polys(loi, lai):
-        if len(loi) == 0:
+    def _poly(mask, tol, buf=0.0):
+        if not mask.any():
             return None
         u = unary_union([shp_box(x - dlon, y - dlat, x + dlon, y + dlat)
-                         for x, y in zip(loi, lai)])
-        return u.simplify(0.00008)  # ~9 m — drop near-collinear pixel edges
+                         for x, y in zip(lon[mask], lat[mask])])
+        if buf:
+            # Merge the scattered all-time patches into coarse "was-here"
+            # blobs. The raw union is thousands of 30 m specks (Santa Rosa's
+            # ringed extent → multi-MB even after simplify, which only cuts
+            # vertices, not polygon COUNT). Buffer out-then-in closes the
+            # gaps + drops to a handful of polygons.
+            u = u.buffer(buf).buffer(-buf * 0.5)
+        u = u.simplify(tol)
+        return None if u.is_empty else u
 
-    ext = _polys(lo, la)
-    cm = re > 0
-    can = _polys(lo[cm], la[cm])
+    # Former extent: buffer ~70 m to coalesce + simplify hard (faint
+    # background, "roughly where kelp once was"). Recent canopy stays crisp
+    # and exact.
+    former = _poly(in_bbox & (ever > 0), 0.0009, buf=0.0007)
+    canopy = _poly(in_bbox & (recent > 0), 0.0003)
     spot_name = SPOT_CENTRES.get(spot_id, {}).get("name", spot_id)
     feats = []
-    if ext is not None and not ext.is_empty:
+    if former is not None:
         feats.append({"type": "Feature",
-                      "properties": {"id": f"{spot_id}-kelp-extent",
-                                     "name": f"{spot_name} surveyed kelp extent",
-                                     "className": "Kelp Subsurface"},
-                      "geometry": mapping(ext)})
-    if can is not None and not can.is_empty:
+                      "properties": {"id": f"{spot_id}-kelp-former",
+                                     "name": f"{spot_name} former kelp extent (pre-decline)",
+                                     "className": "Kelp Former"},
+                      "geometry": _round_geom(mapping(former))})
+    if canopy is not None:
         feats.append({"type": "Feature",
                       "properties": {"id": f"{spot_id}-kelp-canopy",
                                      "name": f"{spot_name} recent kelp canopy",
                                      "className": "Kelp Canopy"},
-                      "geometry": mapping(can)})
-    if not feats:
-        return None
+                      "geometry": _round_geom(mapping(canopy))})
+    if not feats and not in_footprint:
+        return None   # outside the Landsat footprint → caller may fall back
     fc = {"type": "FeatureCollection", "features": feats}
     meta = {"source": "SBC LTER kelp from Landsat (knb-lter-sbc.74)",
             "canopy_quarter": recent_q, "pixel_m": 30}
@@ -1600,39 +1841,54 @@ def build_spot(spot_id: str, *, force: bool) -> bool:
     except Exception as e:
         print(f"    NCEI mosaic fetch failed ({e!r}) — falling back to GMRT")
 
-    # GMRT pass runs only when needed: NCEI down entirely, or the
-    # mosaic returned nodata holes inside the bbox (possible for
-    # offshore-heavy future spots — today's three CA spots are fully
-    # covered, so this is normally skipped).
-    hole_frac = (float(np.mean(~np.isfinite(z_grid)))
-                 if z_grid is not None else 1.0)
-    if hole_frac > 0.0:
-        try:
-            nc_bytes = fetch_gmrt_dem(bbox)
-            gz, g_lats, g_lons = parse_gmrt_netcdf(nc_bytes)
-            g_grid = resample_to_bbox(gz, g_lats, g_lons, bbox,
-                                      BATHY_SIZE, BATHY_SIZE)
-            if z_grid is None:
-                z_grid = g_grid
-                bathy_source = ("GMRT high-resolution GridServer "
-                                "(NetCDF; NCEI mosaic unavailable)")
-            else:
-                fill = ~np.isfinite(z_grid) & np.isfinite(g_grid)
-                if fill.any():
-                    z_grid[fill] = g_grid[fill]
-                    pct = 100.0 * float(fill.mean())
-                    bathy_source += f" + GMRT offshore fill ({pct:.1f}% px)"
-                    print(f"    [blend] filled {int(fill.sum())} px "
-                          f"({pct:.1f}%) from GMRT")
-        except Exception as e:
-            if z_grid is None:
-                print(f"  ERROR: NCEI and GMRT bathy fetches both failed: {e!r}")
-                return False
-            print(f"    [blend] GMRT fill unavailable ({e!r}) — "
-                  f"{hole_frac * 100.0:.1f}% px stay transparent")
+    # GMRT pass — ALWAYS fetch the high-res GMRT grid and blend with NCEI.
+    # Two roles: (a) fill NCEI nodata holes; (b) the SHELF FIX — the coarse
+    # NCEI mosaic marks the shallow Baja subtidal shelf as land/positive
+    # elevation (no real depth), but GMRT resolves the ACTUAL nearshore depth
+    # there. Where NCEI says land (z>=0 or NaN) but GMRT says water (z<0), take
+    # GMRT's real depth instead of fabricating one — this is why the kelp shelf
+    # was reading "0 ft"/"land". CA's CUDEM nearshore is already z<0, so the
+    # shelf fix barely touches CA; it rescues Baja. (Was hole-only before, which
+    # never triggered for Baja because the bad shelf is positive, not NaN.)
+    g_grid = None
+    try:
+        nc_bytes = fetch_gmrt_dem(bbox)
+        gz, g_lats, g_lons = parse_gmrt_netcdf(nc_bytes)
+        g_grid = resample_to_bbox(gz, g_lats, g_lons, bbox,
+                                  BATHY_SIZE, BATHY_SIZE)
+    except Exception as e:
+        if z_grid is None:
+            print(f"  ERROR: NCEI and GMRT bathy fetches both failed: {e!r}")
+            return False
+        print(f"    [blend] GMRT unavailable ({e!r}) — NCEI only")
+    if g_grid is not None:
+        if z_grid is None:
+            z_grid = g_grid
+            bathy_source = ("GMRT high-resolution GridServer "
+                            "(NetCDF; NCEI mosaic unavailable)")
+        else:
+            holes = ~np.isfinite(z_grid) & np.isfinite(g_grid)
+            shelf = (np.isfinite(z_grid) & (z_grid >= 0)
+                     & np.isfinite(g_grid) & (g_grid < 0))
+            use = holes | shelf
+            if use.any():
+                z_grid[use] = g_grid[use]
+                print(f"    [blend] GMRT: {int(holes.sum())} hole + "
+                      f"{int(shelf.sum())} shelf px (NCEI land → GMRT water)")
+                if shelf.any():
+                    bathy_source += " + GMRT nearshore-shelf depths"
+                elif holes.any():
+                    bathy_source += (
+                        f" + GMRT offshore fill ({100.0 * float(holes.mean()):.1f}% px)")
 
     try:
         depth_grid = np.where(z_grid < 0, -z_grid, np.nan).astype(np.float32)
+        # Fill the shallow-shelf no-data BEFORE the OSM burn. The coarse Baja
+        # DEM marks the subtidal kelp shelf as land elevation (z≥0 → NaN), so
+        # the kelp zone would otherwise render as "land"; this ramps the nearest
+        # real depths into that nearshore band. The OSM burn below re-cuts true
+        # above-water land, so only the OSM-water shelf keeps the filled depth.
+        depth_grid = _fill_nearshore_nodata(depth_grid)
         # Burn the OSM coastline into the bathy grid: any pixel whose
         # centre falls inside an OSM land polygon becomes NaN.
         # Without this, the bathy PNG carries the GMRT coastline as a
@@ -1729,6 +1985,7 @@ def build_spot(spot_id: str, *, force: bool) -> bool:
         spot_kelp = fetch_spot_kelp(spot_id, bbox)
     if spot_kelp is not None:
         kelp_fc, kelp_meta = spot_kelp
+        kelp_fc = _clip_kelp_to_water(kelp_fc, region_data_dir / "land.geojson", bbox)
         out_path = bundle_dir / "kelp.geojson"
         out_path.write_text(json.dumps(kelp_fc, separators=(",", ":")))
         layers_meta["kelp"] = {
@@ -1850,6 +2107,22 @@ def build_spot(spot_id: str, *, force: bool) -> bool:
         }
         print(f"    [landmarks] {len(landmark_features)} features → landmarks.geojson")
 
+    # Source attribution — kelp + mpa vary by spot/region (Landsat vs CDFW;
+    # CONANP vs CDFW), so reflect what was actually used rather than the CA
+    # defaults. kelp: prefer the layer's own source (set by the Landsat
+    # fetcher); fall back to the CDFW label when kelp came from the statewide
+    # CDFW clip. mpa: CONANP for baja, CDFW elsewhere.
+    region_name = REGION.name if hasattr(REGION, "name") else "ca"
+    kelp_source_label = (
+        layers_meta.get("kelp", {}).get("source")
+        or "CDFW BIO_CA_Kelp2016 observed aerial-survey canopy (clipped)"
+    )
+    mpa_source_label = (
+        "CONANP federal ANPs 2020 (marine + island, clipped)"
+        if region_name == "baja"
+        else "CDFW MPA ds582 (clipped)"
+    )
+
     # 4. Bundle manifest
     manifest = {
         "id": spot_id,
@@ -1861,8 +2134,8 @@ def build_spot(spot_id: str, *, force: bool) -> bool:
         "sources": {
             "bathy":     bathy_source,
             "coastline": "OSM natural=coastline via fetch_coastline.py — clipped from global land.geojson",
-            "kelp":      "CDFW BIO_CA_Kelp2016 observed aerial-survey canopy (clipped)",
-            "mpa":       "CDFW MPA ds582 (clipped)",
+            "kelp":      kelp_source_label,
+            "mpa":       mpa_source_label,
             "landmarks": "Curated per-spot dive-site / harbor labels",
             "soundings": "Depth soundings sampled from the spot DEM on a 24x24 lattice",
         },
@@ -1894,11 +2167,11 @@ def main() -> int:
     args = parser.parse_args()
 
     region_name = REGION.name if hasattr(REGION, "name") else "ca"
-    if region_name != "ca":
-        # MVP is CA-only. Write an empty index so the frontend's
-        # bundled-spots set is { } and no "View detailed map" buttons
-        # render outside CA — graceful no-op.
-        print(f"[build_spot_bundles] region={region_name} — MVP is CA-only, "
+    if region_name not in ("ca", "baja"):
+        # ca + baja have curated SPOT_CENTRES. Other regions write an empty
+        # index so no "View detailed map" buttons render there — a graceful
+        # no-op until their spot lists are curated.
+        print(f"[build_spot_bundles] region={region_name} — no spot list yet, "
               f"writing empty index.json")
         write_index([])
         return 0
@@ -1906,6 +2179,16 @@ def main() -> int:
     target_spots = [args.spot] if args.spot else list(SPOT_CENTRES.keys())
     built = []
     failed = []
+
+    def _on_disk_spots():
+        # Spots that currently have a complete bundle on disk. The index is
+        # derived from this (not just this run's successes) so a failed
+        # rebuild doesn't drop a spot whose prior bundle is still present.
+        return [
+            d.name for d in sorted(SPOTS_DIR.iterdir())
+            if d.is_dir() and (d / "bundle.json").exists()
+        ] if SPOTS_DIR.exists() else []
+
     for spot_id in target_spots:
         try:
             if build_spot(spot_id, force=args.force):
@@ -1915,16 +2198,18 @@ def main() -> int:
         except Exception as e:
             print(f"  [{spot_id}] FAILED: {e!r}")
             failed.append(spot_id)
+        # Re-emit the index after EVERY spot. Building all 22 sequentially
+        # can exceed the CI step's hard timeout; a single final write would
+        # then be killed before it runs, dropping the whole run's progress
+        # from index.json (this stranded the islands + hubs on 2026-06-16
+        # and forced a manual seed). Writing incrementally means whatever
+        # finished before a timeout stays discoverable + committable; the
+        # scan is cheap (a directory listing + a small JSON write).
+        write_index(_on_disk_spots())
 
-    # Always re-emit the index — even on partial failure, the spots that
-    # already have a bundle in their directory should be discoverable.
-    # Discover by scanning the spots dir rather than only listing this
-    # run's successes, so e.g. a failed catalina rebuild doesn't drop
-    # catalina from the index if its prior bundle is still on disk.
-    on_disk = [
-        d.name for d in sorted(SPOTS_DIR.iterdir())
-        if d.is_dir() and (d / "bundle.json").exists()
-    ] if SPOTS_DIR.exists() else []
+    # Final write covers the no-target-spots edge and reflects the end
+    # state after the last build.
+    on_disk = _on_disk_spots()
     write_index(on_disk)
 
     print(f"\nDone. built={len(built)}, failed={len(failed)}, "

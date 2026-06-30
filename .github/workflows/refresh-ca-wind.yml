@@ -64,16 +64,6 @@ jobs:
         timeout-minutes: 10
         run: python pipeline/fetch_swell_5day.py
 
-      - name: Compute kelp storm-strip risk
-        # PR-K5-3 of kelp roadmap. Recomputes whenever swell refreshes
-        # so the storm-strip warning banner in KelpPopup stays in sync
-        # with the freshest 5-day forecast (wind workflow runs hourly).
-        # Also lives in refresh-ca-data.yml for daily refreshes; either
-        # caller produces the same kelp-storm-risk.json output.
-        continue-on-error: true
-        timeout-minutes: 2
-        run: python pipeline/check_kelp_storm_risk.py
-
       - name: Fetch WaveWatch III nowcast
         continue-on-error: true
         timeout-minutes: 5

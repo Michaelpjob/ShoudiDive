@@ -37,19 +37,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-// 2026-05-26: bumped 8 → 16 as Phase 2 (PR-K2-1) of the kelp roadmap.
-// At 8× the visible bbox is ~1/8 of the full extent — fine when the
-// canonical map content was a 1 km MUR raster (which blurs past 8×
-// anyway), but SVG-vector layers (MPA, kelp, bathy, coastline,
-// place labels, saved-spot pins) are resolution-independent and
-// stay crisp at any zoom. 16× lets divers read individual kelp beds
-// and reef names in busy areas like the SF/Monterey kelp forest
-// cluster and the Channel Islands. Raster layers still soften past
-// 8× — that's a known trade-off the kelp handover called out ("kelp
-// stays crisp while SST/chl blur") and the eventual fix is Phase 4
-// raster tile-pyramid work, not held against this bump.
-// See docs/kelp-roadmap.md § "Phase 2 — Vector fidelity unlock".
-const MAX_ZOOM = 16;
+const MAX_ZOOM = 8;
 
 export function useMapViewport() {
   const stageRef = useRef(null);

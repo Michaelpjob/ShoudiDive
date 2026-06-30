@@ -136,6 +136,8 @@ export default function MobileShell({
   layerIsReal,
   hover,
   setHover,
+  bundledSpots,
+  openSpotDetail,
 }) {
   const [open, setOpen] = useState(false);
   // Stage 5c: units/mpaOn/bathyOn come from context (PrefsProvider in
@@ -470,7 +472,8 @@ function layerNameFor(layer) {
 
 // ---- Saved spots list (used inside the open sheet) ------------------------
 
-function SpotsList({ layer, composite, units, activeSpot, setActiveSpot, bundledSpots, openSpotDetail }) {
+function SpotsList({ layer, composite, units, activeSpot, setActiveSpot,
+  bundledSpots, openSpotDetail }) {
   return (
     <div className="ms-spots">
       {SAVED_SPOTS.map((s) => {
@@ -524,12 +527,10 @@ function SpotsList({ layer, composite, units, activeSpot, setActiveSpot, bundled
           unit = "ft";
           col = "var(--ink-2)";
         }
-        const isBundled = bundledSpots?.has(s.id);
-        const isActive = activeSpot === s.id;
         return (
           <div key={s.id} className="ms-spot-row">
             <button
-              className={"ms-spot" + (isActive ? " active" : "")}
+              className={"ms-spot" + (activeSpot === s.id ? " active" : "")}
               onClick={() => setActiveSpot(s.id)}
             >
               <span className="ms-spot-pin" style={{ color: col }}></span>
@@ -547,7 +548,7 @@ function SpotsList({ layer, composite, units, activeSpot, setActiveSpot, bundled
             {/* Spot Detail launch — mobile mirror of the desktop
                 button. Shows only for the active row to keep the
                 list compact on small screens. */}
-            {isBundled && isActive && (
+            {bundledSpots?.has(s.id) && activeSpot === s.id && (
               <button
                 type="button"
                 className="spot-detail-open"

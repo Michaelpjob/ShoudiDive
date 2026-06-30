@@ -152,6 +152,10 @@ export default function DesktopLayout({
   dataState,
   // Mobile guard — Tooltip honors !isMobile inside this component
   isMobile,
+  // Phase 1B Spot Detail: bundledSpots is a Set of ids that have a
+  // /data/spots/<id>/bundle.json; openSpotDetail(id) mounts the
+  // SpotDetailView overlay in MapShell.
+  bundledSpots, openSpotDetail,
 }) {
   const [infoOpen, setInfoOpen] = useState(true);
   const [controlsOpen, setControlsOpen] = useState(true);
@@ -820,6 +824,19 @@ export default function DesktopLayout({
                         <SstSparkline lng={s.lng} lat={s.lat} units={units} />
                       </div>
                     )}
+                    {/* Two-number viz row (PRD water-column V4): the
+                        spot's modeled below-cliff vis under the
+                        surface number. Falls back to one number when
+                        the column sidecar isn't loaded / no cliff. */}
+                    {wcOn && (() => {
+                      const sc = getColumnSpot(s.id);
+                      if (!sc || sc.no_cliff || sc.below_ft == null) return null;
+                      return (
+                        <div className="spot-below mono">
+                          → ~{Math.round(sc.below_ft)} ft below {Math.round(sc.cliff_ft)} ft
+                        </div>
+                      );
+                    })()}
                     {/* Spot Detail launch — only renders when the
                         active spot has a pre-computed bundle on the
                         pipeline side. Shows on the active spot only
@@ -836,19 +853,6 @@ export default function DesktopLayout({
                         View detailed map →
                       </button>
                     )}
-                    {/* Two-number viz row (PRD water-column V4): the
-                        spot's modeled below-cliff vis under the
-                        surface number. Falls back to one number when
-                        the column sidecar isn't loaded / no cliff. */}
-                    {wcOn && (() => {
-                      const sc = getColumnSpot(s.id);
-                      if (!sc || sc.no_cliff || sc.below_ft == null) return null;
-                      return (
-                        <div className="spot-below mono">
-                          → ~{Math.round(sc.below_ft)} ft below {Math.round(sc.cliff_ft)} ft
-                        </div>
-                      );
-                    })()}
                   </div>
                   <div className="spot-val mono">
                     {valTxt}

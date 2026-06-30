@@ -21,7 +21,7 @@ on:
         default: "main"
         type: string
       force_spot_bundles:
-        description: "Rebuild Spot Detail bundles even if fresh (skip the 30-day TTL)"
+        description: "Rebuild Spot Detail bundles even if fresh (--force)"
         required: false
         default: false
         type: boolean
@@ -41,18 +41,18 @@ jobs:
       actions: write   # for `gh workflow run deploy-prod.yml` at the end
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           ref: ${{ inputs.branch || (github.event_name == 'schedule' && 'main' || github.ref) }}
           token: ${{ secrets.BOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: pipeline/requirements.txt
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: "20"
           cache: npm
@@ -72,7 +72,22 @@ jobs:
         # advancing. live-cp-manifest finally surfaced it: manifest
         # 58.7h stale on 2026-05-17.
         continue-on-error: true
-        timeout-minutes: 35
+        # Skip the slow ocean fetch on a force_spot_bundles run. That path
+        # exists only to rebuild Spot Detail bundles + redeploy, and the
+        # bundles (bathy/coastline/kelp/mpa) don't depend on today's
+        # SST/chl/kd490. Skipping avoids burning the 35-min timeout cap and
+        # lets the freshness sentinels below skip too (they'd otherwise trip
+        # on the deliberately-unrefreshed data and kill the run).
+        if: ${{ !inputs.force_spot_bundles }}
+        # 2026-06-16: 35 → 75 min. The fetch is normally ~3 min, but NOAA
+        # ERDDAP had a slow spell 2026-06-15/16 where SST (7 days of 1 km
+        # MUR over the wide bbox) crawled to 35+ min — the 06-15 run barely
+        # finished at the 35-min cap, 06-16 timed out and the content
+        # sentinel then failed the whole run, freezing SST/chl/kd490 on prod
+        # for 2 days. A generous cap lets the daily refresh ride out an
+        # ERDDAP-slow day instead of failing. (If it keeps recurring, the
+        # real fix is to parallelize fetch.py's per-day requests.)
+        timeout-minutes: 75
         env:
           EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
           # Copernicus Marine (EU) chl backstop in chl_blend.py — dormant until
@@ -82,6 +97,7 @@ jobs:
         run: python pipeline/fetch.py
 
       - name: Sentinel — fail loudly if ocean fetch produced no fresh output
+        if: ${{ !inputs.force_spot_bundles }}
         # The previous step has `continue-on-error: true` so a timeout
         # there is silent. This sentinel checks the canonical SST PNG's
         # mtime to detect that case and fails the workflow loudly. Without
@@ -157,6 +173,34 @@ jobs:
         timeout-minutes: 3
         run: python pipeline/fetch_viz_column.py
 
+      - name: Build Spot Detail bundles (idempotent, ~30-day TTL)
+        # Per-spot pre-computed bathy + contours + clipped overlays for
+        # the Spot Detail view (Phase 1B — docs/spot-detail-handover.md).
+        # 22 CA spots today (4 pilots + 7 Channel Islands + 10 shore hubs
+        # + Coronados). The script self-skips bundles fresher than 30 days,
+        # so the daily cron does real work ~once a month — and only for the
+        # handful that expired that day. The Commit refreshed data step
+        # below picks up public/data/spots/ automatically.
+        #
+        # The force_spot_bundles workflow_dispatch input maps to --force,
+        # used to invalidate the on-disk cache when the builder itself
+        # has changed (contour sizing, encoding, etc.).
+        #
+        # 90-min budget: a forced full rebuild fetches GMRT bathy + CDFW
+        # kelp per spot for all 22 sequentially (~3-4 min each on the big
+        # island bboxes), which overran the old 30-min cap and left the run
+        # with no index update. build_spot_bundles.py now re-emits
+        # index.json after every spot, so even if a rebuild still times out
+        # the finished bundles stay committed + discoverable.
+        continue-on-error: true
+        timeout-minutes: 90
+        run: |
+          if [ "${{ inputs.force_spot_bundles }}" = "true" ]; then
+            python pipeline/build_spot_bundles.py --force
+          else
+            python pipeline/build_spot_bundles.py
+          fi
+
       - name: Fetch RTOFS ocean-model forecast
         # Parallel SST forecast + surface currents from NOAA RTOFS.
         # ~620 MB transfer (4 sample leads × ~155 MB). 25-min timeout
@@ -164,6 +208,10 @@ jobs:
         # Walks back to prior day's 00z cycle if today's hasn't fully
         # landed by 06:00 UTC.
         continue-on-error: true
+        # Skip on a force_spot_bundles run — RTOFS is a ~620 MB ocean-model
+        # pull unrelated to the Spot Detail bundles; no need to spend up to
+        # 25 min on it when the run only rebuilds bundles + redeploys.
+        if: ${{ !inputs.force_spot_bundles }}
         timeout-minutes: 25
         run: python pipeline/fetch_rtofs.py
 
@@ -245,7 +293,26 @@ jobs:
       # lets us iterate on the bundle (push to dev → deploy-dev fires)
       # without having to refire the heavy data pipeline.
 
+      - name: Coverage guard — keep last-good for any near-empty layer
+        # always() is REQUIRED. An earlier step that FAILS — e.g. the
+        # post-fetch freshness sentinel firing on a degraded chl_1d — would
+        # otherwise skip this guard (a custom `if:` still carries an implicit
+        # success()), yet the commit step below runs with if: always() and
+        # would land the degraded layer anyway. That stranded a 9%-valid
+        # chl_1d on main twice (e.g. run 27666503612: fetch ok → freshness
+        # sentinel FAILED → guard SKIPPED → commit still ran), breaking
+        # test_no_nan_floods for every open PR. always() runs the guard so it
+        # restores last-good BEFORE the always-commit, regardless of prior
+        # failures. A flaky / dead ERDDAP source emits a near-empty 1-day
+        # composite; this restores the prior good PNG from HEAD for any layer
+        # below its valid floor (an all-failed fetch → every layer restored to
+        # HEAD = unchanged → the unchanged-sentinel below still trips).
+        if: ${{ always() && !inputs.force_spot_bundles }}
+        continue-on-error: true
+        run: python pipeline/check_coverage_guard.py
+
       - name: Sentinel — fail if SST/chl/wind PNGs unchanged from HEAD
+        if: ${{ !inputs.force_spot_bundles }}
         # Complements `check_fetch_freshness.py` (which is mtime-based,
         # catches "fetcher didn't run") with a content-based check that
         # catches "fetcher ran but produced byte-identical output."

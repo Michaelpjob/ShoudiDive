@@ -9,10 +9,9 @@
 // cleanup-on-cancel pattern.
 //
 // API:
-//   const p = usePopupState({ mpaOn, bathyOn, kelpOn });
+//   const p = usePopupState({ mpaOn, bathyOn });
 //   p.selectedMpa, p.setSelectedMpa       — currently-clicked MPA polygon, null = closed
 //   p.selectedBathy, p.setSelectedBathy   — currently-clicked bathy feature (seamount/reef/community spot)
-//   p.selectedKelp, p.setSelectedKelp     — currently-clicked kelp bed polygon, null = closed
 //   p.bathyFeatures                       — lazy-loaded GeoJSON feature array, null until bathyOn is true
 //   p.setBathyFeatures                    — exposed for test/dev tooling; rarely called outside the lazy-load effect
 //
