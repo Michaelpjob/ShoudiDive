@@ -170,20 +170,45 @@ OFFSHORE_FAR_KM = 17.0       # ~9.2 nm (9-Mile-Bank class) — full fish weight 
 # skill (model_sweep.py) holds or improves. Dev-only while we calibrate.
 SHORE_CREDIT = 0.15
 
-# --- Shore-source credit: cautiously boost the mainland (shore) beds' output -
-# Raw Landsat area-weighting (even sqrt-compressed by SEED_AREA_POW) lets the
-# big outer-island forests dominate the paddy field, so shore beds like Palos
-# Verdes barely feed the mainland fishery the angler actually works (the rigs
-# out to the 14-Mile Bank). A mainland paddy reaches that ground with a short
-# drift + far less beaching/sinking than a 30 nm island paddy, so its real
-# contribution there is under-credited. SHORE_SOURCE_BOOST scales NON-island
-# bed emission. Cautious + reversible: 1.0 = current; verify catch-report skill
-# holds (shore_eval.py / model_sweep.py) before dialing up. Dev-only for now.
-# Calibrated 2026-06-24 (shore_ab.py): 1.4 lifts catch-report skill 0.617->0.626
-# while mainland share only rises 28%->35% (islands still the majority), and the
-# Long Beach rigs->14-Mile corridor climbs 0.82/0.86/0.90 -> 0.85/0.88/0.92.
-# 1.8 helps a bit more (skill 0.631, 41%) if we want to push it later.
-SHORE_SOURCE_BOOST = 1.4
+# --- Shore (mainland) beds: EVIDENCE-BASED source treatment ------------------
+# Recut 2026-07-01 from a 103-agent deep-research adjudication of SCB mainland-
+# vs-island beds (Hobday 2000; Seymour et al. 1988/1989 Point Loma; Leichter
+# 2023; Cavanaugh/Bell Landsat-detection studies). The prior flat
+# SHORE_SOURCE_BOOST=1.4 CONFLATED two mechanistically-distinct things the
+# research says must be split, and applied them YEAR-ROUND — over-crediting
+# mainland beds in calm summer, when the evidence says mainland detachment is
+# WINTER-storm-dominated (Hobday: 23% loss of attached plants in winter vs 8%
+# in fall). The 1.4 constant itself was validated by NO surviving source.
+# So the flat boost is retired and split into its two real, separable parts:
+#
+#   (1) STATIC detection bias  -> SHORE_DETECT_CORR (below). Landsat 30 m
+#       systematically under-counts the nearshore mainland fringe (misses
+#       28-75% of kelp within ~30 m of shore; ~40% under-count vs UAV at
+#       Saunders Reef; cannot see stands <15% of a 900 m^2 pixel). This is a
+#       real, ~time-invariant measurement gap -> a flat multiplier on mainland
+#       canopy AREA is the DEFENSIBLE form. Magnitude 1.2-1.4x is the modeler's
+#       choice WITHIN the supported direction; no source pins the exact value,
+#       so we sit conservative in-band at 1.30.
+#   (2) SEASONAL wave-driven detachment -> CANOPY_SHORE_WAVE_GAIN (in the
+#       canopy reservoir, config below). Mainland winter mortality is entangle-
+#       ment-driven and SHALLOWEST-highest (Seymour Point Loma Jan-1988 storm:
+#       94% at 12 m, 69% at 15 m, 65% at 18 m -> a shallow-fringe cascade), so
+#       mainland beds shed MORE per unit wave energy. Coupling it to wave dose
+#       makes it winter-weighted automatically (big swells = winter) and ~zero
+#       in a calm summer, instead of a false year-round inflation.
+#
+# SHORE_SOURCE_BOOST kept defined (=1.0, NEUTRAL) only so the legacy
+# stateless/model_sweep fallback path still imports; the live reservoir path in
+# drift.py no longer uses it.
+SHORE_SOURCE_BOOST = 1.0        # DEPRECATED/neutral — see SHORE_DETECT_CORR + CANOPY_SHORE_WAVE_GAIN
+SHORE_DETECT_CORR = 1.30        # (b) flat Landsat nearshore under-detection correction on mainland area (modeler's choice in the evidence-supported 1.2-1.4x band)
+# (c) Mainland-shed paddies plausibly beach more / escape offshore less than
+# island paddies (winter shedding coincides with peak LOCAL beaching; kelp-to-
+# beach connectivity is short-range). DIRECTIONALLY supported but NOT quantified
+# by any surviving SCB source -> kept MODEST and flagged as an assumption. Scales
+# the FLOATING (findable-offshore) weight of mainland-shed rafts only; the drift
+# physics + local SHORE_CREDIT nearshore weighting are untouched.
+SHORE_OFFSHORE_YIELD = 0.90     # (c) UNVALIDATED assumption — mainland rafts, lower far-offshore escape
 
 # --- Water-quality gate: WHEN nearshore paddies turn on --------------------
 # Real-world rule (BD/WON/SpearFactor + yellowtail SST guides): nearshore
@@ -284,6 +309,15 @@ CANOPY_WARM_T0 = 17.5
 CANOPY_WARM_WEAKEN = 0.15   # heat accelerates senescence (R->V), per °C above CANOPY_WARM_T0 -- warm beds shed MORE per unit canopy
 CANOPY_SHED_BASE = 0.020    # baseline daily shed fraction of V (senescence self-detachment; always-on paddy trickle even in calm — Hobday's standing raft population)
 CANOPY_SHED = 0.0015        # storm shed gain: + CANOPY_SHED * wave_dose on top of baseline (Seymour-anchored)
+# Mainland (non-island) beds shed MORE per unit wave energy than island beds:
+# the shallow mainland fringe fails by entanglement cascade in winter storms
+# (Seymour Point Loma: mortality rises as depth falls — 94%@12m vs 65%@18m),
+# and mainland detachment is winter-storm-dominated (Hobday: 23% winter loss vs
+# 8% fall). Applied ONLY to the wave (storm) shed term, so it is winter-weighted
+# automatically (kicks in on big-swell days, ~zero in a calm summer) instead of
+# the retired flat year-round SHORE_SOURCE_BOOST. 0.0 = mainland sheds like an
+# island; 0.6 = +60% storm-shed sensitivity on the shallow mainland fringe.
+CANOPY_SHORE_WAVE_GAIN = 0.6
 CANOPY_WARM_INT = 0.08      # warm×wave interaction: heat-weakened kelp sheds easier, per °C above CANOPY_WARM_T0
 CANOPY_INSITU = 0.010       # daily in-situ vulnerable loss (decompose/sink, not findable)
 CANOPY_INIT_ROBUST = 0.60   # spin-up: robust fraction of K at the season start

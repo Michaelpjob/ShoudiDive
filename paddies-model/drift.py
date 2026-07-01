@@ -155,8 +155,8 @@ def run_drift(forcing, landmask, detach, now_h=None):
         clng, clat = _nearest_water(landmask, blng, blat)   # snap inland centroids to coastal water
         wmap = detach["per_bed"][name]
         area_factor = (area_km2 ** _pow) / _mean_area
-        if not is_island:   # cautious shore-source credit: mainland beds feed the
-            area_factor *= getattr(config, "SHORE_SOURCE_BOOST", 1.0)  # nearshore fishery with short, low-attrition drift
+        if not is_island:   # (b) static Landsat nearshore under-detection: 30 m
+            area_factor *= getattr(config, "SHORE_DETECT_CORR", 1.0)  # misses the mainland fringe -> correct the area weight (NOT a seasonal boost)
         for age in config.RELEASE_AGES_DAYS:
             if age < config.MIN_FINDABLE_AGE_DAYS:
                 continue   # fresh sheds still on the source forest aren't findable rafts
@@ -170,6 +170,8 @@ def run_drift(forcing, landmask, detach, now_h=None):
                 fw = float(w) * surv
                 if fate == "floating":   # weight the findable paddy by its current-water quality
                     fw *= _quality(forcing.sample_scalar("sst", now_h, elat, elng))
+                    if not is_island:    # (c) UNVALIDATED assumption: mainland rafts beach more / escape offshore less
+                        fw *= getattr(config, "SHORE_OFFSHORE_YIELD", 1.0)
                 rec = {"bed": name, "island": is_island, "age_days": age,
                        "lng": round(elng, 4), "lat": round(elat, 4),
                        "weight": round(float(w), 3), "survival": round(surv, 3),

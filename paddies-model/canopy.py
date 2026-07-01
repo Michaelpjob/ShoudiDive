@@ -60,6 +60,10 @@ def simulate(beds, sst_hist, wave_hist, profiles, ndays=None):
         name, blng, blat, _r, _isl, area = b
         prof = profiles.get(name)
         K = max(float(area), 1e-6)
+        # Mainland (non-island) beds shed MORE per unit wave energy: the shallow
+        # mainland fringe fails by entanglement cascade in winter storms
+        # (Seymour Point Loma). Winter-weighted because it rides the wave term.
+        shore_wave_gain = 1.0 if _isl else (1.0 + config.CANOPY_SHORE_WAVE_GAIN)
         # Spin-up anchored to the Landsat snapshot: a bed currently at a fraction
         # of its all-time extent (CELL_HEALTH < 1 = declined/heat-thinned) starts
         # with more of its canopy already in the vulnerable pool. (P4, snapshot.)
@@ -79,7 +83,7 @@ def simulate(beds, sst_hist, wave_hist, profiles, ndays=None):
 
             grow = config.CANOPY_GROW * R * max(0.0, 1.0 - (R + V) / K) * _growth_gate(sst)
             weaken = config.CANOPY_WEAKEN * R * (1.0 + config.CANOPY_WARM_WEAKEN * warm_excess)
-            shed = V * (config.CANOPY_SHED_BASE + config.CANOPY_SHED * wdose) \
+            shed = V * (config.CANOPY_SHED_BASE + config.CANOPY_SHED * wdose * shore_wave_gain) \
                 * (1.0 + config.CANOPY_WARM_INT * warm_excess)
             shed = min(shed, V)                # <-- can't shed what's gone
             insitu = config.CANOPY_INSITU * V
