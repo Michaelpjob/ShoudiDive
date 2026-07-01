@@ -36,17 +36,22 @@ import exposure as exposure_mod
 import kelp_source
 
 
-def _growth_gate(sst):
-    """[FLOOR..1] nutrient/temperature REGROWTH gate: full at/below COOL, decaying
-    to a nonzero FLOOR at/above WARM. The floor matters: warm/low-nitrate beds keep
-    growing on internal-wave + ammonium N (Gerard 1982 residual 0.9%/day; Leichter
-    2023 refugia), so the canopy is NOT starved to zero. SST only throttles
-    REGROWTH here — it does NOT set the shedding flux (that's senescence+waves)."""
+def _growth_gate(sst, fl=None):
+    """[fl..1] nutrient/temperature REGROWTH gate: full at/below COOL, decaying
+    to a nonzero FLOOR `fl` at/above WARM. The floor matters: warm/low-nitrate beds
+    keep growing on internal-wave + ammonium/urea N (Gerard 1982 residual 0.9%/day
+    ~25% of max; Leichter 2023 internal waves 84-100% of warm-period NO3; Brzezinski
+    2013 regenerated N), so the canopy is NOT starved to zero. A 0.20 floor drained
+    warm beds monotonically to ~16% by July, which inverts the observed summer-peak
+    default (Bell 2019) — hence the raised base/island floors. `fl` is per-bed
+    (island refugia > mainland). SST only throttles REGROWTH here — it does NOT set
+    the shedding flux (that's senescence+waves)."""
+    if fl is None:
+        fl = config.CANOPY_GROW_GATE_FLOOR
     if sst != sst:
-        return 0.5 * (1.0 + config.CANOPY_GROW_GATE_FLOOR)
+        return 0.5 * (1.0 + fl)
     lo, hi = config.CANOPY_GROW_GATE_COOL, config.CANOPY_GROW_GATE_WARM
     g = float(np.clip((hi - sst) / max(hi - lo, 1e-6), 0.0, 1.0))
-    fl = config.CANOPY_GROW_GATE_FLOOR
     return fl + (1.0 - fl) * g
 
 
@@ -64,6 +69,10 @@ def simulate(beds, sst_hist, wave_hist, profiles, ndays=None):
         # mainland fringe fails by entanglement cascade in winter storms
         # (Seymour Point Loma). Winter-weighted because it rides the wave term.
         shore_wave_gain = 1.0 if _isl else (1.0 + config.CANOPY_SHORE_WAVE_GAIN)
+        # ISLAND beds get a higher warm-water regrowth FLOOR (internal-wave refugia
+        # decouple nutrient supply from bulk SST at exposed offshore islands like
+        # San Clemente/Catalina; Leichter 2023, Fram 2013). Mainland uses the base.
+        grow_floor = config.CANOPY_GROW_GATE_FLOOR_ISLAND if _isl else config.CANOPY_GROW_GATE_FLOOR
         # Spin-up anchored to the Landsat snapshot: a bed currently at a fraction
         # of its all-time extent (CELL_HEALTH < 1 = declined/heat-thinned) starts
         # with more of its canopy already in the vulnerable pool. (P4, snapshot.)
@@ -81,7 +90,7 @@ def simulate(beds, sst_hist, wave_hist, profiles, ndays=None):
             warm_excess = max(0.0, sst - config.CANOPY_WARM_T0) if sst == sst else 0.0
             wdose = wave_hist.dose(prof, blng, blat, d) if wave_hist is not None else 0.0
 
-            grow = config.CANOPY_GROW * R * max(0.0, 1.0 - (R + V) / K) * _growth_gate(sst)
+            grow = config.CANOPY_GROW * R * max(0.0, 1.0 - (R + V) / K) * _growth_gate(sst, grow_floor)
             weaken = config.CANOPY_WEAKEN * R * (1.0 + config.CANOPY_WARM_WEAKEN * warm_excess)
             shed = V * (config.CANOPY_SHED_BASE + config.CANOPY_SHED * wdose * shore_wave_gain) \
                 * (1.0 + config.CANOPY_WARM_INT * warm_excess)

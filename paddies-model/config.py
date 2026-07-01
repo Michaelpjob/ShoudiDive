@@ -203,12 +203,15 @@ SHORE_CREDIT = 0.15
 SHORE_SOURCE_BOOST = 1.0        # DEPRECATED/neutral — see SHORE_DETECT_CORR + CANOPY_SHORE_WAVE_GAIN
 SHORE_DETECT_CORR = 1.30        # (b) flat Landsat nearshore under-detection correction on mainland area (modeler's choice in the evidence-supported 1.2-1.4x band)
 # (c) Mainland-shed paddies plausibly beach more / escape offshore less than
-# island paddies (winter shedding coincides with peak LOCAL beaching; kelp-to-
-# beach connectivity is short-range). DIRECTIONALLY supported but NOT quantified
-# by any surviving SCB source -> kept MODEST and flagged as an assumption. Scales
-# the FLOATING (findable-offshore) weight of mainland-shed rafts only; the drift
-# physics + local SHORE_CREDIT nearshore weighting are untouched.
-SHORE_OFFSHORE_YIELD = 0.90     # (c) UNVALIDATED assumption — mainland rafts, lower far-offshore escape
+# island paddies. DIRECTION now supported by Emery et al. 2025 (Commun. Biol.,
+# SB Channel, 24 beaches/100 km): kelp->beach wrack connectivity is LOCAL (<10 km)
+# and STRONGEST IN WINTER (storms limit which beaches catch it) -> detached
+# mainland kelp preferentially beaches near its short, shallow-fringe source
+# rather than reaching the far-offshore grounds. But the FRACTION (beach vs
+# offshore-escape) is still unquantified -> the 0.90 magnitude stays a MODEST
+# modeler's choice. Scales the FLOATING (findable-offshore) weight of mainland-
+# shed rafts only; drift physics + local SHORE_CREDIT weighting are untouched.
+SHORE_OFFSHORE_YIELD = 0.90     # (c) direction supported (Emery 2025 <10km winter-local wrack); magnitude a modeler's choice
 
 # --- Water-quality gate: WHEN nearshore paddies turn on --------------------
 # Real-world rule (BD/WON/SpearFactor + yellowtail SST guides): nearshore
@@ -299,7 +302,28 @@ SEASON_DAYS = 120            # season-long reservoir integration window (days)
 CANOPY_GROW = 0.06          # max daily robust regrowth rate (fraction of R, gated)
 CANOPY_GROW_GATE_COOL = 14.0  # SST °C at/below which regrowth is full (nitrate-replete; nitrate ~0 above ~14.2C, Snyder 2020)
 CANOPY_GROW_GATE_WARM = 19.0  # SST °C of MINIMUM regrowth (min canopy condition ~19C, Bell 2021) -> the FLOOR, not zero
-CANOPY_GROW_GATE_FLOOR = 0.20  # regrowth never below 20% of max (non-nitrate N + internal-wave refugia keep kelp growing in warm water; Gerard/Leichter)
+# Warm-water REGROWTH FLOOR raised 0.20 -> 0.30 (mainland/base) after a 102-agent
+# deep-research adjudication (2026-07-01, "San Clemente under-reporting"): a 0.20
+# floor drained warm SCB beds' canopy MONOTONICALLY to ~16% fullness by July,
+# which INVERTS the observed default (Bell 2019, 34-yr Landsat: SCB canopy PEAKS
+# spring/summer, bottoms WINTER; 20C is sub-lethal, collapse threshold ~24C
+# Cavanaugh 2019). Warm beds keep growing on REGENERATED N — ammonium+urea are
+# often MORE abundant than nitrate in the SCB (Brzezinski 2013; Lees 2024) and a
+# transplant held ~25% of max growth on reserves near Catalina (Gerard 1982) — so
+# the SST-nitrate gate must not throttle regrowth toward zero. Base 0.30 = the
+# regenerated-N sustained fraction on a warm MAINLAND bed.
+CANOPY_GROW_GATE_FLOOR = 0.30
+# ISLAND beds get a HIGHER floor (internal-wave REFUGIA): during warm/low-upwelling
+# periods internal waves supply 84-100% of NO3 exposure to SoCal kelp (Leichter
+# 2023) and Macrocystis bridges the whole water column to nitrate below the
+# thermocline (Fram 2013) — exposed offshore islands (San Clemente, Catalina) at
+# the SCB edge decouple their nutrient supply from bulk surface SST far more than a
+# sheltered mainland embayment at the same SST (deep-research verdict (e),
+# SUPPORTED). Sits at the TOP of the evidence-supported 0.25-0.4 band because SCI
+# is the strongest-refugia case; NOT higher, per the "proportions-of-low-flux /
+# draining-transient" magnitude caveats. Only binds at SST>=19C, so it barely
+# touches the already-cool northern Channel Islands (they grow well above the floor).
+CANOPY_GROW_GATE_FLOOR_ISLAND = 0.40
 CANOPY_WEAKEN = 0.022       # baseline daily R->V senescence -- the DOMINANT shed driver (age-structured frond turnover, Rodriguez/Rassweiler ~12x/yr)
 # Warm-DETACHMENT enhancement threshold lowered 20 -> 17.5C: enhanced senescence-
 # vulnerability/condition loss onsets ~17-18C (Bell 2021 min condition ~19C;
