@@ -60,6 +60,8 @@ select{background:#1e293b;color:#cbd5e1;border:1px solid #334155;border-radius:6
 .copybtn{background:#0e7490;color:#e0f2fe;border:none;border-radius:5px;padding:3px 9px;cursor:pointer;font:600 11px system-ui;margin-top:5px}
 .leaflet-popup-content .wpc{font:12px/1.4 ui-monospace,Menlo,Consolas,monospace;color:#0b1220}
 .logbtn{background:#dc2626;color:#fff;border:none;border-radius:6px;padding:3px 10px;cursor:pointer;font:600 12px system-ui}
+.simlink{color:#7dd3fc;text-decoration:none;font:600 12px system-ui;border:1px solid #164e63;border-radius:6px;padding:3px 9px;white-space:nowrap}
+.simlink:hover{background:#0c4a6e;color:#e0f2fe}
 .leaflet-tooltip.rep-tip{background:rgba(15,23,42,.95) !important;color:#fff;border:1px solid #64748b !important;border-radius:5px;font:600 11px system-ui;padding:2px 7px;box-shadow:0 1px 3px rgba(0,0,0,.5)}
 .leaflet-tooltip-top.rep-tip::before{border-top-color:#64748b}
 .leaflet-tooltip.ref-lbl{background:none !important;border:none !important;box-shadow:none !important;color:#9fb0c0;font:500 9px/1.1 system-ui;text-shadow:0 1px 2px #000,0 0 2px #000;padding:0;white-space:nowrap;opacity:.72;display:none}
@@ -107,7 +109,8 @@ SITE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8"/>
  <b>Kelp Paddy Finder</b><span class="beta">BETA</span>
  <span class="time"><input type="range" id="tslider" min="0" step="1"/><span id="tlabel"></span></span>
  &nbsp;Launch:&nbsp;<select id="launch"></select>
- &nbsp;<button id="logbtn" class="logbtn" title="Log a catch: tap the map or type GPS coordinates">+ Log a catch</button></div>
+ &nbsp;<button id="logbtn" class="logbtn" title="Log a catch: tap the map or type GPS coordinates">+ Log a catch</button>
+ &nbsp;<a class="simlink" href="summer.html" title="Summer season simulation: Jun-Oct, 2025 vs 2026 El Nino">Summer sim &#8599;</a></div>
 <div class="panel" id="panel">Loading paddy model&hellip;</div>
 <div class="coordbox" id="coordbox"></div>
 <script src="leaflet.js"></script>
