@@ -1,7 +1,8 @@
 'use strict';
 var M,DATA,SC,FI=0,OV,PLAY=null;
 function boot(d){DATA=d;SC=d.scenarios[0].tag;
- M=L.map('map',{zoomControl:true,attributionControl:false}).setView([33.2,-118.7],8);
+ M=L.map('map',{zoomControl:false,attributionControl:false}).setView([33.2,-118.7],8);
+ L.control.zoom({position:'topright'}).addTo(M);
  fetch('/data/land.geojson',{cache:'force-cache'}).then(function(r){return r.ok?r.json():null;}).then(function(g){
   if(g)L.geoJSON(g,{style:{color:'#475569',weight:.6,fillColor:'#1f2937',fillOpacity:1},interactive:false}).addTo(M);
  }).catch(function(){});
