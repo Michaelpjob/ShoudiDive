@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import datetime as dt
 import math
+import os
 import time
 
 import numpy as np
@@ -33,6 +34,47 @@ def _chunks(seq, n):
         yield seq[i:i + n]
 
 
+_HIST_CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out", "cache")
+_HIST_TTL_H = 12.0
+
+
+def _hist_cache_load(name):
+    p = os.path.join(_HIST_CACHE_DIR, name)
+    if os.path.exists(p) and (time.time() - os.path.getmtime(p)) / 3600.0 < _HIST_TTL_H:
+        try:
+            return np.load(p, allow_pickle=False)
+        except Exception:
+            return None
+    return None
+
+
+def _hist_cache_save(name, **arrays):
+    try:
+        os.makedirs(_HIST_CACHE_DIR, exist_ok=True)
+        np.savez(os.path.join(_HIST_CACHE_DIR, name), **arrays)
+    except Exception:
+        pass
+
+
+def _get_retry(url, params, timeout=120, tries=4):
+    """GET with exponential backoff on 429/5xx — the reservoir's seasonal SST +
+    wave fetches are heavy and can trip Open-Meteo's rate limit (esp. in bursts).
+    Raises after the last try so callers still degrade gracefully."""
+    delay = 10.0
+    for i in range(tries):
+        r = requests.get(url, params=params, timeout=timeout)
+        if r.status_code == 429 or r.status_code >= 500:
+            if i < tries - 1:
+                print(f"    {r.status_code} rate-limited; backing off {delay:.0f}s...")
+                time.sleep(delay)
+                delay *= 2
+                continue
+        r.raise_for_status()
+        return r
+    r.raise_for_status()
+    return r
+
+
 def _fetch_batch(url, lats_b, lngs_b, hourly_vars, extra=None):
     params = {
         "latitude": ",".join(f"{v:.4f}" for v in lats_b),
@@ -45,8 +87,7 @@ def _fetch_batch(url, lats_b, lngs_b, hourly_vars, extra=None):
     if extra:
         params.update(extra)
     try:
-        r = requests.get(url, params=params, timeout=120)
-        r.raise_for_status()
+        r = _get_retry(url, params, timeout=120)
         data = r.json()
         results = data if isinstance(data, list) else [data]
         if len(results) == len(lats_b):
@@ -277,3 +318,198 @@ def make_forcing(raw, scenario="live", hfr=None):
 
 def build_forcing(scenario="live"):
     return make_forcing(fetch_raw(), scenario)
+
+
+# ---------------------------------------------------------------------------
+# Trailing thermal history -> cumulative warm-shed DOSE (detachment warm term)
+# ---------------------------------------------------------------------------
+# Warm-water canopy loss is cumulative over ~weeks, not same-day (see config
+# detachment notes). We need SST further back than the 21-day drift window: the
+# oldest release cohort (age ~21 d) needs its prior ~6-week dose, i.e. SST to
+# ~63 d ago. This is an SST-ONLY, decoupled fetch so the main forcing stays lean.
+THERMAL_DAYS_BACK = 70
+
+
+class ThermalHistory:
+    """Daily-mean SST on the coarse grid, with a trailing-window thermal-dose
+    sampler. `dose(...)` returns the MEAN of max(0, SST - thresh) over the
+    `window_days` ending `age_days` before now (degC) -- a degree-week-style
+    dose that rewards SUSTAINED warmth, not a 2-day blip."""
+
+    def __init__(self, lats, lngs, sst_daily, step):
+        self.lats, self.lngs, self.sst_daily, self.step = lats, lngs, sst_daily, step
+        self.ndays = sst_daily.shape[0]   # sst_daily[0]=today, [d]=d days ago
+
+    def _bil(self, cube, d, lat, lng):
+        j0, i0, tj, ti_ = _bil_weights(self.lats, self.lngs, lat, lng, self.step)
+        ws = ((1 - tj) * (1 - ti_), (1 - tj) * ti_, tj * (1 - ti_), tj * ti_)
+        ij = ((j0, i0), (j0, i0 + 1), (j0 + 1, i0), (j0 + 1, i0 + 1))
+        num = den = 0.0
+        for (jj, ii), w in zip(ij, ws):
+            v = cube[d, jj, ii]
+            if v == v:
+                num += v * w
+                den += w
+        return num / den if den > 0 else float("nan")
+
+    def daily_sst(self, lng, lat, day_ago):
+        """Daily-mean SST (°C) at a point, `day_ago` days before now."""
+        d = int(round(day_ago))
+        if d < 0 or d >= self.ndays:
+            return float("nan")
+        return self._bil(self.sst_daily, d, lat, lng)
+
+    def dose(self, lat, lng, thresh, age_days, window_days):
+        d0 = int(round(age_days))
+        d1 = min(self.ndays, d0 + int(round(window_days)))
+        if d0 >= self.ndays:
+            return 0.0
+        excess = []
+        for d in range(d0, d1):
+            v = self._bil(self.sst_daily, d, lat, lng)
+            if v == v:
+                excess.append(max(0.0, v - thresh))
+        return float(np.mean(excess)) if excess else 0.0
+
+
+class WaveHistory:
+    """Daily wave state on the coarse grid (Hs_max, Tp, dominant Dp per day).
+    dose(profile, lng, lat, day_ago) -> exposure-weighted wave ENERGY above
+    threshold that day (the daily shed forcing for the canopy reservoir)."""
+
+    def __init__(self, lats, lngs, hs, tp, dp, step):
+        self.lats, self.lngs, self.hs, self.tp, self.dp, self.step = lats, lngs, hs, tp, dp, step
+        self.ndays = hs.shape[0]   # [0]=today, [d]=d days ago
+
+    def _bil(self, cube, d, lat, lng):
+        j0, i0, tj, ti_ = _bil_weights(self.lats, self.lngs, lat, lng, self.step)
+        ws = ((1 - tj) * (1 - ti_), (1 - tj) * ti_, tj * (1 - ti_), tj * ti_)
+        ij = ((j0, i0), (j0, i0 + 1), (j0 + 1, i0), (j0 + 1, i0 + 1))
+        num = den = 0.0
+        for (jj, ii), w in zip(ij, ws):
+            v = cube[d, jj, ii]
+            if v == v:
+                num += v * w
+                den += w
+        return num / den if den > 0 else float("nan")
+
+    def dose(self, profile, lng, lat, day_ago):
+        import exposure as _ex
+        d = int(round(day_ago))
+        if d < 0 or d >= self.ndays:
+            return 0.0
+        hs = self._bil(self.hs, d, lat, lng)
+        tp = self._bil(self.tp, d, lat, lng)
+        dp = self._bil(self.dp, d, lat, lng)
+        if hs != hs or tp != tp or tp <= 0:
+            return 0.0
+        energy = hs * hs * tp
+        ex = _ex.exposure(profile, dp) if dp == dp else 1.0
+        return ex * max(0.0, energy - config.WAVE_E_CRIT)
+
+
+def _fetch_daily_field(url, daily_vars, days_back, chunk=50):
+    lats, lngs = grid_axes()
+    LA, LN = np.meshgrid(lats, lngs, indexing="ij")
+    flat_la, flat_ln = LA.ravel(), LN.ravel()
+    nlat, nlng = len(lats), len(lngs)
+    all_results = [None] * len(flat_la)
+    for idx in _chunks(list(range(len(flat_la))), chunk):
+        params = {
+            "latitude": ",".join(f"{flat_la[i]:.4f}" for i in idx),
+            "longitude": ",".join(f"{flat_ln[i]:.4f}" for i in idx),
+            "daily": ",".join(daily_vars),
+            "past_days": days_back, "forecast_days": 1, "timezone": "UTC",
+        }
+        r = _get_retry(url, params, timeout=120)
+        data = r.json()
+        res = data if isinstance(data, list) else [data]
+        for k, i in enumerate(idx):
+            all_results[i] = res[k]
+    times = None
+    for res in all_results:
+        t = (res or {}).get("daily", {}).get("time")
+        if t:
+            times = t
+            break
+    if not times:
+        raise RuntimeError("no daily time axis")
+    nt = len(times)
+    cubes = {v: np.full((nt, nlat, nlng), np.nan) for v in daily_vars}
+    for fi, res in enumerate(all_results):
+        j, i = fi // nlng, fi % nlng
+        dd = (res or {}).get("daily", {})
+        for v in daily_vars:
+            arr = dd.get(v)
+            if not arr:
+                continue
+            a = np.array([np.nan if x is None else x for x in arr], dtype=float)
+            m = min(len(a), nt)
+            cubes[v][:m, j, i] = a[:m]
+    return lats, lngs, cubes
+
+
+def fetch_wave_history(days_back=None):
+    """Daily wave history (Hs_max, Tp, dominant Dp) on the coarse grid, indexed
+    [0]=today .. [d]=d days ago, for the seasonal canopy-shed forcing. Returns a
+    WaveHistory or None on failure (reservoir then uses the short 21-day forcing)."""
+    days_back = config.SEASON_DAYS if days_back is None else days_back
+    cn = f"wave_{days_back}.npz"
+    cz = _hist_cache_load(cn)
+    if cz is not None:
+        print(f"  wave history: cache hit ({days_back}d)")
+        return WaveHistory(cz["lats"], cz["lngs"], cz["hs"], cz["tp"], cz["dp"], config.GRID_STEP_DEG)
+    try:
+        print(f"fetching {days_back}d wave history (seasonal shed forcing)...")
+        lats, lngs, cubes = _fetch_daily_field(
+            config.MARINE_URL,
+            ["wave_height_max", "wave_period_max", "wave_direction_dominant"], days_back)
+    except Exception as e:
+        print(f"  wave-history fetch failed ({e}); reservoir shed -> short-window only")
+        return None
+    # daily time axis runs oldest->newest; reverse so index 0 = most recent day
+    hs = cubes["wave_height_max"][::-1]
+    tp = cubes["wave_period_max"][::-1]
+    dp = cubes["wave_direction_dominant"][::-1]
+    cov = float(np.isfinite(hs).mean())
+    print(f"  wave history: {hs.shape[0]} daily layers, {cov*100:.0f}% filled")
+    _hist_cache_save(cn, lats=lats, lngs=lngs, hs=hs, tp=tp, dp=dp)
+    return WaveHistory(lats, lngs, hs, tp, dp, config.GRID_STEP_DEG)
+
+
+def fetch_thermal_history(days_back=THERMAL_DAYS_BACK):
+    """SST-only coarse-grid daily history for the cumulative warm-shed dose.
+    Returns a ThermalHistory, or None on failure (detachment then falls back to
+    the instantaneous warm proxy so a fetch outage can't break the run)."""
+    cn = f"sst_{days_back}.npz"
+    cz = _hist_cache_load(cn)
+    if cz is not None:
+        print(f"  SST history: cache hit ({days_back}d)")
+        return ThermalHistory(cz["lats"], cz["lngs"], cz["sst_daily"], config.GRID_STEP_DEG)
+    try:
+        print(f"fetching {days_back}d SST history (cumulative warm-shed dose)...")
+        lats, lngs, hours, t0, cubes = _fetch_field(
+            config.MARINE_URL, ["sea_surface_temperature"],
+            extra={"past_days": days_back, "forecast_days": 1})
+    except Exception as e:
+        print(f"  thermal-history fetch failed ({e}); warm term -> instantaneous fallback")
+        return None
+    sst = cubes["sea_surface_temperature"]
+    now = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
+    now_h = (now - t0).total_seconds() / 3600.0
+    days_ago = np.floor((now_h - hours) / 24.0 + 1e-9).astype(int)   # 0=today, +into past
+    ndays = days_back + 1
+    nlat, nlng = len(lats), len(lngs)
+    sst_daily = np.full((ndays, nlat, nlng), np.nan)
+    with np.errstate(invalid="ignore"):
+        for d in range(ndays):
+            sel = days_ago == d
+            if sel.any():
+                import warnings
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", category=RuntimeWarning)
+                    sst_daily[d] = np.nanmean(sst[sel], axis=0)
+    cov = float(np.isfinite(sst_daily).mean())
+    print(f"  SST history: {ndays} daily layers, {cov*100:.0f}% filled")
+    _hist_cache_save(cn, lats=lats, lngs=lngs, sst_daily=sst_daily)
+    return ThermalHistory(lats, lngs, sst_daily, config.GRID_STEP_DEG)

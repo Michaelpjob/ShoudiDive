@@ -23,13 +23,21 @@ import math
 import numpy as np
 
 import config
+import exposure
+import wave
 
 
-def detach_value(hs_max, sst_mean):
-    hs = 0.0 if (hs_max is None or hs_max != hs_max) else hs_max
-    sst = None if (sst_mean is None or sst_mean != sst_mean) else sst_mean
-    wave = config.K_WAVE * max(0.0, hs - config.HS0_M) ** config.HS_POW
-    warm = 0.0 if sst is None else config.K_WARM * max(0.0, sst - config.T0_C)
+def detach_value(wave_dose, warm_dose):
+    """detach = BASE + K_WAVE_E*wave_dose + K_WARM*warm_dose^WARM_POW.
+    `wave_dose` = per-bed, exposure-weighted, period-aware (Hs^2*Tp),
+    duration-integrated wave-energy dose (wave.bed_dose). `warm_dose` = trailing
+    cumulative thermal dose (mean max(0, SST-T0) degC). Both already non-negative.
+    NOTE (Phase 1): still a stateless rate; the P2 reservoir makes shedding a
+    flux drawn from a depleting vulnerable pool and clamps it to what's left."""
+    wd = 0.0 if (wave_dose is None or wave_dose != wave_dose) else max(0.0, wave_dose)
+    wave = config.K_WAVE_E * wd
+    dose = 0.0 if (warm_dose is None or warm_dose != warm_dose) else max(0.0, warm_dose)
+    warm = config.K_WARM * dose ** config.WARM_POW
     return config.BASE_SHED + wave + warm
 
 
@@ -74,18 +82,34 @@ def _why(band, dominant, peak_hs, peak_sst):
             f"firing beds.")
 
 
-def compute(forcing, beds, now_h, ages):
+def compute(forcing, beds, now_h, ages, thermal=None, profiles=None):
+    """`thermal` = a forcing.ThermalHistory for the cumulative warm-shed dose.
+    `profiles` = exposure.build_profiles(beds) for the per-bed wave-energy dose
+    (built here if None). Both degrade gracefully (thermal->instantaneous SST;
+    profiles->fully-exposed) so the sweep harness and offline paths still run."""
+    if profiles is None:
+        profiles = exposure.build_profiles(beds)
     per_bed = {}
     peak_hs = peak_sst = float("nan")
+    peak_warm_dose = peak_wave_dose = 0.0
     age_hs = {a: [] for a in ages}      # for the shedding-event timeline
     age_w = {a: [] for a in ages}
     for bed in beds:
         name, blng, blat = bed[0], bed[1], bed[2]
+        prof = profiles.get(name)
         wmap = {}
         for age in ages:
             hs_max, sst_mean = _bed_day(forcing, blng, blat, now_h, age)
-            wmap[age] = detach_value(hs_max, sst_mean)
+            if thermal is not None:
+                warm_dose = thermal.dose(blat, blng, config.T0_C, age,
+                                         config.WARM_DOSE_WINDOW_DAYS)
+            else:
+                warm_dose = max(0.0, sst_mean - config.T0_C) if sst_mean == sst_mean else 0.0
+            wave_dose = wave.bed_dose(forcing, prof, blng, blat, now_h - age * 24.0)
+            wmap[age] = detach_value(wave_dose, warm_dose)
             age_w[age].append(wmap[age])
+            peak_warm_dose = max(peak_warm_dose, warm_dose)
+            peak_wave_dose = max(peak_wave_dose, wave_dose)
             if hs_max == hs_max:
                 age_hs[age].append(hs_max)
                 peak_hs = hs_max if peak_hs != peak_hs else max(peak_hs, hs_max)
@@ -103,10 +127,8 @@ def compute(forcing, beds, now_h, ages):
     mean_detach = float(np.mean(all_w)) if all_w else 0.0
     index = 100.0 * (1.0 - math.exp(-mean_detach / config.ABUND_SCALE))
 
-    wave_term = (config.K_WAVE * max(0.0, peak_hs - config.HS0_M) ** config.HS_POW
-                 if peak_hs == peak_hs else 0.0)
-    warm_term = (config.K_WARM * max(0.0, peak_sst - config.T0_C)
-                 if peak_sst == peak_sst else 0.0)
+    wave_term = config.K_WAVE_E * peak_wave_dose
+    warm_term = config.K_WARM * peak_warm_dose ** config.WARM_POW
     dominant = "swell" if wave_term >= warm_term else "warm water"
     band = _band(index)
     ph = round(peak_hs, 2) if peak_hs == peak_hs else None

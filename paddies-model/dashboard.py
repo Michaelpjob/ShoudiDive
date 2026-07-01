@@ -20,6 +20,8 @@ import beds as beds_mod
 import forcing as forcing_mod
 import fusion as fusion_mod
 import detachment as detach_mod
+import exposure as exposure_mod
+import canopy as canopy_mod
 import geo
 import features
 import reports as reports_mod
@@ -81,6 +83,24 @@ def build():
     hfr = fusion_mod.prepare(fusion_mod.fetch_hfr(), raw["t0"])
     landmask = LandMask()
     forcing = forcing_mod.make_forcing(raw, "live", hfr=hfr)
+    thermal = forcing_mod.fetch_thermal_history(config.SEASON_DAYS)  # season-long SST (warm dose + reservoir)
+    wave_hist = forcing_mod.fetch_wave_history()                     # season-long daily waves (reservoir shed)
+    profiles = exposure_mod.build_profiles(beds_mod.SCB_BEDS)        # per-bed directional wave exposure
+    # The canopy-dynamics reservoir: one season-long per-bed R/V simulation whose
+    # daily shed flux seeds the drift. Requires the seasonal histories; if either
+    # fetch failed, fall back to the stateless detachment term so a data outage
+    # can't break the run.
+    canopy_sim = None
+    if thermal is not None and wave_hist is not None:
+        canopy_sim = canopy_mod.simulate(beds_mod.SCB_BEDS, thermal, wave_hist, profiles)
+        _n = max(len(canopy_sim), 1)
+        _rk = sum(s["R"] / s["K"] for s in canopy_sim.values()) / _n
+        _vk = sum(s["V"] / s["K"] for s in canopy_sim.values()) / _n
+        _sr = sum(s["shed"][0] / s["K"] for s in canopy_sim.values()) / _n
+        print(f"  canopy reservoir: {len(canopy_sim)} beds over {config.SEASON_DAYS} d | "
+              f"mean R/K={_rk:.2f} V/K={_vk:.2f} today shed/K={_sr:.4f}")
+    else:
+        print("  canopy reservoir: SKIPPED (missing seasonal history) -> stateless detachment")
     now_h = forcing.now_hours()
     _bedll = {b[0]: (b[1], b[2]) for b in beds_mod.SCB_BEDS}
     # Catch reports are now crowdsourced live from /api/paddies/reports (the tool
@@ -99,14 +119,18 @@ def build():
         "model_git_sha": _model_git_sha(),
         "report_count": len(reports),
         # Fraction of the bbox the land mask covers. 0.0 means land.geojson
-        # failed to load -> no water-clipping + no beaching (green renders on
-        # land). build_site.py fails loud on this when PADDIES_REQUIRE_REAL_KELP.
+        # failed to load -> no water-clipping + no beaching. build_site.py fails
+        # loud on this when PADDIES_REQUIRE_REAL_KELP.
         "landmask_cov": round(float(landmask.coverage), 4),
     }
     frames, overview_items, beds_fc = [], [], None
     for off in config.TIMELINE_OFFSETS_DAYS:
         T = now_h + off * 24.0
-        det = detach_mod.compute(forcing, beds_mod.SCB_BEDS, T, config.RELEASE_AGES_DAYS)
+        if canopy_sim is not None:
+            det = canopy_mod.frame_det(canopy_sim, config.RELEASE_AGES_DAYS, off, thermal, wave_hist)
+        else:
+            det = detach_mod.compute(forcing, beds_mod.SCB_BEDS, T, config.RELEASE_AGES_DAYS,
+                                     thermal=thermal, profiles=profiles)
         result = drift_mod.run_drift(forcing, landmask, det, now_h=T)
         dens = find_mod.build(result["floating"], landmask)
         cone_feats, _ = cones_mod.build(result["floating"], beds_mod.SCB_BEDS)
