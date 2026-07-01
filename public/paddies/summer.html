@@ -1,0 +1,37 @@
+<!doctype html><html lang=en><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Kelp Paddy — Summer Simulation</title>
+<link rel=stylesheet href="leaflet.css">
+<style>
+html,body{margin:0;height:100%;background:#0b1220;color:#e2e8f0;font:14px system-ui}
+#map{position:absolute;inset:0}
+#hud{position:absolute;top:10px;left:10px;z-index:500;background:rgba(12,18,32,.92);
+ border:1px solid #1e293b;border-radius:10px;padding:12px 14px;width:320px;box-shadow:0 4px 18px rgba(0,0,0,.5)}
+#hud h1{font-size:15px;margin:0 0 2px}#hud .sub{color:#94a3b8;font-size:11px;margin-bottom:10px}
+#hud a{color:#38bdf8;text-decoration:none}
+.row{display:flex;align-items:center;gap:8px;margin:8px 0}
+#scrub{width:100%}
+.seg{display:flex;border:1px solid #334155;border-radius:8px;overflow:hidden}
+.seg button{flex:1;background:#0f172a;color:#cbd5e1;border:0;padding:6px 4px;font:600 12px system-ui;cursor:pointer}
+.seg button.on{background:#166534;color:#fff}
+#date{font-weight:700;font-size:16px}#anom{color:#fca5a5;font-size:11px}
+#play{background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:7px;padding:5px 12px;cursor:pointer;font:600 12px system-ui}
+table{width:100%;border-collapse:collapse;margin-top:8px;font-size:11px}
+td{padding:2px 3px;border-top:1px solid #1e293b}td.r{text-align:right;font-variant-numeric:tabular-nums}
+.mut{color:#94a3b8}.leg{margin-top:8px;font-size:10px;color:#94a3b8;line-height:1.5}
+.sw{display:inline-block;width:22px;height:8px;border-radius:2px;vertical-align:middle;
+ background:linear-gradient(90deg,rgba(255,255,229,.5),#238443)}
+</style></head><body>
+<div id=map></div>
+<div id=hud>
+ <h1>Summer paddy season</h1>
+ <div class=sub>June → October reservoir simulation · <a href="index.html">← live finder</a></div>
+ <div class=seg id=scen></div>
+ <div class=row><button id=play>▶ play</button><span id=date>—</span><span id=anom></span></div>
+ <input id=scrub type=range min=0 value=0 step=1>
+ <div class="row mut" style="font-size:11px">paddy production &amp; canopy by region</div>
+ <table id=tbl></table>
+ <div class=leg><span class=sw></span> floating-paddy density (brighter = more) ·
+ canopy <b>full</b> = (R+V)/K, <b>shed</b> = ×10⁻³/day. 2026 El Niño = 2025 + forecast SST anomaly.</div>
+</div>
+<script src="leaflet.js"></script><script src="summer.js"></script></body></html>
