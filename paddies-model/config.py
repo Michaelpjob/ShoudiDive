@@ -349,5 +349,24 @@ CANOPY_INIT_VULN = 0.10     # spin-up: vulnerable fraction of K at the season st
 CANOPY_HEALTH_DAMP = 0.5    # recent/ever Landsat health is a NOISY prior (canopy area != biomass; tide/submergence hide 15-30%) -> damp it toward 1 by this much
 CANOPY_BAND_SCALE = 0.016   # maps regional mean shed-rate -> 0-100 index (recalibrate if calm band drifts off Low)
 
+# --- Sentinel-2 current-canopy blend (higher-cadence condition refinement) -----
+# Blends the fresh Sentinel-2 current-canopy sidecar (fetch_kelp_sentinel2.py,
+# ~biweekly) onto the slow quarterly Landsat 3-yr-peak baseline. Deep-research
+# adjudicated (run wb11wiaov): S2 is the best free, no-auth, higher-cadence source.
+# The blend is deliberately GENTLE + GATED + BOUNDED: single-scene S2 in the SoCal
+# cloudy season is noisy (per-cell condition ratio spans ~0.02-20x), so S2 only
+# NUDGES a bed's CELL_HEALTH condition (it never touches capacity K = the Landsat
+# baseline), by at most WEIGHT*(CR_HI-1) ~= 15%, and only where the read is
+# confident. A noisy fast source must never dominate the stable baseline (the #229
+# report-assimilation lesson). Cross-sensor scale is auto-calibrated regionally
+# (beta = median S2/Landsat) so the raw 10 m-vs-30 m area difference is absorbed.
+S2_BLEND_ENABLE = True
+S2_BLEND_WEIGHT = 0.30     # gentle: max health nudge = WEIGHT*(CR_HI-1) ~= 15%
+S2_CR_LO = 0.5            # hard-clamp the condition ratio (kills the noisy tails)
+S2_CR_HI = 1.5
+S2_MIN_LS_KM2 = 0.05     # need a real Landsat baseline in the cell to blend
+S2_MIN_WATER_PX = 2000   # need enough clear water pixels for a confident S2 read
+S2_HEALTH_FLOOR = 0.05   # never nudge condition below this
+
 OUT_DIR = "out"
 SEED = 42

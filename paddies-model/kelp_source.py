@@ -29,6 +29,15 @@ _NC_CANDIDATES = (
 )
 KELP_NC = next((p for p in _NC_CANDIDATES if os.path.exists(p)), _NC_CANDIDATES[0])
 
+# Sentinel-2 current-canopy sidecar (fetch_kelp_sentinel2.py output) — the fresh,
+# higher-cadence condition signal blended onto the Landsat baseline. Optional: if
+# absent, load_cells falls back to pure-Landsat CELL_HEALTH (no S2 nudge).
+_S2_CANDIDATES = (
+    os.path.join(_HERE, "data", "sentinel2_kelp_scb.json"),
+    os.path.normpath(os.path.join(_HERE, "..", "kelp-drift-proto", "data", "sentinel2_kelp_scb.json")),
+)
+S2_JSON = next((p for p in _S2_CANDIDATES if os.path.exists(p)), _S2_CANDIDATES[0])
+
 # Known offshore island centers (lng, lat) — a cell near one is flagged island
 # (island-sourced paddies get sea room to drift; mainland kelp beaches fast).
 _ISLANDS = [(-120.37, 34.04), (-120.10, 33.97), (-119.75, 33.99), (-119.40, 34.00),
@@ -85,4 +94,47 @@ def load_cells(bin_deg=0.05, min_area_km2=0.02):
         cells.append((name, round(plng, 4), round(plat, 4),
                       round(bin_deg * 111.0 * 0.5, 2), bool(_is_island(plng, plat)), round(float(akm2), 4)))
     cells.sort(key=lambda c: -c[5])
+    _blend_sentinel2(cells)          # gentle, gated, bounded S2 condition nudge (Stage 3)
     return cells
+
+
+def _blend_sentinel2(cells):
+    """Blend the fresh Sentinel-2 current-canopy sidecar onto the Landsat CELL_HEALTH
+    condition (Stage 3). GENTLE + GATED + BOUNDED: S2 only nudges each bed's condition
+    (never its capacity K = the Landsat baseline), by <= ~15%, and only where the read
+    is confident. Cross-sensor scale is auto-calibrated regionally (beta = median
+    S2/Landsat). No-op if disabled or the sidecar is missing. Returns a diag dict."""
+    if not getattr(config, "S2_BLEND_ENABLE", False):
+        return {}
+    try:
+        import json
+        with open(S2_JSON) as fh:
+            sc = json.load(fh).get("cells", {})
+    except Exception:
+        return {}
+    if not sc:
+        return {}
+    ls_by = {c[0]: c[5] for c in cells}
+    # Regional cross-sensor scale: median(S2 / Landsat) over confident substantial beds.
+    ratios = [sc[n]["area_km2"] / ls_by[n] for n in sc
+              if n in ls_by and ls_by[n] > config.S2_MIN_LS_KM2
+              and sc[n]["area_km2"] > 0.002 and sc[n].get("n_water", 0) >= config.S2_MIN_WATER_PX]
+    if len(ratios) < 8:
+        return {}
+    beta = float(np.median(ratios))
+    if beta <= 0:
+        return {}
+    n_blend = 0
+    for name, ls in ls_by.items():
+        s = sc.get(name)
+        if not s or ls < config.S2_MIN_LS_KM2 or s.get("n_water", 0) < config.S2_MIN_WATER_PX:
+            continue                                   # low confidence -> keep pure Landsat
+        cr = s["area_km2"] / (beta * ls)               # 1.0 = at the regional-typical current:baseline ratio
+        cr = min(max(cr, config.S2_CR_LO), config.S2_CR_HI)   # hard-clamp the noisy tails
+        mult = 1.0 + config.S2_BLEND_WEIGHT * (cr - 1.0)      # bounded ~+/-15% nudge
+        h0 = CELL_HEALTH.get(name, 1.0)
+        CELL_HEALTH[name] = float(min(1.0, max(config.S2_HEALTH_FLOOR, h0 * mult)))
+        n_blend += 1
+    print(f"  Sentinel-2 blend: beta={beta:.3f}, {n_blend}/{len(cells)} cells nudged "
+          f"(<= +/-{config.S2_BLEND_WEIGHT * (config.S2_CR_HI - 1) * 100:.0f}% condition), sidecar {os.path.basename(S2_JSON)}")
+    return {"beta": beta, "n_blended": n_blend}
