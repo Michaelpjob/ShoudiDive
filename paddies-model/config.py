@@ -253,25 +253,43 @@ STORM_DAYS_AGO = 3.0
 STORM_HS_BOOST_M = 3.0       # +3 m Hs spike on the storm day(s)
 STORM_WINDOW_H = 36.0        # storm lasts ~1.5 days
 
-# --- Canopy-dynamics reservoir (P2/P3): per-bed depleting, weakening stock -----
-# The bed is a finite reservoir. Growth fills ROBUST canopy; aging + heat move it
-# to VULNERABLE; wave forcing sheds VULNERABLE into paddies (clamped to what's
-# left). Shedding DEPLETES the pool -> a bed already shed out sheds little more,
-# no matter the forcing (the "peak-summer, everything's shed" behaviour). State
-# is canopy AREA (km²) anchored to the Landsat per-bed area. See canopy.py.
+# --- Canopy-dynamics reservoir (P2/P3): per-bed weakening, turnover-fed stock ---
+# Recalibrated 2026-07-01 after a deep-research review (Rodriguez 2013 Ecology;
+# Rassweiler 2018 Ecology; Bell/Cavanaugh 2021 PNAS; Gerard 1982; Hobday 2000;
+# Leichter 2023) that CORRECTED the first cut. Three temperature effects are now
+# kept DISTINCT instead of conflated:
+#   1. GROWTH/REGROWTH gate  <- SST as a nutrient proxy; throttles regrowth but
+#      NEVER to zero (internal-wave + ammonium N sustain a floor; Gerard's
+#      3.6->0.9%/day residual, Leichter refugia). This is the ONLY thing SST
+#      does to the stock.
+#   2. SHEDDING flux         <- dominated by intrinsic senescence/turnover
+#      (frond age = 58% of frond-loss variation, Rodriguez) + wave dislodgement.
+#      Because Macrocystis turns its ~0.4 kg/m^2 standing canopy over ~12x/yr,
+#      turnover SUSTAINS shedding rather than the pool exhausting over a season.
+#   3. Raft DECAY at sea (warm shortens time-afloat >20C) lives in the SINK
+#      model (drift.py), NOT here -- do not re-penalise production for it.
+# Net: warm beds stay productive-but-lower (not exhausted by July); only a real
+# heatwave (SST past the sink/dieback thresholds) drives large loss.
 SEASON_DAYS = 120            # season-long reservoir integration window (days)
 CANOPY_GROW = 0.06          # max daily robust regrowth rate (fraction of R, gated)
-CANOPY_GROW_GATE_COOL = 14.0  # SST °C at/below which growth is full (nutrient-replete)
-CANOPY_GROW_GATE_WARM = 20.0  # SST °C at/above which growth ~0 (nitrate-starved)
-CANOPY_WEAKEN = 0.020       # baseline daily R->V senescence (frond turnover ~6-7x/yr)
-CANOPY_WARM_WEAKEN = 0.15   # heat accelerates weakening, per °C of thermal excess (P3)
+CANOPY_GROW_GATE_COOL = 14.0  # SST °C at/below which regrowth is full (nitrate-replete; nitrate ~0 above ~14.2C, Snyder 2020)
+CANOPY_GROW_GATE_WARM = 19.0  # SST °C of MINIMUM regrowth (min canopy condition ~19C, Bell 2021) -> the FLOOR, not zero
+CANOPY_GROW_GATE_FLOOR = 0.20  # regrowth never below 20% of max (non-nitrate N + internal-wave refugia keep kelp growing in warm water; Gerard/Leichter)
+CANOPY_WEAKEN = 0.022       # baseline daily R->V senescence -- the DOMINANT shed driver (age-structured frond turnover, Rodriguez/Rassweiler ~12x/yr)
+# Warm-DETACHMENT enhancement threshold lowered 20 -> 17.5C: enhanced senescence-
+# vulnerability/condition loss onsets ~17-18C (Bell 2021 min condition ~19C;
+# nitrate limitation from ~14.2C), well below the ~20-24C raft-DECAY/mortality
+# thresholds. Separate from T0_C (=20, kept for the sink + legacy warm-dose).
+CANOPY_WARM_T0 = 17.5
+CANOPY_WARM_WEAKEN = 0.15   # heat accelerates senescence (R->V), per °C above CANOPY_WARM_T0 -- warm beds shed MORE per unit canopy
 CANOPY_SHED_BASE = 0.020    # baseline daily shed fraction of V (senescence self-detachment; always-on paddy trickle even in calm — Hobday's standing raft population)
 CANOPY_SHED = 0.0015        # storm shed gain: + CANOPY_SHED * wave_dose on top of baseline (Seymour-anchored)
-CANOPY_WARM_INT = 0.08      # warm×wave interaction: heat-weakened kelp sheds easier, per °C (P3)
+CANOPY_WARM_INT = 0.08      # warm×wave interaction: heat-weakened kelp sheds easier, per °C above CANOPY_WARM_T0
 CANOPY_INSITU = 0.010       # daily in-situ vulnerable loss (decompose/sink, not findable)
 CANOPY_INIT_ROBUST = 0.60   # spin-up: robust fraction of K at the season start
 CANOPY_INIT_VULN = 0.10     # spin-up: vulnerable fraction of K at the season start
-CANOPY_BAND_SCALE = 0.016   # maps regional mean shed-rate -> 0-100 index (calibrated: calm ~0.0032 -> Low; storm/warm-spell climb through Moderate/High/Extreme)
+CANOPY_HEALTH_DAMP = 0.5    # recent/ever Landsat health is a NOISY prior (canopy area != biomass; tide/submergence hide 15-30%) -> damp it toward 1 by this much
+CANOPY_BAND_SCALE = 0.016   # maps regional mean shed-rate -> 0-100 index (recalibrate if calm band drifts off Low)
 
 OUT_DIR = "out"
 SEED = 42
