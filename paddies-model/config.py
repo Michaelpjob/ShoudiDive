@@ -50,14 +50,56 @@ CURRENT_DIR_TOWARD = True
 LAND_MASK_STEP_DEG = 0.01
 
 # --- Detachment: amount of kelp entering the system -----------------------
-# detach = BASE_SHED + K_WAVE*relu(Hs-HS0)^HS_POW + K_WARM*relu(SST-T0)
+# Two mechanistically-distinct drivers, recalibrated 2026-06-30 against the
+# SCB kelp-temperature literature (5-strand deep-research pass):
+#   detach = BASE_SHED
+#          + K_WAVE * relu(Hs - HS0)^HS_POW            # SWELL: instantaneous
+#          + K_WARM * dose^WARM_POW                     # WARM: cumulative dose
+#
+# WHY the asymmetry: storms rip kelp loose ON the day (instantaneous), but
+# warm-water canopy loss is CUMULATIVE over ~weeks (N-reserve buffer ~2-3 wk
+# Gerard 1982; frond turnover 1-3 mo Reed/Rodriguez; staggered MHW minima
+# Cavanaugh 2019). `dose` = trailing-window MEAN of max(0, SST - T0_C) in degC
+# (a degree-week-style thermal dose), computed by forcing.ThermalHistory.
 BASE_SHED = 0.10
-HS0_M = 1.5
+# Legacy stateless swell term (HS0_M/HS_POW/K_WAVE) is SUPERSEDED by the
+# canopy-dynamics wave-energy DOSE below (Phase 1): per-bed directional
+# exposure x wave ENERGY (Hs^2*Tp) integrated over the storm window. Kept only
+# for the model_sweep fallback path. See wave.py + exposure.py.
+HS0_M = 2.5
 HS_POW = 2.0
 K_WAVE = 1.00
-T0_C = 19.0
-K_WARM = 0.30
-ABUND_SCALE = 1.20
+# --- Wave-energy dose (canopy-dynamics P1): Hs^2*Tp x exposure, windowed ------
+# Energy/momentum flux ~ Hs^2*Tp rewards long-period groundswell (deeper orbital
+# penetration L~T^2 + bigger breaking rollers at the surface canopy), which
+# dominates SCB Macrocystis loss (Seymour et al. 1989). Per-bed `exposure`
+# (exposure.py) makes a swell only load the beds open to its direction; the
+# window integrates the storm (fatigue: individual waves are too weak, failure
+# is cumulative crack-growth + entanglement cascade, Mach 2009/2011).
+WAVE_E_CRIT = 100.0     # energy threshold Hs^2*Tp (~Hs 2.9 m @ 12 s; destructive onset ~2.5-3 m)
+K_WAVE_E = 0.04         # gain (rough; Seymour-1989 storm-mortality calibration lands in the P2 reservoir)
+WAVE_WINDOW_DAYS = 5    # storm / fatigue integration window (days)
+# Warm term. Threshold 20 degC = field-effective stress onset (Cavanaugh 2019;
+# nitrate ~0 above ~14.5 degC so SST is a defensible nutrient proxy, Snyder 2020
+# / Konotchick 2012 NO3=-5.8T+81.7). Convex (POW=2) to match the observed
+# threshold-then-cliff: gentle 20-22 degC, steep toward the ~23-24 degC near-
+# total-loss cliff. K_WARM gain set ~1.3:1 wave:warm SCB-wide (Bell 2015:
+# waves 37% vs nitrate 29% of SCB sites) -- but per-bed SST sampling lets warmth
+# dominate at the sheltered island beds (Catalina/Clemente), which is correct.
+# Gain to be finalized by the catch-report skill sweep (model_sweep.py).
+T0_C = 20.0
+WARM_POW = 2.0
+K_WARM = 0.13
+WARM_DOSE_WINDOW_DAYS = 42   # ~6-week trailing thermal-dose window
+# ABUND_SCALE recentred 1.20 -> 0.50 for the recalibrated (lower-magnitude,
+# more peaked) terms so the band still spans: a calm/mild week reads "Low"
+# (idx ~18), a storm/warm-spell climbs to Moderate/High, a sustained 24 degC
+# MHW dose reaches Extreme. index = 100*(1-exp(-mean_detach/ABUND_SCALE)).
+# NOTE/limitation: warm water ALSO shrinks the standing canopy, but the kelp
+# SOURCE here is a fixed Landsat snapshot (kelp_source.py) -- so in a long warm
+# spell the model can over-credit a source that is actually dying back. A
+# dynamic canopy-decay feedback is a separate follow-up.
+ABUND_SCALE = 0.50
 
 # --- Sinking: epibiont-ballast model --------------------------------------
 # Mechanism (Graiff/Rothausler 2016, "Epibiont load causes sinking of viable
@@ -210,6 +252,26 @@ WARM_BOOST_C = 4.0
 STORM_DAYS_AGO = 3.0
 STORM_HS_BOOST_M = 3.0       # +3 m Hs spike on the storm day(s)
 STORM_WINDOW_H = 36.0        # storm lasts ~1.5 days
+
+# --- Canopy-dynamics reservoir (P2/P3): per-bed depleting, weakening stock -----
+# The bed is a finite reservoir. Growth fills ROBUST canopy; aging + heat move it
+# to VULNERABLE; wave forcing sheds VULNERABLE into paddies (clamped to what's
+# left). Shedding DEPLETES the pool -> a bed already shed out sheds little more,
+# no matter the forcing (the "peak-summer, everything's shed" behaviour). State
+# is canopy AREA (km²) anchored to the Landsat per-bed area. See canopy.py.
+SEASON_DAYS = 120            # season-long reservoir integration window (days)
+CANOPY_GROW = 0.06          # max daily robust regrowth rate (fraction of R, gated)
+CANOPY_GROW_GATE_COOL = 14.0  # SST °C at/below which growth is full (nutrient-replete)
+CANOPY_GROW_GATE_WARM = 20.0  # SST °C at/above which growth ~0 (nitrate-starved)
+CANOPY_WEAKEN = 0.020       # baseline daily R->V senescence (frond turnover ~6-7x/yr)
+CANOPY_WARM_WEAKEN = 0.15   # heat accelerates weakening, per °C of thermal excess (P3)
+CANOPY_SHED_BASE = 0.020    # baseline daily shed fraction of V (senescence self-detachment; always-on paddy trickle even in calm — Hobday's standing raft population)
+CANOPY_SHED = 0.0015        # storm shed gain: + CANOPY_SHED * wave_dose on top of baseline (Seymour-anchored)
+CANOPY_WARM_INT = 0.08      # warm×wave interaction: heat-weakened kelp sheds easier, per °C (P3)
+CANOPY_INSITU = 0.010       # daily in-situ vulnerable loss (decompose/sink, not findable)
+CANOPY_INIT_ROBUST = 0.60   # spin-up: robust fraction of K at the season start
+CANOPY_INIT_VULN = 0.10     # spin-up: vulnerable fraction of K at the season start
+CANOPY_BAND_SCALE = 0.016   # maps regional mean shed-rate -> 0-100 index (calibrated: calm ~0.0032 -> Low; storm/warm-spell climb through Moderate/High/Extreme)
 
 OUT_DIR = "out"
 SEED = 42

@@ -39,35 +39,50 @@ def _is_island(lng, lat, r=0.30):
     return any(abs(lng - iln) < r and abs(lat - ila) < r for iln, ila in _ISLANDS)
 
 
+# Per-bed canopy CONDITION (recent_area / ever_area) = how much of a bed's
+# all-time Landsat extent it currently holds. ~1 = healthy/full; <1 = currently
+# depressed (declined / heat-thinned). A snapshot observation signal used to
+# initialise the canopy reservoir's robust/vulnerable split (canopy.py). This is
+# the buildable half of the "Landsat anchor" (P4); the mid-SEASON time-series
+# correction needs the full SBC LTER quarterly series (the bundled .nc is a
+# recent+ever snapshot only, no time dimension).
+CELL_HEALTH = {}
+
+
 def load_cells(bin_deg=0.05, min_area_km2=0.02):
     """Bin the Landsat recent-canopy pixels (within the model bbox) into seeding
     cells weighted by real canopy area. Returns a list of
-    (name, lng, lat, radius_km, is_island, area_km2), sorted big-first."""
+    (name, lng, lat, radius_km, is_island, area_km2), sorted big-first. Also
+    populates CELL_HEALTH[name] = recent/ever canopy condition in [0,1]."""
     import xarray as xr
     ds = xr.open_dataset(KELP_NC)
     lon = ds.longitude.values
     lat = ds.latitude.values
     rec = np.nan_to_num(ds.recent_area.values)  # m^2 / 30 m pixel, recent peak
+    evr = np.nan_to_num(ds.ever_area.values) if "ever_area" in ds else rec  # all-time peak
     b = config.FIELD_BBOX
     inb = ((lat >= b["lat_min"]) & (lat <= b["lat_max"])
            & (lon >= b["lng_min"]) & (lon <= b["lng_max"]) & (rec > 0))
-    lon, lat, rec = lon[inb], lat[inb], rec[inb]
+    lon, lat, rec, evr = lon[inb], lat[inb], rec[inb], evr[inb]
 
-    agg = {}  # (kj,ki) -> [area, sum_lat*area, sum_lng*area]
-    for ln, la, a in zip(lon, lat, rec):
+    agg = {}  # (kj,ki) -> [recent, sum_lat*recent, sum_lng*recent, ever]
+    for ln, la, a, e in zip(lon, lat, rec, evr):
         key = (round(la / bin_deg), round(ln / bin_deg))
         c = agg.get(key)
         if c is None:
-            agg[key] = c = [0.0, 0.0, 0.0]
-        c[0] += a; c[1] += la * a; c[2] += ln * a
+            agg[key] = c = [0.0, 0.0, 0.0, 0.0]
+        c[0] += a; c[1] += la * a; c[2] += ln * a; c[3] += e
 
     cells = []
-    for (kj, ki), (area, slaw, slnw) in agg.items():
+    CELL_HEALTH.clear()
+    for (kj, ki), (area, slaw, slnw, ever) in agg.items():
         akm2 = area / 1e6
         if akm2 < min_area_km2:
             continue
         plat, plng = float(slaw / area), float(slnw / area)  # area-weighted centroid (kelp's real spot)
-        cells.append((f"k{kj}_{ki}", round(plng, 4), round(plat, 4),
+        name = f"k{kj}_{ki}"
+        CELL_HEALTH[name] = float(min(1.0, area / ever)) if ever > 0 else 1.0
+        cells.append((name, round(plng, 4), round(plat, 4),
                       round(bin_deg * 111.0 * 0.5, 2), bool(_is_island(plng, plat)), round(float(akm2), 4)))
     cells.sort(key=lambda c: -c[5])
     return cells
