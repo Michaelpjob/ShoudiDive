@@ -1,5 +1,9 @@
 'use strict';
-var LAND_URL='/data/land.geojson';
+// Bundle-local land first (ships in /paddies/, survives the dev "align main-owned
+// data" sync that periodically resets /data/land.geojson back to the border-clipped
+// version); fall back to the shared coastline if the bundle copy is ever missing.
+var LAND_URL='land.geojson';
+var LAND_FALLBACK='/data/land.geojson';
 var BAND={Minimal:'#64748b',Low:'#0ea5e9',Moderate:'#eab308',High:'#f97316',Extreme:'#dc2626'};
 // Expected paddy DENSITY by shedding band, anchored to Hobday's measured SCB
 // raft density (~1-3 rafts/km2). This is a modelled expectation from shedding +
@@ -226,9 +230,11 @@ function drawReference(){
 function boot(d){D=d;F=D.default_frame;LCH=D.default_launch;
  map=L.map('map',{zoomControl:true,attributionControl:false}).setView([33.2,-118.5],8);
  var landLayer=L.layerGroup().addTo(map);
- fetch(LAND_URL).then(function(r){return r.ok?r.json():null;}).then(function(g){
-  if(g)L.geoJSON(g,{style:{color:'#475569',weight:.6,fillColor:'#1f2937',fillOpacity:1},interactive:false}).addTo(landLayer);
- }).catch(function(){});
+ fetch(LAND_URL).then(function(r){return r.ok?r.json():null;})
+  .then(function(g){return g||fetch(LAND_FALLBACK).then(function(r){return r.ok?r.json():null;});})
+  .then(function(g){
+   if(g)L.geoJSON(g,{style:{color:'#475569',weight:.6,fillColor:'#1f2937',fillOpacity:1},interactive:false}).addTo(landLayer);
+  }).catch(function(){});
  coneLayer=L.layerGroup().addTo(map);
  hdrLayer=L.layerGroup().addTo(map);
  // Kelp source beds, sized by how much each is shedding right now (detach_now)
