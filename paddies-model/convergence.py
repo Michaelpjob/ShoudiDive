@@ -119,7 +119,13 @@ def _mainland_mask(lats, lngs):
     if land is None:
         return None
     geoms = list(land.geoms) if land.geom_type == "MultiPolygon" else [land]
-    mainland = max(geoms, key=lambda g: g.area)
+    # ALL continental landmasses, not just the single largest: the US mainland
+    # (47.6 deg2) AND the Baja mainland (0.87 deg2) both count, while every island
+    # is < 0.025 deg2. Using max() alone treated Baja as open ocean, so water off
+    # Ensenada read as "far offshore" and spuriously spiked the fishability there.
+    from shapely.ops import unary_union
+    mains = [g for g in geoms if g.area >= 0.1]
+    mainland = unary_union(mains) if mains else max(geoms, key=lambda g: g.area)
     from shapely.prepared import prep
     from shapely.geometry import Point
     pm = prep(mainland)

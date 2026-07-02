@@ -42,38 +42,19 @@ def _candidates():
 
 
 def _load_land():
-    land = None
+    # land.geojson now includes real OSM Baja coastline down past Ensenada
+    # (pipeline/fetch_coastline_baja.py merges it), so no supplement is needed.
     for p in _candidates():
         if p and os.path.exists(p):
             with open(p, encoding="utf-8") as f:
-                land = json.load(f)
-            break
-    if land is None:
-        try:
-            import requests
-            r = requests.get("https://shouldidive.com/data/land.geojson", timeout=30)
-            r.raise_for_status()
-            land = r.json()
-        except Exception:
-            land = None
-    # Merge the bundled BAJA supplement: the published land.geojson stops at ~31.8N
-    # (US only), so the whole Baja Pacific strip reads as open water — paddies drift
-    # onto Baja land without beaching AND the distance-from-mainland fishability spikes
-    # a spurious hotspot at the SE corner. This adds an approximate Baja coastline so
-    # the mask is correct down the peninsula. (Follow-up: fold real Baja coastline into
-    # the pipeline's land.geojson so the whole app benefits.)
-    baja_path = os.path.join(_HERE, "data", "land_baja.geojson")
-    if os.path.exists(baja_path):
-        try:
-            with open(baja_path, encoding="utf-8") as f:
-                baja = json.load(f)
-            if land and land.get("features"):
-                land["features"] = land["features"] + baja.get("features", [])
-            else:
-                land = baja
-        except Exception:
-            pass
-    return land
+                return json.load(f)
+    try:
+        import requests
+        r = requests.get("https://shouldidive.com/data/land.geojson", timeout=30)
+        r.raise_for_status()
+        return r.json()
+    except Exception:
+        return None
 
 
 def _polys(geom):
