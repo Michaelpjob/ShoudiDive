@@ -31,7 +31,7 @@ except Exception:
 
 W_CONV = 1.0   # convergence front = the PRIMARY locator (best-evidenced signal)
 W_SST = 1.0    # SST temperature break
-W_CHL = 3.0    # chl color-break (the blue/green edge) — RAISED 1.0->3.0 (tune sweep + reports): anglers run to the clean/blue color break; it was the top front signal for aligning opportunity with the real grounds
+W_CHL = 2.0    # chl color-break (the blue/green edge) — 1.0->2.0 (de-overfit: pulled back from 3.0): anglers run to the clean/blue color break; a strong DYNAMIC front signal (this one moves with conditions, unlike static structure), kept meaningful but not dominant
 BASE = 0.05    # low floor: data sweep wants the signals to lead, not a flat baseline
 ZONE_THR_FRAC = 0.50
 ZONE_MIN_AREA_DEG2 = 0.003
