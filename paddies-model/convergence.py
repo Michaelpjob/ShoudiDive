@@ -31,7 +31,7 @@ except Exception:
 
 W_CONV = 1.0   # convergence front = the PRIMARY locator (best-evidenced signal)
 W_SST = 1.0    # SST temperature break
-W_CHL = 1.0    # chl color-break (the blue/green edge) — now wired to real chl
+W_CHL = 3.0    # chl color-break (the blue/green edge) — RAISED 1.0->3.0 (tune sweep + reports): anglers run to the clean/blue color break; it was the top front signal for aligning opportunity with the real grounds
 BASE = 0.05    # low floor: data sweep wants the signals to lead, not a flat baseline
 ZONE_THR_FRAC = 0.50
 ZONE_MIN_AREA_DEG2 = 0.003
@@ -222,9 +222,14 @@ def build_opportunity(forcing, dens, landmask, reports=None, as_of_dt=None):
     sn = sstf / (sstf.max() or 1.0)
 
     dlats, dlngs, kelp = dens["lats"], dens["lngs"], dens["grid"]
-    # kelp is a CONTRIBUTOR, not the ranking driver — compress it (gamma<1) so the
-    # convergence front leads and the big Catalina bed stops auto-winning.
-    kn = (kelp / (kelp.max() or 1.0)) ** config.KELP_GAMMA
+    # kelp/paddy density is a soft PRESENCE-GATE, not the ranking driver — compress it
+    # (gamma<1) AND floor it (DENS_FLOOR) so a prime bank/front/convergence spot still
+    # scores where modeled paddy density is only modest (paddies are ubiquitous in the
+    # Bight; the fishery is at accumulation+structure, not the densest source). Without
+    # the floor, kn multiplied opp to ~0 off the big NW forests -> opportunity ≈ source
+    # density (scorecard B6/A4). See config.DENS_FLOOR.
+    df = getattr(config, "DENS_FLOOR", 0.0)
+    kn = df + (1.0 - df) * (kelp / (kelp.max() or 1.0)) ** config.KELP_GAMMA
     chlf_d = _chl_front_grid(dlats, dlngs)          # real color-break on the density grid
     H, W = kelp.shape
     opp = np.zeros((H, W))

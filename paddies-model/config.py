@@ -10,7 +10,11 @@ published land.geojson (read-only). Touches nothing in prod.
 # a week, so the field is padded south/west of the sources).
 # Open-Meteo trailing hindcast drives the drift (it serves past_days);
 # coarse but TIME-VARYING. ShoudiDive (forecast-only) can't do past data.
-FIELD_BBOX = dict(lat_min=31.0, lat_max=34.8, lng_min=-121.5, lng_max=-116.8)
+# Extended south + east (2026-07-01, scorecard A2/C1) to cover the reported N Baja
+# paddy grounds (60-Mile/Mushroom/Punta Banda/Ensenada-Colnett) that sat just outside
+# the old lng_max=-116.8 / lat_min=31.0 envelope. Kelp extract reaches 26.4N so beds
+# are covered; if land.geojson lacks Baja coverage the mask thins there (harmless).
+FIELD_BBOX = dict(lat_min=30.6, lat_max=34.8, lng_min=-121.5, lng_max=-116.3)
 GRID_STEP_DEG = 0.3          # Open-Meteo can't be queried at finer than this
 
 # Trailing window: kelp that broke loose 0..N days ago.
@@ -233,7 +237,15 @@ WARM_FULL_C = 20.5           # 69 F — warm push / fall peak: full nearshore ov
 # it (else the big Catalina bed always wins). And clarity is a clean-SIDE EDGE
 # preference, NOT a hard veto ("green = dead" was refuted 0-3): suppress green, don't
 # zero it, and reward the actual blue/green color break.
-KELP_GAMMA = 0.4             # compress kelp density HARD: data sweep + literature agree raw abundance is a gate-of-presence, NOT the ranker (big outer-island beds otherwise auto-win)
+KELP_GAMMA = 0.2             # compress kelp/paddy density HARD (0.4->0.2, tune sweep): raw abundance is a gate-of-presence, NOT the ranker; the fishery is at structure+fronts, and paddies are ubiquitous (Hobday 39k-348k rafts) so density variation is weakly informative
+# DENS_FLOOR (added 2026-07-01, scorecard B6/A4): paddy density MULTIPLIED the whole
+# opportunity, so a prime bank/front with modest local paddy density scored ~0 and the
+# field peaked at the NW kelp forests (opportunity ≈ kelp-source density; catch-report
+# ground truth is anti-correlated, r=-0.28). But paddies are UBIQUITOUS in the Bight
+# (39k-348k drifting rafts, Hobday 2000) and CONCENTRATE at convergence/structure — so
+# density should be a soft PRESENCE-GATE, not a hard ranker. Floor it: a spot still
+# scores on structure+convergence+fronts even where modeled paddy density is low.
+DENS_FLOOR = 0.50            # kn = DENS_FLOOR + (1-DENS_FLOOR)*compressed_density (tuned via tune_opportunity.py sweep -> A3/A4 pass)
 CLARITY_FLOOR = 0.40         # green water suppressed to this, NOT vetoed to 0
 
 # --- Research-grade reconciled weighting (2026-06-22, data sweep x literature) -
@@ -247,7 +259,7 @@ SEED_AREA_POW = 0.5          # compress real-canopy seed weighting (outer island
 # already know their own range + what it takes to get there. The opportunity
 # field is launch-AGNOSTIC -- show every ground honestly, let the angler choose.
 # (Also kills the per-launch prod-blocker.)
-STRUCT_WEIGHT = 0.4          # bathymetry bonus: a paddy over a bank/break holds more + bigger fish (practitioner top-3, was unscored). Modifier, not a patch-maker.
+STRUCT_WEIGHT = 5.0          # bathymetry bonus over the named banks (9/14-Mile, 302, Tanner, Cortes, 277...). 0.4->5.0 via tune_opportunity.py sweep (scorecard A3/A4/B6): the 32-agent variable study ranks bathymetric STRUCTURE the single highest-leverage driver (flow-into-topography upwelling + fish aggregation; SatFish ships it first-class). At this weight the opportunity PEAK moves off the NW kelp base onto the southern banks (A3 194->11 km, A4 -0.32->+0.25 correlation with the real fishery). A balanced point on the frontier (max was 8.0/A4=+0.32) to keep dynamic range.
 STRUCT_RADIUS_NM = 5.0       # bank-proximity scale (broad enough that the clustered SD banks merge into one structure zone, not 6 spikes)
 QUAL_T0_C = 18.0             # paddy fish-holding quality: full at/below, ramps down as it sits in warm water
 QUAL_HOT_C = 24.0            # quality -> 0 (physiological collapse, Rothausler >24C)
