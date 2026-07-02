@@ -20,20 +20,25 @@ html,body{margin:0;height:100%;background:#0b1220;color:#e2e8f0;font:14px system
 #play{background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:7px;padding:5px 12px;cursor:pointer;font:600 12px system-ui}
 table{width:100%;border-collapse:collapse;margin-top:8px;font-size:11px}
 td{padding:2px 3px;border-top:1px solid #1e293b}td.r{text-align:right;font-variant-numeric:tabular-nums}
-.mut{color:#94a3b8}.leg{margin-top:8px;font-size:10px;color:#94a3b8;line-height:1.5}
-.sw{display:inline-block;width:22px;height:8px;border-radius:2px;vertical-align:middle;
- background:linear-gradient(90deg,rgba(255,255,229,.5),#238443)}
+.mut{color:#94a3b8}.leg{margin-top:8px;font-size:10px;color:#94a3b8;line-height:1.6}
+.sw{display:inline-block;width:14px;height:9px;border-radius:2px;vertical-align:middle}
+.sw.c25{background:#22d3ee}.sw.cen{background:#f59e0b}
+.leaflet-image-layer{mix-blend-mode:screen}
+td.a{color:#22d3ee}td.b{color:#f59e0b}
 </style></head><body>
 <div id=map></div>
 <div id=hud>
  <h1>Summer paddy season</h1>
  <div class=sub>June → October reservoir simulation · <a href="index.html">← live finder</a></div>
- <div class=seg id=scen></div>
+ <div class=seg id=mode></div>
  <div class=row><button id=play>▶ play</button><span id=date>—</span><span id=anom></span></div>
  <input id=scrub type=range min=0 value=0 step=1>
- <div class="row mut" style="font-size:11px">paddy production &amp; canopy by region</div>
+ <div class="row mut" style="font-size:11px">paddy shedding by region —
+  <span style="color:#22d3ee">2025</span> vs <span style="color:#f59e0b">El&nbsp;Niño</span></div>
  <table id=tbl></table>
- <div class=leg><span class=sw></span> floating-paddy density (brighter = more) ·
- canopy <b>full</b> = (R+V)/K, <b>shed</b> = ×10⁻³/day. 2026 El Niño = 2025 + forecast SST anomaly.</div>
+ <div class=leg><span class="sw c25"></span> 2025 &nbsp;<span class="sw cen"></span> 2026 El&nbsp;Niño &nbsp;·&nbsp;
+ <b>Both</b> overlaid (overlap brightens); <b>Diff</b> = El&nbsp;Niño − 2025
+ (<span style="color:#f87171">red</span> more, <span style="color:#60a5fa">blue</span> fewer).<br>
+ Table = shed (×10⁻³/day); canopy full=(R+V)/K. 2026 El&nbsp;Niño = 2025 + forecast SST anomaly.</div>
 </div>
 <script src="leaflet.js"></script><script src="summer.js"></script></body></html>
