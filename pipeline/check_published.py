@@ -259,6 +259,83 @@ def check_generated_at(manifest: dict) -> list[Finding]:
     return out
 
 
+# ---- SST correctness (beyond "did the PNG ship") ---------------------
+#
+# The buoy-anchored correction (Phase B) should ALWAYS emit a
+# ``buoy_correction`` block into the sst layer — even a zero-anchor run
+# emits one, precisely so this watchdog can see it. A *missing* block
+# means the correction errored before producing a summary. That is what
+# hid the 2026-06 regression: ``_apply_sst_buoy_correction`` imported only
+# ``from pipeline.sst_buoy_correction`` with no bare fallback, so it
+# raised ModuleNotFoundError under the ``python pipeline/fetch.py`` cron
+# (never under ``python -m pipeline.fetch``) and SST silently shipped
+# uncorrected for ~3 weeks with nothing watching for it. This check is
+# that missing watcher.
+SST_MIN_ACTIVE_ANCHORS = 1
+
+
+def check_sst_health(manifest: dict) -> list[Finding]:
+    """SST-specific integrity the generic per-layer PNG probe can't see.
+
+    Both degradations below leave the SST PNG perfectly decodable, so
+    only a manifest-shape check surfaces them:
+      * the buoy correction not running at all (missing block), and
+      * SST stuck on the coarse fallback source (``source_fallback``).
+    """
+    out: list[Finding] = []
+    layers = manifest.get("layers") or {}
+    sst = layers.get("sst")
+    if not isinstance(sst, dict):
+        # A missing sst layer is already reported by required_layers_missing.
+        return out
+
+    corr = sst.get("buoy_correction")
+    if not isinstance(corr, dict):
+        out.append(Finding(
+            severity="high",
+            code="sst_buoy_correction_missing",
+            title="SST is shipping without the buoy correction",
+            detail=(
+                "The `sst` layer has no `buoy_correction` block. That correction "
+                "anchors satellite SST to NDBC buoy thermometers and emits a "
+                "summary every run (even a zero-anchor run), so its absence means "
+                "the correction errored before producing output — SST is "
+                "uncorrected. See `_apply_sst_buoy_correction` in pipeline/fetch.py."
+            ),
+            layer="sst",
+        ))
+    else:
+        n_active = corr.get("n_anchors_active")
+        if isinstance(n_active, int) and n_active < SST_MIN_ACTIVE_ANCHORS:
+            out.append(Finding(
+                severity="medium",
+                code="sst_buoy_correction_no_anchors",
+                title="SST buoy correction ran but has no active anchors",
+                detail=(
+                    f"n_anchors_active={n_active}. Every NDBC buoy was dropped "
+                    "(stale, no MUR coverage at the buoy location, or failed the "
+                    "residual sanity bound), so SST used uncorrected satellite "
+                    "values this run — usually a transient NDBC realtime2 outage."
+                ),
+                layer="sst",
+            ))
+
+    if sst.get("source_fallback"):
+        out.append(Finding(
+            severity="medium",
+            code="sst_on_fallback_source",
+            title="SST is on the coarse fallback source (not MUR 1km)",
+            detail=(
+                f"source={sst.get('source')!r}, source_fallback=true. The MUR L4 "
+                "1km product was unreachable, so SST is on the ~5km NOAA Geo-polar "
+                "blended product — nearshore granularity is reduced. Persistent "
+                "fallback usually means pfeg is 403ing GitHub Actions egress."
+            ),
+            layer="sst",
+        ))
+    return out
+
+
 # ---- Layer probing ----------------------------------------------------
 
 def _resolve_url(path_or_url: str) -> str:
@@ -582,6 +659,7 @@ def main() -> int:
         layer_stats: list[dict] = []
     else:
         findings.extend(check_generated_at(manifest))
+        findings.extend(check_sst_health(manifest))
         layer_findings, layer_stats = check_layers(manifest)
         findings.extend(layer_findings)
 
