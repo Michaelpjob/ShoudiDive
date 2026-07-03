@@ -16,7 +16,9 @@ job picks them up via ``pytest pipeline/tests/test_*.py``.
 """
 from __future__ import annotations
 
+import subprocess
 import sys
+import textwrap
 from pathlib import Path
 
 import numpy as np
@@ -104,6 +106,64 @@ def test_buoy_correction_clamps_extreme_residual():
     )
     assert anchors[0].get("skipped"), "bogus anchor was kept"
     assert np.all(correction == 0.0), "bogus anchor leaked into correction"
+
+
+def test_buoy_correction_import_resolves_under_cron_invocation():
+    """Regression guard for the silent-no-op bug (prod, ~3 weeks).
+
+    The production cron runs ``python pipeline/fetch.py`` — cwd is
+    ``pipeline/`` and the repo root is NOT on sys.path, so ``pipeline``
+    is not an importable package. ``_apply_sst_buoy_correction`` used to
+    import *only* ``from pipeline.sst_buoy_correction import …`` with no
+    bare fallback, so under the cron it raised ModuleNotFoundError →
+    caught → returned None → the buoy correction never ran and no
+    ``buoy_correction`` manifest block was emitted.
+
+    The other Phase-B tests insert ``pipeline/`` onto sys.path and import
+    bare, so they exercise the module but never fetch.py's integration
+    import path — which is exactly how this slipped through. This test
+    reproduces the cron invocation faithfully (subprocess, cwd=pipeline)
+    and asserts the helper returns a summary block, not None. The network
+    is stubbed so the test stays hermetic and fast.
+    """
+    prog = textwrap.dedent(
+        """
+        import numpy as np
+        # Imported the way `python pipeline/fetch.py` imports it.
+        import fetch
+        import sst_buoy_correction as sbc
+
+        # Stub the NDBC fetch so we exercise ONLY the import path inside
+        # the helper, never the live network. One in-bbox anchor.
+        def _fake_readings(**_kw):
+            return [sbc.BuoyReading(
+                stn="46086", name="San Clemente Basin",
+                lat=32.499, lng=-118.034,
+                wtmp_c=20.0, n_samples=24, age_hours=1.0,
+            )]
+        sbc.fetch_buoy_readings = _fake_readings
+
+        stack = [np.full((12, 14), 19.0, dtype="float32")]
+        summ = fetch._apply_sst_buoy_correction(stack=stack, grid_h=12, grid_w=14)
+        assert summ is not None, (
+            "buoy correction returned None under the cron invocation — "
+            "the pipeline.-prefixed import fell through to ImportError"
+        )
+        assert summ.get("method") == "kriging_gaussian"
+        print("CRON_IMPORT_OK anchors=%s" % summ.get("n_anchors_total"))
+        """
+    )
+    r = subprocess.run(
+        [sys.executable, "-c", prog],
+        cwd=str(ROOT),  # ROOT == pipeline/ — mimics `python pipeline/fetch.py`
+        capture_output=True,
+        text=True,
+    )
+    assert r.returncode == 0, (
+        f"cron-invocation buoy import regressed:\nSTDOUT:\n{r.stdout}\n"
+        f"STDERR:\n{r.stderr}"
+    )
+    assert "CRON_IMPORT_OK" in r.stdout, r.stdout
 
 
 # =========================================================================

@@ -560,12 +560,29 @@ def _apply_sst_buoy_correction(*, stack: list, grid_h: int, grid_w: int) -> dict
         # (mostly: editor static-analysis pre-commit, where requests is
         # already a dep but we don't want to make this module a hard
         # gate for those flows).
-        from pipeline.sst_buoy_correction import (
-            BUOYS as _BUOYS,
-            fetch_buoy_readings,
-            kriging_correction_surface,
-            correction_summary,
-        )
+        #
+        # Dual-import for the same reason as the module-level helpers at
+        # the top of this file: the production cron runs
+        # ``python pipeline/fetch.py`` (sys.path = pipeline/), where the
+        # ``pipeline.`` prefix is NOT importable and only the bare arm
+        # resolves. Without the fallback this import always raised
+        # ModuleNotFoundError under the cron, so the buoy correction
+        # silently never ran in production (the wind path already has
+        # this fallback — see fetch_wind.py).
+        try:
+            from pipeline.sst_buoy_correction import (
+                BUOYS as _BUOYS,
+                fetch_buoy_readings,
+                kriging_correction_surface,
+                correction_summary,
+            )
+        except ModuleNotFoundError:
+            from sst_buoy_correction import (
+                BUOYS as _BUOYS,
+                fetch_buoy_readings,
+                kriging_correction_surface,
+                correction_summary,
+            )
     except ImportError as exc:
         print(f"[sst] buoy correction unavailable: {exc}")
         return None
