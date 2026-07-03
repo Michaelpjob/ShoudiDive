@@ -175,6 +175,23 @@ function dynamicModulation(layer, manifest) {
     }
   }
 
+  // sst: surface the buoy-anchored correction as provenance. The pipeline
+  // krieges NDBC buoy residuals into the satellite grid to remove MUR's
+  // known coastal warm bias (skin-vs-bulk + gap-fill smearing). When it's
+  // active the SST a diver sees is tied to real thermometers — a positive
+  // trust signal — so we NAME it rather than nudge the calibrated score.
+  if (layer === "sst") {
+    const bc = info.buoy_correction;
+    const n = bc?.n_anchors_active;
+    if (typeof n === "number" && n > 0) {
+      const rms = bc.rms_residual_c;
+      reasons.push(
+        `buoy-anchored to ${n} NDBC buoy${n === 1 ? "" : "s"}` +
+          (typeof rms === "number" ? ` (±${rms.toFixed(1)}°C vs satellite)` : ""),
+      );
+    }
+  }
+
   // Fallback source: the pipeline sets source_fallback when the primary was
   // unavailable and a coarser/gappier backup stood in (SST→OISST 0.25°,
   // chl→raw VIIRS). It's live, so not "stale" — but lower confidence, and the
