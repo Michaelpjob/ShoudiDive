@@ -167,6 +167,56 @@ def test_buoy_correction_import_resolves_under_cron_invocation():
 
 
 # =========================================================================
+# Grid coherence — prefer the primary (1 km) grid over coarse fallbacks
+# =========================================================================
+
+def _grid(h, w):
+    return np.zeros((h, w), dtype=np.float32)
+
+
+def test_choose_stack_shape_prefers_primary_over_fresher_fallback():
+    """The 2026-06/07 granularity regression: MUR (1 km) lags ~2 days, so
+    the freshest day is the coarse 5 km fallback. The stack grid must still
+    resolve to the primary 1 km grid, dropping the fresher coarse day."""
+    import datetime as _dt
+    from fetch import _choose_stack_shape
+
+    MUR = (511, 586)      # 1 km primary
+    BLEND = (206, 234)    # 5 km fallback
+    d = [_dt.date(2026, 7, 2) - _dt.timedelta(days=i) for i in range(5)]
+    # Newest two days: only the coarse fallback published. Older days: MUR.
+    results = {
+        d[0]: _grid(*BLEND),   # 07-02 fallback (freshest)
+        d[1]: _grid(*BLEND),   # 07-01 fallback
+        d[2]: _grid(*MUR),     # 06-30 primary
+        d[3]: _grid(*MUR),     # 06-29 primary
+        d[4]: _grid(*MUR),     # 06-28 primary
+    }
+    primary_days = {d[2], d[3], d[4]}
+    shape = _choose_stack_shape(d, results, lambda x: x in primary_days)
+    assert shape == MUR, "coarse fallback hijacked the grid — regression is back"
+
+
+def test_choose_stack_shape_falls_back_when_no_primary():
+    """MUR fully unavailable → accept the most-recent fallback grid."""
+    import datetime as _dt
+    from fetch import _choose_stack_shape
+
+    BLEND = (206, 234)
+    d = [_dt.date(2026, 7, 2) - _dt.timedelta(days=i) for i in range(3)]
+    results = {d[0]: _grid(*BLEND), d[1]: _grid(*BLEND), d[2]: None}
+    shape = _choose_stack_shape(d, results, lambda x: False)  # nothing primary
+    assert shape == BLEND
+
+
+def test_choose_stack_shape_none_when_no_data():
+    import datetime as _dt
+    from fetch import _choose_stack_shape
+    d = [_dt.date(2026, 7, 2) - _dt.timedelta(days=i) for i in range(3)]
+    assert _choose_stack_shape(d, {x: None for x in d}, lambda x: True) is None
+
+
+# =========================================================================
 # Phase C — sst_score + sst_watchdog
 # =========================================================================
 

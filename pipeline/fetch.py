@@ -675,6 +675,36 @@ def _apply_sst_nearshore_correction(*, stack: list, grid_h: int, grid_w: int) ->
     return correction_summary(layers)
 
 
+def _choose_stack_shape(
+    days: list[date],
+    results: dict[date, "np.ndarray | None"],
+    is_primary: "callable",
+) -> tuple[int, int] | None:
+    """Pick the single grid shape a layer's multi-day stack will use.
+
+    A layer's stack must share one grid — but we must NOT let a coarse
+    fallback dictate it. The SST primary (MUR L4) publishes ~2 days behind
+    today, so the freshest AVAILABLE day is routinely served by the coarser
+    fallback while slightly older days carry full-resolution primary data.
+    Anchoring to the most-recent valid day (the old behavior) therefore
+    pinned the whole layer to the fallback grid and discarded every
+    primary-grid day as "shape differs" — the regression where SST silently
+    dropped from 1 km MUR to 5 km blended whenever MUR lagged a single day.
+
+    Rule: if ANY fetched day came from the primary (non-fallback) source,
+    that source's grid wins (most-recent primary day). Only when there is no
+    primary data at all do we accept the most-recent valid day's grid — the
+    graceful all-fallback path. ``days`` is most-recent-first.
+    """
+    primary = [d for d in days if results.get(d) is not None and is_primary(d)]
+    if primary:
+        return results[primary[0]].shape
+    for d in days:
+        if results.get(d) is not None:
+            return results[d].shape
+    return None
+
+
 def build_layer(layer: str, cfg: dict, end: date, want: int = 3, max_back: int = 7) -> dict | None:
     """Fetch up to `want` valid days walking back from `end`. Different layers
     publish on different lags, so each layer finds its own latest 3.
@@ -690,9 +720,10 @@ def build_layer(layer: str, cfg: dict, end: date, want: int = 3, max_back: int =
     # Fetch all candidate days concurrently, then assemble the most-recent
     # valid ones below. Parallel because the walk is I/O-bound; bounded pool
     # so we don't overload one upstream. Shape consistency (don't mix a 1 km
-    # primary grid with a coarser fallback grid) is enforced post-hoc against
-    # the most-recent valid day, replacing fetch_day's expected_shape thread
-    # which a parallel fan-out can't share.
+    # primary grid with a coarser fallback grid) is enforced post-hoc via
+    # _choose_stack_shape, which prefers the PRIMARY source's grid — see that
+    # helper for why anchoring to the most-recent valid day silently dropped
+    # SST to the coarse fallback whenever MUR lagged a day.
     days = [end - timedelta(days=i) for i in range(max_back)]
     results: dict[date, np.ndarray | None] = {}
     with ThreadPoolExecutor(max_workers=FETCH_WORKERS) as ex:
@@ -705,12 +736,24 @@ def build_layer(layer: str, cfg: dict, end: date, want: int = 3, max_back: int =
                 print(f"  {layer} {d}: fetch error {type(exc).__name__} - skipping", flush=True)
                 results[d] = None
 
+    # Choose the stack's grid, preferring the primary source over any
+    # coarser fallback (see _choose_stack_shape). A day is "primary" when
+    # fetch_day served it from candidate index 0 (recorded in _LAYER_SOURCE
+    # with fallback=False).
+    def _is_primary(d: date) -> bool:
+        src = _LAYER_SOURCE.get((layer, d))
+        return src is not None and not src.get("fallback", False)
+
+    target_shape = _choose_stack_shape(days, results, _is_primary)
+
     for d in days:  # most-recent first
         a = results.get(d)
         if a is None:
             continue
-        if stack_rev and a.shape != stack_rev[0].shape:
-            print(f"  {layer} {d}: shape {a.shape} differs from {stack_rev[0].shape} - skipping", flush=True)
+        if target_shape is not None and a.shape != target_shape:
+            grid_kind = "primary" if _is_primary(d) else "fallback"
+            print(f"  {layer} {d}: shape {a.shape} differs from target {target_shape} "
+                  f"({grid_kind} grid, preferring primary) - skipping", flush=True)
             continue
         stack_rev.append(a)
         actual_rev.append(d)
