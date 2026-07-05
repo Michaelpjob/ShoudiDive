@@ -2,11 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import { sstColor, sstTrendColor, chlColor, getFitted } from "../lib/mapData.js";
 import { getLayerGrid } from "../lib/dataSource.js";
 
-// Alpha for the viz "confidence veil" — cells whose clarity is an estimate
-// (interpolated / predicted / climatology / no-data per viz_quality.png)
-// paint at this opacity instead of 255, so a gap-filled reading reads as
-// visibly less certain than a direct observation. Muted, still legible.
-const VIZ_VEIL_ALPHA = 115;
+// Alpha for the "confidence veil" — cells whose value is an ESTIMATE rather
+// than a direct observation paint at this opacity instead of 255, so a
+// gap-filled reading reads as visibly less certain. The per-cell decision is
+// made by the layer's loader (which knows its provenance sidecars) and
+// attached as a `veil` mask on the grid; this component just dims those
+// cells. Today: chl (gap-fill source DINEOF/GlobColour) and viz
+// (interpolated/predicted/climatology per viz_quality.png). Emphasis of
+// uncertainty, not hiding — the value still shows, muted.
+const VEIL_ALPHA = 115;
 
 // Beaufort-aligned wind ramp (knots → [r,g,b]); same stops as the legend.
 const WIND_RAMP = [
@@ -166,15 +170,13 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
 
     cv.width = grid.width;
     cv.height = grid.height;
-    // Confidence veil (viz only). viz_quality.png tiers each cell:
-    //   1 OBSERVED_1D · 2 OBSERVED_3D  → a real satellite retrieval (trust)
-    //   3 INTERPOLATED · 4-6 PREDICTED_* · 7 CLIMATOLOGY_ONLY · 0 no-data
-    //     → a gap-fill / model / seasonal estimate, NOT an observation.
-    // Fade the estimates so a gap-filled "clear" reading (e.g. SoCal while
-    // the NASA chl feed is down) never paints as confidently as a direct
-    // observation. Emphasis of uncertainty, not hiding — the value still
-    // shows, just muted.
-    const vizQuality = layer === "viz" ? grid.quality : null;
+    // Confidence veil: the loader attaches a per-cell `veil` mask (1 = this
+    // cell's value is an estimate — a gap-fill / model / climatology output,
+    // not a direct observation). Fade those so a gap-filled "clear" reading
+    // (e.g. SoCal chl/viz while the NASA feed is down) never paints as
+    // confidently as a real retrieval. Absent mask → no veil (every cell
+    // opaque, legacy behavior).
+    const veilMask = grid.veil || null;
     const img = ctx.createImageData(grid.width, grid.height);
     for (let i = 0; i < grid.data.length; i++) {
       const v = grid.data[i];
@@ -195,12 +197,7 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
       img.data[i * 4]     = rgb[0];
       img.data[i * 4 + 1] = rgb[1];
       img.data[i * 4 + 2] = rgb[2];
-      let alpha = 255;
-      if (vizQuality) {
-        const q = vizQuality[i];
-        if (q === 0 || q >= 3) alpha = VIZ_VEIL_ALPHA;
-      }
-      img.data[i * 4 + 3] = alpha;
+      img.data[i * 4 + 3] = (veilMask && veilMask[i]) ? VEIL_ALPHA : 255;
     }
 
     // Coastal halo elimination. NaN cells leave alpha=0 but their RGB

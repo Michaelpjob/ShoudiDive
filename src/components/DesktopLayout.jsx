@@ -490,6 +490,14 @@ export default function DesktopLayout({
                         <span className="swatch" style={{ background: "rgb(122,90,60)" }}></span>
                         <strong>Warm brown</strong> = {copy.brown}
                       </p>
+                      <p className="info-p">
+                        <strong>Faded areas are gap-filled.</strong> When the direct
+                        satellite (NASA MODIS/VIIRS) is clouded out or offline, cells are
+                        filled by a gap-free model (DINEOF / Copernicus) that smooths over
+                        nearshore blooms and can read too clear — those cells paint muted.
+                        A mostly-faded map means the live satellite feed is degraded; trust
+                        the solid areas more.
+                      </p>
                     </>
                   );
                 })()}
