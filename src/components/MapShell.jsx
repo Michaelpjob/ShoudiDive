@@ -573,7 +573,12 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
 
   return (
     <>
-    <div
+    {/* <main> instead of <div>: the map IS the page's main content, and
+        the skip-link in App.jsx targets #map-main so keyboard users
+        bypass the topbar controls. Same default display as div. */}
+    <main
+      id="map-main"
+      aria-label="Interactive ocean conditions map"
       className="map-stage"
       ref={stageRef}
       onMouseMove={onMove}
@@ -897,7 +902,7 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
       {selectedClosure && (
         <ClosuresPopup data={selectedClosure} onClose={() => setSelectedClosure(null)} />
       )}
-    </div>
+    </main>
     {/* Spot Detail overlay (Phase 1B) — fixed full-screen, mounted
         outside .map-stage so the wide map's layout is undisturbed. */}
     {spotDetailFor && (

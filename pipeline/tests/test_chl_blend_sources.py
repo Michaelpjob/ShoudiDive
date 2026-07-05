@@ -162,3 +162,35 @@ def test_blend_returns_none_when_no_source_has_data(tmp_path, monkeypatch):
                         fetcher=_const_fetcher(np.nan))
     _stub_blend_env(monkeypatch, tmp_path, [dead])
     assert cb.build_blended_chl(date(2026, 6, 16)) is None
+
+
+# ---------------------------------------------------------------------
+# Canonical-grid contract (grid-hijack-class prevention)
+# ---------------------------------------------------------------------
+
+def test_off_grid_shapes_flags_native_grid_frames():
+    """A source that returns frames on its native grid instead of the
+    canonical (OUT_H, OUT_W) must be flagged so the blend drops it —
+    a per-cell merge of mismatched grids silently misaligns cells."""
+    import numpy as np
+    from datetime import date as _date
+    good = np.zeros((cb.OUT_H, cb.OUT_W), dtype=np.float32)
+    native = np.zeros((206, 234), dtype=np.float32)  # 5km blended-native shape
+    res = cb._SourceResult(
+        source=cb.CHL_SOURCES[0],
+        frames=[good, native],
+        dates=[_date(2026, 7, 4), _date(2026, 7, 3)],
+    )
+    assert cb.off_grid_shapes(res) == [(206, 234)]
+
+
+def test_off_grid_shapes_empty_for_canonical_frames():
+    import numpy as np
+    from datetime import date as _date
+    good = np.zeros((cb.OUT_H, cb.OUT_W), dtype=np.float32)
+    res = cb._SourceResult(
+        source=cb.CHL_SOURCES[0],
+        frames=[good, good.copy()],
+        dates=[_date(2026, 7, 4), _date(2026, 7, 3)],
+    )
+    assert cb.off_grid_shapes(res) == []

@@ -173,21 +173,38 @@ _NASA_FILENAME_RE = re.compile(
 )
 
 
+# OB.DAAC file_search now REQUIRES sensor_id + dtid (the 2026 "more
+# specificity in queries" migration — the API's own alert banner). A query
+# without them returns HTTP 200 + "No Results Found" FOR FILES THAT EXIST,
+# which silently killed all three NASA chl primaries (~2 weeks of
+# gap-fill-only blends until the 2026-07-05 diagnosis: the exact same
+# NRT files were confirmed present once the ids were supplied). Ids come
+# from the site's own registries:
+#   POST /file_search/file_search_missions/  → sensor ids
+#   POST /file_search/data_types/            → per-sensor dtids
+# dtid is the "Level-3 Mapped Ocean Color, near real-time" id per sensor.
+_NASA_SEARCH_IDS = {
+    "AQUA_MODIS":     {"sensor_id": 7,  "dtid": 1055},
+    "SNPP_VIIRS":     {"sensor_id": 14, "dtid": 1019},
+    "S3A_OLCI_ERRNT": {"sensor_id": 29, "dtid": 1273},
+}
+
+
 def _nasa_search_files(session: requests.Session, sensor: str, d: date) -> list[str]:
     """Find the L3m daily 4km NRT chl file(s) for this sensor + date.
     Returns 0 or 1 filenames (the search matches a single date)."""
-    # OB.DAAC migrated its file_search API (2026): the old `subType=1` +
-    # loose-wildcard `search` now 422s, silently killing all 3 NASA chl
-    # primaries (verified DEAD via the feed-health probe; chl fell back to a
-    # single NOAA host). The current contract wants `dtype=L3m` + a search
-    # glob matching the dotted filename. Bare filenames are still returned
-    # (no addurl) so _NASA_FILENAME_RE parses them unchanged.
+    # History of this endpoint breaking us quietly: the 2026-05 migration
+    # (old `subType=1` + loose wildcard → 422) and the 2026-06/07 one
+    # (sensor_id + dtid now required, see _NASA_SEARCH_IDS above). Bare
+    # filenames are still returned (no addurl) so _NASA_FILENAME_RE
+    # parses them unchanged.
     params = {
         "search": f"{sensor}*L3m.DAY.CHL.chlor_a.4km.NRT*",
         "sdate": d.isoformat(),
         "edate": d.isoformat(),
         "dtype": "L3m",
         "results_as_file": 1,
+        **_NASA_SEARCH_IDS.get(sensor, {}),
     }
     # Stage 6a (2026-05-24): http_get adds retries on the EARTHDATA
     # session — previously a transient 503 dropped the daily file.
@@ -197,12 +214,18 @@ def _nasa_search_files(session: requests.Session, sensor: str, d: date) -> list[
         print(f"  nasa-search {sensor} {d}: all retries failed", flush=True)
         return []
     if r.status_code != 200:
+        # Loud — a silent [] here is how both prior migrations went
+        # unnoticed until the blend ran gap-fill-only.
+        print(f"  nasa-search {sensor} {d}: HTTP {r.status_code}", flush=True)
         return []
     files = []
     for line in r.text.strip().split("\n"):
         line = line.strip()
         if _NASA_FILENAME_RE.match(line):
             files.append(line)
+    if not files:
+        first = (r.text.strip().splitlines() or ["(empty body)"])[0][:80]
+        print(f"  nasa-search {sensor} {d}: 0 matches ({first})", flush=True)
     return files
 
 
@@ -535,6 +558,21 @@ class _SourceResult:
     dates: list[date] = field(default_factory=list)         # parallel to frames
 
 
+def off_grid_shapes(res: _SourceResult, grid_h: int | None = None, grid_w: int | None = None) -> list[tuple]:
+    """Shapes in ``res.frames`` that violate the canonical-grid contract.
+
+    Every source fetcher regrids to (OUT_H, OUT_W) before returning, and
+    the per-cell freshest-wins merge in _blend_freshest silently
+    misaligns cells if that contract ever breaks (a fallback source on
+    its native grid, a bbox change on one side of a regridder). The
+    blend drops any offending source loudly instead of merging it —
+    grid-hijack-class prevention as an enforced check rather than an
+    algorithmic accident."""
+    h = OUT_H if grid_h is None else grid_h
+    w = OUT_W if grid_w is None else grid_w
+    return [f.shape for f in res.frames if f.shape != (h, w)]
+
+
 # Wall-clock budget per source's age-walk. A source that stays ALIVE but
 # responds slowly (NOAA DINEOF ERDDAP can crawl) would otherwise walk its full
 # max_back at HTTP_TIMEOUT each and stack toward the 75-min job limit, killing
@@ -774,6 +812,11 @@ def build_blended_chl(end: date) -> dict | None:
         res = _walk_source(source, end, want=3)
         if not res.frames:
             print(f"  [{source.id}] no valid frames in last {source.max_back}d", flush=True)
+            continue
+        bad = off_grid_shapes(res)
+        if bad:
+            print(f"  [{source.id}] SHAPE MISMATCH {bad[0]} != {(OUT_H, OUT_W)} — "
+                  f"dropping source, regrid contract violated", flush=True)
             continue
         ages_str = ", ".join(str((end - d).days) for d in res.dates)
         print(f"  [{source.id}] {len(res.frames)} frames, ages: {ages_str}d", flush=True)
