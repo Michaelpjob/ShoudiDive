@@ -103,10 +103,32 @@ layer_static() {
     | xargs -0 -n 50 "$PYTHON" -m py_compile \
     || return 1
 
+  # Undefined-name gate — the one failure class py_compile can't see.
+  # A dangling reference in a rarely-hit branch survives compile + the
+  # import smoke below and dies at runtime inside a continue-on-error
+  # workflow step (fetch_waves._idx_url froze wave_max_3d for 41 days,
+  # 2026-05-24 → 2026-07-04). Full pyflakes output stays advisory
+  # (unused-import noise); undefined names alone gate.
+  if "$PYTHON" -c "import pyflakes" 2>/dev/null; then
+    echo "[static] pyflakes undefined-name gate"
+    UNDEF=$(find pipeline -name '*.py' \
+                  -not -path '*/__pycache__/*' \
+                  -not -path '*/.venv/*' \
+                  -print0 \
+      | xargs -0 -n 50 "$PYTHON" -m pyflakes 2>&1 \
+      | grep -i "undefined name" || true)
+    if [ -n "$UNDEF" ]; then
+      echo "$UNDEF"
+      return 1
+    fi
+  else
+    echo "[static] pyflakes not installed — skipping undefined-name gate (pip install pyflakes)"
+  fi
+
   # Import smoke for the two PR1 modules — proves their top-level imports
   # resolve and the new symbols are exposed.
   echo "[static] import smoke (fetch + fetch_visibility)"
-  $PYTHON - <<'PY' || return 1
+  "$PYTHON" - <<'PY' || return 1
 import sys
 sys.path.insert(0, 'pipeline')
 import fetch
@@ -131,11 +153,11 @@ PY
 # ----- Layer 2: unit tests -------------------------------------------------
 
 layer_unit() {
-  if ! $PYTHON -c "import pytest" 2>/dev/null; then
+  if ! "$PYTHON" -c "import pytest" 2>/dev/null; then
     echo "[unit] pytest not installed; install with: pip install pytest"
     return 1
   fi
-  $PYTHON -m pytest pipeline/tests/test_*.py -v
+  "$PYTHON" -m pytest pipeline/tests/test_*.py -v
 }
 
 # ----- Layer 3: integration fetch.py ---------------------------------------
@@ -144,20 +166,20 @@ layer_fetch() {
   # --layer chl keeps the run scoped to the layer PR1 actually changed,
   # cutting wall time roughly in half vs `--layer all`.
   echo "[fetch] python pipeline/fetch.py --layer chl"
-  $PYTHON pipeline/fetch.py --layer chl || return 1
+  "$PYTHON" pipeline/fetch.py --layer chl || return 1
   echo
   echo "[fetch] assert sidecar + manifest"
-  $PYTHON -m pipeline.tests.assert_outputs fetch_chl
+  "$PYTHON" -m pipeline.tests.assert_outputs fetch_chl
 }
 
 # ----- Layer 4: integration fetch_visibility.py ----------------------------
 
 layer_visibility() {
   echo "[visibility] python pipeline/fetch_visibility.py"
-  $PYTHON pipeline/fetch_visibility.py || return 1
+  "$PYTHON" pipeline/fetch_visibility.py || return 1
   echo
   echo "[visibility] assert quality codes + viz outputs"
-  $PYTHON -m pipeline.tests.assert_outputs visibility
+  "$PYTHON" -m pipeline.tests.assert_outputs visibility
 }
 
 # ----- Drive the layers ----------------------------------------------------
