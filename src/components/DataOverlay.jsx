@@ -2,15 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { sstColor, sstTrendColor, chlColor, getFitted } from "../lib/mapData.js";
 import { getLayerGrid } from "../lib/dataSource.js";
 
-// Alpha for the "confidence veil" — cells whose value is an ESTIMATE rather
-// than a direct observation paint at this opacity instead of 255, so a
-// gap-filled reading reads as visibly less certain. The per-cell decision is
-// made by the layer's loader (which knows its provenance sidecars) and
-// attached as a `veil` mask on the grid; this component just dims those
-// cells. Today: chl (gap-fill source DINEOF/GlobColour) and viz
-// (interpolated/predicted/climatology per viz_quality.png). Emphasis of
-// uncertainty, not hiding — the value still shows, muted.
-const VEIL_ALPHA = 115;
+// Layers rendered as discrete per-cell blocks (nearest-neighbour) rather than
+// a smoothly-interpolated field. For the observed-only clarity layers the grid
+// IS the truth — each cell is its own observation and must not visually bleed
+// into its neighbours — so we show crisp cells and let blank (NaN) cells stay
+// transparent. Other layers keep the smooth look.
+const PIXELATED_LAYERS = new Set(["chl", "viz"]);
 
 // Beaufort-aligned wind ramp (knots → [r,g,b]); same stops as the legend.
 const WIND_RAMP = [
@@ -170,13 +167,11 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
 
     cv.width = grid.width;
     cv.height = grid.height;
-    // Confidence veil: the loader attaches a per-cell `veil` mask (1 = this
-    // cell's value is an estimate — a gap-fill / model / climatology output,
-    // not a direct observation). Fade those so a gap-filled "clear" reading
-    // (e.g. SoCal chl/viz while the NASA feed is down) never paints as
-    // confidently as a real retrieval. Absent mask → no veil (every cell
-    // opaque, legacy behavior).
-    const veilMask = grid.veil || null;
+    // Observed-only: a cell either has a real value (paint it, fully opaque)
+    // or it's blank (NaN → transparent). The loaders already blanked
+    // neighbour-derived cells (chl gap-fill sources, viz estimate tiers) and
+    // dropped the fillNearest smear, so there is nothing to fade here — a
+    // blank cell is honest "no observation", never backfilled.
     const img = ctx.createImageData(grid.width, grid.height);
     for (let i = 0; i < grid.data.length; i++) {
       const v = grid.data[i];
@@ -197,7 +192,7 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
       img.data[i * 4]     = rgb[0];
       img.data[i * 4 + 1] = rgb[1];
       img.data[i * 4 + 2] = rgb[2];
-      img.data[i * 4 + 3] = (veilMask && veilMask[i]) ? VEIL_ALPHA : 255;
+      img.data[i * 4 + 3] = 255;
     }
 
     // Coastal halo elimination. NaN cells leave alpha=0 but their RGB
@@ -272,10 +267,11 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
         height={innerH}
         href={imgHref}
         preserveAspectRatio="none"
-        // Pixel-art rendering preserves the source-cell grid look at
-        // any zoom level, matching the previous canvas behavior. Set
-        // to "auto" / "smooth" if a softer interpolation is preferred.
-        style={{ imageRendering: "auto" }}
+        // Observed-only clarity layers (chl/viz) render as discrete cells
+        // (nearest-neighbour) so each cell reads as its own observation and
+        // blanks stay crisp — no smooth blend that would bleed a real cell
+        // into an adjacent blank one. Other layers keep smooth interpolation.
+        style={{ imageRendering: PIXELATED_LAYERS.has(layer) ? "pixelated" : "auto" }}
       />
     </g>
   );

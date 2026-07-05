@@ -1,11 +1,14 @@
-// Contract checks for the viz "confidence veil" — the end-to-end wiring that
-// stops gap-filled clarity from painting as a confident observation.
+// Contract checks for the OBSERVED-ONLY clarity view — every clarity cell is
+// a direct retrieval at that cell, or it is blank. Nothing is filled in from
+// neighbours (no gap-fill product, no fillNearest smear, no offshore reach).
 //
-// The pipeline already emits a per-cell quality raster (viz_quality.png) and
-// declares it in the manifest, but the frontend used to ignore it and every
-// cell rendered opaque. These tests pin the full chain:
-//   chl_1d_source.png → interpolated_mask → assign_quality(INTERPOLATED)
-//   → viz_quality.png → loadViz(quality) → DataOverlay veil.
+// The pipeline emits per-cell provenance (chl_1d_source.png source ids,
+// viz_quality.png tiers) and declares them in the manifest. These tests pin
+// the chain that turns that provenance into honest blanks:
+//   chl_1d_source.png → blank gap-fill cells (source 4/5/6)
+//   viz_quality.png   → blank estimate cells (tier 0 or >=3)
+//   + no fillNearest smear, + no offshore shell-reach in the spot sampler,
+//   + discrete pixelated cells.
 //
 // Source-string style (node's test runner, no jest) like the other
 // tests/*.test.js — asserts the wiring exists without booting a canvas.
@@ -26,39 +29,48 @@ test("decoders.js exposes a raw (categorical) PNG decoder", () => {
   assert.match(src, /codes\[i\]\s*=\s*id\.data\[i \* 4\]/);
 });
 
-test("loadViz builds a veil mask from the quality sidecar (raw, not smeared)", () => {
+test("viz loader BLANKS estimate cells and drops the fillNearest smear", () => {
   const src = read("src/lib/loaders/viz.js");
   assert.match(src, /decodeRawPng/, "viz loader must decode viz_quality via decodeRawPng");
   assert.match(src, /quality_url/, "viz loader must read the manifest quality_url");
-  assert.match(src, /\bveil\b/, "must attach a veil mask to the slot");
-  // Trust only OBSERVED_1D(1)/OBSERVED_3D(2); veil no-data(0) + INTERPOLATED/
-  // PREDICTED/CLIMATOLOGY (>=3).
-  assert.match(src, /c === 0 \|\| c >= 3/, "veil rule fades code 0 and >=3");
-  // fillNearestInPlace runs on the VALUE grid only; quality must not be smeared.
-  const fillIdx = src.indexOf("fillNearestInPlace");
-  const qualIdx = src.indexOf("decodeRawPng");
-  assert.ok(fillIdx >= 0 && qualIdx > fillIdx, "quality decode happens after value fill, separately");
+  // Keep OBSERVED_1D(1)/OBSERVED_3D(2); blank no-data(0) + INTERPOLATED/
+  // PREDICTED/CLIMATOLOGY (>=3) to NaN.
+  assert.match(src, /c === 0 \|\| c >= 3/, "blank rule covers code 0 and >=3");
+  assert.match(src, /decoded\.data\[i\]\s*=\s*NaN/, "estimate cells must be NaN'd, not kept");
+  // The smear that manufactured a colored map out of blind cells must be gone
+  // — not imported, not called (a mention in a comment is fine).
+  assert.doesNotMatch(src, /import\s*\{[^}]*fillNearestInPlace/, "must not import fillNearestInPlace");
+  assert.doesNotMatch(src, /fillNearestInPlace\s*\(/, "must not call fillNearestInPlace");
 });
 
-test("chl loader builds a veil from the gap-fill source sidecar", () => {
+test("chl loader BLANKS gap-fill cells (never backfills from neighbours)", () => {
   const src = read("src/lib/loaders/scalarPng.js");
   assert.match(src, /decodeRawPng/, "must decode chl_1d_source via decodeRawPng");
   assert.match(src, /source_url/, "must read the manifest source_url (chl ships one)");
   // Gap-fill priorities = DINEOF (4/5) + Copernicus GlobColour (6); NASA
-  // direct (1-3) and raw VIIRS (7) are real retrievals, not veiled.
+  // direct (1-3) and raw VIIRS (7) are real retrievals, kept.
   assert.match(src, /GAP_FILL_SOURCE_CODES\s*=\s*new Set\(\[4,\s*5,\s*6\]\)/);
-  assert.match(src, /\bveil\b/, "must attach a veil mask to the slot");
+  assert.match(src, /decoded\.data\[i\]\s*=\s*NaN/, "gap-fill cells must be NaN'd (blank)");
 });
 
-test("DataOverlay dims estimate cells via the generic per-cell veil mask", () => {
+test("DataOverlay paints observed cells opaque, blanks transparent, cells discrete", () => {
   const src = read("src/components/DataOverlay.jsx");
-  assert.match(src, /VEIL_ALPHA/, "must define a veil alpha");
-  assert.match(src, /grid\.veil/, "must read the per-cell veil mask (layer-agnostic)");
-  assert.match(
-    src,
-    /veilMask && veilMask\[i\]\)\s*\?\s*VEIL_ALPHA\s*:\s*255/,
-    "veiled cells paint at VEIL_ALPHA, others opaque",
-  );
+  // No veil/fade any more — a cell is a real value (opaque) or blank (NaN).
+  assert.doesNotMatch(src, /VEIL_ALPHA/, "veil alpha removed — cells blank, not faded");
+  assert.match(src, /img\.data\[i \* 4 \+ 3\]\s*=\s*255/, "finite cells fully opaque");
+  // Clarity layers render as discrete cells (nearest-neighbour), not smoothed.
+  assert.match(src, /PIXELATED_LAYERS\s*=\s*new Set\(\["chl",\s*"viz"\]\)/);
+  assert.match(src, /imageRendering:\s*PIXELATED_LAYERS\.has\(layer\)\s*\?\s*"pixelated"/);
+});
+
+test("spot sampler does not reach offshore for blank clarity cells", () => {
+  const src = read("src/lib/dataSource.js");
+  // bilinear takes a maxReach; <=0 means "no neighbour shell — return NaN".
+  assert.match(src, /function bilinear\(layer, lng, lat, maxReach = 6\)/);
+  assert.match(src, /if \(maxReach <= 0\) return NaN/);
+  // chl + viz spot accessors pass 0 (observed-only, no reach).
+  assert.match(src, /state\.layers\.chl[\s\S]{0,60}lng, lat, 0\)/, "getChl must pass maxReach=0");
+  assert.match(src, /state\.layers\.viz[\s\S]{0,60}lng, lat, 0\)/, "getVizFt must pass maxReach=0");
 });
 
 test("pipeline builds interpolated_mask from the chl source sidecar and passes it", () => {
@@ -71,8 +83,8 @@ test("pipeline builds interpolated_mask from the chl source sidecar and passes i
 
 test("assign_quality treats a gap-fill as INTERPOLATED regardless of age", () => {
   const model = read("pipeline/viz_predict/model.py");
-  // The final override: any interpolated cell → INTERPOLATED, overriding
-  // OBSERVED_* / PREDICTED_*.
+  // The final override: any interpolated cell → INTERPOLATED, so viz_quality
+  // marks gap-fills as estimates (which the frontend then blanks).
   assert.match(
     model,
     /out\[interpolated_mask\.astype\(bool\)\]\s*=\s*"INTERPOLATED"/,

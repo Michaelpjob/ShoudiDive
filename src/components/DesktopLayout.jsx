@@ -491,12 +491,12 @@ export default function DesktopLayout({
                         <strong>Warm brown</strong> = {copy.brown}
                       </p>
                       <p className="info-p">
-                        <strong>Faded areas are gap-filled.</strong> When the direct
-                        satellite (NASA MODIS/VIIRS) is clouded out or offline, cells are
-                        filled by a gap-free model (DINEOF / Copernicus) that smooths over
-                        nearshore blooms and can read too clear — those cells paint muted.
-                        A mostly-faded map means the live satellite feed is degraded; trust
-                        the solid areas more.
+                        <strong>Blank areas have no observation.</strong> Each colored cell
+                        is a direct satellite retrieval at that spot — nothing is filled in
+                        from neighboring cells. Where the satellite was clouded out or the
+                        NASA feed is offline, the cell is left blank rather than guessed, so
+                        a nearshore bloom can't be painted over by clearer water nearby. A
+                        mostly-blank map means there's little real chlorophyll data right now.
                       </p>
                     </>
                   );
@@ -680,10 +680,11 @@ export default function DesktopLayout({
                         Secchi-equivalent visibility you'd expect in feet.
                       </p>
                       <p className="info-p">
-                        <strong>Faded areas are estimates.</strong> Where the chlorophyll
-                        input is gap-filled, modeled, or seasonal rather than a fresh
-                        satellite pass, the cell is drawn muted — trust the solid areas
-                        more. Large faded zones usually mean the satellite feed is degraded.
+                        <strong>Blank areas have no observation.</strong> A cell is drawn
+                        only where the model had a real satellite chlorophyll retrieval at
+                        that spot; gap-filled, modeled, and seasonal cells are left blank
+                        rather than filled in from neighbors. A mostly-blank map means the
+                        satellite feed is degraded — not that the water is clear.
                       </p>
                       <p className="info-p">
                         <span className="swatch" style={{ background: "rgb(194,65,12)" }}></span>
