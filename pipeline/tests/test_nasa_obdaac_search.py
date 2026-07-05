@@ -76,3 +76,57 @@ def test_feed_health_probe_not_on_422_params():
     url = m.group(1)
     assert "subType=1" not in url, "feed-health probe still uses the 422-ing subType param"
     assert "dtype=L3m" in url
+
+
+# ---------------------------------------------------------------------
+# 2026-06/07 migration: sensor_id + dtid are now REQUIRED. Queries
+# without them return HTTP 200 + "No Results Found" for files that
+# exist — the second silent OB.DAAC kill of the NASA primaries.
+# ---------------------------------------------------------------------
+
+@pytest.mark.parametrize("sensor,sensor_id,dtid", [
+    ("AQUA_MODIS", 7, 1055),
+    ("SNPP_VIIRS", 14, 1019),
+    ("S3A_OLCI_ERRNT", 29, 1273),
+])
+def test_nasa_search_sends_sensor_id_and_dtid(monkeypatch, sensor, sensor_id, dtid):
+    captured = {}
+
+    def fake_get(url, **kw):
+        captured["params"] = kw.get("params")
+        return _Resp()
+
+    monkeypatch.setattr(cb, "http_get", fake_get)
+    cb._nasa_search_files(session=None, sensor=sensor, d=date(2026, 7, 2))
+    p = captured["params"]
+    assert p.get("sensor_id") == sensor_id, (
+        f"{sensor}: file_search without sensor_id returns 'No Results Found' "
+        f"for files that exist (the 2026-06/07 'more specificity' migration)"
+    )
+    assert p.get("dtid") == dtid, (
+        f"{sensor}: dtid must be the per-sensor 'L3m Ocean Color, NRT' id "
+        f"from POST /file_search/data_types/"
+    )
+
+
+def test_every_nasa_source_has_search_ids():
+    """A new NASA ChlSource without a _NASA_SEARCH_IDS entry would silently
+    search id-less and get 'No Results Found' forever."""
+    nasa_sensors = {
+        "AQUA_MODIS", "SNPP_VIIRS", "S3A_OLCI_ERRNT",
+    }
+    assert nasa_sensors <= set(cb._NASA_SEARCH_IDS.keys())
+
+
+def test_nasa_search_logs_zero_matches(monkeypatch, capsys):
+    """200 + no matching filenames must print — a silent [] is how both
+    OB.DAAC migrations went unnoticed until chl ran gap-fill-only."""
+    class _Empty:
+        status_code = 200
+        text = "No Results Found\n"
+
+    monkeypatch.setattr(cb, "http_get", lambda url, **kw: _Empty())
+    files = cb._nasa_search_files(session=None, sensor="AQUA_MODIS", d=date(2026, 7, 2))
+    assert files == []
+    out = capsys.readouterr().out
+    assert "0 matches" in out and "No Results Found" in out
