@@ -223,12 +223,23 @@ export function getLayerConfidence(layer, opts = {}) {
   // keep reading "Observed" no matter how good its source normally is.
   score = Math.min(score, st.cap);
   const label = CONFIDENCE_LABELS[score];
+  // Live provenance beats the nominal description: when the pipeline
+  // publishes a per-layer `source` (it does whenever a fallback served,
+  // e.g. SST via "NOAA Geo-polar blended SST"), that's what the user is
+  // actually looking at — showing the static "MUR satellite" label while
+  // the reason line says "via blended (primary unavailable)" contradicts
+  // itself. `nominalSource` keeps the ceiling description for tooltips.
+  const info = manifest?.layers?.[layer];
+  const liveSource = typeof info?.source === "string" ? info.source : null;
+  const sourceFallback = !!info?.source_fallback;
   return {
     score,
     ceilingScore: base.score,
     label: label.name,
     color: label.color,
-    source: base.source,
+    source: (sourceFallback && liveSource) ? liveSource : base.source,
+    nominalSource: base.source,  // the primary this layer normally runs on
+    sourceFallback,              // true → a backup source served this data
     reason: base.reason,
     modReasons: reasons,
     ageDays: st.ageDays,
