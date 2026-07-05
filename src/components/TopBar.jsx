@@ -88,11 +88,11 @@ export default function TopBar({ onSettings, settingsOpen, dataState, layer, hor
     ? "Live"
     : "Demo data";
   return (
-    <div className="topbar">
+    <header className="topbar">
       <div className="brand">
         <FreediverLogo />
         <div>
-          <div className="brand-name">ShouldIDive</div>
+          <h1 className="brand-name">ShouldIDive</h1>
         </div>
         <span className="brand-tag">
           {REGION_TAGLINES[activeRegion()] || REGION_TAGLINES.ca}
@@ -259,6 +259,6 @@ export default function TopBar({ onSettings, settingsOpen, dataState, layer, hor
         </button>
       </div>
       {whatsNewOpen && <WhatsNew onClose={() => setWhatsNewOpen(false)} />}
-    </div>
+    </header>
   );
 }
