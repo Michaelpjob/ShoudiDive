@@ -26,27 +26,38 @@ test("decoders.js exposes a raw (categorical) PNG decoder", () => {
   assert.match(src, /codes\[i\]\s*=\s*id\.data\[i \* 4\]/);
 });
 
-test("loadViz decodes the quality sidecar and keeps it RAW (not smeared)", () => {
+test("loadViz builds a veil mask from the quality sidecar (raw, not smeared)", () => {
   const src = read("src/lib/loaders/viz.js");
   assert.match(src, /decodeRawPng/, "viz loader must decode viz_quality via decodeRawPng");
   assert.match(src, /quality_url/, "viz loader must read the manifest quality_url");
-  assert.match(src, /quality/, "decoded quality must be attached to the slot");
+  assert.match(src, /\bveil\b/, "must attach a veil mask to the slot");
+  // Trust only OBSERVED_1D(1)/OBSERVED_3D(2); veil no-data(0) + INTERPOLATED/
+  // PREDICTED/CLIMATOLOGY (>=3).
+  assert.match(src, /c === 0 \|\| c >= 3/, "veil rule fades code 0 and >=3");
   // fillNearestInPlace runs on the VALUE grid only; quality must not be smeared.
   const fillIdx = src.indexOf("fillNearestInPlace");
   const qualIdx = src.indexOf("decodeRawPng");
   assert.ok(fillIdx >= 0 && qualIdx > fillIdx, "quality decode happens after value fill, separately");
 });
 
-test("DataOverlay veils viz cells whose quality is not a direct observation", () => {
+test("chl loader builds a veil from the gap-fill source sidecar", () => {
+  const src = read("src/lib/loaders/scalarPng.js");
+  assert.match(src, /decodeRawPng/, "must decode chl_1d_source via decodeRawPng");
+  assert.match(src, /source_url/, "must read the manifest source_url (chl ships one)");
+  // Gap-fill priorities = DINEOF (4/5) + Copernicus GlobColour (6); NASA
+  // direct (1-3) and raw VIIRS (7) are real retrievals, not veiled.
+  assert.match(src, /GAP_FILL_SOURCE_CODES\s*=\s*new Set\(\[4,\s*5,\s*6\]\)/);
+  assert.match(src, /\bveil\b/, "must attach a veil mask to the slot");
+});
+
+test("DataOverlay dims estimate cells via the generic per-cell veil mask", () => {
   const src = read("src/components/DataOverlay.jsx");
-  assert.match(src, /VIZ_VEIL_ALPHA/, "must define a veil alpha");
-  assert.match(src, /grid\.quality/, "must read the per-cell quality grid");
-  // Trust only OBSERVED_1D(1)/OBSERVED_3D(2); veil no-data(0) + INTERPOLATED/
-  // PREDICTED/CLIMATOLOGY (>=3).
+  assert.match(src, /VEIL_ALPHA/, "must define a veil alpha");
+  assert.match(src, /grid\.veil/, "must read the per-cell veil mask (layer-agnostic)");
   assert.match(
     src,
-    /q === 0 \|\| q >= 3/,
-    "veil rule must fade code 0 (no-data) and >=3 (interpolated/predicted/climo)",
+    /veilMask && veilMask\[i\]\)\s*\?\s*VEIL_ALPHA\s*:\s*255/,
+    "veiled cells paint at VEIL_ALPHA, others opaque",
   );
 });
 

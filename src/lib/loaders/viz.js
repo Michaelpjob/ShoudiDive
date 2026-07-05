@@ -25,17 +25,24 @@ export async function loadViz(info, state) {
     // in DataOverlay can fade cells whose clarity is a gap-fill / model
     // estimate rather than a direct satellite observation. Optional: the
     // layer still renders if the sidecar is absent or mis-sized.
-    let quality = null;
+    // viz_quality.png tiers each cell: 1=OBSERVED_1D, 2=OBSERVED_3D are real
+    // retrievals (trust); 0=no-data and 3+ (INTERPOLATED / PREDICTED_* /
+    // CLIMATOLOGY_ONLY) are estimates. Build the veil mask DataOverlay dims.
+    let veil = null;
     if (w.quality_url) {
       try {
         const q = await decodeRawPng(w.quality_url);
         if (q.width === decoded.width && q.height === decoded.height) {
-          quality = q.codes;
+          veil = new Uint8Array(q.codes.length);
+          for (let i = 0; i < q.codes.length; i++) {
+            const c = q.codes[i];
+            veil[i] = (c === 0 || c >= 3) ? 1 : 0;
+          }
         }
       } catch {
-        quality = null;
+        veil = null;
       }
     }
-    state.layers.viz[slot] = { ...decoded, quality, valid_at: w.valid_at };
+    state.layers.viz[slot] = { ...decoded, veil, valid_at: w.valid_at };
   }
 }
