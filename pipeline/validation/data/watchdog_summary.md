@@ -1,4 +1,4 @@
-# Validation watchdog — 2026-07-05T06:17Z
+# Validation watchdog — 2026-07-05T09:18Z
 
 **2 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
@@ -18,13 +18,13 @@ A required upstream data source failed the latest feed-health probe.
 
 ### ⚠️ 3. 2 non-critical external feed(s) are red
 
-Red feeds: chl_dineof_nrt_4km, chl_climo_modis_pfeg. Fallbacks may keep the model running, but redundancy is degraded.
+Red feeds: chl_dineof_sci_2km, chl_climo_modis_pfeg. Fallbacks may keep the model running, but redundancy is degraded.
 
 **Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
 
-### 🔴 4. Published-data freshness gate found 2 issue(s)
+### 🔴 4. Published-data freshness gate found 1 issue(s)
 
-Freshness/completeness failures: wave:layer_date_stale, sst:sst_source_query_failed.
+Freshness/completeness failures: sst:sst_source_query_failed.
 
 **Suggested action:** Open `pipeline/validation/data/freshness_health.json`; fix the failing fetcher or rerun the matching workflow before trusting the deploy.
 
@@ -32,16 +32,16 @@ Freshness/completeness failures: wave:layer_date_stale, sst:sst_source_query_fai
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_nearshore` | 4 | 5.49 | -0.42 | 75% | 0.16 |
-| `central_nearshore` | 1 | 3.13 | -3.13 | 100% | — |
+| `bight_nearshore` | 4 | 8.83 | -3.77 | 100% | -0.31 |
+| `central_nearshore` | 1 | 2.91 | -2.91 | 100% | — |
 
 ## Per-source bias (informational)
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `cencoos` | 1 | -3.13 ft |
-| `dive-shop-diveviz` | 1 | -9.25 ft |
-| `dive-shop-justgetwet` | 3 | +2.52 ft |
+| `cencoos` | 1 | -2.91 ft |
+| `dive-shop-diveviz` | 1 | -15.51 ft |
+| `dive-shop-justgetwet` | 3 | +0.14 ft |
 
 ## How to act on this issue
 
