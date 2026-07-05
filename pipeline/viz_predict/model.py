@@ -146,6 +146,16 @@ def assign_quality(chl_obs_today, chl_lastvalid_age_days, interpolated_mask):
     out[pred_med] = "PREDICTED_MED_CONF"
     pred_low = (~has_today) & (age > PRED_AGE_LOW_CONF_DAYS) & (~interpolated_mask)
     out[pred_low] = "PREDICTED_LOW_CONF"
+    # A gap-filled / spatially-interpolated cell (DINEOF or Copernicus
+    # GlobColour "gap-free" products) is NOT a direct satellite retrieval —
+    # no matter how recent. Previously INTERPOLATED only fired for age > 3, so
+    # a same-day gap-fill still read as OBSERVED_1D/OBSERVED_3D and the map
+    # presented it as a real observation. That is the "clear + confident over
+    # San Diego during a bloom" bug: while the NASA chl primaries are down,
+    # every SoCal cell is served by a gap-fill source, yet all read OBSERVED.
+    # A gap-fill is an estimate; override any OBSERVED_*/PREDICTED_* label so
+    # the UI can present it honestly (and veil it).
+    out[interpolated_mask.astype(bool)] = "INTERPOLATED"
     return out
 
 

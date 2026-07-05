@@ -825,6 +825,35 @@ def main():
     chl_lastvalid = flat(chl_today)
     age = flat(age_resampled)
 
+    # ---- Interpolated-source mask ---------------------------------------
+    # chl_blend.py writes chl_1d_source.png = the winning source PRIORITY per
+    # cell (0 = no cell). Priorities 4/5 = NOAA DINEOF and 6 = Copernicus
+    # GlobColour are "gap-free"/gap-filled products: their coastal values are
+    # spatial/temporal interpolations, NOT direct satellite retrievals.
+    # Priorities 1-3 (NASA MODIS/VIIRS/OLCI direct) and 7 (raw VIIRS) ARE
+    # retrievals. Flag the gap-fill cells so assign_quality labels them
+    # INTERPOLATED instead of OBSERVED — otherwise, while the NASA primaries
+    # are down and the whole bight is served by gap-fill, every cell reads
+    # "clear + confident" even over a bloom. Resample the boolean mask
+    # (majority-vote via bilinear + 0.5 threshold) onto the prediction grid.
+    GAP_FILL_PRIORITIES = (4, 5, 6)
+    chl_source_path = OUT_DIR / "chl_1d_source.png"
+    interp_mask_grid = np.zeros(lat_grid.shape, dtype=bool)
+    if chl_source_path.exists():
+        src_arr = np.array(Image.open(chl_source_path).convert("L"))
+        interp_native = np.isin(src_arr, GAP_FILL_PRIORITIES).astype(np.float32)
+        interp_rs = bilinear_sample(
+            interp_native, src_arr.shape[1], src_arr.shape[0], lng_grid, lat_grid
+        )
+        interp_mask_grid = np.where(np.isfinite(interp_rs), interp_rs, 0.0) > 0.5
+        print(
+            f"  chl interpolated-source mask: {int(interp_mask_grid.sum())} of "
+            f"{interp_mask_grid.size} cells are gap-fill (DINEOF/GlobColour)"
+        )
+    else:
+        print("  chl_1d_source.png missing — interpolated_mask all-false (legacy)")
+    interpolated_mask = flat(interp_mask_grid)
+
     # ---- Kd_490 (Phase 2) -----------------------------------------------
     # Mirror the chl freshness pipeline: decode log10 PNG + age sidecar,
     # bilinear-resample onto our grid, gate by age. The model blends Kd
@@ -914,6 +943,7 @@ def main():
         river_discharge_cfs=river_disch, river_climo_cfs=river_climo,
         tide_range_today_m=tide_range,
         cloud_fraction_7d=cloud_frac,
+        interpolated_mask=interpolated_mask,
         kd490_obs_today=kd490_obs_today,
         kd490_age_days=kd490_age_days,
     )

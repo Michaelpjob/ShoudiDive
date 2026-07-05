@@ -672,6 +672,12 @@ export default function DesktopLayout({
                         Secchi-equivalent visibility you'd expect in feet.
                       </p>
                       <p className="info-p">
+                        <strong>Faded areas are estimates.</strong> Where the chlorophyll
+                        input is gap-filled, modeled, or seasonal rather than a fresh
+                        satellite pass, the cell is drawn muted — trust the solid areas
+                        more. Large faded zones usually mean the satellite feed is degraded.
+                      </p>
+                      <p className="info-p">
                         <span className="swatch" style={{ background: "rgb(194,65,12)" }}></span>
                         <strong>Poor</strong> — 0–10 ft. Burnt orange; silty / blown out.
                       </p>
