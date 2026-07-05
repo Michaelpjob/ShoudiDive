@@ -2,6 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { sstColor, sstTrendColor, chlColor, getFitted } from "../lib/mapData.js";
 import { getLayerGrid } from "../lib/dataSource.js";
 
+// Alpha for the viz "confidence veil" — cells whose clarity is an estimate
+// (interpolated / predicted / climatology / no-data per viz_quality.png)
+// paint at this opacity instead of 255, so a gap-filled reading reads as
+// visibly less certain than a direct observation. Muted, still legible.
+const VIZ_VEIL_ALPHA = 115;
+
 // Beaufort-aligned wind ramp (knots → [r,g,b]); same stops as the legend.
 const WIND_RAMP = [
   { kt: 0,  c: [230, 240, 250] },
@@ -160,6 +166,15 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
 
     cv.width = grid.width;
     cv.height = grid.height;
+    // Confidence veil (viz only). viz_quality.png tiers each cell:
+    //   1 OBSERVED_1D · 2 OBSERVED_3D  → a real satellite retrieval (trust)
+    //   3 INTERPOLATED · 4-6 PREDICTED_* · 7 CLIMATOLOGY_ONLY · 0 no-data
+    //     → a gap-fill / model / seasonal estimate, NOT an observation.
+    // Fade the estimates so a gap-filled "clear" reading (e.g. SoCal while
+    // the NASA chl feed is down) never paints as confidently as a direct
+    // observation. Emphasis of uncertainty, not hiding — the value still
+    // shows, just muted.
+    const vizQuality = layer === "viz" ? grid.quality : null;
     const img = ctx.createImageData(grid.width, grid.height);
     for (let i = 0; i < grid.data.length; i++) {
       const v = grid.data[i];
@@ -180,7 +195,12 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
       img.data[i * 4]     = rgb[0];
       img.data[i * 4 + 1] = rgb[1];
       img.data[i * 4 + 2] = rgb[2];
-      img.data[i * 4 + 3] = 255;
+      let alpha = 255;
+      if (vizQuality) {
+        const q = vizQuality[i];
+        if (q === 0 || q >= 3) alpha = VIZ_VEIL_ALPHA;
+      }
+      img.data[i * 4 + 3] = alpha;
     }
 
     // Coastal halo elimination. NaN cells leave alpha=0 but their RGB

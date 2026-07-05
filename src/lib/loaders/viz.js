@@ -11,7 +11,7 @@
 // Carved out of dataSource.js loadManifest's if/else if chain on
 // 2026-05-09 (Tier-1 follow-up).
 
-import { decodePng, fillNearestInPlace } from "./decoders.js";
+import { decodePng, decodeRawPng, fillNearestInPlace } from "./decoders.js";
 
 export async function loadViz(info, state) {
   state.layers.viz = state.layers.viz || {};
@@ -19,6 +19,23 @@ export async function loadViz(info, state) {
   for (const [slot, w] of Object.entries(info.windows || {})) {
     const decoded = await decodePng(w.url, "linear", range);
     fillNearestInPlace(decoded, 30);
-    state.layers.viz[slot] = { ...decoded, valid_at: w.valid_at };
+    // Per-cell quality flag (viz_quality.png): 0=no-data, 1=OBSERVED_1D,
+    // 2=OBSERVED_3D, 3=INTERPOLATED, 4-6=PREDICTED_*, 7=CLIMATOLOGY_ONLY.
+    // Kept RAW (never smeared by fillNearestInPlace) so the confidence veil
+    // in DataOverlay can fade cells whose clarity is a gap-fill / model
+    // estimate rather than a direct satellite observation. Optional: the
+    // layer still renders if the sidecar is absent or mis-sized.
+    let quality = null;
+    if (w.quality_url) {
+      try {
+        const q = await decodeRawPng(w.quality_url);
+        if (q.width === decoded.width && q.height === decoded.height) {
+          quality = q.codes;
+        }
+      } catch {
+        quality = null;
+      }
+    }
+    state.layers.viz[slot] = { ...decoded, quality, valid_at: w.valid_at };
   }
 }
