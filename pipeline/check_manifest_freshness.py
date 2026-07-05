@@ -392,6 +392,16 @@ def main() -> int:
         action="store_true",
         help="Query NOAA MUR at San Clemente Island and fail if published SST lags source availability.",
     )
+    parser.add_argument(
+        "--fail-on",
+        choices=("any", "high"),
+        default="any",
+        help=(
+            "Which findings make the exit code non-zero: 'any' (default, "
+            "advisory pre-commit runs) or 'high' only (the post-publish "
+            "gate step that reddens the workflow for alert-router)."
+        ),
+    )
     args = parser.parse_args()
 
     now = datetime.now(timezone.utc)
@@ -448,6 +458,12 @@ def main() -> int:
         if f.detail:
             print(f"       {f.detail}")
     print(f"wrote {OUT_PATH.relative_to(ROOT)}")
+    if args.fail_on == "high":
+        gating = [f for f in findings if f.severity == "high"]
+        if gating and len(gating) < len(findings):
+            print(f"gating on {len(gating)} high-severity finding(s); "
+                  f"{len(findings) - len(gating)} medium finding(s) advisory")
+        return 1 if gating else 0
     return 1 if findings else 0
 
 
