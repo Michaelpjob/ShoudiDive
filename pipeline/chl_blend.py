@@ -535,6 +535,21 @@ class _SourceResult:
     dates: list[date] = field(default_factory=list)         # parallel to frames
 
 
+def off_grid_shapes(res: _SourceResult, grid_h: int | None = None, grid_w: int | None = None) -> list[tuple]:
+    """Shapes in ``res.frames`` that violate the canonical-grid contract.
+
+    Every source fetcher regrids to (OUT_H, OUT_W) before returning, and
+    the per-cell freshest-wins merge in _blend_freshest silently
+    misaligns cells if that contract ever breaks (a fallback source on
+    its native grid, a bbox change on one side of a regridder). The
+    blend drops any offending source loudly instead of merging it —
+    grid-hijack-class prevention as an enforced check rather than an
+    algorithmic accident."""
+    h = OUT_H if grid_h is None else grid_h
+    w = OUT_W if grid_w is None else grid_w
+    return [f.shape for f in res.frames if f.shape != (h, w)]
+
+
 # Wall-clock budget per source's age-walk. A source that stays ALIVE but
 # responds slowly (NOAA DINEOF ERDDAP can crawl) would otherwise walk its full
 # max_back at HTTP_TIMEOUT each and stack toward the 75-min job limit, killing
@@ -774,6 +789,11 @@ def build_blended_chl(end: date) -> dict | None:
         res = _walk_source(source, end, want=3)
         if not res.frames:
             print(f"  [{source.id}] no valid frames in last {source.max_back}d", flush=True)
+            continue
+        bad = off_grid_shapes(res)
+        if bad:
+            print(f"  [{source.id}] SHAPE MISMATCH {bad[0]} != {(OUT_H, OUT_W)} — "
+                  f"dropping source, regrid contract violated", flush=True)
             continue
         ages_str = ", ".join(str((end - d).days) for d in res.dates)
         print(f"  [{source.id}] {len(res.frames)} frames, ages: {ages_str}d", flush=True)
