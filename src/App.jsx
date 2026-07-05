@@ -55,7 +55,12 @@ function useRegionAwareTitle() {
 export default function App() {
   useRegionAwareTitle();
   const [layer, setLayer] = useState("sst");
-  const [composite, setComposite] = useState(2);
+  // Default the chl composite to 1-day (freshest). It's the only window with a
+  // per-cell source sidecar, so it's the one that renders observed-only
+  // (gap-fill cells blanked). 2-/3-day are opt-in "extend coverage with older
+  // days" modes and are NOT yet blanked — they need per-window provenance from
+  // the pipeline (follow-up). Landing on 1-day keeps the honest view default.
+  const [composite, setComposite] = useState(1);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const dataState = useDataVersion();
 
