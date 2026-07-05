@@ -43,14 +43,46 @@ test("viz loader BLANKS estimate cells and drops the fillNearest smear", () => {
   assert.doesNotMatch(src, /fillNearestInPlace\s*\(/, "must not call fillNearestInPlace");
 });
 
-test("chl loader BLANKS gap-fill cells (never backfills from neighbours)", () => {
+test("chl loader reads source + age sidecars and gates on both", () => {
   const src = read("src/lib/loaders/scalarPng.js");
-  assert.match(src, /decodeRawPng/, "must decode chl_1d_source via decodeRawPng");
-  assert.match(src, /source_url/, "must read the manifest source_url (chl ships one)");
+  assert.match(src, /decodeRawPng/, "must decode sidecars via decodeRawPng");
+  assert.match(src, /source_url/, "must read the manifest source_url");
+  assert.match(src, /age_days_url/, "must read the manifest age_days_url (freshness gate)");
   // Gap-fill priorities = DINEOF (4/5) + Copernicus GlobColour (6); NASA
   // direct (1-3) and raw VIIRS (7) are real retrievals, kept.
   assert.match(src, /GAP_FILL_SOURCE_CODES\s*=\s*new Set\(\[4,\s*5,\s*6\]\)/);
-  assert.match(src, /decoded\.data\[i\]\s*=\s*NaN/, "gap-fill cells must be NaN'd (blank)");
+  assert.match(src, /OBSERVED_FRESH_DAYS\s*=\s*\{\s*chl:\s*3\s*\}/, "chl freshness budget = 3 days");
+});
+
+test("blankUnverifiedCells keeps only real + fresh cells, blanks the rest", async () => {
+  const { blankUnverifiedCells } = await import("../src/lib/loaders/scalarPng.js");
+  const GAP = new Set([4, 5, 6]);
+  // 6 cells. source: 2=VIIRS(real) 6=GlobColour(gap) 1=MODIS(real) 7=rawVIIRS(real) 3=OLCI(real) 2=VIIRS(real)
+  // age codes (0=no-data, code-1 = days): 3→2d, 3→2d, 13→12d(STALE), 2→1d, 0→unknown, 4→3d
+  const data = new Float32Array([0.3, 0.4, 0.5, 0.6, 0.7, 0.8]);
+  const source = new Uint8Array([2, 6, 1, 7, 3, 2]);
+  const age = new Uint8Array([3, 3, 13, 2, 0, 4]);
+  const res = blankUnverifiedCells(data, { source, age, gapFillCodes: GAP, freshDays: 3 });
+  // cell0: real + 2d fresh → KEEP
+  // cell1: gap-fill → BLANK (gap)
+  // cell2: real but 12d → BLANK (stale)
+  // cell3: real + 1d → KEEP
+  // cell4: real but age unknown (code 0) → BLANK (can't verify freshness)
+  // cell5: real + 3d (== budget) → KEEP
+  assert.equal(res.blankedGapFill, 1);
+  assert.equal(res.blankedStale, 2);
+  assert.ok(Number.isFinite(data[0]) && Number.isFinite(data[3]) && Number.isFinite(data[5]), "real+fresh kept");
+  assert.ok(Number.isNaN(data[1]) && Number.isNaN(data[2]) && Number.isNaN(data[4]), "gap/stale/unknown blanked");
+});
+
+test("blankUnverifiedCells skips the age gate when no age sidecar or budget", async () => {
+  const { blankUnverifiedCells } = await import("../src/lib/loaders/scalarPng.js");
+  const data = new Float32Array([0.3, 0.4]);
+  const source = new Uint8Array([2, 6]);
+  // No age array → only the gap-fill gate runs; the real cell survives.
+  const res = blankUnverifiedCells(data, { source, gapFillCodes: new Set([4, 5, 6]) });
+  assert.equal(res.blankedStale, 0);
+  assert.ok(Number.isFinite(data[0]) && Number.isNaN(data[1]));
 });
 
 test("DataOverlay paints observed cells opaque, blanks transparent, cells discrete", () => {
