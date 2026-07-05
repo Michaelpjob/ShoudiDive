@@ -13,7 +13,9 @@ export default function ConfidenceDot({ layer, size = 8, className = "", showTag
   const reasons = [conf.reason, ...conf.modReasons].filter(Boolean).join(" · ");
   const title =
     `${conf.label} (${conf.score}/5)\n` +
-    `Source: ${conf.source}\n` +
+    `Source: ${conf.source}` +
+    (conf.sourceFallback ? ` — backup (primary: ${conf.nominalSource})` : "") +
+    `\n` +
     `${reasons}` +
     (conf.score < conf.ceilingScore
       ? `\n(today's score is ${conf.ceilingScore - conf.score} below ceiling)`
