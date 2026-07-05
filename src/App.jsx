@@ -127,6 +127,9 @@ export default function App() {
 
   return (
     <div className="app">
+      {/* Keyboard users otherwise Tab through every topbar control
+          before reaching the map — MapShell's root is <main id="map-main">. */}
+      <a className="skip-link" href="#map-main">Skip to map</a>
       <TopBar
         onSettings={() => setSettingsOpen((v) => !v)}
         settingsOpen={settingsOpen}
