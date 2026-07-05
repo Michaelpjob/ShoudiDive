@@ -16,7 +16,9 @@ job picks them up via ``pytest pipeline/tests/test_*.py``.
 """
 from __future__ import annotations
 
+import subprocess
 import sys
+import textwrap
 from pathlib import Path
 
 import numpy as np
@@ -104,6 +106,114 @@ def test_buoy_correction_clamps_extreme_residual():
     )
     assert anchors[0].get("skipped"), "bogus anchor was kept"
     assert np.all(correction == 0.0), "bogus anchor leaked into correction"
+
+
+def test_buoy_correction_import_resolves_under_cron_invocation():
+    """Regression guard for the silent-no-op bug (prod, ~3 weeks).
+
+    The production cron runs ``python pipeline/fetch.py`` — cwd is
+    ``pipeline/`` and the repo root is NOT on sys.path, so ``pipeline``
+    is not an importable package. ``_apply_sst_buoy_correction`` used to
+    import *only* ``from pipeline.sst_buoy_correction import …`` with no
+    bare fallback, so under the cron it raised ModuleNotFoundError →
+    caught → returned None → the buoy correction never ran and no
+    ``buoy_correction`` manifest block was emitted.
+
+    The other Phase-B tests insert ``pipeline/`` onto sys.path and import
+    bare, so they exercise the module but never fetch.py's integration
+    import path — which is exactly how this slipped through. This test
+    reproduces the cron invocation faithfully (subprocess, cwd=pipeline)
+    and asserts the helper returns a summary block, not None. The network
+    is stubbed so the test stays hermetic and fast.
+    """
+    prog = textwrap.dedent(
+        """
+        import numpy as np
+        # Imported the way `python pipeline/fetch.py` imports it.
+        import fetch
+        import sst_buoy_correction as sbc
+
+        # Stub the NDBC fetch so we exercise ONLY the import path inside
+        # the helper, never the live network. One in-bbox anchor.
+        def _fake_readings(**_kw):
+            return [sbc.BuoyReading(
+                stn="46086", name="San Clemente Basin",
+                lat=32.499, lng=-118.034,
+                wtmp_c=20.0, n_samples=24, age_hours=1.0,
+            )]
+        sbc.fetch_buoy_readings = _fake_readings
+
+        stack = [np.full((12, 14), 19.0, dtype="float32")]
+        summ = fetch._apply_sst_buoy_correction(stack=stack, grid_h=12, grid_w=14)
+        assert summ is not None, (
+            "buoy correction returned None under the cron invocation — "
+            "the pipeline.-prefixed import fell through to ImportError"
+        )
+        assert summ.get("method") == "kriging_gaussian"
+        print("CRON_IMPORT_OK anchors=%s" % summ.get("n_anchors_total"))
+        """
+    )
+    r = subprocess.run(
+        [sys.executable, "-c", prog],
+        cwd=str(ROOT),  # ROOT == pipeline/ — mimics `python pipeline/fetch.py`
+        capture_output=True,
+        text=True,
+    )
+    assert r.returncode == 0, (
+        f"cron-invocation buoy import regressed:\nSTDOUT:\n{r.stdout}\n"
+        f"STDERR:\n{r.stderr}"
+    )
+    assert "CRON_IMPORT_OK" in r.stdout, r.stdout
+
+
+# =========================================================================
+# Grid coherence — prefer the primary (1 km) grid over coarse fallbacks
+# =========================================================================
+
+def _grid(h, w):
+    return np.zeros((h, w), dtype=np.float32)
+
+
+def test_choose_stack_shape_prefers_primary_over_fresher_fallback():
+    """The 2026-06/07 granularity regression: MUR (1 km) lags ~2 days, so
+    the freshest day is the coarse 5 km fallback. The stack grid must still
+    resolve to the primary 1 km grid, dropping the fresher coarse day."""
+    import datetime as _dt
+    from fetch import _choose_stack_shape
+
+    MUR = (511, 586)      # 1 km primary
+    BLEND = (206, 234)    # 5 km fallback
+    d = [_dt.date(2026, 7, 2) - _dt.timedelta(days=i) for i in range(5)]
+    # Newest two days: only the coarse fallback published. Older days: MUR.
+    results = {
+        d[0]: _grid(*BLEND),   # 07-02 fallback (freshest)
+        d[1]: _grid(*BLEND),   # 07-01 fallback
+        d[2]: _grid(*MUR),     # 06-30 primary
+        d[3]: _grid(*MUR),     # 06-29 primary
+        d[4]: _grid(*MUR),     # 06-28 primary
+    }
+    primary_days = {d[2], d[3], d[4]}
+    shape = _choose_stack_shape(d, results, lambda x: x in primary_days)
+    assert shape == MUR, "coarse fallback hijacked the grid — regression is back"
+
+
+def test_choose_stack_shape_falls_back_when_no_primary():
+    """MUR fully unavailable → accept the most-recent fallback grid."""
+    import datetime as _dt
+    from fetch import _choose_stack_shape
+
+    BLEND = (206, 234)
+    d = [_dt.date(2026, 7, 2) - _dt.timedelta(days=i) for i in range(3)]
+    results = {d[0]: _grid(*BLEND), d[1]: _grid(*BLEND), d[2]: None}
+    shape = _choose_stack_shape(d, results, lambda x: False)  # nothing primary
+    assert shape == BLEND
+
+
+def test_choose_stack_shape_none_when_no_data():
+    import datetime as _dt
+    from fetch import _choose_stack_shape
+    d = [_dt.date(2026, 7, 2) - _dt.timedelta(days=i) for i in range(3)]
+    assert _choose_stack_shape(d, {x: None for x in d}, lambda x: True) is None
 
 
 # =========================================================================
