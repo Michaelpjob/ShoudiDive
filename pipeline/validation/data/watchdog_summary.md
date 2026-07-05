@@ -1,6 +1,6 @@
-# Validation watchdog — 2026-07-05T22:56Z
+# Validation watchdog — 2026-07-05T23:06Z
 
-**1 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
+**2 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
@@ -10,20 +10,26 @@ Multiple scrapers may be silently broken.
 
 **Suggested action:** Open the latest hourly ingest workflow run; look for `FAILED` lines per scraper.
 
+### ⚠️ 2. 2 non-critical external feed(s) are red
+
+Red feeds: kd490_dineof_2km, nasa_obdaac_search. Fallbacks may keep the model running, but redundancy is degraded.
+
+**Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
+
 ## Per-zone metrics
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_nearshore` | 4 | 8.72 | -3.52 | 100% | -0.30 |
-| `central_nearshore` | 1 | 2.33 | -2.33 | 100% | — |
+| `bight_nearshore` | 4 | 5.75 | +2.60 | 25% | 0.32 |
+| `central_nearshore` | 1 | 2.79 | -2.79 | 100% | — |
 
 ## Per-source bias (informational)
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `cencoos` | 1 | -2.33 ft |
-| `dive-shop-diveviz` | 1 | -15.20 ft |
-| `dive-shop-justgetwet` | 3 | +0.37 ft |
+| `cencoos` | 1 | -2.79 ft |
+| `dive-shop-diveviz` | 1 | -5.90 ft |
+| `dive-shop-justgetwet` | 3 | +5.43 ft |
 
 ## How to act on this issue
 
