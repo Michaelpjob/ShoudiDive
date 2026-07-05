@@ -15,13 +15,15 @@
 
 import { decodePng, decodeRawPng } from "./decoders.js";
 
-// chl source-priority codes that mean "gap-filled / interpolated product"
-// (chl_1d_source.png stores the winning source priority per cell): 4/5 =
-// NOAA DINEOF, 6 = Copernicus GlobColour "gap-free". Priorities 1-3 (NASA
-// MODIS/VIIRS/OLCI direct) and 7 (raw VIIRS) are real satellite retrievals.
-// Cells from a gap-fill source get veiled so a smoothed "gin-clear" value —
-// which washes out nearshore blooms, especially while the NASA feed is down
-// and the whole grid is GlobColour — doesn't paint as a confident reading.
+// chl source-priority codes that mean "gap-filled / spatially-interpolated
+// product" (chl_1d_source.png stores the winning source priority per cell):
+// 4/5 = NOAA DINEOF, 6 = Copernicus GlobColour "gap-free". Those values are
+// derived from NEIGHBOURING cells, not a retrieval at the cell itself.
+// Priorities 1-3 (NASA MODIS/VIIRS/OLCI direct) and 7 (raw VIIRS) ARE direct
+// retrievals. Observed-only view: blank the gap-fill cells (set NaN) so a
+// smoothed "gin-clear" value — which washes out nearshore blooms — is never
+// shown or sampled. A blank cell is honest ("no observation here"); it is
+// NOT backfilled from its neighbours.
 const GAP_FILL_SOURCE_CODES = new Set([4, 5, 6]);
 
 export async function loadScalarPng(layer, info, state) {
@@ -35,24 +37,32 @@ export async function loadScalarPng(layer, info, state) {
   for (const [win, w] of Object.entries(info.windows || {})) {
     try {
       const decoded = await decodePng(w.url, scale, range);
-      // Confidence veil from the per-cell source sidecar (chl ships one on
-      // its 1d window). Opt-in: layers/windows without source_url are
-      // unaffected. Kept RAW (categorical source ids, never smeared).
-      let veil = null;
+      // Observed-only blanking from the per-cell source sidecar (chl ships
+      // one on its 1d window). Opt-in: layers/windows without source_url are
+      // unaffected (SST legacy, etc.). Source raster is categorical — decode
+      // RAW, never smeared.
       if (w.source_url) {
         try {
           const s = await decodeRawPng(w.source_url);
           if (s.width === decoded.width && s.height === decoded.height) {
-            veil = new Uint8Array(s.codes.length);
+            let blanked = 0;
             for (let i = 0; i < s.codes.length; i++) {
-              veil[i] = GAP_FILL_SOURCE_CODES.has(s.codes[i]) ? 1 : 0;
+              if (GAP_FILL_SOURCE_CODES.has(s.codes[i])) {
+                decoded.data[i] = NaN;
+                blanked++;
+              }
+            }
+            if (blanked) {
+              console.info(
+                `dataSource: ${layer}/${win} observed-only — blanked ${blanked} gap-fill cells`,
+              );
             }
           }
         } catch {
-          veil = null;
+          /* no source sidecar → leave the grid as decoded */
         }
       }
-      state.layers[layer][win] = { ...decoded, dates: w.dates || [], veil };
+      state.layers[layer][win] = { ...decoded, dates: w.dates || [] };
     } catch (e) {
       console.warn(`dataSource: ${layer}/${win} decode failed`, e);
     }

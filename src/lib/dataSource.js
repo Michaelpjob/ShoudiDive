@@ -105,7 +105,7 @@ export async function loadManifest() {
 
 // PNG row 0 is the top of the image, which corresponds to lat_max
 // (fetch.py flips the array vertically before encoding).
-function bilinear(layer, lng, lat) {
+function bilinear(layer, lng, lat, maxReach = 6) {
   if (!layer) return NaN;
   const { data, width, height } = layer;
   const fx = ((lng - BBOX.lngMin) / (BBOX.lngMax - BBOX.lngMin)) * (width - 1);
@@ -135,11 +135,14 @@ function bilinear(layer, lng, lat) {
       v11 * tx * ty
     );
   }
-  // No valid corner — expand outward in concentric shells looking for the
-  // nearest finite pixel. Caps at radius 6 (~30–35 km) so we don't snap
-  // ridiculously far for a hover. Especially useful for the swell layer
-  // where coastal cells still go NaN past the pipeline-side fill cap.
-  return findNearestFinite(data, width, height, fx, fy, 6);
+  // No valid corner. Optionally expand outward in concentric shells for the
+  // nearest finite pixel (swell needs this — coastal cells go NaN past the
+  // pipeline fill cap). But per-cell HONEST layers (chl/viz) pass maxReach=0:
+  // if there's no observation at this spot, we report "no data here" rather
+  // than snapping to water 30 km offshore — the whole point of the
+  // observed-only view is that a cell is never filled from its neighbours.
+  if (maxReach <= 0) return NaN;
+  return findNearestFinite(data, width, height, fx, fy, maxReach);
 }
 
 // Shared NaN-safe bilinear UV lookup. Used by wind nowcast, wind5d, and
@@ -327,7 +330,9 @@ export function getSstForecastStats(slotKeyStr) {
 
 export function getChl(lng, lat, composite = 1) {
   // Returns mg/m³, or NaN if the satellite didn't capture this cell.
-  return bilinear(state.layers.chl?.[slotKey("chl", composite)], lng, lat);
+  // maxReach=0: observed-only — never borrow a neighbour's value for a spot
+  // whose own cell is blank (cloud / gap-fill). "No data here" is honest.
+  return bilinear(state.layers.chl?.[slotKey("chl", composite)], lng, lat, 0);
 }
 
 export function getWindSpeed(lng, lat, composite = 1) {
@@ -339,7 +344,8 @@ export function getWindSpeed(lng, lat, composite = 1) {
 
 export function getVizFt(lng, lat, composite = 1) {
   // Returns predicted Secchi visibility in feet (NaN if not loaded).
-  return bilinear(state.layers.viz?.[slotKey("viz", composite)], lng, lat);
+  // maxReach=0: observed-only — no neighbour reach for a blank cell.
+  return bilinear(state.layers.viz?.[slotKey("viz", composite)], lng, lat, 0);
 }
 
 const FT_PER_M = 3.28084;
