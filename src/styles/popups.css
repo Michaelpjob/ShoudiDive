@@ -54,8 +54,12 @@
   line-height: 1;
   color: var(--ink-3);
   cursor: pointer;
-  width: 24px;
-  height: 24px;
+  /* 44px hit area (Apple HIG / WCAG 2.5.5) — was 24px, too small to
+     dismiss reliably on a phone. Negative margins keep the visual
+     footprint compact while the transparent padding does the tapping. */
+  width: 44px;
+  height: 44px;
+  margin: -10px -10px -10px 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
