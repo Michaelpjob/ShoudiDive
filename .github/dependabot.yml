@@ -51,9 +51,10 @@ updates:
         update-types:
           - "minor"
           - "patch"
-    # Ignore packages we deliberately pin (none today; placeholder
-    # for the inevitable "wrangler 4.85.0 — don't upgrade until X" case).
-    ignore: []
+    # To pin a package ("wrangler 4.85.0 — don't upgrade until X"), add an
+    # `ignore:` block here with ≥1 entry. An empty `ignore: []` is INVALID
+    # to Dependabot's config validator (min 1 item), so it's omitted until
+    # there's something to pin.
   # ---- python pipeline ----------------------------------------------
   - package-ecosystem: "pip"
     directory: "/pipeline"
