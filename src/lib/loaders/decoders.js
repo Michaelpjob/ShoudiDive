@@ -83,6 +83,24 @@ export async function decodePng(url, scale, range) {
   return { data: out, width: c.width, height: c.height };
 }
 
+// Decode an 8-bit CATEGORICAL/index PNG (e.g. viz_quality.png) into raw
+// byte codes — no range mapping, no NaN. Pixel 0 is the class sentinel
+// ("no cell"); codes 1..255 pass through unchanged. Used for provenance
+// rasters where the value IS a class id (quality tier, source id), not a
+// scaled measurement — so it must NOT be smeared/interpolated.
+export async function decodeRawPng(url) {
+  const img = await loadImage(url);
+  const c = document.createElement("canvas");
+  c.width = img.naturalWidth;
+  c.height = img.naturalHeight;
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(img, 0, 0);
+  const id = ctx.getImageData(0, 0, c.width, c.height);
+  const codes = new Uint8Array(c.width * c.height);
+  for (let i = 0; i < codes.length; i++) codes[i] = id.data[i * 4];
+  return { codes, width: c.width, height: c.height };
+}
+
 export async function decodeWavePng(url, heightRange, periodRange) {
   // RGBA: R=Hs (m), G=Tp (s), B=Dp (deg), A=valid.
   const img = await loadImage(url);

@@ -98,6 +98,7 @@ def find_history_runs(latest_date: date, latest_hour: int, n_days: int = 4) -> l
     and we skip them. The caller decides what to do if fewer than n_days are
     available (we just take the per-pixel max over whatever we got).
     """
+    subset = _gfswave_subset()
     out = [(latest_date, latest_hour)]
     base = datetime(latest_date.year, latest_date.month, latest_date.day, latest_hour, tzinfo=timezone.utc)
     for k in range(1, n_days):
@@ -106,8 +107,8 @@ def find_history_runs(latest_date: date, latest_hour: int, n_days: int = 4) -> l
         found = None
         for back in range(0, 24, 6):
             cand = target - timedelta(hours=back)
-            url = _idx_url(cand.date(), cand.hour)
-            if SESSION.head(url, timeout=30, allow_redirects=True).status_code == 200:
+            url = nomads.gfswave_idx_url(cand.date(), cand.hour, fhour=0, subset=subset)
+            if nomads.head_ok(url, timeout=30):
                 found = (cand.date(), cand.hour)
                 break
         if found is None:
