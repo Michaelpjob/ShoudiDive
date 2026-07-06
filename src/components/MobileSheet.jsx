@@ -576,7 +576,7 @@ function Legend({ layer, units, composite, compositeText, layerIsReal, dataReady
     : layer === "wind" ? "Wind Speed (10 m)"
     : layer === "swell" ? "Swell · Hs"
     : layer === "current" ? "Surface Current"
-    : "Predicted Visibility · surface";
+    : "Predicted Visibility (Secchi-ft) · surface";
   const unitLabel =
     layer === "sst" ? `°${units}`
     : layer === "chl" ? "mg/m³"

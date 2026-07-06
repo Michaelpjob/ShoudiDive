@@ -30,7 +30,7 @@ const STATIC_CONFIDENCE = {
     wind:    { score: 5, source: "HRRR 3 km hourly",     reason: "NOAA operational forecast" },
     swell:   { score: 4, source: "WW3 gfswave wcoast",   reason: "NOAA model, ~18 km grid" },
     current: { score: 4, source: "HFRNet 6 km + tide/wind", reason: "Observed nearshore via HF radar; inferred offshore" },
-    viz:     { score: 4, source: "viz_predict model",    reason: "Calibrated against CA dive ground-truth ingestion" },
+    viz:     { score: 3, source: "viz_predict model",    reason: "Model output (Secchi-derived); scored daily vs CA dive ground-truth" },
   },
   baja: {
     sst:     { score: 5, source: "MUR satellite",        reason: "Same satellite + algorithm as CA" },

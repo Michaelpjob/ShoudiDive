@@ -134,6 +134,11 @@ def cdom_obs_trust(dist_to_river_km, runoff_idx=None, river_idx=None):
 def assign_quality(chl_obs_today, chl_lastvalid_age_days, interpolated_mask):
     out = np.full(chl_lastvalid_age_days.shape, "CLIMATOLOGY_ONLY", dtype="<U24")
     has_today = ~np.isnan(chl_obs_today)
+    # NOTE (honesty): OBSERVED_1D requires a same-day (age==0) clear retrieval.
+    # The DINEOF gap-filled chl product has a mean cell age of ~2.5 days, so this
+    # top rung is structurally rare — in practice OBSERVED_3D is the best
+    # attainable tier most days. The ladder is kept as-is; loosening the age gate
+    # would change model behaviour (Phase C), not just the label.
     out[has_today] = "OBSERVED_1D"
     age = np.where(np.isnan(chl_lastvalid_age_days), 999.0, chl_lastvalid_age_days)
     fresh = (~has_today) & (age <= 3)
