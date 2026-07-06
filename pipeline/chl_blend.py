@@ -173,21 +173,38 @@ _NASA_FILENAME_RE = re.compile(
 )
 
 
+# OB.DAAC file_search now REQUIRES sensor_id + dtid (the 2026 "more
+# specificity in queries" migration — the API's own alert banner). A query
+# without them returns HTTP 200 + "No Results Found" FOR FILES THAT EXIST,
+# which silently killed all three NASA chl primaries (~2 weeks of
+# gap-fill-only blends until the 2026-07-05 diagnosis: the exact same
+# NRT files were confirmed present once the ids were supplied). Ids come
+# from the site's own registries:
+#   POST /file_search/file_search_missions/  → sensor ids
+#   POST /file_search/data_types/            → per-sensor dtids
+# dtid is the "Level-3 Mapped Ocean Color, near real-time" id per sensor.
+_NASA_SEARCH_IDS = {
+    "AQUA_MODIS":     {"sensor_id": 7,  "dtid": 1055},
+    "SNPP_VIIRS":     {"sensor_id": 14, "dtid": 1019},
+    "S3A_OLCI_ERRNT": {"sensor_id": 29, "dtid": 1273},
+}
+
+
 def _nasa_search_files(session: requests.Session, sensor: str, d: date) -> list[str]:
     """Find the L3m daily 4km NRT chl file(s) for this sensor + date.
     Returns 0 or 1 filenames (the search matches a single date)."""
-    # OB.DAAC migrated its file_search API (2026): the old `subType=1` +
-    # loose-wildcard `search` now 422s, silently killing all 3 NASA chl
-    # primaries (verified DEAD via the feed-health probe; chl fell back to a
-    # single NOAA host). The current contract wants `dtype=L3m` + a search
-    # glob matching the dotted filename. Bare filenames are still returned
-    # (no addurl) so _NASA_FILENAME_RE parses them unchanged.
+    # History of this endpoint breaking us quietly: the 2026-05 migration
+    # (old `subType=1` + loose wildcard → 422) and the 2026-06/07 one
+    # (sensor_id + dtid now required, see _NASA_SEARCH_IDS above). Bare
+    # filenames are still returned (no addurl) so _NASA_FILENAME_RE
+    # parses them unchanged.
     params = {
         "search": f"{sensor}*L3m.DAY.CHL.chlor_a.4km.NRT*",
         "sdate": d.isoformat(),
         "edate": d.isoformat(),
         "dtype": "L3m",
         "results_as_file": 1,
+        **_NASA_SEARCH_IDS.get(sensor, {}),
     }
     # Stage 6a (2026-05-24): http_get adds retries on the EARTHDATA
     # session — previously a transient 503 dropped the daily file.
@@ -197,12 +214,18 @@ def _nasa_search_files(session: requests.Session, sensor: str, d: date) -> list[
         print(f"  nasa-search {sensor} {d}: all retries failed", flush=True)
         return []
     if r.status_code != 200:
+        # Loud — a silent [] here is how both prior migrations went
+        # unnoticed until the blend ran gap-fill-only.
+        print(f"  nasa-search {sensor} {d}: HTTP {r.status_code}", flush=True)
         return []
     files = []
     for line in r.text.strip().split("\n"):
         line = line.strip()
         if _NASA_FILENAME_RE.match(line):
             files.append(line)
+    if not files:
+        first = (r.text.strip().splitlines() or ["(empty body)"])[0][:80]
+        print(f"  nasa-search {sensor} {d}: 0 matches ({first})", flush=True)
     return files
 
 
@@ -535,6 +558,21 @@ class _SourceResult:
     dates: list[date] = field(default_factory=list)         # parallel to frames
 
 
+def off_grid_shapes(res: _SourceResult, grid_h: int | None = None, grid_w: int | None = None) -> list[tuple]:
+    """Shapes in ``res.frames`` that violate the canonical-grid contract.
+
+    Every source fetcher regrids to (OUT_H, OUT_W) before returning, and
+    the per-cell freshest-wins merge in _blend_freshest silently
+    misaligns cells if that contract ever breaks (a fallback source on
+    its native grid, a bbox change on one side of a regridder). The
+    blend drops any offending source loudly instead of merging it —
+    grid-hijack-class prevention as an enforced check rather than an
+    algorithmic accident."""
+    h = OUT_H if grid_h is None else grid_h
+    w = OUT_W if grid_w is None else grid_w
+    return [f.shape for f in res.frames if f.shape != (h, w)]
+
+
 # Wall-clock budget per source's age-walk. A source that stays ALIVE but
 # responds slowly (NOAA DINEOF ERDDAP can crawl) would otherwise walk its full
 # max_back at HTTP_TIMEOUT each and stack toward the 75-min job limit, killing
@@ -594,6 +632,12 @@ def _blend_freshest(per_source: list[_SourceResult], end: date,
     blended = np.full((OUT_H, OUT_W), np.nan, dtype=np.float32)
     ages = np.full((OUT_H, OUT_W), 255, dtype=np.uint8)
     sources = np.zeros((OUT_H, OUT_W), dtype=np.uint8)  # 0 = unset
+    # Ownership comparisons use the FRESHEST contributing frame (below);
+    # the returned `ages` array reports the OLDEST one. For want_frames=1
+    # they're identical; for 2d/3d composites the oldest bound is what the
+    # frontend's observed-only freshness gate must see — a composite cell
+    # nanmean-ing a 1d and a 9d frame is not "1 day old" data.
+    blend_ages = np.full((OUT_H, OUT_W), 255, dtype=np.uint8)
     stats: dict[str, dict] = {}
 
     # For "smoothed" composites (want_frames > 1), per-source nanmean across
@@ -604,11 +648,15 @@ def _blend_freshest(per_source: list[_SourceResult], end: date,
         if not ps.frames:
             continue
         take = ps.frames[: want_frames]
+        take_dates = ps.dates[: want_frames]
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
             src_grid = np.nanmean(np.stack(take), axis=0).astype(np.float32)
         # Per-source effective age = age of the FRESHEST contributing frame
         src_age = max(0, min(254, (end - ps.dates[0]).days))
+        # ...and the OLDEST one, for the honesty sidecar (dates are
+        # newest-first, so the last taken date is the oldest).
+        src_oldest_age = max(0, min(254, (end - take_dates[-1]).days))
 
         # Blend rule: take this source's value if (a) the cell is currently
         # empty OR (b) this source has lower priority (= more trusted) AND
@@ -622,12 +670,13 @@ def _blend_freshest(per_source: list[_SourceResult], end: date,
         upgrade = (
             ~empty
             & valid
-            & (src_age < ages.astype(np.int16))
+            & (src_age < blend_ages.astype(np.int16))
         )
         take_mask = replace | upgrade
 
         blended[take_mask] = src_grid[take_mask]
-        ages[take_mask] = src_age
+        blend_ages[take_mask] = src_age
+        ages[take_mask] = src_oldest_age
         sources[take_mask] = ps.source.priority
 
         stats[ps.source.id] = {
@@ -775,6 +824,11 @@ def build_blended_chl(end: date) -> dict | None:
         if not res.frames:
             print(f"  [{source.id}] no valid frames in last {source.max_back}d", flush=True)
             continue
+        bad = off_grid_shapes(res)
+        if bad:
+            print(f"  [{source.id}] SHAPE MISMATCH {bad[0]} != {(OUT_H, OUT_W)} — "
+                  f"dropping source, regrid contract violated", flush=True)
+            continue
         ages_str = ", ".join(str((end - d).days) for d in res.dates)
         print(f"  [{source.id}] {len(res.frames)} frames, ages: {ages_str}d", flush=True)
         per_source.append(res)
@@ -830,22 +884,31 @@ def build_blended_chl(end: date) -> dict | None:
         }
         if win == "1d":
             source_stats_1d = stats
-            age_out = OUT_DIR / "chl_1d_age_days.png"
-            src_out = OUT_DIR / "chl_1d_source.png"
-            _encode_age_png(ages, age_out)
-            _encode_source_png(sources, src_out)
-            win_entry["age_days_url"] = "/data/chl_1d_age_days.png"
-            win_entry["source_url"] = "/data/chl_1d_source.png"
-            win_entry["source_legend"] = {
-                str(s.priority): {"id": s.id, "label": s.label}
-                for s in CHL_SOURCES
-            }
-            print(
-                f"  wrote chl_1d_source.png "
-                f"({sum(1 for s in CHL_SOURCES if s.priority in {int(x) for x in np.unique(sources) if int(x) != 0})} "
-                f"sources contributed)",
-                flush=True,
-            )
+        # Per-window provenance sidecars — every window, not just 1d. The
+        # frontend's observed-only gate (scalarPng.js) is opt-in per window:
+        # a window shipping source_url + age_days_url gets real+fresh gated,
+        # one without renders unverified. Emitting these for 2d/3d closes
+        # the "switch off the default view and see ungated data" hole
+        # (docs/HANDOFF-data-honesty.md §5.2, option b). The age sidecar
+        # carries the OLDEST contributing frame per cell (see
+        # _blend_freshest), so the freshness gate bounds composites
+        # conservatively.
+        age_out = OUT_DIR / f"chl_{win}_age_days.png"
+        src_out = OUT_DIR / f"chl_{win}_source.png"
+        _encode_age_png(ages, age_out)
+        _encode_source_png(sources, src_out)
+        win_entry["age_days_url"] = f"/data/chl_{win}_age_days.png"
+        win_entry["source_url"] = f"/data/chl_{win}_source.png"
+        win_entry["source_legend"] = {
+            str(s.priority): {"id": s.id, "label": s.label}
+            for s in CHL_SOURCES
+        }
+        print(
+            f"  wrote chl_{win}_source.png "
+            f"({sum(1 for s in CHL_SOURCES if s.priority in {int(x) for x in np.unique(sources) if int(x) != 0})} "
+            f"sources contributed)",
+            flush=True,
+        )
 
         windows[win] = win_entry
 

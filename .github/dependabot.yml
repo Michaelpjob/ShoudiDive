@@ -22,6 +22,15 @@ updates:
       day: "monday"
       time: "06:00"
       timezone: "America/Los_Angeles"
+    # Supply-chain cooldown: wait before adopting a just-published version,
+    # so a compromised fresh release (hijacked maintainer account →
+    # malicious x.y.z) isn't auto-PR'd within hours. Applies to ROUTINE
+    # version bumps only — GHSA-driven security-updates bypass cooldown,
+    # so genuine CVE fixes still land immediately. (Flat default-days is
+    # what both Dependabot and the Semgrep dependabot-missing-cooldown
+    # rule accept across every ecosystem.)
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -41,9 +50,10 @@ updates:
         update-types:
           - "minor"
           - "patch"
-    # Ignore packages we deliberately pin (none today; placeholder
-    # for the inevitable "wrangler 4.85.0 — don't upgrade until X" case).
-    ignore: []
+    # To pin a package ("wrangler 4.85.0 — don't upgrade until X"), add an
+    # `ignore:` block here with ≥1 entry. An empty `ignore: []` is INVALID
+    # to Dependabot's config validator (min 1 item), so it's omitted until
+    # there's something to pin.
   # ---- python pipeline ----------------------------------------------
   - package-ecosystem: "pip"
     directory: "/pipeline"
@@ -52,6 +62,8 @@ updates:
       day: "monday"
       time: "06:30"
       timezone: "America/Los_Angeles"
+    cooldown:  # supply-chain delay on fresh releases — see the npm block above
+      default-days: 7
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
@@ -73,6 +85,10 @@ updates:
       day: "monday"
       time: "07:00"
       timezone: "America/Los_Angeles"
+    # github-actions versions aren't semver-tiered in Dependabot's schema,
+    # so this ecosystem only supports a flat default-days cooldown.
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
@@ -91,6 +107,8 @@ updates:
       day: "monday"
       time: "07:30"
       timezone: "America/Los_Angeles"
+    cooldown:  # supply-chain delay on fresh releases — see the npm block above
+      default-days: 7
     open-pull-requests-limit: 3
     labels:
       - "dependencies"

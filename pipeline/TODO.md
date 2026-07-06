@@ -12,7 +12,13 @@ different agent.
 
 ---
 
-## PR1 — Chl freshness fix (HIGHEST PRIORITY, ~50 LOC, no source change)
+## PR1 — Chl freshness fix ✅ (LANDED — verified live 2026-07-04)
+
+**Shipped**: `fetch.py:build_layer()` emits `chl_1d_age_days.png` (+
+`age_days_url` manifest field) and `fetch_visibility.py` decodes real
+per-cell ages (legacy fresh-assumption only when the sidecar is
+missing). Sidecar confirmed refreshing daily on prod. Original spec
+kept below for reference.
 
 **Symptom**: visibility model showing places clearer than they actually
 are, especially Coronados / Bight islands / cloudy NorCal days.

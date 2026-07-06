@@ -131,16 +131,35 @@ def _load_wind_uv_kt() -> Optional[tuple[np.ndarray, np.ndarray]]:
     # and the alongshore decomposition we infer from the vector — but
     # speed alone tells us "windy or not" which is the dominant
     # upwelling signal at this resolution.
-    speed_path = PUBLIC_DATA / "wind_now_speed.png"
+    # fetch_wind.py publishes `wind_speed_now.png` (0 = NaN, 1..255
+    # linear over the manifest's speed_range, 0..50 kt today). This
+    # loader shipped reading `wind_now_speed.png` at 0..40 — a swapped
+    # filename that made it return None every cycle, so the upwelling
+    # term (and with it the whole nearshore_correction block) sat
+    # silently inactive from birth. Same silent-None failure class as
+    # the fetch_waves._idx_url freeze; hence the regression test in
+    # tests/test_nearshore_inputs.py.
+    speed_path = PUBLIC_DATA / "wind_speed_now.png"
     if not speed_path.exists():
         return None
+    lo, hi = 0.0, 50.0
     try:
-        img = Image.open(speed_path).convert("L")
+        manifest = json.loads((PUBLIC_DATA / "manifest.json").read_text(encoding="utf-8"))
+        rng = ((manifest.get("layers") or {}).get("wind") or {}).get("speed_range")
+        if isinstance(rng, (list, tuple)) and len(rng) == 2:
+            lo, hi = float(rng[0]), float(rng[1])
+    except (OSError, json.JSONDecodeError, ValueError):
+        pass  # fall back to fetch_wind.py's SPEED_RANGE default
+    try:
+        from pipeline.lib.decode import decode_linear_png
+    except ModuleNotFoundError:
+        from lib.decode import decode_linear_png
+    try:
+        speed_kt = decode_linear_png(speed_path, lo, hi)
     except OSError:
         return None
-    speed_norm = np.asarray(img, dtype=np.float32) / 255.0
-    # Speed ramp encoded 0..40 kt linear (matches fetch_wind.py).
-    speed_kt = speed_norm * 40.0
+    # Missing cells (NaN) contribute no upwelling — treat as calm.
+    speed_kt = np.nan_to_num(speed_kt, nan=0.0)
     # We don't have direction reliably available without re-decoding
     # the UV PNG. For v1, treat speed as a proxy for upwelling-
     # favorable conditions; assume CA's typical NW summer pattern.

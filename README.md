@@ -66,7 +66,7 @@ the frontend.
 | `uptime-monitor.yml` | every 5 min | Lightweight homepage + manifest reachability probe |
 | `sync-dev.yml` | push to main (bot only) | Auto-merge main → dev so cron pushes don't leave open PRs DIRTY |
 | `health-check.yml` + `ingest-ground-truth.yml` + `promote-baseline.yml` | various crons | Validation pipeline (feed health, scraped dive-shop observations, baseline promotion) |
-| `codeql.yml` | weekly + on push | JS + Python SAST |
+| `semgrep.yml` | weekly + on push/PR | JS + Python SAST (Semgrep OSS — free on private repos; replaced `codeql.yml`, which needed GitHub Advanced Security) |
 
 The branching contract that those workflows enforce lives in
 [`CLAUDE.md`](CLAUDE.md) (also copied to `AGENTS.md` for OpenAI Codex

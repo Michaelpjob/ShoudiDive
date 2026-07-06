@@ -162,3 +162,89 @@ def test_blend_returns_none_when_no_source_has_data(tmp_path, monkeypatch):
                         fetcher=_const_fetcher(np.nan))
     _stub_blend_env(monkeypatch, tmp_path, [dead])
     assert cb.build_blended_chl(date(2026, 6, 16)) is None
+
+
+# ---------------------------------------------------------------------
+# Canonical-grid contract (grid-hijack-class prevention)
+# ---------------------------------------------------------------------
+
+def test_off_grid_shapes_flags_native_grid_frames():
+    """A source that returns frames on its native grid instead of the
+    canonical (OUT_H, OUT_W) must be flagged so the blend drops it —
+    a per-cell merge of mismatched grids silently misaligns cells."""
+    import numpy as np
+    from datetime import date as _date
+    good = np.zeros((cb.OUT_H, cb.OUT_W), dtype=np.float32)
+    native = np.zeros((206, 234), dtype=np.float32)  # 5km blended-native shape
+    res = cb._SourceResult(
+        source=cb.CHL_SOURCES[0],
+        frames=[good, native],
+        dates=[_date(2026, 7, 4), _date(2026, 7, 3)],
+    )
+    assert cb.off_grid_shapes(res) == [(206, 234)]
+
+
+def test_off_grid_shapes_empty_for_canonical_frames():
+    import numpy as np
+    from datetime import date as _date
+    good = np.zeros((cb.OUT_H, cb.OUT_W), dtype=np.float32)
+    res = cb._SourceResult(
+        source=cb.CHL_SOURCES[0],
+        frames=[good, good.copy()],
+        dates=[_date(2026, 7, 4), _date(2026, 7, 3)],
+    )
+    assert cb.off_grid_shapes(res) == []
+
+
+# ---------------------------------------------------------------------
+# Per-window provenance sidecars (HANDOFF-data-honesty §5.2, option b)
+# ---------------------------------------------------------------------
+
+def _fake_source_result(priority_source, frame_dates, fill=1.0):
+    frames = [np.full((cb.OUT_H, cb.OUT_W), fill, dtype=np.float32) for _ in frame_dates]
+    return cb._SourceResult(source=priority_source, frames=frames, dates=list(frame_dates))
+
+
+def test_blend_age_sidecar_reports_oldest_contributing_frame():
+    """A 3d composite nanmean-ing frames aged 1d and 9d is NOT '1 day old'
+    data — the sidecar the freshness gate reads must carry the oldest
+    bound, or stale pixels ride through the observed-only gate."""
+    end = date(2026, 7, 5)
+    src = cb.CHL_SOURCES[0]
+    res = _fake_source_result(src, [date(2026, 7, 4), date(2026, 6, 26)])
+    blended, ages, sources, _stats = cb._blend_freshest([res], end, want_frames=3)
+    assert np.isfinite(blended).all()
+    # freshest frame is 1d old; oldest contributing is 9d — sidecar says 9.
+    assert int(ages[0, 0]) == 9
+
+
+def test_blend_age_sidecar_unchanged_for_single_frame_window():
+    end = date(2026, 7, 5)
+    src = cb.CHL_SOURCES[0]
+    res = _fake_source_result(src, [date(2026, 7, 4), date(2026, 6, 26)])
+    _b, ages, _s, _st = cb._blend_freshest([res], end, want_frames=1)
+    assert int(ages[0, 0]) == 1  # 1d window: oldest == freshest
+
+
+def test_all_windows_emit_provenance_sidecars(monkeypatch, tmp_path):
+    """Every chl window (1d/2d/3d) must ship source_url + age_days_url so
+    the frontend's opt-in observed-only gate covers all reachable views —
+    not just the default 1-day composite."""
+    src = cb.CHL_SOURCES[0]
+    res = _fake_source_result(src, [date(2026, 7, 4), date(2026, 7, 3), date(2026, 7, 2)])
+    monkeypatch.setattr(cb, "_walk_source", lambda source, end, want=3: res if source is src else
+                        cb._SourceResult(source=source))
+    monkeypatch.setattr(cb, "_load_land_mask", lambda w, h: None)
+    monkeypatch.setattr(cb, "OUT_DIR", tmp_path)
+    monkeypatch.setenv("EARTHDATA_TOKEN", "test-token")
+    monkeypatch.setenv("COPERNICUSMARINE_SERVICE_USERNAME", "u")
+    monkeypatch.setenv("COPERNICUSMARINE_SERVICE_PASSWORD", "p")
+
+    layer = cb.build_blended_chl(date(2026, 7, 5))
+    assert layer is not None
+    for win in ("1d", "2d", "3d"):
+        w = layer["windows"][win]
+        assert w.get("age_days_url") == f"/data/chl_{win}_age_days.png", win
+        assert w.get("source_url") == f"/data/chl_{win}_source.png", win
+        assert (tmp_path / f"chl_{win}_age_days.png").exists(), win
+        assert (tmp_path / f"chl_{win}_source.png").exists(), win

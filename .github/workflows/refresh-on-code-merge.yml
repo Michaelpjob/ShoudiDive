@@ -1,0 +1,58 @@
+name: Refresh data after encoder-affecting merge
+
+# Closes a coupling gap from the 2026-07-04 architecture review: when a
+# code merge changes how PNGs are encoded/decoded (LayerSpec ranges, a
+# fetcher's grid, a correction term), the data already committed in
+# public/data/ was produced by the OLD code. Until the next scheduled
+# cron (up to 24 h for the daily layers) the live site decodes
+# yesterday's pixels with today's contract. Previously a human had to
+# remember to dispatch refresh-ca-data manually after such merges.
+#
+# This workflow watches pushes to main that touch encoder-relevant
+# pipeline surfaces and dispatches the prod-region data refreshes. It
+# deliberately does NOT extend the refresh workflows themselves (see
+# CLAUDE.md "Auto-data refresh" note) — it only pulls the same lever a
+# human would.
+#
+# The paths filter keeps data-only bot commits (public/data/**,
+# pipeline/validation/data/**) from re-triggering, and the actor guard
+# is a second fence against loops: the refresh workflows commit as
+# github-actions[bot], which never matches here.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "pipeline/lib/layer_spec.py"
+      - "pipeline/lib/encode.py"
+      - "pipeline/lib/decode.py"
+      - "pipeline/fetch.py"
+      - "pipeline/chl_blend.py"
+      - "pipeline/fetch_*.py"
+      - "pipeline/sst_predict/**"
+      - "pipeline/viz_predict/**"
+      - "pipeline/viz_column/**"
+      - "pipeline/regions/**"
+
+concurrency:
+  group: refresh-on-code-merge
+  cancel-in-progress: true   # rapid merges collapse into one dispatch
+
+permissions:
+  actions: write
+
+jobs:
+  dispatch-refresh:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch prod-region data refreshes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          echo "Encoder-affecting merge ${GITHUB_SHA} — dispatching data refreshes"
+          gh workflow run refresh-ca-data.yml --ref main --repo "$REPO"
+          gh workflow run refresh-baja-data.yml --ref main --repo "$REPO"
