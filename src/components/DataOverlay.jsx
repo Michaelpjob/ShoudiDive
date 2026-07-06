@@ -2,28 +2,29 @@ import { useEffect, useRef, useState } from "react";
 import { sstColor, sstTrendColor, chlColor, getFitted } from "../lib/mapData.js";
 import { getLayerGrid } from "../lib/dataSource.js";
 
-// Layers rendered as discrete per-cell blocks (nearest-neighbour) rather than
-// a smoothly-interpolated field. For the observed-only clarity layers the grid
-// IS the truth — each cell is its own observation and must not visually bleed
-// into its neighbours — so we show crisp cells and let blank (NaN) cells stay
-// transparent. Other layers keep the smooth look.
-// viz still renders as discrete cells (each cell is its own estimate tier).
-// chl now renders SMOOTH with a per-cell confidence veil (opacity encodes
-// trust) instead of a boxy checkerboard of blanked holes — see the
-// confidence path in loaders/scalarPng.js and the per-cell alpha below.
+// viz renders as discrete per-cell blocks (nearest-neighbour): each cell is its
+// own estimate tier and must not visually bleed into its neighbours. Other
+// (dense) layers render smooth. chl is neither — see SUPPORTED_GRADIENT_LAYERS.
 const PIXELATED_LAYERS = new Set(["viz"]);
 
-// chl renders as DISCRETE OBSERVATION DOTS, not a filled field. Ocean-color
-// chl is sparse + coarse (only ~1-2% of cells are a fresh, real satellite
-// retrieval on a typical day). A filled or smoothed raster paints those few
-// real points across the whole map as if we had dense coverage — false
-// confidence. Instead we draw a dot ONLY where confidence == 1 (real source,
-// within the fresh window). Gaps stay empty so the sparsity is self-evident
-// and nothing implies data between the points we actually measured. Chosen
-// 2026-07-06 after the smooth+veil version over-claimed. confidence + values
-// come from loaders/scalarPng.js.
-const DOTTED_LAYERS = new Set(["chl"]);
-const OBSERVED_CONF = 0.999;   // a dot means: real, fresh observation here
+// chl renders as a SUPPORTED GRADIENT: a smooth field that exists ONLY where a
+// real, fresh satellite observation is nearby, and fades to blank beyond that.
+// Ocean-color chl is sparse + coarse (~1-2% of cells are a fresh real retrieval
+// on a typical day). Full-map smoothing spreads those few points across the
+// whole domain as if we had dense coverage (false confidence); pure dots read
+// too stark. The middle: each real observation blooms into a soft blob out to a
+// bounded reach (~1 chl correlation length); clusters merge into a continuous
+// gradient, isolated obs stay small, and areas with no nearby measurement stay
+// transparent. So it's a gradient over what we sampled, honest about the gaps —
+// never extrapolated past a real observation. Only confidence==1 cells seed it
+// (gap-fill never does). Chosen 2026-07-06 after dots + smooth-veil were both
+// off. confidence + values come from loaders/scalarPng.js.
+const SUPPORTED_GRADIENT_LAYERS = new Set(["chl"]);
+const OBSERVED_CONF = 0.999;   // only real, fresh observations seed the gradient
+const GRADIENT_REACH_CELLS = 2.5;  // bloom radius (~32-45 km — within a chl
+                                   // mesoscale correlation length; THE knob for
+                                   // the fill-vs-honesty balance — bigger fills
+                                   // more but extrapolates further from real obs)
 
 // Beaufort-aligned wind ramp (knots → [r,g,b]); same stops as the legend.
 const WIND_RAMP = [
@@ -167,7 +168,6 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
     canvasRef.current = document.createElement("canvas");
   }
   const [imgHref, setImgHref] = useState(null);
-  const [dots, setDots] = useState(null);
 
   useEffect(() => {
     const cv = canvasRef.current;
@@ -179,28 +179,54 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
       // No real data loaded for this (layer, window) yet — drop the
       // overlay image so the basemap + no-data hatch are all that show.
       setImgHref(null);
-      setDots(null);
       return;
     }
 
-    // Discrete-observation-dots layers (chl): collect only the cells that are a
-    // real, fresh retrieval (confidence == 1) as grid-index points. Everything
-    // else renders NOTHING — no fill, no smear, no gap-fill — so the map shows
-    // exactly what we measured and where. Positions are projected at render
-    // time so the dots track pan/zoom.
-    if (DOTTED_LAYERS.has(layer)) {
+    // Supported-gradient layers (chl): build a smooth field that exists ONLY
+    // near a real, fresh observation. Each observation "stamps" a distance-
+    // weighted bloom onto the canvas out to GRADIENT_REACH_CELLS; overlapping
+    // blooms average (inverse-distance weighted) into a continuous gradient,
+    // and alpha fades to 0 at the reach edge. Cells with no observation within
+    // reach stay transparent — the gradient never extends past what we
+    // measured. Only confidence==1 cells seed it (gap-fill never does).
+    if (SUPPORTED_GRADIENT_LAYERS.has(layer)) {
       const conf = grid.confidence;
-      const cells = [];
+      const W = grid.width, H = grid.height;
+      const R = GRADIENT_REACH_CELLS, Ri = Math.ceil(R);
+      const vSum = new Float32Array(W * H);   // Σ w·value
+      const wSum = new Float32Array(W * H);   // Σ w
+      const nearest = new Float32Array(W * H).fill(Infinity);
       if (conf) {
         for (let i = 0; i < grid.data.length; i++) {
-          if (conf[i] >= OBSERVED_CONF && Number.isFinite(grid.data[i])) {
-            cells.push({ gx: i % grid.width, gy: Math.floor(i / grid.width),
-                         color: chlColor(grid.data[i]) });
+          if (!(conf[i] >= OBSERVED_CONF) || !Number.isFinite(grid.data[i])) continue;
+          const ox = i % W, oy = (i / W) | 0, v = grid.data[i];
+          for (let dy = -Ri; dy <= Ri; dy++) {
+            const y = oy + dy; if (y < 0 || y >= H) continue;
+            for (let dx = -Ri; dx <= Ri; dx++) {
+              const x = ox + dx; if (x < 0 || x >= W) continue;
+              const d = Math.hypot(dx, dy); if (d > R) continue;
+              const w = 1 / (d * d + 0.35);   // inverse-distance weight
+              const j = y * W + x;
+              vSum[j] += w * v; wSum[j] += w;
+              if (d < nearest[j]) nearest[j] = d;
+            }
           }
         }
       }
-      setDots({ W: grid.width, H: grid.height, cells });
-      setImgHref(null);
+      cv.width = W; cv.height = H;
+      const gimg = ctx.createImageData(W, H);
+      for (let j = 0; j < W * H; j++) {
+        if (wSum[j] <= 0) { gimg.data[j * 4 + 3] = 0; continue; }  // no obs in reach
+        const rgb = rgbStrToArr(chlColor(vSum[j] / wSum[j]));
+        gimg.data[j * 4] = rgb[0];
+        gimg.data[j * 4 + 1] = rgb[1];
+        gimg.data[j * 4 + 2] = rgb[2];
+        // Alpha fades from full at an observation to 0 at the reach edge, so
+        // isolated obs are soft blobs and the field dissolves honestly at gaps.
+        gimg.data[j * 4 + 3] = Math.round(255 * Math.max(0, 1 - nearest[j] / R));
+      }
+      ctx.putImageData(gimg, 0, 0);
+      try { setImgHref(cv.toDataURL("image/png")); } catch { setImgHref(null); }
       return;
     }
 
@@ -298,29 +324,6 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
   // Otherwise the canvas stretches one way while the coastline geometry
   // stays correctly proportioned and they visibly drift apart.
   const { marginX, marginY, innerW, innerH } = getFitted(width, height);
-
-  // Discrete observation dots (chl): one marker per real, fresh measurement,
-  // projected into the same fitted rectangle the raster uses. No fill between
-  // them — the empty space IS the message ("we didn't measure here").
-  if (DOTTED_LAYERS.has(layer)) {
-    if (!dots || !dots.cells.length) return null;
-    const cw = innerW / dots.W;
-    const ch = innerH / dots.H;
-    const r = Math.max(1.1, 0.42 * Math.min(cw, ch));
-    return (
-      <g className="data-overlay data-dots" opacity={opacity}>
-        {dots.cells.map(({ gx, gy, color }, k) => (
-          <circle
-            key={k}
-            cx={marginX + (gx + 0.5) * cw}
-            cy={marginY + (gy + 0.5) * ch}
-            r={r}
-            fill={color}
-          />
-        ))}
-      </g>
-    );
-  }
 
   if (!imgHref) return null;
 

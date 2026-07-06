@@ -687,10 +687,11 @@ function Info({ layer }) {
             <strong>Warm brown</strong> = peak upwelling or mild bloom.
           </p>
           <p className="info-p">
-            <strong>Each dot is one real satellite measurement.</strong> Chl is
-            sparse + coarse, so we plot only fresh retrievals as points — no fill
-            between them. Empty space = no recent reading there (not clear water,
-            just no data). A thin scatter of dots is the honest cloudy-day picture.
+            <strong>The gradient only fills near a real reading.</strong> Chl is
+            sparse + coarse, so each fresh retrieval blooms into a soft gradient
+            over its neighborhood and fades out beyond it. Blank = no recent
+            measurement nearby (not clear water, just no data). Color is never
+            extended past a real observation.
           </p>
         </>
       )}

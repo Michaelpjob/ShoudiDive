@@ -491,12 +491,13 @@ export default function DesktopLayout({
                         <strong>Warm brown</strong> = {copy.brown}
                       </p>
                       <p className="info-p">
-                        <strong>Each dot is one real satellite measurement.</strong> Ocean-color
-                        chlorophyll is sparse and coarse (~18 km cells, often cloud-blocked), so
-                        we plot only the fresh, direct retrievals as points — no filled field, no
-                        interpolation between them. <strong>Empty space means we have no recent
-                        reading there</strong> — not clear water, just no data. A thin scatter of
-                        dots is the honest picture on a cloudy or gap-filled day.
+                        <strong>The gradient only fills where we have a real reading nearby.</strong>{" "}
+                        Ocean-color chlorophyll is sparse and coarse (~18 km cells, often
+                        cloud-blocked), so each fresh satellite retrieval blooms into a soft
+                        gradient over its local neighborhood and fades out beyond it — clusters
+                        of readings merge into a smooth field. <strong>Where the map is blank we
+                        have no recent measurement nearby</strong> — not clear water, just no data.
+                        The color is never extended past a real observation.
                       </p>
                     </>
                   );
