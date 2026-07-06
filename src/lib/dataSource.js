@@ -428,7 +428,9 @@ export function getLayerGrid(layer, composite) {
   }
   const w = state.layers[layer]?.[slotKey(layer, composite)];
   if (!w) return null;
-  return { data: w.data, width: w.width, height: w.height };
+  // Pass through the per-cell confidence array (chl) so DataOverlay can render
+  // observation dots / confidence — undefined for layers that don't attach it.
+  return { data: w.data, width: w.width, height: w.height, confidence: w.confidence };
 }
 
 // ---- wind5d accessors -------------------------------------------------------

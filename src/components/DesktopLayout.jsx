@@ -491,12 +491,12 @@ export default function DesktopLayout({
                         <strong>Warm brown</strong> = {copy.brown}
                       </p>
                       <p className="info-p">
-                        <strong>Blank areas have no observation.</strong> Each colored cell
-                        is a direct satellite retrieval at that spot — nothing is filled in
-                        from neighboring cells. Where the satellite was clouded out or the
-                        NASA feed is offline, the cell is left blank rather than guessed, so
-                        a nearshore bloom can't be painted over by clearer water nearby. A
-                        mostly-blank map means there's little real chlorophyll data right now.
+                        <strong>Each dot is one real satellite measurement.</strong> Ocean-color
+                        chlorophyll is sparse and coarse (~18 km cells, often cloud-blocked), so
+                        we plot only the fresh, direct retrievals as points — no filled field, no
+                        interpolation between them. <strong>Empty space means we have no recent
+                        reading there</strong> — not clear water, just no data. A thin scatter of
+                        dots is the honest picture on a cloudy or gap-filled day.
                       </p>
                     </>
                   );

@@ -7,7 +7,23 @@ import { getLayerGrid } from "../lib/dataSource.js";
 // IS the truth — each cell is its own observation and must not visually bleed
 // into its neighbours — so we show crisp cells and let blank (NaN) cells stay
 // transparent. Other layers keep the smooth look.
-const PIXELATED_LAYERS = new Set(["chl", "viz"]);
+// viz still renders as discrete cells (each cell is its own estimate tier).
+// chl now renders SMOOTH with a per-cell confidence veil (opacity encodes
+// trust) instead of a boxy checkerboard of blanked holes — see the
+// confidence path in loaders/scalarPng.js and the per-cell alpha below.
+const PIXELATED_LAYERS = new Set(["viz"]);
+
+// chl renders as DISCRETE OBSERVATION DOTS, not a filled field. Ocean-color
+// chl is sparse + coarse (only ~1-2% of cells are a fresh, real satellite
+// retrieval on a typical day). A filled or smoothed raster paints those few
+// real points across the whole map as if we had dense coverage — false
+// confidence. Instead we draw a dot ONLY where confidence == 1 (real source,
+// within the fresh window). Gaps stay empty so the sparsity is self-evident
+// and nothing implies data between the points we actually measured. Chosen
+// 2026-07-06 after the smooth+veil version over-claimed. confidence + values
+// come from loaders/scalarPng.js.
+const DOTTED_LAYERS = new Set(["chl"]);
+const OBSERVED_CONF = 0.999;   // a dot means: real, fresh observation here
 
 // Beaufort-aligned wind ramp (knots → [r,g,b]); same stops as the legend.
 const WIND_RAMP = [
@@ -151,6 +167,7 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
     canvasRef.current = document.createElement("canvas");
   }
   const [imgHref, setImgHref] = useState(null);
+  const [dots, setDots] = useState(null);
 
   useEffect(() => {
     const cv = canvasRef.current;
@@ -162,6 +179,28 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
       // No real data loaded for this (layer, window) yet — drop the
       // overlay image so the basemap + no-data hatch are all that show.
       setImgHref(null);
+      setDots(null);
+      return;
+    }
+
+    // Discrete-observation-dots layers (chl): collect only the cells that are a
+    // real, fresh retrieval (confidence == 1) as grid-index points. Everything
+    // else renders NOTHING — no fill, no smear, no gap-fill — so the map shows
+    // exactly what we measured and where. Positions are projected at render
+    // time so the dots track pan/zoom.
+    if (DOTTED_LAYERS.has(layer)) {
+      const conf = grid.confidence;
+      const cells = [];
+      if (conf) {
+        for (let i = 0; i < grid.data.length; i++) {
+          if (conf[i] >= OBSERVED_CONF && Number.isFinite(grid.data[i])) {
+            cells.push({ gx: i % grid.width, gy: Math.floor(i / grid.width),
+                         color: chlColor(grid.data[i]) });
+          }
+        }
+      }
+      setDots({ W: grid.width, H: grid.height, cells });
+      setImgHref(null);
       return;
     }
 
@@ -172,6 +211,10 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
     // neighbour-derived cells (chl gap-fill sources, viz estimate tiers) and
     // dropped the fillNearest smear, so there is nothing to fade here — a
     // blank cell is honest "no observation", never backfilled.
+    // Per-cell confidence (0..1), when the loader attached one (chl). Encodes
+    // trust as opacity: fresh verified obs paint solid, gap-filled/aging cells
+    // paint faded. Absent → every finite cell is fully opaque (legacy layers).
+    const conf = grid.confidence;
     const img = ctx.createImageData(grid.width, grid.height);
     for (let i = 0; i < grid.data.length; i++) {
       const v = grid.data[i];
@@ -192,7 +235,7 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
       img.data[i * 4]     = rgb[0];
       img.data[i * 4 + 1] = rgb[1];
       img.data[i * 4 + 2] = rgb[2];
-      img.data[i * 4 + 3] = 255;
+      img.data[i * 4 + 3] = conf ? Math.round(255 * conf[i]) : 255;
     }
 
     // Coastal halo elimination. NaN cells leave alpha=0 but their RGB
@@ -256,6 +299,29 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
   // stays correctly proportioned and they visibly drift apart.
   const { marginX, marginY, innerW, innerH } = getFitted(width, height);
 
+  // Discrete observation dots (chl): one marker per real, fresh measurement,
+  // projected into the same fitted rectangle the raster uses. No fill between
+  // them — the empty space IS the message ("we didn't measure here").
+  if (DOTTED_LAYERS.has(layer)) {
+    if (!dots || !dots.cells.length) return null;
+    const cw = innerW / dots.W;
+    const ch = innerH / dots.H;
+    const r = Math.max(1.1, 0.42 * Math.min(cw, ch));
+    return (
+      <g className="data-overlay data-dots" opacity={opacity}>
+        {dots.cells.map(({ gx, gy, color }, k) => (
+          <circle
+            key={k}
+            cx={marginX + (gx + 0.5) * cw}
+            cy={marginY + (gy + 0.5) * ch}
+            r={r}
+            fill={color}
+          />
+        ))}
+      </g>
+    );
+  }
+
   if (!imgHref) return null;
 
   return (
@@ -267,10 +333,8 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
         height={innerH}
         href={imgHref}
         preserveAspectRatio="none"
-        // Observed-only clarity layers (chl/viz) render as discrete cells
-        // (nearest-neighbour) so each cell reads as its own observation and
-        // blanks stay crisp — no smooth blend that would bleed a real cell
-        // into an adjacent blank one. Other layers keep smooth interpolation.
+        // viz renders as discrete cells (each cell is its own estimate tier);
+        // other layers keep smooth interpolation.
         style={{ imageRendering: PIXELATED_LAYERS.has(layer) ? "pixelated" : "auto" }}
       />
     </g>
