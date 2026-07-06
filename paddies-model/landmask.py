@@ -16,18 +16,46 @@ from PIL import Image, ImageDraw
 
 import config
 
-_LAND_CANDIDATES = [
-    os.path.join(config.OUT_DIR, "land.geojson"),
-    r"C:\Users\Michael Job\Claude\ShoudiDive\public\data\land.geojson",
-]
+_HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def _candidates():
+    """Where to find ShoudiDive's published land.geojson, most-specific first.
+
+    The CI build runs `python paddies-model/build_site.py` from the repo root
+    with PADDIES_LOCAL_DATA=<workspace>/public (same env sd_source.py uses), so
+    honor that first. The hard-coded Windows path used to be the ONLY non-`out/`
+    candidate — which silently fails on the Linux runner, disabling the mask so
+    the green field + cones never clip to water and nothing beaches (the
+    "kelp on land" bug). The repo-relative path covers a checkout with no env
+    set; the legacy absolute path stays last for ad-hoc local runs.
+    """
+    out = []
+    local = os.environ.get("PADDIES_LOCAL_DATA", "").strip()
+    if local:
+        out.append(os.path.join(local, "data", "land.geojson"))
+    out += [
+        os.path.join(config.OUT_DIR, "land.geojson"),
+        os.path.join(_HERE, "..", "public", "data", "land.geojson"),
+        r"C:\Users\Michael Job\Claude\ShoudiDive\public\data\land.geojson",
+    ]
+    return out
 
 
 def _load_land():
-    for p in _LAND_CANDIDATES:
-        if os.path.exists(p):
+    for p in _candidates():
+        if p and os.path.exists(p):
             with open(p, encoding="utf-8") as f:
                 return json.load(f)
-    return None
+    # Last resort for local dev with no checkout/env: fetch the same published
+    # file over HTTP. (CI sets PADDIES_LOCAL_DATA, so it never reaches here.)
+    try:
+        import requests
+        r = requests.get("https://shouldidive.com/data/land.geojson", timeout=30)
+        r.raise_for_status()
+        return r.json()
+    except Exception:
+        return None
 
 
 def _polys(geom):

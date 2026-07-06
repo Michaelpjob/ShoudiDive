@@ -490,6 +490,14 @@ export default function DesktopLayout({
                         <span className="swatch" style={{ background: "rgb(122,90,60)" }}></span>
                         <strong>Warm brown</strong> = {copy.brown}
                       </p>
+                      <p className="info-p">
+                        <strong>Blank areas have no observation.</strong> Each colored cell
+                        is a direct satellite retrieval at that spot — nothing is filled in
+                        from neighboring cells. Where the satellite was clouded out or the
+                        NASA feed is offline, the cell is left blank rather than guessed, so
+                        a nearshore bloom can't be painted over by clearer water nearby. A
+                        mostly-blank map means there's little real chlorophyll data right now.
+                      </p>
                     </>
                   );
                 })()}
@@ -670,6 +678,13 @@ export default function DesktopLayout({
                         <strong>This is a prediction, not a measurement.</strong> A zone-aware
                         model blends satellite, weather, and ocean inputs to estimate the
                         Secchi-equivalent visibility you'd expect in feet.
+                      </p>
+                      <p className="info-p">
+                        <strong>Blank areas have no observation.</strong> A cell is drawn
+                        only where the model had a real satellite chlorophyll retrieval at
+                        that spot; gap-filled, modeled, and seasonal cells are left blank
+                        rather than filled in from neighbors. A mostly-blank map means the
+                        satellite feed is degraded — not that the water is clear.
                       </p>
                       <p className="info-p">
                         <span className="swatch" style={{ background: "rgb(194,65,12)" }}></span>

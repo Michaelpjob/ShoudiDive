@@ -361,3 +361,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh workflow run deploy-prod.yml --ref main
+
+      - name: Freshness gate — red run on breached budgets (post-publish)
+        # The advisory assert above runs pre-commit with continue-on-error
+        # so a breach never blocks publishing the layers that DID refresh.
+        # This gate re-runs the same budgets AFTER the commit + deploy
+        # trigger and fails the run on high-severity breaches only, so
+        # alert-router's consecutive-failure rule escalates to a rolling
+        # issue. Added after the fetch_waves NameError (2026-05-24 →
+        # 2026-07-04) breached the 2-day wave budget for 41 days with the
+        # finding printed into green runs.
+        run: python pipeline/check_manifest_freshness.py --layers sst,sst7d,sst5d,chl,kd490,viz,wave,precip --check-sst-source --fail-on high

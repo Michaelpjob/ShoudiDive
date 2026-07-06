@@ -182,6 +182,33 @@ def test_assign_quality_interpolated_mask_overrides_predicted():
     )
 
 
+def test_interpolated_mask_demotes_fresh_observation():
+    """A gap-fill source (DINEOF / GlobColour) is NOT a direct retrieval,
+    even when its value is same-day. Before this fix INTERPOLATED only fired
+    for age > 3, so a fresh gap-fill still read OBSERVED_1D/OBSERVED_3D and
+    the map presented it as a real observation — the "clear + confident over
+    SD while NASA chl is down" bug. interpolated_mask must override the
+    OBSERVED_* labels at every age.
+    """
+    # age 0 (would be OBSERVED_1D) and age 2 (would be OBSERVED_3D), both
+    # served by a gap-fill source.
+    ages = np.array([0.0, 2.0])
+    chl_obs_today = np.array([0.4, np.nan])   # age-0 cell has a finite obs
+    interpolated = np.array([True, True])
+    quality = assign_quality(chl_obs_today, ages, interpolated)
+    np.testing.assert_array_equal(
+        quality, np.array(["INTERPOLATED", "INTERPOLATED"])
+    )
+
+    # Control: the SAME ages from a REAL retrieval stay OBSERVED_*.
+    quality_obs = assign_quality(
+        chl_obs_today, ages, np.array([False, False])
+    )
+    np.testing.assert_array_equal(
+        quality_obs, np.array(["OBSERVED_1D", "OBSERVED_3D"])
+    )
+
+
 def test_pre_pr1_bug_would_fail_this_test():
     """Regression guard: under the pre-PR1 hardcoded `age = 0.0` path,
     every cell with a finite chl value (regardless of true age) would

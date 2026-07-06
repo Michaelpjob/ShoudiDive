@@ -49,6 +49,20 @@ def main():
         if os.environ.get("PADDIES_REQUIRE_REAL_KELP"):
             raise SystemExit(f"FATAL: {msg}")
         print(f"  WARNING: {msg}")
+    # Guard the land mask too: if land.geojson can't be found, the mask is
+    # empty -> the green likelihood field + drift cones are NOT clipped to
+    # water and nothing beaches, so the tool ships "kelp on land" (the exact
+    # symptom on a Linux CI runner where the old hard-coded Windows path
+    # failed). Fail loud rather than publish a degraded snapshot.
+    cov = data.get("model_meta", {}).get("landmask_cov", 0.0)
+    print(f"  land mask coverage: {cov*100:.1f}% of bbox")
+    if not cov or cov <= 0:
+        msg = ("land mask empty (land.geojson not found) — green field + cones "
+               "won't clip to water and nothing beaches; check PADDIES_LOCAL_DATA "
+               "or public/data/land.geojson")
+        if os.environ.get("PADDIES_REQUIRE_REAL_KELP"):
+            raise SystemExit(f"FATAL: {msg}")
+        print(f"  WARNING: {msg}")
     # Bake the static reference overlays (dive spots / banks / harbors) into the
     # bundle. repo_root = the sd-kelp-paddies root holding public/data/spots.
     reference.apply(data, os.path.dirname(os.path.dirname(target)))
