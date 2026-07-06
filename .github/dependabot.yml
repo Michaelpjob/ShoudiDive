@@ -22,6 +22,16 @@ updates:
       day: "monday"
       time: "06:00"
       timezone: "America/Los_Angeles"
+    # Supply-chain cooldown: wait before adopting a just-published version,
+    # so a compromised fresh release (hijacked maintainer account →
+    # malicious x.y.z) isn't auto-PR'd within hours. Kept short for
+    # patches so genuine CVE fixes still land fast; longer for majors,
+    # which need human eyes anyway. (Flagged by the Semgrep supply-chain
+    # rule dependabot-missing-cooldown.)
+    cooldown:
+      semver-major-days: 14
+      semver-minor-days: 5
+      semver-patch-days: 2
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -52,6 +62,10 @@ updates:
       day: "monday"
       time: "06:30"
       timezone: "America/Los_Angeles"
+    cooldown:  # supply-chain delay on fresh releases — see the npm block above
+      semver-major-days: 14
+      semver-minor-days: 5
+      semver-patch-days: 2
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
@@ -73,6 +87,10 @@ updates:
       day: "monday"
       time: "07:00"
       timezone: "America/Los_Angeles"
+    cooldown:  # supply-chain delay on fresh releases — see the npm block above
+      semver-major-days: 14
+      semver-minor-days: 5
+      semver-patch-days: 2
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
@@ -91,6 +109,10 @@ updates:
       day: "monday"
       time: "07:30"
       timezone: "America/Los_Angeles"
+    cooldown:  # supply-chain delay on fresh releases — see the npm block above
+      semver-major-days: 14
+      semver-minor-days: 5
+      semver-patch-days: 2
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
