@@ -632,6 +632,12 @@ def _blend_freshest(per_source: list[_SourceResult], end: date,
     blended = np.full((OUT_H, OUT_W), np.nan, dtype=np.float32)
     ages = np.full((OUT_H, OUT_W), 255, dtype=np.uint8)
     sources = np.zeros((OUT_H, OUT_W), dtype=np.uint8)  # 0 = unset
+    # Ownership comparisons use the FRESHEST contributing frame (below);
+    # the returned `ages` array reports the OLDEST one. For want_frames=1
+    # they're identical; for 2d/3d composites the oldest bound is what the
+    # frontend's observed-only freshness gate must see — a composite cell
+    # nanmean-ing a 1d and a 9d frame is not "1 day old" data.
+    blend_ages = np.full((OUT_H, OUT_W), 255, dtype=np.uint8)
     stats: dict[str, dict] = {}
 
     # For "smoothed" composites (want_frames > 1), per-source nanmean across
@@ -642,11 +648,15 @@ def _blend_freshest(per_source: list[_SourceResult], end: date,
         if not ps.frames:
             continue
         take = ps.frames[: want_frames]
+        take_dates = ps.dates[: want_frames]
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
             src_grid = np.nanmean(np.stack(take), axis=0).astype(np.float32)
         # Per-source effective age = age of the FRESHEST contributing frame
         src_age = max(0, min(254, (end - ps.dates[0]).days))
+        # ...and the OLDEST one, for the honesty sidecar (dates are
+        # newest-first, so the last taken date is the oldest).
+        src_oldest_age = max(0, min(254, (end - take_dates[-1]).days))
 
         # Blend rule: take this source's value if (a) the cell is currently
         # empty OR (b) this source has lower priority (= more trusted) AND
@@ -660,12 +670,13 @@ def _blend_freshest(per_source: list[_SourceResult], end: date,
         upgrade = (
             ~empty
             & valid
-            & (src_age < ages.astype(np.int16))
+            & (src_age < blend_ages.astype(np.int16))
         )
         take_mask = replace | upgrade
 
         blended[take_mask] = src_grid[take_mask]
-        ages[take_mask] = src_age
+        blend_ages[take_mask] = src_age
+        ages[take_mask] = src_oldest_age
         sources[take_mask] = ps.source.priority
 
         stats[ps.source.id] = {
@@ -873,22 +884,31 @@ def build_blended_chl(end: date) -> dict | None:
         }
         if win == "1d":
             source_stats_1d = stats
-            age_out = OUT_DIR / "chl_1d_age_days.png"
-            src_out = OUT_DIR / "chl_1d_source.png"
-            _encode_age_png(ages, age_out)
-            _encode_source_png(sources, src_out)
-            win_entry["age_days_url"] = "/data/chl_1d_age_days.png"
-            win_entry["source_url"] = "/data/chl_1d_source.png"
-            win_entry["source_legend"] = {
-                str(s.priority): {"id": s.id, "label": s.label}
-                for s in CHL_SOURCES
-            }
-            print(
-                f"  wrote chl_1d_source.png "
-                f"({sum(1 for s in CHL_SOURCES if s.priority in {int(x) for x in np.unique(sources) if int(x) != 0})} "
-                f"sources contributed)",
-                flush=True,
-            )
+        # Per-window provenance sidecars — every window, not just 1d. The
+        # frontend's observed-only gate (scalarPng.js) is opt-in per window:
+        # a window shipping source_url + age_days_url gets real+fresh gated,
+        # one without renders unverified. Emitting these for 2d/3d closes
+        # the "switch off the default view and see ungated data" hole
+        # (docs/HANDOFF-data-honesty.md §5.2, option b). The age sidecar
+        # carries the OLDEST contributing frame per cell (see
+        # _blend_freshest), so the freshness gate bounds composites
+        # conservatively.
+        age_out = OUT_DIR / f"chl_{win}_age_days.png"
+        src_out = OUT_DIR / f"chl_{win}_source.png"
+        _encode_age_png(ages, age_out)
+        _encode_source_png(sources, src_out)
+        win_entry["age_days_url"] = f"/data/chl_{win}_age_days.png"
+        win_entry["source_url"] = f"/data/chl_{win}_source.png"
+        win_entry["source_legend"] = {
+            str(s.priority): {"id": s.id, "label": s.label}
+            for s in CHL_SOURCES
+        }
+        print(
+            f"  wrote chl_{win}_source.png "
+            f"({sum(1 for s in CHL_SOURCES if s.priority in {int(x) for x in np.unique(sources) if int(x) != 0})} "
+            f"sources contributed)",
+            flush=True,
+        )
 
         windows[win] = win_entry
 
