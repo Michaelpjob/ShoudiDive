@@ -41,9 +41,13 @@ jobs:
       - name: Install pipeline dependencies
         run: pip install -r pipeline/requirements.txt
       - name: Run wind spot-check
+        # inputs.source passed via env, never interpolated directly into
+        # the shell (Semgrep run-shell-injection hardening).
+        env:
+          SOURCE: ${{ inputs.source || 'https://shouldidive.com' }}
         run: |
           python -m pipeline.validation.wind_spotcheck \
-            --source "${{ inputs.source || 'https://shouldidive.com' }}"
+            --source "$SOURCE"
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

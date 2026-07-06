@@ -29,10 +29,17 @@ permissions:
 
 jobs:
   deploy:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    # Same-repo origin guard: only deploy when the triggering Dev-checks run
+    # came from THIS repo (not a fork). workflow_run fires on success AND
+    # failure, so the conclusion check stays too.
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_repository.full_name == github.repository) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      # head_sha checkout is guarded by the same-repo `if:` above + the repo
+      # takes no external PRs, so the ref is trusted. The residual static
+      # pattern is the intended, reviewed behavior.
+      # nosemgrep: yaml.github-actions.security.workflow-run-target-code-checkout.workflow-run-target-code-checkout
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           ref: ${{ github.event.workflow_run.head_sha || 'dev' }}

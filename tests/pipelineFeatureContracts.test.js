@@ -16,11 +16,16 @@ test("SST history fallbacks keep a single grid instead of truncating the slider"
   assert.match(fetchPipeline, /def fetch_day\([\s\S]*expected_shape: tuple\[int, int\] \| None = None/);
   assert.match(fetchPipeline, /expected_shape is not None and arr\.shape != expected_shape/);
   assert.match(fetchPipeline, /trying next source/);
-  // Shape consistency is now enforced POST-HOC against the most-recent valid
-  // day: the parallel day-walk can't thread expected_shape through each
-  // fetch_day call, so build_layer drops any day whose grid differs — same
-  // contract (one grid, never truncate/mix), different mechanism.
-  assert.match(fetchPipeline, /a\.shape != stack_rev\[0\]\.shape/);
+  // Shape consistency is enforced POST-HOC in build_layer (the parallel
+  // day-walk can't thread expected_shape through each fetch_day call). The
+  // stack grid is chosen by _choose_stack_shape, which PREFERS the primary
+  // source's grid over a coarser fallback — otherwise MUR L4's ~2-day
+  // publication lag let the 5 km blended fallback hijack the grid and every
+  // 1 km MUR day got dropped as "shape differs". Same contract (one grid,
+  // never truncate/mix), stronger mechanism (prefer the high-res primary).
+  assert.match(fetchPipeline, /def _choose_stack_shape\(/);
+  assert.match(fetchPipeline, /a\.shape != target_shape/);
+  assert.match(fetchPipeline, /preferring primary/);
   assert.match(fetchPipeline, /ThreadPoolExecutor/);
   assert.match(fetchPipeline, /candidate_configs\(cfg\)/);
 });

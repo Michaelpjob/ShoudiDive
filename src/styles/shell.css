@@ -48,6 +48,30 @@
   font-weight: 600;
   letter-spacing: -0.005em;
   font-size: 13px;
+  /* the brand is the page h1 (screen-reader heading nav); kill the
+     UA heading margins so the topbar layout is untouched */
+  margin: 0;
+}
+
+/* Skip-to-map link: visually hidden until keyboard focus lands on it
+   (it's the first tabbable element in the app). */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 8px;
+  z-index: 100;
+  padding: 8px 14px;
+  background: var(--bg-panel-solid);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--r-2, 8px);
+  box-shadow: var(--shadow-2);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.skip-link:focus {
+  left: 8px;
 }
 .brand-tag {
   color: var(--ink-3);
@@ -80,6 +104,18 @@
   color: var(--ink);
   font-weight: 500;
 }
+
+/* Keep decorative topbar text on one line so a squeezed flex item can't wrap
+   and spill below the fixed-height bar onto the map, and drop the
+   non-essential bits progressively at narrow-desktop widths (between the
+   760px mobile breakpoint and the width where the full bar fits). These are
+   a layer recap + source attribution, not controls. */
+.brand-tag,
+.topbar-meta .topbar-sources,
+.topbar-meta .topbar-status { white-space: nowrap; }
+@media (max-width: 1240px) { .brand-tag { display: none; } }
+@media (max-width: 1080px) { .topbar-meta .topbar-sources { display: none; } }
+@media (max-width: 940px)  { .topbar-meta .topbar-status { display: none; } }
 
 /* Region switcher chip — sits at the left of the topbar-meta cluster.
  * Same visual weight as the status pill so it doesn't dominate, but

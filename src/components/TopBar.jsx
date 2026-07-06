@@ -88,11 +88,11 @@ export default function TopBar({ onSettings, settingsOpen, dataState, layer, hor
     ? "Live"
     : "Demo data";
   return (
-    <div className="topbar">
+    <header className="topbar">
       <div className="brand">
         <FreediverLogo />
         <div>
-          <div className="brand-name">ShouldIDive</div>
+          <h1 className="brand-name">ShouldIDive</h1>
         </div>
         <span className="brand-tag">
           {REGION_TAGLINES[activeRegion()] || REGION_TAGLINES.ca}
@@ -155,13 +155,18 @@ export default function TopBar({ onSettings, settingsOpen, dataState, layer, hor
               className="layer-confidence"
               title={
                 `${layerName} confidence: ${lc.label} (${lc.score}/5)\n` +
-                `Source: ${lc.source}\n` +
+                `Source: ${lc.source}` +
+                (lc.sourceFallback ? ` — backup (primary: ${lc.nominalSource})` : "") +
+                `\n` +
                 tooltipReasons +
                 (lc.score < lc.ceilingScore
                   ? `\n(today's score is ${lc.ceilingScore - lc.score} below ceiling)`
                   : "")
               }
-              aria-label={`${layerName} confidence ${lc.label}, ${lc.score} of 5`}
+              aria-label={
+                `${layerName} confidence ${lc.label}, ${lc.score} of 5` +
+                (lc.sourceFallback ? ", served by backup source" : "")
+              }
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -188,15 +193,21 @@ export default function TopBar({ onSettings, settingsOpen, dataState, layer, hor
               {lc.stale && lc.staleTag && (
                 <span style={{ fontWeight: 700, color: lc.color }}>· {lc.staleTag}</span>
               )}
+              {/* Fallback provenance stays visible, not tooltip-only:
+                  divers should see at a glance the layer is on a backup
+                  source (full source name in the hover title). */}
+              {lc.sourceFallback && (
+                <span style={{ fontWeight: 700, opacity: 0.8 }}>· backup src</span>
+              )}
             </span>
           );
         })()}
-        <span>
+        <span className="topbar-status">
           <span className="dot"></span>
           <strong>{status}</strong> · Last update{" "}
           <span className="mono">{lastUpdate}</span>
         </span>
-        <span>
+        <span className="topbar-sources">
           Sources: <strong>NOAA · IOOS · NASA OB.DAAC · Copernicus</strong>
         </span>
         {/* Tip jar — visible on every layer, every device. The WSB
@@ -259,6 +270,6 @@ export default function TopBar({ onSettings, settingsOpen, dataState, layer, hor
         </button>
       </div>
       {whatsNewOpen && <WhatsNew onClose={() => setWhatsNewOpen(false)} />}
-    </div>
+    </header>
   );
 }

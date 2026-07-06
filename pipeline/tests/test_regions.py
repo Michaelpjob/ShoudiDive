@@ -216,3 +216,77 @@ def test_ca_lat_zone_bounds_match_viz_predict_config():
         f"regions/ca.py = {ca.lat_zone_bounds}; "
         f"viz_predict/config.py = {LAT_ZONE_BOUNDS}"
     )
+
+
+# ---------------------------------------------------------------------
+# JS <-> Python bbox drift (the follow-up TODO noted in mapData.js)
+# ---------------------------------------------------------------------
+#
+# src/lib/mapData.js hardcodes REGION_BBOX for the frontend projection
+# and its comment says "must stay in lockstep with pipeline/regions/*.py".
+# Until this gate existed, nothing enforced that: bumping a bbox on one
+# side rendered data geographically misaligned with the basemap. The
+# test parses the JS literal with a regex (no JS toolchain in the
+# pipeline-tests job) — if the literal's shape changes enough to defeat
+# the regex, the parse assertion fails loudly rather than passing empty.
+
+_MAPDATA_JS = ROOT.parent / "src" / "lib" / "mapData.js"
+
+_JS_KEY_TO_PY = {
+    "latMin": "lat_min",
+    "latMax": "lat_max",
+    "lngMin": "lng_min",
+    "lngMax": "lng_max",
+}
+
+
+def _parse_js_region_bbox() -> dict[str, dict[str, float]]:
+    text = _MAPDATA_JS.read_text(encoding="utf-8")
+    m = re.search(r"const REGION_BBOX\s*=\s*\{(.*?)\n\};", text, re.DOTALL)
+    assert m, (
+        "Could not locate the `const REGION_BBOX = {...};` literal in "
+        "src/lib/mapData.js — if it moved or was renamed, update "
+        "_parse_js_region_bbox() in this test."
+    )
+    out: dict[str, dict[str, float]] = {}
+    for line in m.group(1).splitlines():
+        entry = re.match(r"\s*(\w+)\s*:\s*\{(.*)\}", line)
+        if not entry:
+            continue
+        name, body = entry.group(1), entry.group(2)
+        vals = {
+            _JS_KEY_TO_PY[k]: float(v)
+            for k, v in re.findall(r"(latMin|latMax|lngMin|lngMax)\s*:\s*(-?[\d.]+)", body)
+        }
+        assert len(vals) == 4, (
+            f"REGION_BBOX.{name} in mapData.js parsed to {vals} — expected "
+            f"all four of latMin/latMax/lngMin/lngMax."
+        )
+        out[name] = vals
+    assert out, "REGION_BBOX literal parsed to zero regions — regex rot?"
+    return out
+
+
+def test_js_region_bbox_covers_same_regions_as_python():
+    js = _parse_js_region_bbox()
+    assert sorted(js.keys()) == list_regions(), (
+        f"DRIFT: region sets differ — src/lib/mapData.js REGION_BBOX has "
+        f"{sorted(js.keys())} but pipeline/regions/ registers "
+        f"{list_regions()}. Add the missing region to whichever side "
+        f"lacks it."
+    )
+
+
+@pytest.mark.parametrize("name", list_regions())
+def test_js_region_bbox_matches_python(name):
+    js = _parse_js_region_bbox()
+    if name not in js:
+        pytest.skip("region-set mismatch is reported by the test above")
+    py = get_region(name).bbox
+    for key, js_val in js[name].items():
+        assert js_val == pytest.approx(py[key], abs=1e-9), (
+            f"DRIFT: {name}.{key} — src/lib/mapData.js says {js_val}, "
+            f"pipeline/regions/{name}.py says {py[key]}. These must be "
+            f"bumped together or the frontend projection misaligns with "
+            f"the pipeline rasters."
+        )

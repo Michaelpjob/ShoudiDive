@@ -11,6 +11,12 @@ the floor, **restores the last-good PNG from git HEAD** — so a bad fetch keeps
 the previous good data on disk instead of publishing garbage. Region-aware via
 SHOULDIDIVE_REGION.
 
+A restore also reverts the layer's manifest metadata (its ``1d`` window +
+``generated_at``) to HEAD's values. Without that, the manifest advertises
+today's dates over yesterday's restored pixels and the frontend confidence
+UI — which reads window observation dates — shows "fresh" for data that
+isn't. Honest staleness beats optimistic timestamps.
+
 Floors mirror ``pipeline/tests/test_data_integrity.py::LAYER_VALID_FRAC_FLOOR``
 (the gate this guard keeps green). Keep the two in sync — a unit test asserts it.
 
@@ -18,6 +24,7 @@ Run:  python pipeline/check_coverage_guard.py
 """
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -44,6 +51,62 @@ FLOORS = {
     "tropical": {"sst_1d.png": 0.30, "chl_1d.png": 0.05},
     "baja":     {"sst_1d.png": 0.20, "chl_1d.png": 0.05},
 }
+
+# artifact -> (manifest layer id, window key) whose metadata must revert
+# alongside a restored PNG so the manifest never claims fresh dates over
+# last-good pixels.
+ARTIFACT_MANIFEST_WINDOW = {
+    "sst_1d.png": ("sst", "1d"),
+    "chl_1d.png": ("chl", "1d"),
+}
+
+
+def merge_restored_window(current: dict, head: dict, layer_id: str, window_key: str) -> bool:
+    """Copy `layer_id`'s `window_key` window + generated_at from the HEAD
+    manifest into the current one. Pure dict surgery so it's unit-testable;
+    returns True if anything changed. Only the restored window reverts —
+    sibling windows (2d/3d) keep their fresh metadata since their PNGs
+    weren't restored."""
+    head_layer = (head.get("layers") or {}).get(layer_id) or {}
+    cur_layer = (current.get("layers") or {}).get(layer_id)
+    if not head_layer or not isinstance(cur_layer, dict):
+        return False
+    changed = False
+    head_win = (head_layer.get("windows") or {}).get(window_key)
+    if isinstance(head_win, dict):
+        cur_layer.setdefault("windows", {})[window_key] = head_win
+        changed = True
+    if head_layer.get("generated_at"):
+        cur_layer["generated_at"] = head_layer["generated_at"]
+        changed = True
+    return changed
+
+
+def restore_manifest_metadata(artifact: str) -> None:
+    mapping = ARTIFACT_MANIFEST_WINDOW.get(artifact)
+    manifest_path = OUT_DIR / "manifest.json"
+    if mapping is None or not manifest_path.exists():
+        return
+    layer_id, window_key = mapping
+    rel = manifest_path.relative_to(REPO_ROOT).as_posix()
+    r = subprocess.run(
+        ["git", "show", f"HEAD:{rel}"],
+        cwd=REPO_ROOT, capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        print(f"  [guard] {artifact}: manifest metadata NOT reverted "
+              f"({r.stderr.strip() or 'no HEAD manifest'})")
+        return
+    try:
+        head_manifest = json.loads(r.stdout)
+        current = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        print(f"  [guard] {artifact}: manifest metadata NOT reverted (bad JSON: {exc})")
+        return
+    if merge_restored_window(current, head_manifest, layer_id, window_key):
+        manifest_path.write_text(json.dumps(current, indent=2))
+        print(f"  [guard] {artifact}: manifest {layer_id}.windows.{window_key} + "
+              f"generated_at reverted to HEAD (matches restored pixels)")
 
 
 def valid_frac(path: Path) -> float:
@@ -75,6 +138,7 @@ def main() -> int:
         if r.returncode == 0:
             print(f"  [guard] {artifact}: {vf*100:.1f}% valid < {floor*100:.0f}% floor "
                   f"— RESTORED last-good from HEAD (fetch likely hit a dead source)")
+            restore_manifest_metadata(artifact)
             restored.append(artifact)
         else:
             # No HEAD version (first run) or git error — leave it; the gate

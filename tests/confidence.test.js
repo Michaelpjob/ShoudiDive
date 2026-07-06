@@ -160,6 +160,17 @@ test("confidence drops the score + names the source on a fallback", () => {
   );
 });
 
+test("confidence surfaces the SST buoy-anchored correction as provenance", () => {
+  const src = read("src/lib/confidence.js");
+  // dynamicModulation must read the pipeline's buoy_correction block for sst
+  // and name the anchoring in the tooltip when anchors are active.
+  assert.match(
+    src,
+    /info\.buoy_correction[\s\S]{0,160}buoy-anchored to \$\{n\} NDBC buoy/,
+    "sst must surface buoy_correction.n_anchors_active as 'buoy-anchored to N NDBC buoy(s)'",
+  );
+});
+
 test("pipeline records source provenance (blender + build_layer)", () => {
   // chl: provenance lives in the BLENDER (build_blended_chl), not build_layer —
   // a fallback added to LAYERS["chl"].fallbacks would be a silent no-op.
