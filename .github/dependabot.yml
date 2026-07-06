@@ -88,10 +88,10 @@ updates:
       day: "monday"
       time: "07:00"
       timezone: "America/Los_Angeles"
-    cooldown:  # supply-chain delay on fresh releases — see the npm block above
-      semver-major-days: 14
-      semver-minor-days: 5
-      semver-patch-days: 2
+    # github-actions versions aren't semver-tiered in Dependabot's schema,
+    # so this ecosystem only supports a flat default-days cooldown.
+    cooldown:
+      default-days: 5
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
