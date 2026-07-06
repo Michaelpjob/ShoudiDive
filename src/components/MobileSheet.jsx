@@ -686,6 +686,11 @@ function Info({ layer }) {
             <span className="swatch" style={{ background: "rgb(122,90,60)" }}></span>
             <strong>Warm brown</strong> = peak upwelling or mild bloom.
           </p>
+          <p className="info-p">
+            <strong>Faded = lower confidence.</strong> Solid color is a fresh
+            satellite reading; gap-filled or aging areas paint translucent (your
+            grain of salt); fully blank = no data. Confidence shows as opacity.
+          </p>
         </>
       )}
       {layer === "wind" && (

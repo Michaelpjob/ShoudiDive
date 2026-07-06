@@ -7,7 +7,11 @@ import { getLayerGrid } from "../lib/dataSource.js";
 // IS the truth — each cell is its own observation and must not visually bleed
 // into its neighbours — so we show crisp cells and let blank (NaN) cells stay
 // transparent. Other layers keep the smooth look.
-const PIXELATED_LAYERS = new Set(["chl", "viz"]);
+// viz still renders as discrete cells (each cell is its own estimate tier).
+// chl now renders SMOOTH with a per-cell confidence veil (opacity encodes
+// trust) instead of a boxy checkerboard of blanked holes — see the
+// confidence path in loaders/scalarPng.js and the per-cell alpha below.
+const PIXELATED_LAYERS = new Set(["viz"]);
 
 // Beaufort-aligned wind ramp (knots → [r,g,b]); same stops as the legend.
 const WIND_RAMP = [
@@ -172,6 +176,10 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
     // neighbour-derived cells (chl gap-fill sources, viz estimate tiers) and
     // dropped the fillNearest smear, so there is nothing to fade here — a
     // blank cell is honest "no observation", never backfilled.
+    // Per-cell confidence (0..1), when the loader attached one (chl). Encodes
+    // trust as opacity: fresh verified obs paint solid, gap-filled/aging cells
+    // paint faded. Absent → every finite cell is fully opaque (legacy layers).
+    const conf = grid.confidence;
     const img = ctx.createImageData(grid.width, grid.height);
     for (let i = 0; i < grid.data.length; i++) {
       const v = grid.data[i];
@@ -192,7 +200,7 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
       img.data[i * 4]     = rgb[0];
       img.data[i * 4 + 1] = rgb[1];
       img.data[i * 4 + 2] = rgb[2];
-      img.data[i * 4 + 3] = 255;
+      img.data[i * 4 + 3] = conf ? Math.round(255 * conf[i]) : 255;
     }
 
     // Coastal halo elimination. NaN cells leave alpha=0 but their RGB

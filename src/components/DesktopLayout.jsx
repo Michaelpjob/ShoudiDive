@@ -491,12 +491,12 @@ export default function DesktopLayout({
                         <strong>Warm brown</strong> = {copy.brown}
                       </p>
                       <p className="info-p">
-                        <strong>Blank areas have no observation.</strong> Each colored cell
-                        is a direct satellite retrieval at that spot — nothing is filled in
-                        from neighboring cells. Where the satellite was clouded out or the
-                        NASA feed is offline, the cell is left blank rather than guessed, so
-                        a nearshore bloom can't be painted over by clearer water nearby. A
-                        mostly-blank map means there's little real chlorophyll data right now.
+                        <strong>Faded areas are lower confidence.</strong> Solid color is a
+                        fresh, direct satellite retrieval. Where the data is gap-filled
+                        (interpolated) or aging, the color paints <em>translucent</em> — you
+                        still see the trend, but the fade is your grain of salt. Fully blank
+                        means no data at all (clouded out or feed offline). Nothing is
+                        painted over a real reading — confidence just shows as opacity.
                       </p>
                     </>
                   );
