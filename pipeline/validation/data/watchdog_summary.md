@@ -1,6 +1,6 @@
-# Validation watchdog — 2026-07-06T01:30Z
+# Validation watchdog — 2026-07-06T01:38Z
 
-**4 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
+**1 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
@@ -9,24 +9,6 @@
 Multiple scrapers may be silently broken.
 
 **Suggested action:** Open the latest hourly ingest workflow run; look for `FAILED` lines per scraper.
-
-### 🔴 2. 1 critical external feed(s) are red
-
-A required upstream data source failed the latest feed-health probe.
-
-**Suggested action:** Inspect `pipeline/validation/data/feed_health.json`, then retry the affected fetch workflow after confirming the upstream feed recovered.
-
-### ⚠️ 3. 2 non-critical external feed(s) are red
-
-Red feeds: chl_dineof_sci_2km, chl_climo_modis_pfeg. Fallbacks may keep the model running, but redundancy is degraded.
-
-**Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
-
-### 🔴 4. Published-data freshness gate found 1 issue(s)
-
-Freshness/completeness failures: sst:sst_source_query_failed.
-
-**Suggested action:** Open `pipeline/validation/data/freshness_health.json`; fix the failing fetcher or rerun the matching workflow before trusting the deploy.
 
 ## Per-zone metrics
 
