@@ -6,7 +6,30 @@ from .config import (
     SECCHI_COEFFS, TURBIDITY_CORRECTIONS,
     SECCHI_MIN_M, SECCHI_MAX_M,
     CLARITY_CATEGORIES,
+    OFFSHORE_DISTRUST_START_KM, OFFSHORE_DISTRUST_FULL_KM,
+    OFFSHORE_TRUST_CEIL_FT, OFFSHORE_TRUST_FULL_FT,
 )
+
+
+def offshore_chl_distrust(viz_p50_ft, dist_to_shore_km):
+    """Per-cell distrust factor in [0, 1] for the offshore over-optimistic
+    regime where ocean-color chl misses sub-pixel / subsurface green (see
+    config.py "Offshore satellite-chl distrust"). 1.0 = far offshore AND
+    implausibly clear; 0.0 = nearshore or plausibly-clear. Pure + vectorized.
+    """
+    viz = np.asarray(viz_p50_ft, dtype=np.float64)
+    dist = np.asarray(dist_to_shore_km, dtype=np.float64)
+    off = np.clip(
+        (dist - OFFSHORE_DISTRUST_START_KM)
+        / (OFFSHORE_DISTRUST_FULL_KM - OFFSHORE_DISTRUST_START_KM),
+        0.0, 1.0,
+    )
+    optimism = np.clip(
+        (viz - OFFSHORE_TRUST_CEIL_FT)
+        / (OFFSHORE_TRUST_FULL_FT - OFFSHORE_TRUST_CEIL_FT),
+        0.0, 1.0,
+    )
+    return off * optimism
 
 
 def secchi_from_chl(chl_mgpm3, zone):
