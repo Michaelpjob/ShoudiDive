@@ -49,6 +49,7 @@ on:
 
 permissions:
   contents: write
+  issues: write   # degraded-mode fallback opens a rolling tracking Issue
 
 concurrency:
   group: sync-dev
@@ -165,8 +166,76 @@ jobs:
 
       - name: Push synced dev
         if: steps.check.outputs.ahead != '0'
+        env:
+          GH_TOKEN: ${{ secrets.BOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
         run: |
-          git push origin dev
+          set -o pipefail
+          # Happy path: push everything (data + code + workflow files).
+          if git push origin dev 2>push.log; then
+            cat push.log
+            echo "Synced dev (full push)."
+            # Recovered: clear any open degraded-mode tracking Issue.
+            num=$(gh issue list --repo "$REPO" \
+              --label "system:dev-sync-degraded" --state open --limit 1 \
+              --json number --jq '.[0].number // empty' || true)
+            if [ -n "$num" ]; then
+              gh issue close "$num" --repo "$REPO" \
+                --comment "Full sync (including workflow files) succeeded — degraded mode cleared. Auto-closed by sync-dev.yml." \
+                || true
+            fi
+            exit 0
+          fi
+          cat push.log
+
+          # KNOWN DEGRADED MODE — the cause of the 2026-06-24..30 freeze.
+          # BOT_PUSH_TOKEN is a user PAT, and GitHub refuses to let a PAT
+          # *without* the `workflow` scope create/update files under
+          # .github/workflows/**. When main carries a workflow change the
+          # WHOLE push — including the fresh DATA riding with it — is
+          # rejected, and dev silently freezes. Rather than freeze, drop
+          # ONLY the workflow delta and re-push data + code so dev DATA
+          # stays fresh (deploy-dev's data-path trigger then redeploys
+          # the site), and raise a visible rolling Issue so the held-back
+          # workflows get noticed. PERMANENT FIX: add the `workflow`
+          # scope to BOT_PUSH_TOKEN.
+          if grep -qiE "workflow.*scope|without .?workflow" push.log; then
+            echo "::warning::BOT_PUSH_TOKEN lacks the 'workflow' scope — pushing data+code only; dev workflow files held back. Re-scope the PAT to restore full sync."
+            git checkout "${{ steps.check.outputs.pre_sha }}" -- .github/workflows/
+            if git diff --cached --quiet; then
+              echo "::error::Push rejected for workflow scope but no workflow delta to drop — failing loudly."
+              exit 1
+            fi
+            git commit -m "sync(auto): data+code only — BOT_PUSH_TOKEN lacks 'workflow' scope; dev workflow files NOT updated (re-scope the PAT to fix)"
+            git push origin dev
+
+            title="[dev-sync degraded] BOT_PUSH_TOKEN missing 'workflow' scope"
+            body=$(printf '%s\n' \
+              "The main→dev sync is running in **degraded mode**: data and code reach \`dev\`, but **workflow-file changes do not**, because \`BOT_PUSH_TOKEN\` is a PAT without the \`workflow\` scope." \
+              "" \
+              "**Impact:** dev DATA stays fresh, but \`dev\`'s \`.github/workflows/**\` lag \`main\`. If a *tested* workflow (e.g. refresh-ca-data.yml's coverage guard) changes, Dev checks can go red and stop deploying the dev preview." \
+              "" \
+              "**Permanent fix:** add the \`workflow\` scope to \`BOT_PUSH_TOKEN\` (GitHub → Settings → Developer settings → Personal access tokens → that token → enable \`workflow\`), then re-save it as the repo secret if the value changed." \
+              "" \
+              "Auto-managed by .github/workflows/sync-dev.yml — closes itself once a full sync succeeds.")
+            gh label create system:dev-sync-degraded --repo "$REPO" \
+              --color "B45309" \
+              --description "main→dev sync running without the workflow PAT scope" \
+              2>/dev/null || true
+            existing=$(gh issue list --repo "$REPO" \
+              --label "system:dev-sync-degraded" --state open --limit 1 \
+              --json number --jq '.[0].number // empty' || true)
+            if [ -n "$existing" ]; then
+              gh issue edit "$existing" --repo "$REPO" --title "$title" --body "$body" || true
+            else
+              gh issue create --repo "$REPO" --title "$title" --body "$body" \
+                --label "system:dev-sync-degraded" || true
+            fi
+            exit 0
+          fi
+
+          echo "::error::Sync push to dev failed for a reason other than workflow scope — see push.log above."
+          exit 1
 
       # (No dev-checks dispatch step: the BOT_PUSH_TOKEN push above
       # triggers workflows natively. dev-checks' paths-ignore keeps

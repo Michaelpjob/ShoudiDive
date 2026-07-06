@@ -7,6 +7,7 @@ import it without circular-import gymnastics through the package
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Literal
 
 
@@ -81,7 +82,7 @@ class Region:
         b = self.bbox
         return [b["lng_min"], b["lat_min"], b["lng_max"], b["lat_max"]]
 
-    def data_output_dir(self, repo_root) -> "Path":  # type: ignore[name-defined]
+    def data_output_dir(self, repo_root) -> Path:
         """Where this region's data PNGs / JSON outputs live under ``public/data/``.
 
         Convention:
@@ -92,8 +93,6 @@ class Region:
         The directory is created on access so callers can write to
         it immediately without their own mkdir bookkeeping.
         """
-        from pathlib import Path
-
         root = Path(repo_root)
         base = root / "public" / "data"
         if self.name == "ca":

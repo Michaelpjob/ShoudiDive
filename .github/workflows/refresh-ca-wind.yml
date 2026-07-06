@@ -12,7 +12,7 @@ name: Refresh CA — wind (hourly)
 
 on:
   schedule:
-    - cron: "15 * * * *"
+    - cron: "15 */3 * * *"
   workflow_dispatch:
     inputs:
       branch:
@@ -76,7 +76,10 @@ jobs:
 
       - name: Assert wind/swell freshness budgets
         continue-on-error: true
-        run: python pipeline/check_manifest_freshness.py --layers wind,wind5d,swell5d,current5d --skip-top-level
+        # `wave` rides in this hourly cron (fetch_waves.py above), so its
+        # budget is asserted here where a freeze reddens runs within hours
+        # — not only in the once-a-day data workflow.
+        run: python pipeline/check_manifest_freshness.py --layers wind,wind5d,swell5d,current5d,wave --skip-top-level
 
       # Build + deploy steps were removed 2026-05-13 — data-only flow.
       # See deploy-prod.yml (triggered below) for the publish.
@@ -103,3 +106,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh workflow run deploy-prod.yml --ref main
+
+      - name: Freshness gate — red run on breached budgets (post-publish)
+        # Mirror of the gate in refresh-ca-data.yml: the advisory assert
+        # above never blocks the commit; this re-run AFTER commit + deploy
+        # fails the run on high-severity breaches so alert-router's
+        # consecutive-failure rule escalates within hours on this hourly
+        # cron. (The fetch_waves NameError of 2026-05-24 → 2026-07-04
+        # would have gone red here on day 2 instead of running silent
+        # for 41 days.)
+        run: python pipeline/check_manifest_freshness.py --layers wind,wind5d,swell5d,current5d,wave --skip-top-level --fail-on high

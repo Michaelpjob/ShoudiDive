@@ -60,7 +60,7 @@ jobs:
       - name: Install
         run: |
           pip install -r pipeline/requirements.txt
-          pip install pytest
+          pip install pytest pyflakes
       - name: Run unit + static layers
         run: bash pipeline/scripts/validate.sh --unit
 
