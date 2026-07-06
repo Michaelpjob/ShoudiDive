@@ -162,6 +162,23 @@ jobs:
         timeout-minutes: 25
         run: python pipeline/fetch_rtofs.py
 
+      - name: Finalize manifest — reconcile grid + timestamps with on-disk PNGs
+        # See refresh-ca-data.yml for the full root-cause write-up (the
+        # 2026-06-20 stale-manifest ship). fetch.py writes PNGs/summaries
+        # incrementally but the manifest only at the end of main(); a crashed
+        # or timed-out fetch strands fresh PNGs against a stale manifest.
+        # always() so it runs even after an upstream failure, re-deriving each
+        # grid from the actual PNG + each generated_at from its summary sidecar.
+        if: ${{ always() }}
+        run: python pipeline/finalize_manifest.py
+
+      - name: Verify manifest ↔ PNG consistency (pre-commit gate)
+        # Fail-loud re-assert of the data_integrity grid + freshness gates,
+        # which otherwise only run on PRs — this cron commits straight to its
+        # branch with no review. A mismatch fails the run + skips the deploy.
+        if: ${{ always() }}
+        run: python pipeline/finalize_manifest.py --check-only
+
       - name: Commit refreshed baja data
         if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         run: |

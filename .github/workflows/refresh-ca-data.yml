@@ -323,6 +323,32 @@ jobs:
         # to fail the run so the bot inbox lights up.
         run: python pipeline/check_data_changed.py
 
+      - name: Finalize manifest — reconcile grid + timestamps with on-disk PNGs
+        # ROOT-CAUSE GUARD for the 2026-06-20 stale-manifest ship. fetch.py
+        # writes each layer's PNG + summary.json inside build_layer() but the
+        # consolidated manifest.json only at the END of main(); a later-layer
+        # crash or the 75-min timeout (the fetch step is continue-on-error)
+        # skips that final write, stranding fresh PNGs against a stale manifest
+        # — wrong per-layer grid (the frontend's bilinear sampler trusts grid
+        # blindly → silently mis-projected layer) and a stale top-level
+        # generated_at. The coverage guard above restoring a different-
+        # dimensioned last-good PNG is a second drift vector. This re-derives
+        # each grid from the actual PNG + each generated_at from its summary
+        # sidecar, and runs always() so it survives a crashed/timed-out fetch —
+        # exactly the failure a finalize inside fetch.py's own main() can't fix.
+        if: ${{ always() && !inputs.force_spot_bundles }}
+        run: python pipeline/finalize_manifest.py
+
+      - name: Verify manifest ↔ PNG consistency (pre-commit gate)
+        # The daily cron commits straight to main with NO PR review, so the
+        # data_integrity grid + freshness gates (which only run on PRs) can't
+        # catch a divergence here. Re-assert them fail-loud: a mismatch fails
+        # the run, and "Trigger production deploy" (gated on success()) is
+        # skipped rather than publishing an inconsistent manifest to
+        # shouldidive.com.
+        if: ${{ always() && !inputs.force_spot_bundles }}
+        run: python pipeline/finalize_manifest.py --check-only
+
       - name: Commit refreshed data
         if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         run: |
