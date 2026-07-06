@@ -194,8 +194,12 @@ jobs:
         # the finished bundles stay committed + discoverable.
         continue-on-error: true
         timeout-minutes: 90
+        # inputs.force_spot_bundles passed via env, never interpolated
+        # directly into the shell (Semgrep run-shell-injection hardening).
+        env:
+          FORCE_SPOT_BUNDLES: ${{ inputs.force_spot_bundles }}
         run: |
-          if [ "${{ inputs.force_spot_bundles }}" = "true" ]; then
+          if [ "$FORCE_SPOT_BUNDLES" = "true" ]; then
             python pipeline/build_spot_bundles.py --force
           else
             python pipeline/build_spot_bundles.py
