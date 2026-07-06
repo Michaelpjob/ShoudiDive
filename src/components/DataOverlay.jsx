@@ -2,6 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { sstColor, sstTrendColor, chlColor, getFitted } from "../lib/mapData.js";
 import { getLayerGrid } from "../lib/dataSource.js";
 
+// Layers rendered as discrete per-cell blocks (nearest-neighbour) rather than
+// a smoothly-interpolated field. For the observed-only clarity layers the grid
+// IS the truth — each cell is its own observation and must not visually bleed
+// into its neighbours — so we show crisp cells and let blank (NaN) cells stay
+// transparent. Other layers keep the smooth look.
+const PIXELATED_LAYERS = new Set(["chl", "viz"]);
+
 // Beaufort-aligned wind ramp (knots → [r,g,b]); same stops as the legend.
 const WIND_RAMP = [
   { kt: 0,  c: [230, 240, 250] },
@@ -160,6 +167,11 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
 
     cv.width = grid.width;
     cv.height = grid.height;
+    // Observed-only: a cell either has a real value (paint it, fully opaque)
+    // or it's blank (NaN → transparent). The loaders already blanked
+    // neighbour-derived cells (chl gap-fill sources, viz estimate tiers) and
+    // dropped the fillNearest smear, so there is nothing to fade here — a
+    // blank cell is honest "no observation", never backfilled.
     const img = ctx.createImageData(grid.width, grid.height);
     for (let i = 0; i < grid.data.length; i++) {
       const v = grid.data[i];
@@ -255,10 +267,11 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
         height={innerH}
         href={imgHref}
         preserveAspectRatio="none"
-        // Pixel-art rendering preserves the source-cell grid look at
-        // any zoom level, matching the previous canvas behavior. Set
-        // to "auto" / "smooth" if a softer interpolation is preferred.
-        style={{ imageRendering: "auto" }}
+        // Observed-only clarity layers (chl/viz) render as discrete cells
+        // (nearest-neighbour) so each cell reads as its own observation and
+        // blanks stay crisp — no smooth blend that would bleed a real cell
+        // into an adjacent blank one. Other layers keep smooth interpolation.
+        style={{ imageRendering: PIXELATED_LAYERS.has(layer) ? "pixelated" : "auto" }}
       />
     </g>
   );
