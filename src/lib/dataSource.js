@@ -22,6 +22,7 @@ import {
 const state = {
   ready: false,
   manifest: null,
+  vizSkill: null, // measured viz-model skill (build_viz_skill.py); null until loaded
   layers: {}, // { sst: { '1d': { data, width, height, dates }, ... }, chl: ... }
 };
 
@@ -58,6 +59,17 @@ export async function loadManifest() {
     }
     const manifest = rewriteManifestUrls(await res.json());
     state.manifest = manifest;
+
+    // Measured-skill record for the viz model (pipeline/validation/
+    // build_viz_skill.py, from the published-historical hindcast). Best-effort
+    // and region-aware: only CA has ground truth today, so other regions 404
+    // here and viz keeps its static (unvalidated) confidence. This is what
+    // makes the viz confidence dot DATA-DRIVEN instead of a hand-typed claim
+    // (docs/STRICT-SCIENCE.md, S2). Non-blocking: never fails the boot.
+    fetch(manifestUrl().replace(/manifest\.json$/, "viz_skill.json"), { cache: "no-cache" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((skill) => { state.vizSkill = skill; notify(); })
+      .catch(() => {});
 
     // 2026-05-09: dispatch loaders in PARALLEL instead of one-by-one.
     // The previous serial `for await` ran sst → sst7d → sst5d → swell5d
