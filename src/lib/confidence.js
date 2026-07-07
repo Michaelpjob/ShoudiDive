@@ -30,7 +30,7 @@ const STATIC_CONFIDENCE = {
     wind:    { score: 5, source: "HRRR 3 km hourly",     reason: "NOAA operational forecast" },
     swell:   { score: 4, source: "WW3 gfswave wcoast",   reason: "NOAA model, ~18 km grid" },
     current: { score: 4, source: "HFRNet 6 km + tide/wind", reason: "Observed nearshore via HF radar; inferred offshore" },
-    viz:     { score: 4, source: "viz_predict model",    reason: "Calibrated against CA dive ground-truth ingestion" },
+    viz:     { score: 3, source: "viz_predict model",    reason: "Model estimate; not yet validated (skill loop dormant, r near 0 on scored pairs). See docs/STRICT-SCIENCE.md" },
   },
   baja: {
     sst:     { score: 5, source: "MUR satellite",        reason: "Same satellite + algorithm as CA" },
@@ -207,10 +207,32 @@ function dynamicModulation(layer, manifest) {
   return { delta, reasons };
 }
 
+// viz is the one bespoke DERIVED index, so its confidence must come from
+// MEASURED skill, not a static literal (docs/STRICT-SCIENCE.md, S2). When the
+// hindcast skill record is loaded for the active region, it overrides the
+// static viz entry: a model with no demonstrated skill (pearson r below the
+// threshold) is capped at "Modeled" (3) no matter what, and the reason line
+// carries the real numbers. Regions without ground truth keep the static
+// (honest, explicitly-unvalidated) entry.
+function measuredVizBase(region, staticBase) {
+  const skill = getDataState()?.vizSkill;
+  const m = skill?.regions?.[region];
+  if (!m || m.n == null || m.pearson_r == null) return staticBase;
+  const minN = skill?.thresholds?.min_n ?? 30;
+  const minR = skill?.thresholds?.min_r ?? 0.3;
+  const earned = m.n >= minN && m.pearson_r >= minR;
+  const score = earned ? Math.min(staticBase.score, 4) : 3; // capped Modeled until skill is proven
+  const reason =
+    `Measured skill: r=${m.pearson_r}, RMSE ${m.rmse_ft} ft, ${m.bias_ft > 0 ? "+" : ""}` +
+    `${m.bias_ft} ft bias over ${m.n} scored dives. ${m.verdict}. See docs/STRICT-SCIENCE.md`;
+  return { ...staticBase, score, reason };
+}
+
 export function getLayerConfidence(layer, opts = {}) {
   const r = activeRegion();
-  const base = STATIC_CONFIDENCE[r]?.[layer];
+  let base = STATIC_CONFIDENCE[r]?.[layer];
   if (!base) return null;
+  if (layer === "viz") base = measuredVizBase(r, base);
   const manifest = getDataState()?.manifest;
   const { delta: dynDelta, reasons: dynReasons } = dynamicModulation(layer, manifest);
   const { delta: horDelta, reason: horReason } = horizonDecay(layer, opts.horizonDays);

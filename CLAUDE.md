@@ -36,6 +36,36 @@ Track in-flight features in [`docs/FEATURES.md`](docs/FEATURES.md); see
 mechanical ground truth (ahead/behind, open PR, checks) with
 `bash scripts/feature-status.sh`.
 
+## Scientific integrity: read before touching display, scoring, or coefficients
+
+**[`docs/STRICT-SCIENCE.md`](docs/STRICT-SCIENCE.md) is a hard contract, not a
+suggestion.** It exists because we kept polishing the presentation of numbers
+never checked against reality, and painting color into space we never measured.
+Before you change how the app displays a number, scores its own predictions, or
+tunes a coefficient, read it and run the harness:
+
+```bash
+node --test tests/checkpoints/display-honesty.test.js   # S1 no display fabrication
+python pipeline/validation/integrity_gate.py            # S2..S5 confidence/loop/ingest/knobs
+```
+
+The constraints in one line each:
+
+- **S1** Observed-only layers (`chl`, `viz`) are never interpolated/smoothed/
+  bloomed. Blank = no data, not clear water. Boxiness is honesty.
+- **S2** `viz` (the one derived index) may not display above "Modeled" without
+  residual metrics proving skill. No "calibrated/validated" language unbacked.
+- **S3** The predicted-vs-observed loop must run and accumulate (non-empty
+  residuals, archive depth >= LOOKBACK_DAYS).
+- **S4** Ground truth must keep flowing (ingest above the watchdog floor).
+- **S5** Every coefficient that moves a user-facing number is registered in
+  `pipeline/validation/knobs_registry.json` as `fit` or `provisional`.
+- **S6** Claims to the user cite decoded data or residuals with n and caveats.
+  If you cannot show the evidence, you have a guess, and you say so.
+
+CI enforces S1 (in `web-tests`) and S2/S5 (the `science-integrity` job). S3/S4
+are tracked RED until the loop is repaired (Phase 1 of the plan in the doc).
+
 ## Why this exists
 
 Two coding agents (Claude Code, Codex) make autonomous commits to
