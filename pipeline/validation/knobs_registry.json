@@ -1,0 +1,21 @@
+{
+  "_comment": "S5 of docs/STRICT-SCIENCE.md. Every coefficient or correction that moves a number the USER sees must be declared here as 'fit' (tuned against residuals, must name the artifact) or 'provisional' (hand-picked, not yet validated). Provisional is allowed, but it is surfaced here and must never be described to the user as truth. The integrity gate (integrity_gate.py) fails if a knob is missing status/note, or claims 'fit' without a fit_against artifact.",
+  "knobs": [
+    {
+      "name": "offshore_chl_distrust.magnitudes",
+      "where": "pipeline/viz_predict/config.py (TRUST_CEIL_FT, FULL_DISTRUST_FT, OFFSHORE_GREEN_FLOOR_FT, ramp 8-25km)",
+      "status": "provisional",
+      "affects": "viz_p50_ft / viz_p10_ft offshore",
+      "note": "Hand-chosen to pull over-optimistic offshore visibility toward a 15ft green floor after the Northeast Bank miss (app said 44ft, diver saw 15-20ft green). Directionally defensible (satellite is surface-blind offshore) but the magnitudes are NOT fit to residuals. Must be refit once the loop accumulates offshore ground truth.",
+      "fit_against": null
+    },
+    {
+      "name": "viz_predict.coefficients",
+      "where": "pipeline/viz_predict/config.py + model.py",
+      "status": "provisional",
+      "affects": "viz_p10/p50/p90 everywhere (the app's primary output)",
+      "note": "The visibility model's turbidity/chl/wind/swell coefficients are expert-set, not regression-fit. Current hindcast on the handful of scored pairs shows r near 0, we do not yet have evidence they track reality. Refitting against residuals.jsonl is Phase 2 of the remediation plan.",
+      "fit_against": null
+    }
+  ]
+}
