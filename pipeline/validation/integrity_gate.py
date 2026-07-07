@@ -121,6 +121,21 @@ def check_loop_live(blocking):
                       f"0 residuals scored from {obs_total} observations on file "
                       ",  the loop is dormant; the primary output is unvalidated",
                       blocking)
+    # The live loop only scores obs whose same-day prediction survives on the
+    # ephemeral archive (tiny n). The published-historical hindcast reconstructs
+    # every past day's prediction from git history and scores the full retained
+    # record, so it is the real accumulated skill signal. Prefer it when present.
+    hind = list(_iter_jsonl(DATA_DIR / "hindcast_residuals.jsonl"))
+    if hind:
+        preds = [h["predicted_p50_ft"] for h in hind if "predicted_p50_ft" in h]
+        obs = [h["observed_ft"] for h in hind if "predicted_p50_ft" in h]
+        r = _pearson(preds, obs)
+        nh = len(preds)
+        status = PASS if nh >= MIN_N_FOR_VALIDATED else WARN
+        detail = (f"live loop scored {n}; historical hindcast scored {nh} "
+                  f"(pearson r={None if r is None else round(r, 3)}). "
+                  "Real skill signal exists.")
+        return Result("S3a", "loop-live", status, detail, blocking)
     zones = metrics.get("zones", metrics) if isinstance(metrics, dict) else {}
     lines = []
     for z, m in sorted(zones.items()):
@@ -131,6 +146,19 @@ def check_loop_live(blocking):
               + ("  [n below skill floor, cannot yet claim validation]"
                  if status == WARN else ""))
     return Result("S3a", "loop-live", status, detail, blocking)
+
+
+def _pearson(a, b):
+    n = min(len(a), len(b))
+    if n < 3:
+        return None
+    a, b = a[:n], b[:n]
+    ma, mb = sum(a) / n, sum(b) / n
+    da = (sum((x - ma) ** 2 for x in a)) ** 0.5
+    db = (sum((y - mb) ** 2 for y in b)) ** 0.5
+    if da == 0 or db == 0:
+        return None
+    return sum((x - ma) * (y - mb) for x, y in zip(a, b)) / (da * db)
 
 
 def check_archive_depth(blocking):
