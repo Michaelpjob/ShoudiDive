@@ -103,7 +103,16 @@
 @media (max-width: 760px), (hover: none) and (pointer: coarse) {
   .closures-timeline {
     bottom: 140px;
-    max-width: 96%;
+    /* Left-anchored, stopping short of the right edge: the zoom
+       column (44px + 8px inset) lives bottom-right on phones, and a
+       centered 96%-wide card crossed into it on short viewports
+       (375x667 — caught by the cp-visual-paint overlap guard). The
+       day strip inside scrolls horizontally, so the lost width costs
+       nothing. */
+    left: 8px;
+    right: auto;
+    transform: none;
+    max-width: calc(100% - 64px);
   }
   /* The scrubber sits at the top here, so there's nothing extra to
      clear — same stacking height as the no-scrubber case. */
