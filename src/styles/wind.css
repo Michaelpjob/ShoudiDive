@@ -501,7 +501,9 @@
      temp/chl/viz layers (no timeline) the moon stays at the default
      top: 8 from the base .moon-widget mobile rule. */
   .moon-widget.below-timeline {
-    top: 80px;
+    /* Clears the slimmed 44px band (top 12) plus the playhead badge
+       that now hangs below it (~26px). */
+    top: 88px;
   }
   .tl-day-label {
     font-size: 10px;
@@ -517,11 +519,26 @@
     white-space: nowrap;
     font-size: 8px;
   }
-  .tl-hour-label {
-    font-size: 8px;
-  }
+  /* Hour labels collide at phone cell widths (a ~51px day cell holds
+     "6a 12p 6p" as one smear) and the 3-hourly minor ticks add noise
+     without information. Day ticks + labels stay; the playhead badge
+     carries the precise selected time, and the sheet has the full
+     per-bucket buttons. */
+  .tl-hour-label { display: none; }
+  .tl-tick.minor { display: none; }
+  .tl-tick.major { height: 8px; }
+  .tl-tick.day   { height: 18px; }
+  /* With no hour labels the tick zone doesn't need 32px. Slim the
+     band so it costs less map (56 -> 44px). */
+  .wind-timeline { height: 44px; }
+  .tl-days { inset: 0 0 18px 0; }
+  /* The badge renders ABOVE the band on desktop (top: -28px). On
+     phones the band sits 12px under the topbar, so the badge landed
+     underneath it — the current-value readout was invisible on every
+     phone. Render it BELOW the band instead. */
   .tl-playhead-badge {
     font-size: 10px;
     padding: 3px 6px;
+    top: calc(100% + 6px);
   }
 }
