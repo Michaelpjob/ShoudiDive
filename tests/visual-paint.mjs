@@ -23,6 +23,17 @@
  *        - capture a screenshot per layer for the artifact
  *   3. Report per-(viewport × layer) pass/fail.
  *
+ * It ALSO asserts (mobile viewport only) that no two pieces of
+ * floating map chrome — topbar, timeline scrubber + its value badge,
+ * moon widget, Navy closures card, MPA banner, overlay quick pills,
+ * zoom column, peek strip — paint on top of each other. This is the
+ * guard for the 2026-07-07 audit class of bug: the MPAS/BOTTOM/NAVY
+ * pills rendered directly over the MPA banner's text, and the Navy
+ * card clipped both. Elements that don't render without live data
+ * (timelines, Navy card) simply drop out of the pairwise check in CI;
+ * the static chrome (banner, pills, zoom, peek strip) is always
+ * exercised.
+ *
  * What it can NOT catch:
  *   - Pixel-perfect regression (no baseline image diffing yet — see
  *     tests/CHECKPOINTS.md "future work")
@@ -52,6 +63,10 @@ const VIEWPORTS = [
   { id: "desktop", w: 1920, h: 1080 },
   { id: "tablet",  w: 1024, h:  768 },
   { id: "mobile",  w:  375, h:  667 },
+  // Landscape phones lay the chrome out differently (floating strip
+  // card, raised zoom column) and had their own collision set — the
+  // overlap guard runs there too.
+  { id: "mobile-landscape", w: 667, h: 375 },
 ];
 
 // Layers we try to switch into. Names must match the .lt-label text
@@ -162,6 +177,58 @@ async function measureOverlayPaint(page) {
 }
 
 
+// Floating chrome that must never overlap on a phone. Selectors, not
+// refs — anything that doesn't render (no data, overlay off) simply
+// drops out of the pairwise check.
+const MOBILE_CHROME_SELECTORS = [
+  ".topbar",
+  ".wind-timeline",
+  ".tl-playhead-badge",
+  ".moon-widget",
+  ".closures-timeline",
+  ".mpa-banner",
+  ".ms-overlay-quick",
+  ".zoom-ctl",
+  ".ms-peek",
+];
+
+/** Pairwise-intersect the visible floating chrome. DOM-contained pairs
+ *  (badge inside its own timeline) are skipped; a 2px tolerance
+ *  absorbs subpixel rounding so shadows/borders can kiss without
+ *  failing. Returns the offending pairs with their rects. */
+async function checkChromeOverlaps(page) {
+  return await page.evaluate((selectors) => {
+    const els = [];
+    for (const sel of selectors) {
+      const el = document.querySelector(sel);
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) continue;
+      els.push({ sel, el, r });
+    }
+    const TOL = 2;
+    const overlaps = [];
+    for (let i = 0; i < els.length; i++) {
+      for (let j = i + 1; j < els.length; j++) {
+        const a = els[i], b = els[j];
+        if (a.el.contains(b.el) || b.el.contains(a.el)) continue;
+        const w = Math.min(a.r.right, b.r.right) - Math.max(a.r.left, b.r.left);
+        const h = Math.min(a.r.bottom, b.r.bottom) - Math.max(a.r.top, b.r.top);
+        if (w > TOL && h > TOL) {
+          overlaps.push({
+            pair: `${a.sel} × ${b.sel}`,
+            overlapPx: `${Math.round(w)}×${Math.round(h)}`,
+            a: { l: Math.round(a.r.left), t: Math.round(a.r.top), r: Math.round(a.r.right), b: Math.round(a.r.bottom) },
+            b: { l: Math.round(b.r.left), t: Math.round(b.r.top), r: Math.round(b.r.right), b: Math.round(b.r.bottom) },
+          });
+        }
+      }
+    }
+    return overlaps;
+  }, MOBILE_CHROME_SELECTORS);
+}
+
+
 async function run() {
   console.log(`[visual-paint] starting static server on ${ORIGIN}`);
   let server;
@@ -203,8 +270,8 @@ async function run() {
         width: vp.w,
         height: vp.h,
         deviceScaleFactor: 1,
-        isMobile: vp.id === "mobile",
-        hasTouch: vp.id === "mobile",
+        isMobile: vp.id.startsWith("mobile"),
+        hasTouch: vp.id.startsWith("mobile"),
       });
 
       try {
@@ -267,6 +334,28 @@ async function run() {
                   : `data URL only ${m.dataUrlLen} chars (floor ${NON_TRIVIAL_DATAURL_LEN}) — layer probably not painting`,
             dataUrlLen: m.dataUrlLen,
           });
+          // Floating-chrome overlap check — mobile viewport only (the
+          // desktop panels have their own layout budget and legitimate
+          // stacking; phones are where chrome piles into the same band).
+          if (vp.id.startsWith("mobile")) {
+            const overlaps = await checkChromeOverlaps(page);
+            if (overlaps.length > 0) {
+              anyFailed = true;
+              for (const o of overlaps) {
+                console.error(`  [OVERLAP] viewport=mobile layer=${layerLabel} ${o.pair} ` +
+                  `(${o.overlapPx} px) a=${JSON.stringify(o.a)} b=${JSON.stringify(o.b)}`);
+              }
+            }
+            results.push({
+              viewport: vp.id,
+              layer: layerLabel,
+              check: "chrome-overlap",
+              ok: overlaps.length === 0,
+              reason: overlaps.length
+                ? overlaps.map((o) => `${o.pair} (${o.overlapPx}px)`).join("; ")
+                : undefined,
+            });
+          }
           // Capture a screenshot per (viewport × layer) for the artifact.
           await page.screenshot({
             path: resolve(ARTIFACTS, `${vp.id}_${layerLabel}.png`),
