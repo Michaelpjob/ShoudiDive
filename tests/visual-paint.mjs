@@ -63,6 +63,10 @@ const VIEWPORTS = [
   { id: "desktop", w: 1920, h: 1080 },
   { id: "tablet",  w: 1024, h:  768 },
   { id: "mobile",  w:  375, h:  667 },
+  // Landscape phones lay the chrome out differently (floating strip
+  // card, raised zoom column) and had their own collision set — the
+  // overlap guard runs there too.
+  { id: "mobile-landscape", w: 667, h: 375 },
 ];
 
 // Layers we try to switch into. Names must match the .lt-label text
@@ -266,8 +270,8 @@ async function run() {
         width: vp.w,
         height: vp.h,
         deviceScaleFactor: 1,
-        isMobile: vp.id === "mobile",
-        hasTouch: vp.id === "mobile",
+        isMobile: vp.id.startsWith("mobile"),
+        hasTouch: vp.id.startsWith("mobile"),
       });
 
       try {
@@ -333,7 +337,7 @@ async function run() {
           // Floating-chrome overlap check — mobile viewport only (the
           // desktop panels have their own layout budget and legitimate
           // stacking; phones are where chrome piles into the same band).
-          if (vp.id === "mobile") {
+          if (vp.id.startsWith("mobile")) {
             const overlaps = await checkChromeOverlaps(page);
             if (overlaps.length > 0) {
               anyFailed = true;
