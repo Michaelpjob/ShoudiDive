@@ -553,12 +553,15 @@
     bottom: calc(144px + env(safe-area-inset-bottom));
   }
 
-  /* MPA Coronados disclaimer — float just above the peek strip.
-     Map-stage now ends above the strip, so a small inset reads as
-     the line directly above the chips. */
+  /* MPA Coronados disclaimer — float above the MPAs/Bottom/Navy quick
+     pills, which own the bottom-left corner of the map (they sit 8px
+     above the peek strip, ~44px tall). bottom: 8px put the banner in
+     the exact same spot and the pills painted over the banner text —
+     visible in every mobile screenshot since the pills shipped. 60px
+     clears them with a small gap. */
   .mpa-banner {
     top: auto;
-    bottom: 8px;
+    bottom: 60px;
     left: 8px;
     right: 8px;
     max-width: none;
