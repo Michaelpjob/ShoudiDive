@@ -186,12 +186,72 @@ export default function MobileShell({
     setOpen(dy < 0);
   };
 
+  // Drag-to-dismiss on the open sheet: pulling down from the TOP of
+  // the scroll (scrollTop 0) makes the sheet follow the finger 1:1;
+  // release past 110px dismisses, under it the sheet eases back.
+  // The per-frame transform writes go straight to the DOM node — a
+  // setState per touchmove would re-render the whole sheet at 60Hz.
+  // If the content is scrolled (scrollTop > 0) the gesture is plain
+  // scrolling and the drag never engages; overscroll-behavior:contain
+  // on .ms-sheet keeps the browser from rubber-banding underneath.
+  const sheetRef = useRef(null);
+  const sheetDrag = useRef(null);
+  const onSheetTouchStart = (e) => {
+    const el = sheetRef.current;
+    if (!el || el.scrollTop > 0) { sheetDrag.current = null; return; }
+    sheetDrag.current = { y: e.touches[0].clientY, dy: 0, active: true };
+  };
+  const onSheetTouchMove = (e) => {
+    const d = sheetDrag.current;
+    const el = sheetRef.current;
+    if (!d || !el) return;
+    if (el.scrollTop > 0) {
+      // The gesture turned into a real scroll — stand down.
+      d.active = false;
+      d.dy = 0;
+      el.style.transform = "";
+      return;
+    }
+    const dy = e.touches[0].clientY - d.y;
+    if (d.active && dy > 0) {
+      el.style.transition = "none";
+      el.style.transform = `translateY(${dy}px)`;
+      d.dy = dy;
+    } else {
+      el.style.transform = "";
+      d.dy = 0;
+    }
+  };
+  const onSheetTouchEnd = () => {
+    const d = sheetDrag.current;
+    const el = sheetRef.current;
+    sheetDrag.current = null;
+    if (!d || !el) return;
+    if (d.dy > 110) {
+      el.style.transform = "";
+      el.style.transition = "";
+      setOpen(false);
+    } else if (d.dy > 0) {
+      el.style.transition = "transform 160ms cubic-bezier(0.2, 0.7, 0.3, 1)";
+      el.style.transform = "";
+    }
+  };
+
   return (
     <div className={"mobile-shell" + (open ? " open" : "")}>
       {/* Pull-up sheet — only mounted when open so off-screen content
           isn't sitting in the DOM eating layout. */}
       {open && (
-        <div className="ms-sheet" role="dialog" aria-label="Conditions panel">
+        <div
+          className="ms-sheet"
+          role="dialog"
+          aria-label="Conditions panel"
+          ref={sheetRef}
+          onTouchStart={onSheetTouchStart}
+          onTouchMove={onSheetTouchMove}
+          onTouchEnd={onSheetTouchEnd}
+          onTouchCancel={onSheetTouchEnd}
+        >
           <button
             className="ms-close"
             onClick={() => setOpen(false)}
