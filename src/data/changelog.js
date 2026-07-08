@@ -23,9 +23,26 @@ export const CHANGELOG = [
         type: "fixed",
         text:
           "On phones, the top bar was overflowing the screen and hiding the " +
-          "Settings gear — units, theme, and layer opacity were unreachable. " +
+          "Settings gear, so units, theme, and layer opacity were unreachable. " +
           "It now fits every phone width, and the Kelp Paddy Finder link plus " +
           "the tip jar moved into the pull-up panel's new More section.",
+      },
+      {
+        type: "fixed",
+        text:
+          "The forecast slider's readout was hiding behind the top bar on " +
+          "phones. The selected time and value now show in a badge right " +
+          "under the slider, and the slider itself is slimmer so you see " +
+          "more map. Floating cards at the bottom of the map (marine " +
+          "protected area notice, Navy closures, overlay buttons) stopped " +
+          "stacking on top of each other, in portrait and landscape.",
+      },
+      {
+        type: "new",
+        text:
+          "The bottom panel now answers gestures: swipe up on the strip to " +
+          "open it, swipe down to close, or drag the open panel down and it " +
+          "follows your finger.",
       },
       {
         type: "improved",
