@@ -208,6 +208,50 @@ async function run() {
     } else {
       console.log(`[smoke] app shell mounted`);
     }
+
+    // ---- Mobile-viewport layout sanity --------------------------------
+    // Re-render at phone size and assert the topbar fits the viewport.
+    // Catches the 2026-07-08 class of bug: inline styles defeating the
+    // responsive hide rules, pushing Settings (units/theme) off-screen
+    // where no phone user could reach it. Pure layout math in headless
+    // Chrome — deterministic, no data dependency.
+    if (shellPresent) {
+      await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
+      await page.reload({ waitUntil: "domcontentloaded", timeout: 30000 });
+      await new Promise((r) => setTimeout(r, 2000));
+      const mobileLayout = await page.evaluate(() => {
+        const tb = document.querySelector(".topbar");
+        if (!tb) return { ok: false, why: ".topbar missing at 390px" };
+        // +1 tolerates sub-pixel rounding.
+        if (tb.scrollWidth > tb.clientWidth + 1) {
+          const overflowers = [...tb.querySelectorAll("*")]
+            .filter((e) => {
+              const r = e.getBoundingClientRect();
+              return r.width > 0 && r.right > window.innerWidth + 1;
+            })
+            .slice(0, 5)
+            .map((e) => (typeof e.className === "string" && e.className) || e.tagName);
+          return {
+            ok: false,
+            why: `topbar overflows: scrollWidth ${tb.scrollWidth} > viewport ${tb.clientWidth}. ` +
+                 `Off-screen: ${overflowers.join(", ")}`,
+          };
+        }
+        return { ok: true };
+      });
+      if (!mobileLayout.ok) {
+        errors.push({
+          kind: "mobile_topbar_overflow",
+          message:
+            `Topbar does not fit a 390px phone viewport — ${mobileLayout.why}. ` +
+            "Everything past the right edge (often the Settings cog) is unreachable on phones. " +
+            "Usual cause: a topbar element styled with inline `display`, which beats " +
+            "mobile.css's responsive hide rules.",
+        });
+      } else {
+        console.log(`[smoke] mobile topbar fits 390px viewport`);
+      }
+    }
   } finally {
     await browser.close();
     server.close();
