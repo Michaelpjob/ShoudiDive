@@ -15,6 +15,29 @@
 
 export const CHANGELOG = [
   {
+    id: "2026-07-08",
+    date: "July 8, 2026",
+    title: "The phone layout works again",
+    items: [
+      {
+        type: "fixed",
+        text:
+          "On phones, the top bar was overflowing the screen and hiding the " +
+          "Settings gear — units, theme, and layer opacity were unreachable. " +
+          "It now fits every phone width, and the Kelp Paddy Finder link plus " +
+          "the tip jar moved into the pull-up panel's new More section.",
+      },
+      {
+        type: "improved",
+        text:
+          "The layer chips at the bottom are readable again: data-age tags no " +
+          "longer print on top of the layer names, and the current layer's " +
+          "confidence (with its age, like “6d old”) now shows next to the layer " +
+          "name in the status bar.",
+      },
+    ],
+  },
+  {
     id: "2026-06-23",
     date: "June 23, 2026",
     highlight: true,
