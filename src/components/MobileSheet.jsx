@@ -16,7 +16,7 @@
 //
 // Shares state with DesktopView via props — no parallel state.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { sstColor, chlColor, SAVED_SPOTS } from "../lib/mapData.js";
 import { SstTrendChip } from "./SstTrendBits.jsx";
 import {
@@ -166,6 +166,27 @@ export default function MobileShell({
     (layer === "sst" && hasSstTimeline) || layer === "wind" || layer === "swell" || layer === "current"
       ? compositeText
       : `${composite}-day · ${compositeText}`;
+
+  // Swipe on the peek strip — up opens the sheet, down closes it. The
+  // tap affordances (status row + handle button) stay; this adds the
+  // gesture phones expect from a bottom sheet. 32px threshold filters
+  // tap jitter, and horizontal intent (|dx| > |dy|) is ignored so chip
+  // taps and horizontal thumb slips don't toggle the sheet.
+  const touchStart = useRef(null);
+  const onPeekTouchStart = (e) => {
+    const t = e.touches[0];
+    touchStart.current = { x: t.clientX, y: t.clientY };
+  };
+  const onPeekTouchEnd = (e) => {
+    const s = touchStart.current;
+    touchStart.current = null;
+    if (!s) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - s.x;
+    const dy = t.clientY - s.y;
+    if (Math.abs(dy) < 32 || Math.abs(dx) > Math.abs(dy)) return;
+    setOpen(dy < 0);
+  };
 
   return (
     <div className={"mobile-shell" + (open ? " open" : "")}>
@@ -410,7 +431,11 @@ export default function MobileShell({
       </div>
 
       {/* Always-visible peek strip ------------------------------------- */}
-      <div className="ms-peek">
+      <div
+        className="ms-peek"
+        onTouchStart={onPeekTouchStart}
+        onTouchEnd={onPeekTouchEnd}
+      >
         {/* Status line — layer name on left, value at focal point in the
             middle, time on the right. Tells the user at a glance what
             they're looking at without opening anything. Also doubles
