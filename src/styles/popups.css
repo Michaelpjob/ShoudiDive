@@ -656,6 +656,22 @@
   flex: 0 0 44vh;
   min-height: 0;
 }
+/* On mobile the absolutely-positioned depth legend (bottom: 34px of
+   the OVERLAY) landed on top of the sources footer — the overlay is
+   the whole screen here, not the chart. The legend sits between the
+   stage and the panel in the markup, so static positioning slots it
+   into the flex column right under the chart instead. */
+.spot-detail-overlay.sd-mobile .spot-detail-legend {
+  position: static;
+  transform: none;
+  align-self: center;
+  margin: 6px 8px 0;
+  max-width: calc(100% - 16px);
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex: 0 0 auto;
+}
+.spot-detail-overlay.sd-mobile .spot-detail-legend::-webkit-scrollbar { display: none; }
 .sd-mobile-panel {
   flex: 1 1 auto;
   min-height: 0;
@@ -669,12 +685,13 @@
 }
 .sd-m-chips {
   display: flex;
+  /* Wrap instead of horizontal scroll: with 7 chips the row clipped
+     at "Labels" with the scrollbar hidden — nothing signalled that
+     MPA + Reset existed off-screen. Two visible rows beat hidden
+     affordances; the panel scrolls vertically anyway. */
+  flex-wrap: wrap;
   gap: 6px;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
 }
-.sd-m-chips::-webkit-scrollbar { display: none; }
 .sd-m-chip {
   flex: none;
   appearance: none;
