@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { project } from "../lib/mapData.js";
 
 // Renders map labels as constant-size HTML elements positioned over the SVG.
@@ -26,7 +26,38 @@ function rectsOverlap(a, b) {
   return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
 }
 
+// Fixed chrome floating over the map occludes labels rendered under
+// it — "Pt. Conception" read as "Pt. Conce" behind the zoom column on
+// phones. Measure those rects (stage-relative) so the placement pass
+// can flip a label to the other side of its pin, and the collision
+// pass can drop any label that still lands underneath. Re-measured on
+// size change; the zoom column only moves when the viewport does.
+function useChromeObstacles(size) {
+  const [obstacles, setObstacles] = useState([]);
+  useEffect(() => {
+    const stage = document.querySelector(".map-stage");
+    if (!stage) { setObstacles([]); return; }
+    const s = stage.getBoundingClientRect();
+    const out = [];
+    for (const sel of [".zoom-ctl"]) {
+      const el = document.querySelector(sel);
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) continue;
+      out.push({
+        left: r.left - s.left,
+        top: r.top - s.top,
+        right: r.right - s.left,
+        bottom: r.bottom - s.top,
+      });
+    }
+    setObstacles(out);
+  }, [size]);
+  return obstacles;
+}
+
 export default function MapLabels({ labels, vb, size }) {
+  const obstacles = useChromeObstacles(size);
   const positioned = useMemo(() => {
     if (!labels || !size?.w || !size?.h) return [];
     const out = [];
@@ -94,8 +125,22 @@ export default function MapLabels({ labels, vb, size }) {
         left = sx + offX - w / 2;
         top = sy + offY;
       }
-      const right = left + w;
-      const bottom = top + h;
+      let right = left + w;
+      let bottom = top + h;
+
+      // Chrome-occlusion flip: a left-anchored label running under the
+      // zoom column (right side of the map) flips to the other side of
+      // its pin, same as the screen-edge flip above. Labels that still
+      // collide after this get dropped by the obstacle-seeded collision
+      // pass below — half-hidden text helps nobody.
+      if (anchor === "left" && obstacles.some((o) => rectsOverlap({ left, top, right, bottom }, o))) {
+        anchor = "right";
+        offX = -(lab.offsetX || 0);
+        left = sx + offX - w;
+        right = left + w;
+        top = sy + offY;
+        bottom = top + h;
+      }
       out.push({
         ...lab,
         sx,
@@ -111,19 +156,26 @@ export default function MapLabels({ labels, vb, size }) {
       });
     }
     return out;
-  }, [labels, vb, size]);
+  }, [labels, vb, size, obstacles]);
 
   const visible = useMemo(() => {
-    const placed = [];
+    // Seed with the chrome rects: a label that would render under the
+    // zoom column (even after the anchor flip) drops like any other
+    // collision loser.
+    const placed = [...obstacles];
+    const kept = [];
     const sorted = [...positioned].sort(
       (a, b) => (b.priority || 0) - (a.priority || 0)
     );
     for (const p of sorted) {
       const collides = placed.some((q) => rectsOverlap(p, q));
-      if (!collides) placed.push(p);
+      if (!collides) {
+        placed.push(p);
+        kept.push(p);
+      }
     }
-    return placed;
-  }, [positioned]);
+    return kept;
+  }, [positioned, obstacles]);
 
   return (
     <div
