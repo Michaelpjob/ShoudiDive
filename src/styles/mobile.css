@@ -194,6 +194,14 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* 320px-class phones: a 6-column chip is ~47px wide; "Current" at
+   11px ellipsizes to "Curren…". 10px + no tracking fits it. */
+@media (max-width: 360px) {
+  .ms-chip-label {
+    font-size: 10px;
+    letter-spacing: 0;
+  }
+}
 .ms-chip-sub {
   font-size: 9px;
   opacity: 0.75;
