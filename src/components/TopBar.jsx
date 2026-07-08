@@ -108,33 +108,10 @@ export default function TopBar({ onSettings, settingsOpen, dataState, layer, hor
           href="/paddies/"
           className="tool-link"
           title="Kelp Paddy Finder — where drifting kelp paddies are offshore (beta)"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 5,
-            padding: "2px 9px",
-            borderRadius: 999,
-            border: "1px solid var(--line, rgba(0,0,0,0.14))",
-            fontSize: 12,
-            textDecoration: "none",
-            color: "inherit",
-          }}
         >
           <span aria-hidden="true">🪸</span>
           Paddy Finder
-          <span
-            style={{
-              fontSize: 9,
-              fontWeight: 700,
-              letterSpacing: ".04em",
-              background: "#0e7490",
-              color: "#e0f2fe",
-              padding: "1px 5px",
-              borderRadius: 5,
-            }}
-          >
-            BETA
-          </span>
+          <span className="tool-link-beta">BETA</span>
         </a>
         )}
         {(() => {
@@ -168,24 +145,12 @@ export default function TopBar({ onSettings, settingsOpen, dataState, layer, hor
                 (lc.sourceFallback ? ", served by backup source" : "")
               }
               style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "2px 8px",
-                borderRadius: 999,
-                border: `1px solid ${lc.stale ? lc.color : "var(--line, rgba(0,0,0,0.12))"}`,
-                fontSize: 12,
+                borderColor: lc.stale ? lc.color : "var(--line, rgba(0,0,0,0.12))",
               }}
             >
               <span
-                style={{
-                  display: "inline-block",
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  background: lc.color,
-                  boxShadow: "0 0 0 1px rgba(0,0,0,0.18)",
-                }}
+                className="lc-dot"
+                style={{ background: lc.color }}
               />
               <span style={{ opacity: 0.72 }}>{layerName}</span>
               <strong>{lc.label}</strong>

@@ -127,6 +127,40 @@ test("cp-mobile-adaptive: app.css uses env(safe-area-inset-top) somewhere", () =
 });
 
 
+// ---------------------------------------------------------------------
+// Topbar responsive hiding must not be defeated by inline styles.
+//
+// 2026-07-08 regression class: the Paddy Finder link + confidence
+// badge carried `style={{ display: "inline-flex", ... }}` in TopBar.jsx.
+// Inline styles beat every stylesheet rule, so mobile.css's
+// `.topbar-meta > span { display: none }` never applied — the topbar
+// rendered ~320px past the right edge of a 390px phone and pushed the
+// Settings cog (units, theme) fully out of reach.
+// ---------------------------------------------------------------------
+
+test("cp-mobile-adaptive: TopBar.jsx sets no inline display styles", () => {
+  const topbar = read("src/components/TopBar.jsx");
+  assert.doesNotMatch(
+    topbar, /style=\{\{[^}]*\bdisplay\s*:/s,
+    "TopBar.jsx must not set `display` via inline style props — inline " +
+    "display overrides mobile.css's responsive hide rules and re-breaks " +
+    "the phone topbar overflow. Style topbar elements with classes.",
+  );
+});
+
+test("cp-mobile-adaptive: mobile CSS hides the topbar tool link, confidence badge, and tip jar", () => {
+  const mobile = read("src/styles/mobile.css");
+  for (const sel of [".topbar-meta .tool-link", ".topbar-meta .layer-confidence", ".topbar-meta .tip-fish"]) {
+    assert.ok(
+      mobile.includes(sel),
+      `mobile.css must keep a \`${sel}\` hide rule — these elements ` +
+      "don't fit the phone topbar; their mobile homes are the peek-strip " +
+      "status row (confidence) and the sheet's More section (link + tip).",
+    );
+  }
+});
+
+
 test("cp-mobile-adaptive: app.css uses 100dvh for viewport-tracking layout", () => {
   // 100vh is the static viewport height. iOS Safari's collapsing
   // toolbar makes 100vh land BEHIND the toolbar, eating bottom UI.
