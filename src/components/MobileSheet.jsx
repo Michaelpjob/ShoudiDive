@@ -16,7 +16,7 @@
 //
 // Shares state with DesktopView via props — no parallel state.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { sstColor, chlColor, SAVED_SPOTS } from "../lib/mapData.js";
 import { SstTrendChip } from "./SstTrendBits.jsx";
 import {
@@ -43,6 +43,8 @@ import { SstCurrentCard, SstModeToggle } from "./SstTimeline.jsx";
 import { CurrentCurrentCard } from "./CurrentTimeline.jsx";
 import { usePrefs } from "../contexts/PrefsContext.jsx";
 import ConfidenceDot from "./ConfidenceDot.jsx";
+import { activeRegion } from "../lib/region.js";
+import { track } from "../lib/analytics.js";
 
 const LAYERS = [
   { id: "sst",   label: "Temp",  unit: "°{U}" },
@@ -165,12 +167,93 @@ export default function MobileShell({
       ? compositeText
       : `${composite}-day · ${compositeText}`;
 
+  // Swipe on the peek strip — up opens the sheet, down closes it. The
+  // tap affordances (status row + handle button) stay; this adds the
+  // gesture phones expect from a bottom sheet. 32px threshold filters
+  // tap jitter, and horizontal intent (|dx| > |dy|) is ignored so chip
+  // taps and horizontal thumb slips don't toggle the sheet.
+  const touchStart = useRef(null);
+  const onPeekTouchStart = (e) => {
+    const t = e.touches[0];
+    touchStart.current = { x: t.clientX, y: t.clientY };
+  };
+  const onPeekTouchEnd = (e) => {
+    const s = touchStart.current;
+    touchStart.current = null;
+    if (!s) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - s.x;
+    const dy = t.clientY - s.y;
+    if (Math.abs(dy) < 32 || Math.abs(dx) > Math.abs(dy)) return;
+    setOpen(dy < 0);
+  };
+
+  // Drag-to-dismiss on the open sheet: pulling down from the TOP of
+  // the scroll (scrollTop 0) makes the sheet follow the finger 1:1;
+  // release past 110px dismisses, under it the sheet eases back.
+  // The per-frame transform writes go straight to the DOM node — a
+  // setState per touchmove would re-render the whole sheet at 60Hz.
+  // If the content is scrolled (scrollTop > 0) the gesture is plain
+  // scrolling and the drag never engages; overscroll-behavior:contain
+  // on .ms-sheet keeps the browser from rubber-banding underneath.
+  const sheetRef = useRef(null);
+  const sheetDrag = useRef(null);
+  const onSheetTouchStart = (e) => {
+    const el = sheetRef.current;
+    if (!el || el.scrollTop > 0) { sheetDrag.current = null; return; }
+    sheetDrag.current = { y: e.touches[0].clientY, dy: 0, active: true };
+  };
+  const onSheetTouchMove = (e) => {
+    const d = sheetDrag.current;
+    const el = sheetRef.current;
+    if (!d || !el) return;
+    if (el.scrollTop > 0) {
+      // The gesture turned into a real scroll — stand down.
+      d.active = false;
+      d.dy = 0;
+      el.style.transform = "";
+      return;
+    }
+    const dy = e.touches[0].clientY - d.y;
+    if (d.active && dy > 0) {
+      el.style.transition = "none";
+      el.style.transform = `translateY(${dy}px)`;
+      d.dy = dy;
+    } else {
+      el.style.transform = "";
+      d.dy = 0;
+    }
+  };
+  const onSheetTouchEnd = () => {
+    const d = sheetDrag.current;
+    const el = sheetRef.current;
+    sheetDrag.current = null;
+    if (!d || !el) return;
+    if (d.dy > 110) {
+      el.style.transform = "";
+      el.style.transition = "";
+      setOpen(false);
+    } else if (d.dy > 0) {
+      el.style.transition = "transform 160ms cubic-bezier(0.2, 0.7, 0.3, 1)";
+      el.style.transform = "";
+    }
+  };
+
   return (
     <div className={"mobile-shell" + (open ? " open" : "")}>
       {/* Pull-up sheet — only mounted when open so off-screen content
           isn't sitting in the DOM eating layout. */}
       {open && (
-        <div className="ms-sheet" role="dialog" aria-label="Conditions panel">
+        <div
+          className="ms-sheet"
+          role="dialog"
+          aria-label="Conditions panel"
+          ref={sheetRef}
+          onTouchStart={onSheetTouchStart}
+          onTouchMove={onSheetTouchMove}
+          onTouchEnd={onSheetTouchEnd}
+          onTouchCancel={onSheetTouchEnd}
+        >
           <button
             className="ms-close"
             onClick={() => setOpen(false)}
@@ -341,12 +424,33 @@ export default function MobileShell({
             <div className="ms-section-h">How to read this</div>
             <Info layer={layer} />
           </section>
-          {/* Tip-jar moved 2026-05-08: now lives in the topbar (the
-              tiny fish "click for WSB" link), visible on every layer
-              from the start. The mobile peek strip already hides the
-              topbar at narrow widths, so the topbar tip falls back
-              into view in the open sheet via the .topbar inside the
-              fixed shell — same affordance, less duplication. */}
+          {/* MORE — mobile homes for the topbar items hidden on phones
+              (the Paddy Finder link + tip jar carried inline styles
+              that made them overflow the topbar off-screen; see
+              mobile.css). CA-only gating mirrors the topbar. */}
+          <section className="ms-section">
+            <div className="ms-section-h">More</div>
+            <div className="ms-links">
+              {activeRegion() === "ca" && (
+                <a href="/paddies/" className="ms-link-row">
+                  <span aria-hidden="true">🪸</span>
+                  Kelp Paddy Finder
+                  <span className="ms-link-sub">beta tool</span>
+                </a>
+              )}
+              <a
+                href="https://venmo.com/u/michaelpjob"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ms-link-row"
+                onClick={() => track("tip_click", { source: "sheet" })}
+              >
+                <span aria-hidden="true">🐟</span>
+                Tip the creator
+                <span className="ms-link-sub">Venmo · click for WSB</span>
+              </a>
+            </div>
+          </section>
         </div>
       )}
 
@@ -387,7 +491,11 @@ export default function MobileShell({
       </div>
 
       {/* Always-visible peek strip ------------------------------------- */}
-      <div className="ms-peek">
+      <div
+        className="ms-peek"
+        onTouchStart={onPeekTouchStart}
+        onTouchEnd={onPeekTouchEnd}
+      >
         {/* Status line — layer name on left, value at focal point in the
             middle, time on the right. Tells the user at a glance what
             they're looking at without opening anything. Also doubles
@@ -411,6 +519,10 @@ export default function MobileShell({
           <span className="ms-status-layer">
             <span className="dot" />
             <strong>{layerNameFor(layer)}</strong>
+            {/* Active-layer confidence — the mobile stand-in for the
+                topbar badge (hidden on phones). Shows the score color
+                plus the "Nd old" tag when the layer is stale. */}
+            <ConfidenceDot layer={layer} className="ms-status-conf" />
           </span>
           <span className="ms-status-val mono">
             {focalValue}
@@ -446,7 +558,11 @@ export default function MobileShell({
                 role="tab"
                 aria-selected={active}
               >
-                <ConfidenceDot layer={L.id} className="ms-chip-conf" />
+                {/* Dot only — the stale "Nd old" text tag rendered on
+                    top of the chip label in the 6-column grid (user
+                    report 2026-07-07). Age text lives in the status
+                    row + sheet instead. */}
+                <ConfidenceDot layer={L.id} className="ms-chip-conf" showTag={false} />
                 <span className="ms-chip-label">
                   {L.label}
                   {L.beta && <span className="ms-chip-beta">Beta</span>}
