@@ -94,16 +94,19 @@
   box-shadow: inset 0 0 0 1px var(--accent, #2563eb);
 }
 
-/* Lift the strip above the mobile bottom-sheet peek so it stays visible. */
+/* Lift the strip above the mobile bottom-sheet peek so it stays visible.
+   Bottom-of-map stacking order on phones (bottom-up): overlay quick
+   pills (~44px) -> MPA banner (bottom: 60, up to ~75px tall) -> this
+   card. 96px put the card's bottom row underneath the banner. */
 @media (max-width: 760px), (hover: none) and (pointer: coarse) {
   .closures-timeline {
-    bottom: 96px;
+    bottom: 140px;
     max-width: 96%;
   }
-  /* The scrubber sits at the top here, so there's nothing to clear at the
-     bottom — keep the strip at the same height as the no-scrubber case. */
+  /* The scrubber sits at the top here, so there's nothing extra to
+     clear — same stacking height as the no-scrubber case. */
   .closures-timeline.above-scrubber {
-    bottom: 96px;
+    bottom: 140px;
   }
 }
 
