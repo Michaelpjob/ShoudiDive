@@ -438,6 +438,57 @@
   padding-top: 12px;
 }
 
+/* Active-layer confidence in the status row — the mobile home of the
+   topbar's layer-confidence badge (hidden on phones below). The dot
+   carries the score color; the staleTag ("6d old") renders inline via
+   ConfidenceDot's stale branch, so age reads at a glance without
+   crowding the layer chips. */
+.ms-status-conf { margin-left: 2px; flex-shrink: 0; }
+
+/* Chip top strip is reserved for the two corner markers — beta pill
+   top-left, confidence dot top-right — and the label starts below
+   them (padding-top clears both). Keeps "Current"/"Vis" labels
+   untruncated AND unoverlapped in the 6-column grid at 390px; the
+   chip grows ~3px, inside the peek strip's ~144px budget noise. */
+.ms-chip { padding: 14px 4px 6px; }
+.ms-chip .ms-chip-beta {
+  position: absolute;
+  top: 3px;
+  left: 4px;
+  margin: 0;
+  padding: 0 3px;
+  font-size: 7.5px;
+}
+
+/* "More" section rows — Paddy Finder + tip jar, relocated from the
+   topbar on phones. 44px rows per HIG tap minimum. */
+.ms-links {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ms-link-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--bg-panel-solid);
+}
+.ms-link-row:active { background: var(--bg-sunken); }
+.ms-link-row .ms-link-sub {
+  margin-left: auto;
+  color: var(--ink-3);
+  font-size: 11px;
+  font-weight: 400;
+}
+
 /* ---------- Responsive overrides ---------- */
 
 @media (max-width: 760px), (hover: none) and (pointer: coarse) {
@@ -448,6 +499,16 @@
      the topbar only needs the brand mark + a settings cog. */
   .topbar-meta > span { display: none; }
   .topbar-meta { gap: 8px; }
+  /* Phone topbar = brand + region + What's New + Settings, nothing
+     else. The Paddy Finder link, confidence badge, and tip jar used
+     to overflow the bar ~320px past the right edge (they carried
+     inline display styles that beat the span rule above), taking the
+     Settings cog with them — phones couldn't change units at all.
+     Their mobile homes now: confidence → peek-strip status row;
+     Paddy Finder + tip jar → pull-up sheet "More" section. */
+  .topbar-meta .tool-link,
+  .topbar-meta .layer-confidence,
+  .topbar-meta .tip-fish { display: none; }
   /* Mobile region switcher: compact the `Region <select>` chip so it
      doesn't collide with the ShouldIDive brand at 390px. Caught in QA
      2026-05-11 — at 390px the "Region" label + select would push the
@@ -458,6 +519,12 @@
     padding: 4px 18px 4px 6px;
     background-position: calc(100% - 8px) center, calc(100% - 4px) center;
     max-width: 130px;
+  }
+  /* 320px-class phones (SE, small Androids): brand + region + two
+     icon buttons totals ~347px with the 130px select. Tighten the
+     select so the Settings cog never slides off the right edge. */
+  @media (max-width: 374px) {
+    .region-switcher select { max-width: 96px; }
   }
 
   /* Hide the lat/lng axis labels on mobile — they collided with the
@@ -486,12 +553,15 @@
     bottom: calc(144px + env(safe-area-inset-bottom));
   }
 
-  /* MPA Coronados disclaimer — float just above the peek strip.
-     Map-stage now ends above the strip, so a small inset reads as
-     the line directly above the chips. */
+  /* MPA Coronados disclaimer — float above the MPAs/Bottom/Navy quick
+     pills, which own the bottom-left corner of the map (they sit 8px
+     above the peek strip, ~44px tall). bottom: 8px put the banner in
+     the exact same spot and the pills painted over the banner text —
+     visible in every mobile screenshot since the pills shipped. 60px
+     clears them with a small gap. */
   .mpa-banner {
     top: auto;
-    bottom: 8px;
+    bottom: 60px;
     left: 8px;
     right: 8px;
     max-width: none;
@@ -626,8 +696,26 @@
     box-shadow: var(--shadow-2);
   }
 
+  /* Landscape bottom lanes (map-stage runs to the viewport bottom
+     here, so everything floats over it): quick pills own bottom-left
+     (~236px wide), the zoom column owns bottom-right (44px + inset),
+     and the strip card spans the full width at the very bottom.
+     bottom: 12px parked the zoom column ON the strip card, and the
+     banner inherited the portrait full-width rule, crossing both. */
   .zoom-ctl {
-    bottom: 12px;
+    bottom: 72px;
+  }
+  .mpa-banner {
+    left: 244px;
+    right: 64px;
+    bottom: 78px;
+  }
+  /* The decorative moon card can't fit a 390px-tall landscape next to
+     the raised zoom column (they're both right-anchored and collide).
+     PR #312 hides it on all mobile as decoration; this mirrors that
+     call for landscape so the branch is clean standalone too. */
+  .moon-widget {
+    display: none;
   }
 }
 

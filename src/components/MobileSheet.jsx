@@ -43,6 +43,8 @@ import { SstCurrentCard, SstModeToggle } from "./SstTimeline.jsx";
 import { CurrentCurrentCard } from "./CurrentTimeline.jsx";
 import { usePrefs } from "../contexts/PrefsContext.jsx";
 import ConfidenceDot from "./ConfidenceDot.jsx";
+import { activeRegion } from "../lib/region.js";
+import { track } from "../lib/analytics.js";
 
 const LAYERS = [
   { id: "sst",   label: "Temp",  unit: "°{U}" },
@@ -422,12 +424,33 @@ export default function MobileShell({
             <div className="ms-section-h">How to read this</div>
             <Info layer={layer} />
           </section>
-          {/* Tip-jar moved 2026-05-08: now lives in the topbar (the
-              tiny fish "click for WSB" link), visible on every layer
-              from the start. The mobile peek strip already hides the
-              topbar at narrow widths, so the topbar tip falls back
-              into view in the open sheet via the .topbar inside the
-              fixed shell — same affordance, less duplication. */}
+          {/* MORE — mobile homes for the topbar items hidden on phones
+              (the Paddy Finder link + tip jar carried inline styles
+              that made them overflow the topbar off-screen; see
+              mobile.css). CA-only gating mirrors the topbar. */}
+          <section className="ms-section">
+            <div className="ms-section-h">More</div>
+            <div className="ms-links">
+              {activeRegion() === "ca" && (
+                <a href="/paddies/" className="ms-link-row">
+                  <span aria-hidden="true">🪸</span>
+                  Kelp Paddy Finder
+                  <span className="ms-link-sub">beta tool</span>
+                </a>
+              )}
+              <a
+                href="https://venmo.com/u/michaelpjob"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ms-link-row"
+                onClick={() => track("tip_click", { source: "sheet" })}
+              >
+                <span aria-hidden="true">🐟</span>
+                Tip the creator
+                <span className="ms-link-sub">Venmo · click for WSB</span>
+              </a>
+            </div>
+          </section>
         </div>
       )}
 
@@ -496,6 +519,10 @@ export default function MobileShell({
           <span className="ms-status-layer">
             <span className="dot" />
             <strong>{layerNameFor(layer)}</strong>
+            {/* Active-layer confidence — the mobile stand-in for the
+                topbar badge (hidden on phones). Shows the score color
+                plus the "Nd old" tag when the layer is stale. */}
+            <ConfidenceDot layer={layer} className="ms-status-conf" />
           </span>
           <span className="ms-status-val mono">
             {focalValue}
@@ -531,7 +558,11 @@ export default function MobileShell({
                 role="tab"
                 aria-selected={active}
               >
-                <ConfidenceDot layer={L.id} className="ms-chip-conf" />
+                {/* Dot only — the stale "Nd old" text tag rendered on
+                    top of the chip label in the 6-column grid (user
+                    report 2026-07-07). Age text lives in the status
+                    row + sheet instead. */}
+                <ConfidenceDot layer={L.id} className="ms-chip-conf" showTag={false} />
                 <span className="ms-chip-label">
                   {L.label}
                   {L.beta && <span className="ms-chip-beta">Beta</span>}
