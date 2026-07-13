@@ -1,3 +1,5 @@
+# Copyright (c) 2026 Michael Job. All rights reserved.
+# Licensed under the PolyForm Strict License 1.0.0; see LICENSE.md.
 """Convergence / opportunity engine — where kelp, paddies, and fish align.
 
 Four physically-grounded fields, combined:

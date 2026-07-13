@@ -1,3 +1,5 @@
+# Copyright (c) 2026 Michael Job. All rights reserved.
+# Licensed under the PolyForm Strict License 1.0.0; see LICENSE.md.
 """Shared PNG encoders for the data pipeline.
 
 Stage 6 refactor — consolidates the linear/log10/age-sidecar PNG

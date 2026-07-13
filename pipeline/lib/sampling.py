@@ -1,3 +1,5 @@
+# Copyright (c) 2026 Michael Job. All rights reserved.
+# Licensed under the PolyForm Strict License 1.0.0; see LICENSE.md.
 """NaN-aware bilinear sampler — for resampling raster data between
 the per-fetcher source grids and the higher-resolution viz model grid.
 

@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Michael Job. All rights reserved.
+// Licensed under the PolyForm Strict License 1.0.0; see LICENSE.md.
 // Map projection helpers and mocked sea data.
 //
 // 2026-05-11 — BBOX is now region-aware (PR-FE-1). The frontend reads

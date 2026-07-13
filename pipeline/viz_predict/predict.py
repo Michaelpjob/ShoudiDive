@@ -1,3 +1,5 @@
+# Copyright (c) 2026 Michael Job. All rights reserved.
+# Licensed under the PolyForm Strict License 1.0.0; see LICENSE.md.
 """End-to-end orchestrator for the viz_predict module.
 
 Wraps zone classification + feature engineering + chl model + Secchi
