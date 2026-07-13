@@ -1,3 +1,5 @@
+# Copyright (c) 2026 Michael Job. All rights reserved.
+# Licensed under the PolyForm Strict License 1.0.0; see LICENSE.md.
 """Extract ranked 'go here' waypoints from the findability surface.
 
 peaks() returns launch-independent maxima (lat/lng/strength) — used by the

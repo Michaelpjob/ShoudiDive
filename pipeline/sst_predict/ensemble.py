@@ -1,3 +1,5 @@
+# Copyright (c) 2026 Michael Job. All rights reserved.
+# Licensed under the PolyForm Strict License 1.0.0; see LICENSE.md.
 """p10 / p50 / p90 uncertainty intervals for SST predictions.
 
 Mirror of viz_predict's p10/p50/p90 pattern. SST has three independent

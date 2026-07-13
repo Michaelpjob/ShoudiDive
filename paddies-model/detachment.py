@@ -1,3 +1,5 @@
+# Copyright (c) 2026 Michael Job. All rights reserved.
+# Licensed under the PolyForm Strict License 1.0.0; see LICENSE.md.
 """Detachment model — what rips kelp loose, and how much.
 
 Per bed, per day, we read the conditions that detach giant kelp and
