@@ -1,18 +1,23 @@
 name: Refresh CA — wind (hourly)
 
-# California — HOURLY wind/swell/currents refresh at :15 past every
-# hour. Matches the cadence of the upstream NOAA HRRR + GFS + WW3
-# +HFR sources. Triggers a separate Cloudflare deploy so the live
-# site reflects fresh wind within ~10 min of the latest model run.
+# California — HOURLY wind refresh at :15 past every hour. HRRR
+# issues a new model run every hour, so hourly is the honest max
+# cadence for the nowcast; wind5d (GFS, 4 cycles/day) rides along
+# and simply no-ops between GFS cycles. Triggers a separate
+# Cloudflare deploy so the live site reflects fresh wind within
+# ~10 min of the latest model run.
 #
-# Daily SST/chl/viz/etc refresh lives in refresh-ca-data.yml. Keeping
-# wind on its own hourly file lets us bound the per-run cost (no chl
-# blender, no viz prediction, no validation suite) and run 24x per
-# day cheaply.
+# Cadence recut 2026-07-13: wind is the priority layer and runs
+# hourly; swell (gfswave) + WW3 waves + surface currents moved to
+# the DAILY refresh-ca-data.yml. Their freshness budgets in
+# pipeline/check_manifest_freshness.py were retuned to the daily
+# cadence at the same time.
+#
+# Daily SST/chl/viz/etc refresh lives in refresh-ca-data.yml.
 
 on:
   schedule:
-    - cron: "15 */3 * * *"
+    - cron: "15 * * * *"
   workflow_dispatch:
     inputs:
       branch:
@@ -59,27 +64,11 @@ jobs:
         timeout-minutes: 15
         run: python pipeline/fetch_wind_5day.py
 
-      - name: Fetch 5-day hourly swell
+      - name: Assert wind freshness budgets
         continue-on-error: true
-        timeout-minutes: 10
-        run: python pipeline/fetch_swell_5day.py
-
-      - name: Fetch WaveWatch III nowcast
-        continue-on-error: true
-        timeout-minutes: 5
-        run: python pipeline/fetch_waves.py
-
-      - name: Fetch surface currents
-        continue-on-error: true
-        timeout-minutes: 5
-        run: python pipeline/fetch_currents.py
-
-      - name: Assert wind/swell freshness budgets
-        continue-on-error: true
-        # `wave` rides in this hourly cron (fetch_waves.py above), so its
-        # budget is asserted here where a freeze reddens runs within hours
-        # — not only in the once-a-day data workflow.
-        run: python pipeline/check_manifest_freshness.py --layers wind,wind5d,swell5d,current5d,wave --skip-top-level
+        # swell/wave/currents moved to the daily refresh-ca-data.yml
+        # (cadence recut 2026-07-13); their budgets are asserted there.
+        run: python pipeline/check_manifest_freshness.py --layers wind,wind5d --skip-top-level
 
       # Build + deploy steps were removed 2026-05-13 — data-only flow.
       # See deploy-prod.yml (triggered below) for the publish.
@@ -113,6 +102,6 @@ jobs:
         # fails the run on high-severity breaches so alert-router's
         # consecutive-failure rule escalates within hours on this hourly
         # cron. (The fetch_waves NameError of 2026-05-24 → 2026-07-04
-        # would have gone red here on day 2 instead of running silent
-        # for 41 days.)
-        run: python pipeline/check_manifest_freshness.py --layers wind,wind5d,swell5d,current5d,wave --skip-top-level --fail-on high
+        # class of freeze now reddens the DAILY data workflow instead,
+        # since wave moved there in the 2026-07-13 cadence recut.)
+        run: python pipeline/check_manifest_freshness.py --layers wind,wind5d --skip-top-level --fail-on high

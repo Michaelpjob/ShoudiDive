@@ -1,17 +1,19 @@
 name: Refresh baja — wind (hourly)
 
-# Baja Mexico (Pacific + Sea of Cortez) — HOURLY wind/swell/currents at :00.
+# Baja Mexico (Pacific + Sea of Cortez) — HOURLY wind at :00.
 # Time slot rationale: CA :15, PNW :30, tropical :45, CA-beta :50 →
 # pick :00 (top of hour) for baja. HRRR covers down to ~22°N over
 # Mexico (the full Baja peninsula and the Sea of Cortez), so HRRR
 # is the primary wind source for the whole region; GFS fallback
 # remains in fetch_wind.py for any sub-hour HRRR outages.
-# Currents are model-inferred (HFRNet has zero coverage south of
-# San Diego at ~32.5°N).
+#
+# Cadence recut 2026-07-13: wind is the priority layer and runs
+# hourly; swell (gfswave) + WW3 waves + surface currents moved to
+# the DAILY refresh-baja-data.yml.
 
 on:
   schedule:
-    - cron: "0 */3 * * *"
+    - cron: "0 * * * *"
   workflow_dispatch:
     inputs:
       branch:
@@ -60,21 +62,6 @@ jobs:
         continue-on-error: true
         timeout-minutes: 15
         run: python pipeline/fetch_wind_5day.py
-
-      - name: Fetch 5-day hourly swell
-        continue-on-error: true
-        timeout-minutes: 10
-        run: python pipeline/fetch_swell_5day.py
-
-      - name: Fetch WaveWatch III nowcast
-        continue-on-error: true
-        timeout-minutes: 5
-        run: python pipeline/fetch_waves.py
-
-      - name: Fetch surface currents (model-inferred — zero HFR coverage south of US border)
-        continue-on-error: true
-        timeout-minutes: 5
-        run: python pipeline/fetch_currents.py
 
       - name: Commit refreshed baja wind data
         if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
