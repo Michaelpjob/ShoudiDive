@@ -1,0 +1,14 @@
+# shouldidive-monitor — uptime + freshness monitoring, off GitHub Actions.
+# Deploy:  npx wrangler deploy   (from workers/monitor/)
+# Secret:  npx wrangler secret put GITHUB_TOKEN
+#          (fine-grained PAT, repo Michaelpjob/ShoudiDive, Issues: R/W)
+# Verify:  GET https://shouldidive-monitor.<subdomain>.workers.dev/status
+name = "shouldidive-monitor"
+main = "worker.js"
+compatibility_date = "2026-07-01"
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+[observability]
+enabled = true

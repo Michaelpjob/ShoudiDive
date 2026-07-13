@@ -38,12 +38,15 @@ name: Uptime monitor
 #   To route alerts to a different address, edit that page — no change
 #   needed here.
 
+# RETIRED FROM SCHEDULE 2026-07-13: continuous uptime probing moved to
+# the Cloudflare Worker in workers/monitor/ (shouldidive-monitor).
+# Rationale: during the 2026-07-10 Actions budget exhaustion this
+# monitor was blocked by the same budget that froze the pipeline, so
+# the outage produced zero alerts — monitoring must not share a
+# failure domain with what it monitors. The Worker probes every 5 min
+# (this cron had decayed to 15) and manages the same site-down rolling
+# issue. workflow_dispatch is kept as a manual escape hatch.
 on:
-  schedule:
-    # Every 5 minutes. GitHub may delay scheduled runs by up to ~15
-    # minutes during high load, but the cadence is still ~12/hour
-    # on average.
-    - cron: "*/15 * * * *"
   workflow_dispatch:
 
 # A 5-min tick can occasionally overlap a slow probe. We DO NOT cancel
