@@ -219,6 +219,27 @@ jobs:
         timeout-minutes: 25
         run: python pipeline/fetch_rtofs.py
 
+      # ---- swell / waves / currents (moved from the hourly wind
+      # workflow in the 2026-07-13 cadence recut: wind stays hourly,
+      # these refresh daily) ----
+      - name: Fetch 5-day hourly swell
+        continue-on-error: true
+        if: ${{ !inputs.force_spot_bundles }}
+        timeout-minutes: 10
+        run: python pipeline/fetch_swell_5day.py
+
+      - name: Fetch WaveWatch III nowcast
+        continue-on-error: true
+        if: ${{ !inputs.force_spot_bundles }}
+        timeout-minutes: 5
+        run: python pipeline/fetch_waves.py
+
+      - name: Fetch surface currents
+        continue-on-error: true
+        if: ${{ !inputs.force_spot_bundles }}
+        timeout-minutes: 5
+        run: python pipeline/fetch_currents.py
+
       # ---- CA validation ----
       - name: Assert chl freshness sidecar
         continue-on-error: true
@@ -230,7 +251,7 @@ jobs:
 
       - name: Assert local manifest freshness budgets
         continue-on-error: true
-        run: python pipeline/check_manifest_freshness.py --layers sst,sst7d,sst5d,chl,kd490,viz,wave,precip --check-sst-source
+        run: python pipeline/check_manifest_freshness.py --layers sst,sst7d,sst5d,chl,kd490,viz,wave,precip,swell5d,current5d --check-sst-source
 
       - name: Score SST predictions
         continue-on-error: true
@@ -371,4 +392,4 @@ jobs:
         # issue. Added after the fetch_waves NameError (2026-05-24 →
         # 2026-07-04) breached the 2-day wave budget for 41 days with the
         # finding printed into green runs.
-        run: python pipeline/check_manifest_freshness.py --layers sst,sst7d,sst5d,chl,kd490,viz,wave,precip --check-sst-source --fail-on high
+        run: python pipeline/check_manifest_freshness.py --layers sst,sst7d,sst5d,chl,kd490,viz,wave,precip,swell5d,current5d --check-sst-source --fail-on high
