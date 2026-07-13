@@ -166,6 +166,24 @@ jobs:
         timeout-minutes: 25
         run: python pipeline/fetch_rtofs.py
 
+      # ---- swell / waves / currents (moved from the hourly wind
+      # workflow in the 2026-07-13 cadence recut: wind stays hourly,
+      # these refresh daily) ----
+      - name: Fetch 5-day hourly swell
+        continue-on-error: true
+        timeout-minutes: 10
+        run: python pipeline/fetch_swell_5day.py
+
+      - name: Fetch WaveWatch III nowcast
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_waves.py
+
+      - name: Fetch surface currents (model-inferred — zero HFR coverage south of US border)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python pipeline/fetch_currents.py
+
       - name: Commit refreshed baja data
         if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         run: |

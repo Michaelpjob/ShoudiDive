@@ -47,8 +47,12 @@ SUMMARY_MAX_HOURS = {
     "sst7d": 96,
     "sst5d": 96,
     "wind5d": 8,
-    "swell5d": 8,
-    "current5d": 8,
+    # Cadence recut 2026-07-13: swell5d/current5d moved from the hourly
+    # wind workflow to the daily data workflow. 30h = daily cadence plus
+    # slack for a late/retried run; a breach still means "the daily
+    # refresh missed a full cycle", which is the signal we want.
+    "swell5d": 30,
+    "current5d": 30,
 }
 
 SUMMARY_MIN_DAYS = {
