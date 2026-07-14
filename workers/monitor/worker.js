@@ -32,8 +32,14 @@ const REPO = "Michaelpjob/ShoudiDive";
 const PROBES = [
   { name: "homepage", url: "https://shouldidive.com/" },
   { name: "manifest", url: "https://shouldidive.com/data/manifest.json" },
+  { name: "paddies", url: "https://shouldidive.com/paddies/data.json" },
 ];
 const STALE_HOURS = 36; // matches health-check.yml's critical threshold
+// Paddies rebuilds once daily (refresh-paddies.yml, 09:30 UTC). 36h =
+// one fully missed run + slack. The 2026-07-10→13 budget outage left
+// the tool on a 4-day-old snapshot with zero alerts — this probe is
+// what would have caught it.
+const PADDIES_STALE_HOURS = 36;
 const RETRY_DELAY_MS = 15_000;
 const UA = "shouldidive-monitor-worker/1.0 (+https://shouldidive.com)";
 
@@ -56,8 +62,8 @@ export default {
 };
 
 async function runChecks(env, { source, dryRun = false }) {
-  const report = { at: new Date().toISOString(), source, probes: [], stale: null };
-  let manifestBody = null;
+  const report = { at: new Date().toISOString(), source, probes: [], stale: null, paddies: null };
+  const bodies = {};
 
   for (const probe of PROBES) {
     let result = await probeOnce(probe.url);
@@ -66,37 +72,48 @@ async function runChecks(env, { source, dryRun = false }) {
       result = await probeOnce(probe.url);
       result.retried = true;
     }
-    if (probe.name === "manifest" && result.ok) manifestBody = result.body;
+    if (result.ok) bodies[probe.name] = result.body;
     delete result.body;
     report.probes.push({ name: probe.name, url: probe.url, ...result });
   }
 
   const down = report.probes.filter((p) => !p.ok);
 
-  // Freshness: generated_at age vs STALE_HOURS. Only meaningful when
-  // the manifest is reachable — an unreachable site is already "down".
-  if (manifestBody) {
-    try {
-      const m = JSON.parse(manifestBody);
-      const genAt = Date.parse(m.generated_at);
-      const ageHours = Number.isNaN(genAt) ? null : (Date.now() - genAt) / 3_600_000;
-      report.stale = {
-        generated_at: m.generated_at ?? null,
-        age_hours: ageHours == null ? null : Math.round(ageHours * 10) / 10,
-        breach: ageHours != null && ageHours > STALE_HOURS,
-      };
-    } catch (e) {
-      report.stale = { error: `manifest unparseable: ${e.message}`, breach: true };
-    }
-  }
+  // Freshness: timestamp age vs per-surface budget. Only meaningful when
+  // the surface is reachable — an unreachable site is already "down".
+  report.stale = staleCheck(bodies.manifest, (m) => m.generated_at, STALE_HOURS, "generated_at");
+  report.paddies = staleCheck(bodies.paddies, (p) => p.model_meta?.build_utc, PADDIES_STALE_HOURS, "build_utc");
 
   if (!dryRun) {
+    const anyStale = report.stale?.breach === true || report.paddies?.breach === true;
     await syncIssue(env, "site-down", down.length > 0, siteDownBody(report), report);
-    await syncIssue(env, "data-stale", report.stale?.breach === true, dataStaleBody(report), report);
+    await syncIssue(env, "data-stale", anyStale, dataStaleBody(report), report);
   }
 
   console.log(JSON.stringify({ ...report, down: down.length }));
   return report;
+}
+
+// Parse a JSON body, extract a UTC timestamp via `pick`, and grade its
+// age against `budgetHours`. Unreachable body → null (the liveness probe
+// already covers that); unparseable body or timestamp → breach (a data
+// endpoint serving garbage is a data incident, not silence).
+function staleCheck(body, pick, budgetHours, fieldName) {
+  if (body == null) return null;
+  try {
+    const parsed = JSON.parse(body);
+    const raw = pick(parsed);
+    const t = Date.parse(raw);
+    const ageHours = Number.isNaN(t) ? null : (Date.now() - t) / 3_600_000;
+    return {
+      [fieldName]: raw ?? null,
+      age_hours: ageHours == null ? null : Math.round(ageHours * 10) / 10,
+      budget_hours: budgetHours,
+      breach: ageHours == null || ageHours > budgetHours,
+    };
+  } catch (e) {
+    return { error: `unparseable: ${e.message}`, budget_hours: budgetHours, breach: true };
+  }
 }
 
 async function probeOnce(url) {
@@ -132,15 +149,16 @@ function siteDownBody(report) {
 
 function dataStaleBody(report) {
   const s = report.stale || {};
-  return [
-    `Live manifest \`generated_at\` is **${s.age_hours ?? "?"} h old** (budget ${STALE_HOURS} h).`,
-    "",
-    `- generated_at: \`${s.generated_at ?? "unparseable"}\``,
-    "- The site is up; the data pipeline has stopped landing refreshes.",
-    "- Check the refresh-*-data / refresh-*-wind workflow runs first.",
-    "",
-    `_Probed ${report.at} by the Cloudflare monitor Worker. Add label \`monitoring-paused\` to silence._`,
-  ].join("\n");
+  const p = report.paddies || {};
+  const lines = ["The site is up, but a data surface has stopped refreshing:", ""];
+  if (s.breach) {
+    lines.push(`- **Main manifest** \`generated_at\` is **${s.age_hours ?? "?"} h old** (budget ${STALE_HOURS} h): \`${s.generated_at ?? s.error ?? "unparseable"}\` — check refresh-*-data / refresh-*-wind runs.`);
+  }
+  if (p.breach) {
+    lines.push(`- **Paddies tool** \`model_meta.build_utc\` is **${p.age_hours ?? "?"} h old** (budget ${PADDIES_STALE_HOURS} h): \`${p.build_utc ?? p.error ?? "unparseable"}\` — check refresh-paddies.yml runs. Stale here means the -3d…+2d drift window is anchored days in the past.`);
+  }
+  lines.push("", `_Probed ${report.at} by the Cloudflare monitor Worker. Add label \`monitoring-paused\` to silence._`);
+  return lines.join("\n");
 }
 
 /**
