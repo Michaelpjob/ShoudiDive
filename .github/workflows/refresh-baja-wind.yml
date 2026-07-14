@@ -11,6 +11,9 @@ name: Refresh baja — wind (hourly)
 # hourly; swell (gfswave) + WW3 waves + surface currents moved to
 # the DAILY refresh-baja-data.yml.
 
+# Schedule re-registered 2026-07-14: repo-wide cron freeze after the
+# visibility flip + workflow-file merges; this commit forces GitHub to
+# re-parse and re-arm the cron triggers.
 on:
   schedule:
     - cron: "0 * * * *"
