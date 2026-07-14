@@ -29,6 +29,9 @@ name: Alert router
 # `system:alert-router` updating "last ran at T". If you stop seeing
 # that update, the router itself died and the silence is suspicious.
 
+# Schedule re-registered 2026-07-14: repo-wide cron freeze after the
+# visibility flip + workflow-file merges; this commit forces GitHub to
+# re-parse and re-arm the cron triggers.
 on:
   schedule:
     - cron: "*/30 * * * *"   # every 30 min
