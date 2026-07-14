@@ -28,6 +28,8 @@
  * (probe results remain visible via /status and the CF dashboard logs).
  */
 
+import { renderDashboard } from "./dashboard.js";
+
 const REPO = "Michaelpjob/ShoudiDive";
 const PROBES = [
   { name: "homepage", url: "https://shouldidive.com/" },
@@ -50,14 +52,19 @@ export default {
 
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname !== "/status") {
-      return new Response("shouldidive-monitor. GET /status for probe results.", { status: 404 });
+    if (url.pathname === "/status") {
+      // On-demand run never mutates issues — read-only view for humans.
+      const report = await runChecks(env, { source: "manual", dryRun: true });
+      return new Response(JSON.stringify(report, null, 2), {
+        headers: { "content-type": "application/json" },
+      });
     }
-    // On-demand run never mutates issues — read-only view for humans.
-    const report = await runChecks(env, { source: "manual", dryRun: true });
-    return new Response(JSON.stringify(report, null, 2), {
-      headers: { "content-type": "application/json" },
-    });
+    if (url.pathname === "/" || url.pathname === "/dashboard") {
+      return new Response(await renderDashboard(env), {
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    }
+    return new Response("shouldidive-monitor. GET / for the dashboard, /status for JSON.", { status: 404 });
   },
 };
 
