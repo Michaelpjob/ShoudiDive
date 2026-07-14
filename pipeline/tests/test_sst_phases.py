@@ -197,6 +197,36 @@ def test_choose_stack_shape_prefers_primary_over_fresher_fallback():
     assert shape == MUR, "coarse fallback hijacked the grid — regression is back"
 
 
+def test_choose_stack_shape_freshness_beats_resolution_past_grace():
+    """The 2026-07-10→13 pfeg outage: MUR's freshest day trails fresher
+    fallback data by MORE than PRIMARY_FRESHNESS_GRACE_DAYS. Resolution
+    must yield to freshness — the stack re-targets to the fallback grid
+    instead of pinning temperature days-old on the 1 km grid."""
+    import datetime as _dt
+    from fetch import _choose_stack_shape, PRIMARY_FRESHNESS_GRACE_DAYS
+
+    MUR = (511, 586)
+    BLEND = (206, 234)
+    d = [_dt.date(2026, 7, 13) - _dt.timedelta(days=i) for i in range(6)]
+    # Freshest three days: only the coarse fallback published. MUR's newest
+    # is 3 days behind the freshest valid day — one past the 2-day grace.
+    results = {
+        d[0]: _grid(*BLEND),   # 07-13 fallback (freshest)
+        d[1]: _grid(*BLEND),   # 07-12 fallback
+        d[2]: _grid(*BLEND),   # 07-11 fallback
+        d[3]: _grid(*MUR),     # 07-10 primary — stale past grace
+        d[4]: _grid(*MUR),     # 07-09 primary
+        d[5]: None,
+    }
+    primary_days = {d[3], d[4]}
+    assert PRIMARY_FRESHNESS_GRACE_DAYS == 2, "test written against 2d grace"
+    shape = _choose_stack_shape(d, results, lambda x: x in primary_days)
+    assert shape == BLEND, (
+        "stale primary pinned the grid past the freshness grace — the "
+        "2026-07 four-days-old-SST symptom is back"
+    )
+
+
 def test_choose_stack_shape_falls_back_when_no_primary():
     """MUR fully unavailable → accept the most-recent fallback grid."""
     import datetime as _dt
