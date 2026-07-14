@@ -675,6 +675,15 @@ def _apply_sst_nearshore_correction(*, stack: list, grid_h: int, grid_w: int) ->
     return correction_summary(layers)
 
 
+# How many days the primary source's freshest day may trail the freshest
+# valid day of ANY source before freshness beats resolution. MUR routinely
+# publishes ~2 days behind today while the coarse fallbacks run ~1 day
+# behind, so the routine 1-2 day gap stays on the 1 km grid; only a real
+# primary outage (pfeg served nothing new 2026-07-10 → 07-13 while OISST
+# had current days) crosses this line.
+PRIMARY_FRESHNESS_GRACE_DAYS = 2
+
+
 def _choose_stack_shape(
     days: list[date],
     results: dict[date, "np.ndarray | None"],
@@ -691,18 +700,29 @@ def _choose_stack_shape(
     primary-grid day as "shape differs" — the regression where SST silently
     dropped from 1 km MUR to 5 km blended whenever MUR lagged a single day.
 
-    Rule: if ANY fetched day came from the primary (non-fallback) source,
-    that source's grid wins (most-recent primary day). Only when there is no
-    primary data at all do we accept the most-recent valid day's grid — the
+    Rule: the primary source's grid wins while its newest day is within
+    PRIMARY_FRESHNESS_GRACE_DAYS of the newest valid day from ANY source.
+    Past the grace (a primary-mirror outage, not routine lag) freshness
+    beats resolution: the stack re-targets to the newest valid day's grid,
+    the manifest ``source`` flips to the fallback ("via …"), and the
+    frontend lowers confidence accordingly. Self-heals back to the primary
+    grid on the first run after the primary catches up. When there is no
+    primary data at all, accept the most-recent valid day's grid — the
     graceful all-fallback path. ``days`` is most-recent-first.
     """
-    primary = [d for d in days if results.get(d) is not None and is_primary(d)]
+    valid = [d for d in days if results.get(d) is not None]
+    if not valid:
+        return None
+    primary = [d for d in valid if is_primary(d)]
     if primary:
-        return results[primary[0]].shape
-    for d in days:
-        if results.get(d) is not None:
-            return results[d].shape
-    return None
+        lag = (valid[0] - primary[0]).days
+        if lag <= PRIMARY_FRESHNESS_GRACE_DAYS:
+            return results[primary[0]].shape
+        print(f"  primary's freshest day ({primary[0]}) trails the freshest "
+              f"valid day ({valid[0]}) by {lag}d (> {PRIMARY_FRESHNESS_GRACE_DAYS}d "
+              f"grace) — freshness beats resolution, re-targeting to the "
+              f"fallback grid", flush=True)
+    return results[valid[0]].shape
 
 
 def build_layer(layer: str, cfg: dict, end: date, want: int = 3, max_back: int = 7) -> dict | None:
