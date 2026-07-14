@@ -1,6 +1,6 @@
-# Validation watchdog — 2026-07-14T00:46Z
+# Validation watchdog — 2026-07-14T01:00Z
 
-**4 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
+**6 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
@@ -22,9 +22,21 @@ Expected `ndbc-buoy` to contribute at least one observation per cron. None seen 
 
 **Suggested action:** Inspect `pipeline/validation/ingest/ndbc.py` and the latest ingest cron's log.
 
-### 🔴 4. Published-data freshness gate found 1 issue(s)
+### 🔴 4. 1 critical external feed(s) are red
 
-Freshness/completeness failures: sst:layer_date_stale.
+A required upstream data source failed the latest feed-health probe.
+
+**Suggested action:** Inspect `pipeline/validation/data/feed_health.json`, then retry the affected fetch workflow after confirming the upstream feed recovered.
+
+### ⚠️ 5. 1 non-critical external feed(s) are red
+
+Red feeds: chl_climo_modis_pfeg. Fallbacks may keep the model running, but redundancy is degraded.
+
+**Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
+
+### 🔴 6. Published-data freshness gate found 1 issue(s)
+
+Freshness/completeness failures: sst:sst_source_query_failed.
 
 **Suggested action:** Open `pipeline/validation/data/freshness_health.json`; fix the failing fetcher or rerun the matching workflow before trusting the deploy.
 
