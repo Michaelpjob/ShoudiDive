@@ -1,3 +1,5 @@
+# Copyright (c) 2026 Michael Job. All rights reserved.
+# Licensed under the PolyForm Strict License 1.0.0; see LICENSE.md.
 """v1 water-column visibility model (PRD C1) — pure functions.
 
 Computes a per-cell two-layer profile from inputs the pipeline already

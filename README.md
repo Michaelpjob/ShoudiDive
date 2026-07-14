@@ -10,6 +10,15 @@ Live at [shouldidive.com](https://shouldidive.com). Repo name is
 **ShouldIDive** and the Vite package name is `ca-coast-conditions` —
 those mismatches are cosmetic, not bugs.
 
+## License
+
+**This is source-visible, not open source.** Copyright (c) 2026
+Michael Job. All rights reserved. The code is licensed under the
+[PolyForm Strict License 1.0.0](LICENSE.md): personal noncommercial
+reading and experimentation are permitted; commercial use,
+redistribution, and derivative works are not. See
+[NOTICE.md](NOTICE.md) for details and licensing contact.
+
 ## Regions
 
 Each region has its own bbox + data pipeline + Cloudflare Pages

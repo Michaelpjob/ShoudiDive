@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Michael Job. All rights reserved.
+// Licensed under the PolyForm Strict License 1.0.0; see LICENSE.md.
 // Water-column UI logic (PRD water-column V1-V3) — pure functions.
 //
 // Geometry + formatting for the WaterColumn widget, kept free of React

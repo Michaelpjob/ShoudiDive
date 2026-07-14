@@ -1,3 +1,5 @@
+# Copyright (c) 2026 Michael Job. All rights reserved.
+# Licensed under the PolyForm Strict License 1.0.0; see LICENSE.md.
 """+1 .. +7 day SST forecast via persistence + advection + heat flux.
 
 Two-stage propagation of today's blended field, mirroring the

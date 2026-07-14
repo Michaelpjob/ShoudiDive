@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Michael Job. All rights reserved.
+// Licensed under the PolyForm Strict License 1.0.0; see LICENSE.md.
 // Per-region, per-layer confidence scoring.
 //
 // Two layers of evidence:

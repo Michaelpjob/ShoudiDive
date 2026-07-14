@@ -1,3 +1,5 @@
+# Copyright (c) 2026 Michael Job. All rights reserved.
+# Licensed under the PolyForm Strict License 1.0.0; see LICENSE.md.
 """Zone classification: 3 latitude bands × 3 distance bands = 9 zones.
 
 Plus nearest-Channel-Island lookup with a current-regime side ('east' = warm

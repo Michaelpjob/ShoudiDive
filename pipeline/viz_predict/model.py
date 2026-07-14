@@ -1,3 +1,5 @@
+# Copyright (c) 2026 Michael Job. All rights reserved.
+# Licensed under the PolyForm Strict License 1.0.0; see LICENSE.md.
 """Three-stage chl-a prediction: climatology -> persistence -> driver model."""
 from __future__ import annotations
 import numpy as np

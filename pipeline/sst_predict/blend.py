@@ -1,3 +1,5 @@
+# Copyright (c) 2026 Michael Job. All rights reserved.
+# Licensed under the PolyForm Strict License 1.0.0; see LICENSE.md.
 """Multi-source per-cell SST blender → "now" field.
 
 Mirror of ``pipeline/chl_blend.py``: walk every satellite source in

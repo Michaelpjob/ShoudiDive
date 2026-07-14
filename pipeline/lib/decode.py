@@ -1,3 +1,5 @@
+# Copyright (c) 2026 Michael Job. All rights reserved.
+# Licensed under the PolyForm Strict License 1.0.0; see LICENSE.md.
 """PNG decoders matching the encoders in lib/encode.py + dataSource.js.
 
 The web frontend's dataSource.js owns the canonical contract for how
