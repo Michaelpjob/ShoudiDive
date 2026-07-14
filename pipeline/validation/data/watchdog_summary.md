@@ -1,6 +1,6 @@
-# Validation watchdog — 2026-07-14T00:18Z
+# Validation watchdog — 2026-07-14T00:46Z
 
-**5 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
+**4 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
@@ -22,13 +22,7 @@ Expected `ndbc-buoy` to contribute at least one observation per cron. None seen 
 
 **Suggested action:** Inspect `pipeline/validation/ingest/ndbc.py` and the latest ingest cron's log.
 
-### ⚠️ 4. 3 non-critical external feed(s) are red
-
-Red feeds: chl_dineof_nrt_4km, chl_dineof_sci_2km, kd490_dineof_2km. Fallbacks may keep the model running, but redundancy is degraded.
-
-**Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
-
-### 🔴 5. Published-data freshness gate found 1 issue(s)
+### 🔴 4. Published-data freshness gate found 1 issue(s)
 
 Freshness/completeness failures: sst:layer_date_stale.
 
