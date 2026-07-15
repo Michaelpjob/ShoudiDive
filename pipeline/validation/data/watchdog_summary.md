@@ -1,6 +1,6 @@
-# Validation watchdog — 2026-07-14T08:10Z
+# Validation watchdog — 2026-07-15T08:10Z
 
-**2 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
+**1 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
@@ -10,26 +10,20 @@ Multiple scrapers may be silently broken.
 
 **Suggested action:** Open the latest hourly ingest workflow run; look for `FAILED` lines per scraper.
 
-### 🔴 2. Published-data freshness gate found 1 issue(s)
-
-Freshness/completeness failures: sst:layer_date_stale.
-
-**Suggested action:** Open `pipeline/validation/data/freshness_health.json`; fix the failing fetcher or rerun the matching workflow before trusting the deploy.
-
 ## Per-zone metrics
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_nearshore` | 4 | 6.07 | +0.77 | 50% | 0.97 |
-| `central_nearshore` | 1 | 3.42 | -3.42 | 100% | — |
+| `bight_nearshore` | 4 | 5.72 | +1.54 | 0% | 0.97 |
+| `central_nearshore` | 1 | 2.93 | -2.93 | 100% | — |
 
 ## Per-source bias (informational)
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `cencoos` | 1 | -3.42 ft |
-| `dive-shop-diveviz` | 1 | -9.37 ft |
-| `dive-shop-justgetwet` | 3 | +4.15 ft |
+| `cencoos` | 1 | -2.93 ft |
+| `dive-shop-diveviz` | 1 | -7.67 ft |
+| `dive-shop-justgetwet` | 3 | +4.61 ft |
 
 ## How to act on this issue
 
