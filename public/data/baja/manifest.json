@@ -194,7 +194,7 @@
         25.0
       ],
       "tz": "America/Los_Angeles",
-      "generated_at": "2026-07-22T10:02:35Z"
+      "generated_at": "2026-07-23T08:20:50Z"
     },
     "wave": {
       "height_range_m": [
@@ -210,15 +210,15 @@
         "height": 110
       },
       "source": "NOAA gfswave (WaveWatch III)",
-      "generated_at": "2026-07-22T10:02:37Z",
+      "generated_at": "2026-07-23T08:20:55Z",
       "windows": {
         "now": {
           "url": "/data/wave_now.png",
-          "valid_at": "2026-07-22T06:00:00Z"
+          "valid_at": "2026-07-23T00:00:00Z"
         },
         "max_3d": {
           "url": "/data/wave_max_3d.png",
-          "valid_at": "2026-07-22T06:00:00Z"
+          "valid_at": "2026-07-23T00:00:00Z"
         }
       }
     },
@@ -238,11 +238,11 @@
       ],
       "unit": "kt",
       "vector_convention": "direction_to",
-      "generated_at": "2026-07-22T10:02:38Z",
+      "generated_at": "2026-07-23T08:20:55Z",
       "best_window": {
         "day": 4,
-        "bucket": "afternoon",
-        "mean_kt": 0.4
+        "bucket": "predawn",
+        "mean_kt": 0.33
       }
     },
     "sst": {
@@ -253,30 +253,30 @@
       "scale": "linear",
       "unit": "degC",
       "grid": {
-        "width": 576,
-        "height": 531
+        "width": 231,
+        "height": 212
       },
-      "generated_at": "2026-07-22T09:58:03Z",
+      "generated_at": "2026-07-23T08:18:34Z",
       "windows": {
         "1d": {
           "url": "/data/sst_1d.png",
           "dates": [
-            "2026-07-19"
+            "2026-07-21"
           ]
         },
         "2d": {
           "url": "/data/sst_2d.png",
           "dates": [
-            "2026-07-18",
-            "2026-07-19"
+            "2026-07-20",
+            "2026-07-21"
           ]
         },
         "3d": {
           "url": "/data/sst_3d.png",
           "dates": [
-            "2026-07-17",
-            "2026-07-18",
-            "2026-07-19"
+            "2026-07-19",
+            "2026-07-20",
+            "2026-07-21"
           ]
         }
       },
@@ -292,11 +292,11 @@
             "name": "San Clemente Basin",
             "lat": 32.499,
             "lng": -118.034,
-            "wtmp_c": 21.93,
+            "wtmp_c": 21.87,
             "mur_c": null,
             "residual_c": null,
-            "n_samples": 136,
-            "age_hours": 0.5,
+            "n_samples": 138,
+            "age_hours": 0.6,
             "skipped": "no MUR coverage at buoy location"
           },
           {
@@ -304,11 +304,11 @@
             "name": "Tanner Bank",
             "lat": 32.418,
             "lng": -119.535,
-            "wtmp_c": 19.25,
+            "wtmp_c": 18.81,
             "mur_c": null,
             "residual_c": null,
-            "n_samples": 135,
-            "age_hours": 0.6,
+            "n_samples": 134,
+            "age_hours": 0.5,
             "skipped": "no MUR coverage at buoy location"
           },
           {
@@ -316,10 +316,10 @@
             "name": "Santa Monica Basin",
             "lat": 33.765,
             "lng": -119.077,
-            "wtmp_c": 22.09,
+            "wtmp_c": 22.65,
             "mur_c": null,
             "residual_c": null,
-            "n_samples": 138,
+            "n_samples": 140,
             "age_hours": 0.5,
             "skipped": "no MUR coverage at buoy location"
           },
@@ -328,7 +328,7 @@
             "name": "Santa Maria",
             "lat": 34.937,
             "lng": -120.999,
-            "wtmp_c": 16.58,
+            "wtmp_c": 16.72,
             "mur_c": null,
             "residual_c": null,
             "n_samples": 140,
@@ -340,10 +340,10 @@
             "name": "Cape San Martin",
             "lat": 35.763,
             "lng": -121.893,
-            "wtmp_c": 15.66,
+            "wtmp_c": 15.84,
             "mur_c": null,
             "residual_c": null,
-            "n_samples": 138,
+            "n_samples": 141,
             "age_hours": 0.5,
             "skipped": "no MUR coverage at buoy location"
           },
@@ -352,10 +352,10 @@
             "name": "Monterey",
             "lat": 36.787,
             "lng": -122.408,
-            "wtmp_c": 15.76,
+            "wtmp_c": 16.15,
             "mur_c": null,
             "residual_c": null,
-            "n_samples": 138,
+            "n_samples": 140,
             "age_hours": 0.5,
             "skipped": "no MUR coverage at buoy location"
           }
@@ -366,12 +366,13 @@
         "layers": [
           {
             "name": "upwelling",
-            "contrib_frac": 0.002,
-            "max_abs_c": 0.173
+            "contrib_frac": 0.004,
+            "max_abs_c": 0.366
           }
         ]
       },
-      "source": "MUR L4 SST (1 km)",
+      "source": "NOAA Geo-polar blended SST",
+      "source_fallback": true,
       "history_summary_url": "/data/sst/summary.json",
       "forecast_summary_url": "/data/sst5d/summary.json"
     },
@@ -391,56 +392,57 @@
         "1d": {
           "url": "/data/chl_1d.png",
           "dates": [
-            "2026-07-20"
+            "2026-07-20",
+            "2026-07-21"
           ],
           "blended": true,
-          "coverage_frac": 0.557,
+          "coverage_frac": 0.559,
           "mean_age_days": 2.0,
           "sources": {
             "aqua_modis_nrt": {
               "label": "AQUA_MODIS NRT 4km",
               "priority": 1,
-              "freshest_date": "2026-07-20",
+              "freshest_date": "2026-07-21",
               "age_days": 2,
               "frames_used": 1,
-              "valid_cells_in_source": 201,
-              "cells_owned": 201
+              "valid_cells_in_source": 1046,
+              "cells_owned": 1046
             },
             "snpp_viirs_nrt": {
               "label": "SNPP_VIIRS NRT 4km",
               "priority": 2,
               "freshest_date": "2026-07-20",
-              "age_days": 2,
+              "age_days": 3,
               "frames_used": 1,
               "valid_cells_in_source": 2305,
-              "cells_owned": 2149
+              "cells_owned": 3
             },
             "s3a_olci_nrt": {
               "label": "S3A_OLCI ERR-NRT 4km",
               "priority": 3,
-              "freshest_date": "2026-07-20",
+              "freshest_date": "2026-07-21",
               "age_days": 2,
               "frames_used": 1,
-              "valid_cells_in_source": 43,
-              "cells_owned": 5
+              "valid_cells_in_source": 977,
+              "cells_owned": 977
             },
             "dineof_nrt_4km": {
               "label": "NOAA DINEOF NRT 4km",
               "priority": 4,
-              "freshest_date": "2026-07-20",
+              "freshest_date": "2026-07-21",
               "age_days": 2,
               "frames_used": 1,
               "valid_cells_in_source": 3423,
-              "cells_owned": 1961
+              "cells_owned": 2220
             },
             "cmems_globcolour": {
               "label": "Copernicus Marine GlobColour L4 (EU, gap-free)",
               "priority": 6,
-              "freshest_date": "2026-07-20",
+              "freshest_date": "2026-07-21",
               "age_days": 2,
               "frames_used": 1,
               "valid_cells_in_source": 3369,
-              "cells_owned": 630
+              "cells_owned": 716
             }
           },
           "age_days_url": "/data/chl_1d_age_days.png",
@@ -480,57 +482,57 @@
           "url": "/data/chl_2d.png",
           "dates": [
             "2026-07-18",
-            "2026-07-19",
-            "2026-07-20"
+            "2026-07-20",
+            "2026-07-21"
           ],
           "blended": true,
-          "coverage_frac": 0.558,
-          "mean_age_days": 3.17,
+          "coverage_frac": 0.559,
+          "mean_age_days": 3.0,
           "sources": {
             "aqua_modis_nrt": {
               "label": "AQUA_MODIS NRT 4km",
               "priority": 1,
-              "freshest_date": "2026-07-20",
+              "freshest_date": "2026-07-21",
               "age_days": 2,
               "frames_used": 2,
-              "valid_cells_in_source": 2139,
-              "cells_owned": 2139
+              "valid_cells_in_source": 1224,
+              "cells_owned": 1224
             },
             "snpp_viirs_nrt": {
               "label": "SNPP_VIIRS NRT 4km",
               "priority": 2,
               "freshest_date": "2026-07-20",
-              "age_days": 2,
+              "age_days": 3,
               "frames_used": 2,
               "valid_cells_in_source": 2433,
-              "cells_owned": 590
+              "cells_owned": 5
             },
             "s3a_olci_nrt": {
               "label": "S3A_OLCI ERR-NRT 4km",
               "priority": 3,
-              "freshest_date": "2026-07-20",
+              "freshest_date": "2026-07-21",
               "age_days": 2,
               "frames_used": 2,
-              "valid_cells_in_source": 542,
-              "cells_owned": 140
+              "valid_cells_in_source": 1020,
+              "cells_owned": 836
             },
             "dineof_nrt_4km": {
               "label": "NOAA DINEOF NRT 4km",
               "priority": 4,
-              "freshest_date": "2026-07-20",
+              "freshest_date": "2026-07-21",
               "age_days": 2,
               "frames_used": 2,
               "valid_cells_in_source": 3423,
-              "cells_owned": 1642
+              "cells_owned": 2208
             },
             "cmems_globcolour": {
               "label": "Copernicus Marine GlobColour L4 (EU, gap-free)",
               "priority": 6,
-              "freshest_date": "2026-07-20",
+              "freshest_date": "2026-07-21",
               "age_days": 2,
               "frames_used": 2,
               "valid_cells_in_source": 3369,
-              "cells_owned": 441
+              "cells_owned": 691
             }
           },
           "age_days_url": "/data/chl_2d_age_days.png",
@@ -572,56 +574,57 @@
             "2026-07-17",
             "2026-07-18",
             "2026-07-19",
-            "2026-07-20"
+            "2026-07-20",
+            "2026-07-21"
           ],
           "blended": true,
           "coverage_frac": 0.56,
-          "mean_age_days": 4.18,
+          "mean_age_days": 4.0,
           "sources": {
             "aqua_modis_nrt": {
               "label": "AQUA_MODIS NRT 4km",
               "priority": 1,
-              "freshest_date": "2026-07-20",
+              "freshest_date": "2026-07-21",
               "age_days": 2,
               "frames_used": 3,
-              "valid_cells_in_source": 2452,
-              "cells_owned": 2452
+              "valid_cells_in_source": 2854,
+              "cells_owned": 2854
             },
             "snpp_viirs_nrt": {
               "label": "SNPP_VIIRS NRT 4km",
               "priority": 2,
               "freshest_date": "2026-07-20",
-              "age_days": 2,
+              "age_days": 3,
               "frames_used": 3,
               "valid_cells_in_source": 2655,
-              "cells_owned": 626
+              "cells_owned": 4
             },
             "s3a_olci_nrt": {
               "label": "S3A_OLCI ERR-NRT 4km",
               "priority": 3,
-              "freshest_date": "2026-07-20",
+              "freshest_date": "2026-07-21",
               "age_days": 2,
               "frames_used": 3,
-              "valid_cells_in_source": 1620,
-              "cells_owned": 205
+              "valid_cells_in_source": 1519,
+              "cells_owned": 229
             },
             "dineof_nrt_4km": {
               "label": "NOAA DINEOF NRT 4km",
               "priority": 4,
-              "freshest_date": "2026-07-20",
+              "freshest_date": "2026-07-21",
               "age_days": 2,
               "frames_used": 3,
               "valid_cells_in_source": 3423,
-              "cells_owned": 1561
+              "cells_owned": 1640
             },
             "cmems_globcolour": {
               "label": "Copernicus Marine GlobColour L4 (EU, gap-free)",
               "priority": 6,
-              "freshest_date": "2026-07-20",
+              "freshest_date": "2026-07-21",
               "age_days": 2,
               "frames_used": 3,
               "valid_cells_in_source": 3369,
-              "cells_owned": 123
+              "cells_owned": 241
             }
           },
           "age_days_url": "/data/chl_3d_age_days.png",
@@ -658,7 +661,7 @@
           }
         }
       },
-      "source": "SNPP_VIIRS NRT 4km"
+      "source": "NOAA DINEOF NRT 4km"
     },
     "kd490": {
       "range": [
@@ -700,8 +703,8 @@
     "sst7d": {
       "summary_url": "/data/sst/summary.json",
       "grid": {
-        "width": 576,
-        "height": 531
+        "width": 231,
+        "height": 212
       },
       "range": [
         14.0,
@@ -709,7 +712,7 @@
       ],
       "scale": "linear",
       "unit": "degC",
-      "generated_at": "2026-07-22T09:58:03Z",
+      "generated_at": "2026-07-23T08:18:34Z",
       "tz": "UTC"
     },
     "sst5d": {
@@ -726,8 +729,8 @@
       "scale": "linear",
       "unit": "degC",
       "grid": {
-        "width": 576,
-        "height": 531
+        "width": 231,
+        "height": 212
       },
       "method": "persistence_decay",
       "beta": true
@@ -742,18 +745,18 @@
         "height": 110
       },
       "source": "NOAA CPC Global Unified Daily Precip (7-day cumulative)",
-      "generated_at": "2026-07-21T10:02:45Z",
+      "generated_at": "2026-07-23T08:19:46Z",
       "windows": {
         "now": {
           "url": "/data/precip_7d.png",
           "dates": [
-            "2026-07-13",
-            "2026-07-14",
             "2026-07-15",
             "2026-07-16",
             "2026-07-17",
             "2026-07-18",
-            "2026-07-19"
+            "2026-07-19",
+            "2026-07-20",
+            "2026-07-21"
           ]
         }
       }
@@ -772,17 +775,17 @@
       "source": "viz_predict (PREDICTED)",
       "beta": true,
       "beta_reason": "NorCal predictions unvalidated; chl input affected by gap-fill",
-      "generated_at": "2026-07-22T10:02:06Z",
+      "generated_at": "2026-07-23T08:20:33Z",
       "windows": {
         "now": {
           "url": "/data/viz_p50_ft.png",
           "p10_url": "/data/viz_p10_ft.png",
           "p90_url": "/data/viz_p90_ft.png",
           "quality_url": "/data/viz_quality.png",
-          "valid_at": "2026-07-22T10:02:06Z"
+          "valid_at": "2026-07-23T08:20:33Z"
         }
       }
     }
   },
-  "generated_at": "2026-07-22T09:59:45Z"
+  "generated_at": "2026-07-23T08:19:44Z"
 }
