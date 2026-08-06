@@ -68,11 +68,13 @@ multi-sensor chl — **stronger choice** because it's already merged
 across VIIRS S-NPP + NOAA-20 + Sentinel-3A OLCI AND is gap-filled by
 construction. MODIS Aqua had its own NaN gaps; DINEOF doesn't.
 
-* **Dataset**: `noaacwNPPN20S3ASCIDINEOF2kmDaily`
+* **Dataset**: `noaacwNPPN20S3ASCIDINEOFDaily` (was
+  `...DINEOF2kmDaily` until CoastWatch retired the 2 km pair in
+  2026-08 and republished at 9 km)
 * **Server**: `coastwatch.noaa.gov/erddap/griddap` (national CoastWatch
   ERDDAP — different host than the existing PFEG ERDDAP for SST + the
   legacy chl layer)
-* **Coverage**: global 2 km, science-quality NRT, ~2 day latency,
+* **Coverage**: global 9 km, science-quality NRT, ~2 day latency,
   gap-free
 * **Variable**: `chlor_a`
 

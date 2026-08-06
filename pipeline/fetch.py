@@ -243,7 +243,7 @@ LAYERS: dict[str, dict] = {
         # giving Kd priority weight when fresh.
         #
         # Source: NOAA CoastWatch ERDDAP — DINEOF-gap-filled multi-sensor
-        # (S-NPP + NOAA-20 VIIRS + Copernicus S-3A OLCI), 2 km global daily.
+        # (S-NPP + NOAA-20 VIIRS + Copernicus S-3A OLCI), 9 km global daily.
         # Same dimensions order as our chl product. We tried the NRT VIIRS-only
         # product (`noaacwNPPVIIRSkd490Daily`, 4 km, ~7 day lag) first; on a
         # typical day under coastal marine layer it has only ~11% non-NaN
@@ -252,10 +252,20 @@ LAYERS: dict[str, dict] = {
         # specifically designed to fill those holes via empirical orthogonal
         # functions — covers 100% of pixels at the cost of an extra ~4 days
         # of latency (NRT 7d → SQ-DINEOF 11d).
+        #
+        # 2026-08-06: CoastWatch retired the 2 km DINEOF pair and republished
+        # both as 9 km under ids without the `2km` infix
+        # (`...kdSCIDINEOF2kmDaily` → `...kdSCIDINEOFDaily`). The old id 404s,
+        # so the day-walk exhausted max_back and skipped the layer entirely —
+        # kd490 froze at 2026-07-04 for 33 days. There is no surviving 2 km
+        # gap-filled Kd product; 9 km (1/12°) is the resolution now available,
+        # which drops our bbox grid from ~563×491 to ~140×122. The manifest
+        # publishes the real grid, so the clients resample honestly rather
+        # than implying detail the source no longer has.
         "host":    "https://coastwatch.noaa.gov/erddap/griddap",
-        "dataset": "noaacwNPPN20S3AkdSCIDINEOF2kmDaily",
+        "dataset": "noaacwNPPN20S3AkdSCIDINEOFDaily",
         "variable": "kd_490",
-        # 2 km native resolution gives ~290×290 pixels over our bbox.
+        # 9 km native resolution gives ~140×122 pixels over our bbox.
         "stride": 1,
         # Same altitude length-1 axis as VIIRS chl.
         "pre_xy_dims": "[0]",
