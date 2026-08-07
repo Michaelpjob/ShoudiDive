@@ -802,6 +802,13 @@ function Info({ layer }) {
             <span className="swatch" style={{ background: "rgb(122,90,60)" }}></span>
             <strong>Warm brown</strong> = peak upwelling or mild bloom.
           </p>
+          <p className="info-p">
+            <strong>The gradient only fills near a real reading.</strong> Chl is
+            sparse + coarse, so each fresh retrieval blooms into a soft gradient
+            over its neighborhood and fades out beyond it. Blank = no recent
+            measurement nearby (not clear water, just no data). Color is never
+            extended past a real observation.
+          </p>
         </>
       )}
       {layer === "wind" && (

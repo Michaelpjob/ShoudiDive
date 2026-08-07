@@ -491,12 +491,13 @@ export default function DesktopLayout({
                         <strong>Warm brown</strong> = {copy.brown}
                       </p>
                       <p className="info-p">
-                        <strong>Blank areas have no observation.</strong> Each colored cell
-                        is a direct satellite retrieval at that spot — nothing is filled in
-                        from neighboring cells. Where the satellite was clouded out or the
-                        NASA feed is offline, the cell is left blank rather than guessed, so
-                        a nearshore bloom can't be painted over by clearer water nearby. A
-                        mostly-blank map means there's little real chlorophyll data right now.
+                        <strong>The gradient only fills where we have a real reading nearby.</strong>{" "}
+                        Ocean-color chlorophyll is sparse and coarse (~18 km cells, often
+                        cloud-blocked), so each fresh satellite retrieval blooms into a soft
+                        gradient over its local neighborhood and fades out beyond it — clusters
+                        of readings merge into a smooth field. <strong>Where the map is blank we
+                        have no recent measurement nearby</strong> — not clear water, just no data.
+                        The color is never extended past a real observation.
                       </p>
                     </>
                   );
