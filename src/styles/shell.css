@@ -301,16 +301,13 @@
 }
 
 @media (max-width: 760px), (hover: none) and (pointer: coarse) {
+  /* Declutter: the moon card is decorative and covered ~60px of the
+     already-cramped phone map. Hidden on mobile; still shows on desktop.
+     (If wanted back on phones, move it into the bottom sheet rather than
+     floating it over the map.) */
   .moon-widget {
-    top: 8px;
-    right: 8px;
-    padding: 6px 8px 7px;
-    width: auto;
-    max-width: calc(50vw - 16px);
+    display: none;
   }
-  .moon-widget-header { display: none; }
-  .moon-widget-name { font-size: 12px; }
-  .moon-widget-meta { font-size: 10.5px; }
 }
 
 .panel-header {
