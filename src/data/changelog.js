@@ -15,6 +15,40 @@
 
 export const CHANGELOG = [
   {
+    id: "2026-08-08",
+    date: "August 8, 2026",
+    title: "Water clarity is updating again",
+    items: [
+      {
+        type: "fixed",
+        text:
+          "The water clarity layer had been frozen on July 4 data for over a " +
+          "month. Our satellite provider renamed the dataset it comes from, so " +
+          "every daily fetch quietly came back empty and the map kept showing " +
+          "the last reading it had. It updates again. One honest note: the " +
+          "provider retired the sharper version of this product, so clarity is " +
+          "now a coarser grid than before, and it always runs about 11 days " +
+          "behind because that is how long the science-quality processing takes.",
+      },
+      {
+        type: "fixed",
+        text:
+          "A credential behind our automated data updates expired, which stopped " +
+          "wind, temperature, and clarity from refreshing for about a day. " +
+          "Everything is flowing again, and the layer age shown next to each " +
+          "layer name was accurate the whole time, so conditions were never " +
+          "presented as fresher than they were.",
+      },
+      {
+        type: "improved",
+        text:
+          "Our own staleness alarm for the clarity layer was set tighter than " +
+          "the data could ever be, so it cried wolf daily and made real outages " +
+          "easy to miss. It now matches how often the source actually publishes.",
+      },
+    ],
+  },
+  {
     id: "2026-07-08",
     date: "July 8, 2026",
     title: "The phone layout works again",
