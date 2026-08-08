@@ -61,11 +61,17 @@ const REQUIRED_LAYERS = [
 const STALE_HOURS    = 30;
 const CRITICAL_HOURS = 36;
 
-// Per-layer date staleness — same numbers as check_published.py.
-// kd490 has the longest lag (NASA OB.DAAC SQ DINEOF product is ~11 d
-// behind today by design).
+// Per-layer date staleness — same numbers as check_published.py, kept in
+// sync by test_live_probe_thresholds_match_js in test_data_integrity.py.
+//
+// kd490 has the longest lag: NOAA CoastWatch's science-quality DINEOF
+// reconstruction publishes ~11 d behind today by design. It is 14 here, not
+// the old 10 — a 10-day ceiling sat BELOW the source's own publication lag,
+// so the layer warned every day even when the fetch was perfectly healthy.
+// (The previous comment noted the ~11 d lag and set the ceiling to 10 in the
+// same breath, and credited NASA OB.DAAC, which does not serve this product.)
 const LAYER_DATE_MAX_DAYS = {
-  sst: 4, chl: 7, kd490: 10, viz: 2,
+  sst: 4, chl: 7, kd490: 14, viz: 2,
   wind: 2, wave: 2, precip: 3,
 };
 
