@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -409,7 +410,42 @@ def test_live_probe_not_stricter_than_publish_gate():
         )
 
 
-def test_coverage_guard_floors_match_gate():
+def test_live_probe_thresholds_match_js():
+    """The live probe's age ceilings exist in TWO places: check_published.py
+    (the Python probe) and tests/live-checkpoints/live-manifest.mjs (the JS
+    probe deploy-verify runs against prod). Both emit `layer_<id>_data_stale`.
+
+    Fixing only the Python copy is why kd490 kept reporting "threshold 10 d"
+    on production after its Python ceiling was already raised to 14 — the JS
+    table was the one actually talking. Keep them identical."""
+    try:
+        from pipeline.check_published import LAYER_DATE_MAX_DAYS as PY_MAX
+    except ModuleNotFoundError:
+        from check_published import LAYER_DATE_MAX_DAYS as PY_MAX
+
+    src = (REPO_ROOT / "tests" / "live-checkpoints" / "live-manifest.mjs").read_text(
+        encoding="utf-8"
+    )
+    block = re.search(
+        r"const\s+LAYER_DATE_MAX_DAYS\s*=\s*\{(.*?)\}", src, re.S
+    )
+    assert block, (
+        "could not find LAYER_DATE_MAX_DAYS in live-manifest.mjs — if it was "
+        "renamed or moved, update this test so the two tables stay linked"
+    )
+    js_max = {k: int(v) for k, v in re.findall(r"(\w+)\s*:\s*(\d+)", block.group(1))}
+
+    assert js_max, "parsed an empty LAYER_DATE_MAX_DAYS out of live-manifest.mjs"
+    assert js_max == PY_MAX, (
+        f"live-probe thresholds have drifted between languages.\n"
+        f"  live-manifest.mjs: {js_max}\n"
+        f"  check_published.py: {PY_MAX}\n"
+        f"Both emit layer_<id>_data_stale against production; a layer fixed in "
+        f"only one will keep warning from the other."
+    )
+
+
+def test_live_probe_not_stricter_than_publish_gate():
     """The producer-side coverage guard (check_coverage_guard.FLOORS) exists to
     keep test_no_nan_floods green by refusing to commit a layer below the gate's
     floor — restoring last-good instead. If the two drift apart, the guard
