@@ -79,13 +79,26 @@ GENERATED_AT_STALE_HOURS = 30
 GENERATED_AT_CRITICAL_HOURS = 36
 
 # Per-layer date freshness (when the manifest reports a layer's most-
-# recent satellite/model day in `windows.<key>.dates`). chl + kd490
-# share the ~4-day NASA OB.DAAC publication lag floor; sst's MUR L4
-# typically has a 2d lag but can stretch to 4 during gap-fill rebuilds.
+# recent satellite/model day in `windows.<key>.dates`). chl rides the
+# ~4-day NASA OB.DAAC publication lag floor; sst's MUR L4 typically has
+# a 2d lag but can stretch to 4 during gap-fill rebuilds.
+#
+# INVARIANT: no threshold here may be STRICTER than the matching entry in
+# check_manifest_freshness.LAYER_DATE_MAX_DAYS. That module is the gate that
+# decides whether data is fit to publish; this one is the probe that watches
+# what already went out. A stricter probe means we publish data and then warn
+# about it, which can never be resolved by anything the pipeline does.
+# test_live_probe_not_stricter_than_publish_gate enforces it.
 LAYER_DATE_MAX_DAYS = {
     "sst":    4,
     "chl":    7,
-    "kd490":  10,   # NASA's kd490 product is more lag-prone than chl
+    # 14, not the old 10. kd490 is NOT a NASA product — it comes from NOAA
+    # CoastWatch's science-quality DINEOF reconstruction, which publishes
+    # ~11 days behind real time. A 10-day ceiling was therefore unreachable
+    # by construction: the layer warned every single day even when the fetch
+    # was perfectly healthy. The 10 was inherited from the retired 2 km
+    # product; matches the publish gate now.
+    "kd490":  14,
     "viz":    2,
     "wind":   2,    # HRRR is sub-daily; 2d window covers a missed cron
     "wave":   2,    # gfswave is sub-daily, same logic as wind
