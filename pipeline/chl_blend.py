@@ -497,13 +497,17 @@ CHL_SOURCES: list[ChlSource] = [
         ),
     ),
     ChlSource(
-        id="dineof_sci_2km",
-        label="NOAA DINEOF SCI 2km",
+        # 2026-08-06: CoastWatch retired the 2 km DINEOF products and
+        # republished them at 9 km under ids without the `2km` infix. The old
+        # id 404s, so this source had been silently dead — the blender just
+        # fell through to lower-priority sources and never said why.
+        id="dineof_sci_9km",
+        label="NOAA DINEOF SCI 9km",
         priority=5,
         max_back=NOAA_SCI_MAX_BACK,
         fetcher=_make_noaa_erddap_fetcher(
             "https://coastwatch.noaa.gov/erddap/griddap",
-            "noaacwNPPN20S3ASCIDINEOF2kmDaily",
+            "noaacwNPPN20S3ASCIDINEOFDaily",
             has_altitude=True,
         ),
     ),
