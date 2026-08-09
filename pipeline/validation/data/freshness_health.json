@@ -1,5 +1,5 @@
 {
-  "computed_at": "2026-08-09T06:21:52Z",
+  "computed_at": "2026-08-09T06:36:34Z",
   "manifest": "public/data/manifest.json",
   "layers_checked": [
     "sst",
@@ -9,9 +9,7 @@
     "kd490",
     "viz",
     "wave",
-    "precip",
-    "swell5d",
-    "current5d"
+    "precip"
   ],
   "summary": {
     "total_findings": 1,
@@ -19,11 +17,11 @@
   },
   "findings": [
     {
-      "severity": "high",
-      "code": "summary_day_sparse",
-      "title": "Layer swell5d has sparse day summaries",
-      "layer": "swell5d",
-      "detail": "d0 buckets=2"
+      "severity": "medium",
+      "code": "sst_source_query_failed",
+      "title": "Could not query latest MUR SST source time",
+      "layer": "sst",
+      "detail": "HTTPError: 403 Client Error:  for url: https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.csv?analysed_sst%5B(last)%5D%5B(32.93)%5D%5B(-118.49)%5D"
     }
   ]
 }
