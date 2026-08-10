@@ -410,6 +410,43 @@ def test_live_probe_not_stricter_than_publish_gate():
         )
 
 
+def test_red_freshness_gates_are_debounced():
+    """Every workflow step that reddens a run on freshness breaches
+    (`--fail-on high`) must route through scripts/freshness-gate-debounce.sh,
+    which tolerates a single-cycle upstream flap (NOMADS partial hours, one
+    ERDDAP 5xx window) and goes red only on the second consecutive breach.
+
+    The gate is post-publish — red blocks nothing; its only effect is a
+    failure email + alert-router escalation. Calling the checker directly
+    with --fail-on high re-creates the 2026-08-10 state: five failure
+    emails in a day for one-hour NOMADS flaps that healed on their own.
+    A debounced step also needs GH_TOKEN in its env (the debounce reads
+    this workflow's run history) — assert that too, since a missing token
+    silently degrades to always-red."""
+    wf_dir = REPO_ROOT / ".github" / "workflows"
+    offenders, tokenless = [], []
+    for wf in sorted(wf_dir.glob("*.yml")):
+        text = wf.read_text(encoding="utf-8")
+        for line in text.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("#") or "--fail-on high" not in stripped:
+                continue
+            if "freshness-gate-debounce.sh" not in stripped:
+                offenders.append(f"{wf.name}: {stripped}")
+            elif "GH_TOKEN" not in text:
+                tokenless.append(wf.name)
+    assert not offenders, (
+        "red freshness gate(s) bypass the flap debounce — call "
+        "scripts/freshness-gate-debounce.sh instead of the checker directly:\n  "
+        + "\n  ".join(offenders)
+    )
+    assert not tokenless, (
+        "debounced gate(s) missing GH_TOKEN in the workflow env — the "
+        "run-history lookup will fail and every breach reds immediately: "
+        + ", ".join(tokenless)
+    )
+
+
 def test_live_probe_thresholds_match_js():
     """The live probe's age ceilings exist in TWO places: check_published.py
     (the Python probe) and tests/live-checkpoints/live-manifest.mjs (the JS
