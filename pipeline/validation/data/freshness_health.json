@@ -1,5 +1,5 @@
 {
-  "computed_at": "2026-08-09T06:21:52Z",
+  "computed_at": "2026-08-10T06:38:23Z",
   "manifest": "public/data/manifest.json",
   "layers_checked": [
     "sst",
@@ -14,16 +14,30 @@
     "current5d"
   ],
   "summary": {
-    "total_findings": 1,
+    "total_findings": 3,
     "healthy": false
   },
   "findings": [
+    {
+      "severity": "high",
+      "code": "layer_date_stale",
+      "title": "Layer sst is 4.3d old",
+      "layer": "sst",
+      "detail": "threshold=4d window=1d"
+    },
     {
       "severity": "high",
       "code": "summary_day_sparse",
       "title": "Layer swell5d has sparse day summaries",
       "layer": "swell5d",
       "detail": "d0 buckets=2"
+    },
+    {
+      "severity": "high",
+      "code": "sst_source_lag",
+      "title": "SST is 2.0d behind latest MUR availability",
+      "layer": "sst",
+      "detail": "published=2026-08-06 source=2026-08-08 point=San Clemente Island"
     }
   ]
 }
