@@ -1,5 +1,5 @@
 {
-  "computed_at": "2026-08-09T06:36:34Z",
+  "computed_at": "2026-08-10T06:38:23Z",
   "manifest": "public/data/manifest.json",
   "layers_checked": [
     "sst",
@@ -12,16 +12,30 @@
     "precip"
   ],
   "summary": {
-    "total_findings": 1,
+    "total_findings": 3,
     "healthy": false
   },
   "findings": [
     {
-      "severity": "medium",
-      "code": "sst_source_query_failed",
-      "title": "Could not query latest MUR SST source time",
+      "severity": "high",
+      "code": "layer_date_stale",
+      "title": "Layer sst is 4.3d old",
       "layer": "sst",
-      "detail": "HTTPError: 403 Client Error:  for url: https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.csv?analysed_sst%5B(last)%5D%5B(32.93)%5D%5B(-118.49)%5D"
+      "detail": "threshold=4d window=1d"
+    },
+    {
+      "severity": "high",
+      "code": "summary_day_sparse",
+      "title": "Layer swell5d has sparse day summaries",
+      "layer": "swell5d",
+      "detail": "d0 buckets=2"
+    },
+    {
+      "severity": "high",
+      "code": "sst_source_lag",
+      "title": "SST is 2.0d behind latest MUR availability",
+      "layer": "sst",
+      "detail": "published=2026-08-06 source=2026-08-08 point=San Clemente Island"
     }
   ]
 }
