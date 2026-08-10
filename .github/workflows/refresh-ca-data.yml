@@ -392,4 +392,13 @@ jobs:
         # issue. Added after the fetch_waves NameError (2026-05-24 →
         # 2026-07-04) breached the 2-day wave budget for 41 days with the
         # finding printed into green runs.
-        run: python pipeline/check_manifest_freshness.py --layers sst,sst7d,sst5d,chl,kd490,viz,wave,precip,swell5d,current5d --check-sst-source --fail-on high
+        #
+        # Debounced 2026-08-10: routed through freshness-gate-debounce.sh,
+        # which reds the run only when the PREVIOUS completed run of this
+        # workflow also failed. A one-cycle upstream flap (NOMADS partial
+        # hours, a single ERDDAP 5xx window) becomes a green run with a
+        # ::warning:: annotation instead of a failure email; a real
+        # outage fails every run and goes red from its second breach.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash scripts/freshness-gate-debounce.sh --layers sst,sst7d,sst5d,chl,kd490,viz,wave,precip,swell5d,current5d --check-sst-source --fail-on high

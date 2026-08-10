@@ -118,9 +118,18 @@ jobs:
             --jq '[.workflows[] | {path: .path, name: .name}]' \
             > workflow-map.json || echo '[]' > workflow-map.json
 
+          # While normalizing, also drop runs on dependabot branches from
+          # BOTH lists. A dependabot bump PR that fails Dev checks sits
+          # open for days and re-fails on every rebase, which classified
+          # as a paging p1 (issue #356, 2026-08-10) even though nothing
+          # the human owns is broken — dependabot iterates on its own.
+          # Dropped from successes too so a green dependabot run cannot
+          # close an issue about a real branch failure. (Keep jq comments
+          # apostrophe-free — the program is single-quoted shell.)
           for f in failures.json successes.json; do
             jq --slurpfile wfmap workflow-map.json '
               ($wfmap[0] | map({key: .path, value: .name}) | from_entries) as $byPath
+              | map(select((.headBranch // "") | startswith("dependabot/") | not))
               | map(.workflowName = ($byPath[.workflowName] // .workflowName))
             ' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
           done

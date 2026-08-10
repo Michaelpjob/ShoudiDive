@@ -107,4 +107,14 @@ jobs:
         # cron. (The fetch_waves NameError of 2026-05-24 → 2026-07-04
         # class of freeze now reddens the DAILY data workflow instead,
         # since wave moved there in the 2026-07-13 cadence recut.)
-        run: python pipeline/check_manifest_freshness.py --layers wind,wind5d --skip-top-level --fail-on high
+        #
+        # Debounced 2026-08-10: routed through freshness-gate-debounce.sh,
+        # which reds the run only when the PREVIOUS completed run of this
+        # workflow also failed. NOMADS routinely drops forecast hours for
+        # one GFS cycle and heals on the next (2026-08-10: five red runs
+        # alternating with green in a single day) — those flaps now end
+        # as green runs with a ::warning:: annotation; a real wind freeze
+        # fails every hourly run and goes red from its second breach.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash scripts/freshness-gate-debounce.sh --layers wind,wind5d --skip-top-level --fail-on high
