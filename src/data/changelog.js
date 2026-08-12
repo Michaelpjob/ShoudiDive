@@ -15,6 +15,27 @@
 
 export const CHANGELOG = [
   {
+    id: "2026-08-12",
+    date: "August 12, 2026",
+    title: "Temperature breaks, outlined on the map",
+    items: [
+      {
+        type: "new",
+        text:
+          "The water temperature layer now draws a thin dark line wherever " +
+          "the temperature changes sharply over a short distance (about 1 " +
+          "degree C over 10 km or steeper). These breaks are where bait and " +
+          "pelagic fish tend to stack up, and where water color often " +
+          "changes. The lines come straight from the same satellite " +
+          "temperature data the map already shows, nothing is added or " +
+          "smoothed in the temperature field itself. Turn it off in " +
+          "Settings under Temp breaks. On days when temperature falls back " +
+          "to a coarser backup satellite, the lines hide themselves rather " +
+          "than draw from blurry data.",
+      },
+    ],
+  },
+  {
     id: "2026-08-08",
     date: "August 8, 2026",
     title: "Water clarity is updating again",
