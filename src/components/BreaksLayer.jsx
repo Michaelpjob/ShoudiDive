@@ -12,7 +12,7 @@
 import { useMemo } from "react";
 import { getFitted, BBOX } from "../lib/mapData.js";
 import { getLayerGrid, isSstSourceFallback } from "../lib/dataSource.js";
-import { computeBreakMask } from "../lib/sstBreaks.js";
+import { computeBreakMask, BREAK_STRONG_C_PER_KM } from "../lib/sstBreaks.js";
 
 export default function BreaksLayer({
   width,
@@ -59,6 +59,10 @@ export default function BreaksLayer({
     <g className="breaks-layer">
       {paths.map((p) => {
         const sel = p.idx === selectedIdx;
+        // Hard breaks (peak >= the knife-edge bar) draw solid and bold;
+        // softer MUR-smeared edges draw thin + dashed. Keeps the majors
+        // unmissable without flooding the map at the lower seed.
+        const strong = p.front.maxGradient >= BREAK_STRONG_C_PER_KM;
         return (
           <g key={p.idx}>
             {/* white casing under the core = readable on warm reds,
@@ -67,8 +71,8 @@ export default function BreaksLayer({
               d={p.d}
               fill="none"
               stroke="#ffffff"
-              strokeWidth={sel ? 5 : 3.4}
-              strokeOpacity={sel ? 0.95 : 0.75}
+              strokeWidth={sel ? 5 : strong ? 3.8 : 2.8}
+              strokeOpacity={sel ? 0.95 : strong ? 0.8 : 0.6}
               strokeLinecap="round"
               strokeLinejoin="round"
               pointerEvents="none"
@@ -77,11 +81,11 @@ export default function BreaksLayer({
               d={p.d}
               fill="none"
               stroke={sel ? "#b91c1c" : "#0f172a"}
-              strokeWidth={sel ? 2.4 : 1.7}
-              strokeOpacity="0.9"
+              strokeWidth={sel ? 2.4 : strong ? 2 : 1.3}
+              strokeOpacity={sel ? 0.9 : strong ? 0.9 : 0.7}
               strokeLinecap="round"
               strokeLinejoin="round"
-              strokeDasharray={sel ? "none" : "7 3"}
+              strokeDasharray={sel || strong ? "none" : "6 4"}
               pointerEvents="none"
             />
             {/* fat invisible hit target — a 1.7px line is unclickable,

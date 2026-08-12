@@ -4,6 +4,7 @@
 
 import { useEffect, useState } from "react";
 import { BBOX } from "../lib/mapData.js";
+import { BREAK_STRONG_C_PER_KM } from "../lib/sstBreaks.js";
 import {
   buildGpsText,
   gridToLngLat,
@@ -59,7 +60,11 @@ export default function BreaksPopup({ front, grid, dataDate, onClose }) {
         </button>
         <div className="mpa-popup-head">
           <div>
-            <div className="mpa-popup-name">Temperature break</div>
+            <div className="mpa-popup-name">
+              {front.maxGradient >= BREAK_STRONG_C_PER_KM
+                ? "Temperature break — strong"
+                : "Temperature break — moderate"}
+            </div>
             <div className="mpa-popup-fullname">
               ~{front.spanKm} km front
               {dataDate ? ` · satellite data ${dataDate}` : ""}

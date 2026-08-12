@@ -16,6 +16,7 @@ import {
   BREAK_THRESHOLD_C_PER_KM,
   BREAK_THRESHOLD_LOW_C_PER_KM,
   BREAK_MIN_SPAN_KM,
+  BREAK_STRONG_C_PER_KM,
 } from "../src/lib/sstBreaks.js";
 
 // 100x100 grid over a ~1° box near 33N: ~1.1 km/px both axes. Same object
@@ -70,11 +71,14 @@ test("a locally-steep SPOT is rejected — breaks must run for miles", () => {
 test("hysteresis carries a front through its faded middle", () => {
   // One edge, strong at the ends, SMOOTHLY fading toward the middle (a
   // sharp amplitude jump would itself be a thermal edge — real fronts
-  // weaken gradually). At y=50 the contrast bottoms out at 0.32 degC over
-  // ~2 px ≈ 0.07 degC/km: BELOW the 0.1 seed threshold but above the
-  // 0.05 continuation floor. A real warm-tongue boundary does exactly
+  // weaken gradually). At y=50 the contrast bottoms out at 0.20 degC over
+  // ~2 px ≈ 0.045 degC/km: BELOW the 0.06 seed threshold but above the
+  // 0.035 continuation floor. A real warm-tongue boundary does exactly
   // this; it must stay ONE line, not two fragments with a gap.
-  const amp = (y) => 2.0 - 1.68 * Math.exp(-((y - 50) ** 2) / (2 * 12 ** 2));
+  // sigma 20 keeps the fade gentle enough that the gradient DIRECTION
+  // stays across-the-front — a steeper along-front fade rotates the
+  // direction and fragments NMS, which is fixture geometry, not physics.
+  const amp = (y) => 2.0 - 1.78 * Math.exp(-((y - 50) ** 2) / (2 * 20 ** 2));
   const res = computeBreakMask(grid((x, y) => 16 + step(x, 50, 2, amp(y))), BBOX);
   assert.equal(res.fronts.length, 1, `expected one connected front, got ${res.fronts.length}`);
   const midRows = new Set();
@@ -84,13 +88,14 @@ test("hysteresis carries a front through its faded middle", () => {
   assert.ok(midRows.size >= 10, `faded middle missing: only ${midRows.size}/13 mid rows marked`);
   // And the faded crest really is sub-seed there — otherwise this test
   // wouldn't be exercising hysteresis at all.
-  assert.ok(amp(50) / (4 * 1.11) < 0.1, "fixture no longer dips below the seed threshold");
+  assert.ok(amp(50) / (4 * 1.11) < BREAK_THRESHOLD_C_PER_KM,
+    "fixture no longer dips below the seed threshold");
 });
 
 test("a weak-everywhere edge never seeds a front", () => {
   // Entire edge sits between the low and high thresholds: hysteresis may
   // not bootstrap a line that nothing strong anchors.
-  const res = computeBreakMask(grid((x) => 16 + step(x, 50, 2, 0.35)), BBOX);
+  const res = computeBreakMask(grid((x) => 16 + step(x, 50, 2, 0.2)), BBOX);
   assert.equal(res.breakPx, 0);
 });
 
@@ -138,9 +143,12 @@ test("array-style bbox is rejected, not misread", () => {
 });
 
 test("thresholds and span are the exported knobs and stay registered", () => {
-  assert.equal(BREAK_THRESHOLD_C_PER_KM, 0.1);
-  assert.equal(BREAK_THRESHOLD_LOW_C_PER_KM, 0.05);
-  assert.equal(BREAK_MIN_SPAN_KM, 20);
+  // Recalibrated 2026-08-12 (San Nicolas/Tanner miss): MUR smears real
+  // fronts into the 0.05-0.13 band, so 0.1 only caught knife-edges.
+  assert.equal(BREAK_THRESHOLD_C_PER_KM, 0.06);
+  assert.equal(BREAK_THRESHOLD_LOW_C_PER_KM, 0.035);
+  assert.equal(BREAK_MIN_SPAN_KM, 30);
+  assert.equal(BREAK_STRONG_C_PER_KM, 0.1);
   // S5: numbers that decide what users see must be in the registry.
   const reg = JSON.parse(
     readFileSync(new URL("../pipeline/validation/knobs_registry.json", import.meta.url), "utf-8")
@@ -148,6 +156,28 @@ test("thresholds and span are the exported knobs and stay registered", () => {
   const knob = (reg.knobs || []).find((k) => k.name === "sst_breaks.front_tracing");
   assert.ok(knob, "sst_breaks.front_tracing missing from knobs_registry.json");
   assert.ok(["provisional", "fit"].includes(knob.status));
+});
+
+test("a broad MUR-smeared front is captured (San Nicolas regression)", () => {
+  // The warm-pool west wall, 2026-08-09: ~1.8 degC spread over a ~25 km
+  // transition. Peak local gradient ~0.068 degC/km — invisible at the old
+  // 0.1 seed, real and obvious to any eye on the map. tanh width 12 px
+  // (~13 km half-width) with 1.8 degC amplitude reproduces it.
+  const g = grid((x) => 16 + step(x, 50, 12, 1.8));
+  const res = computeBreakMask(g, BBOX);
+  assert.equal(res.fronts.length, 1, "the smeared wall must trace");
+  assert.ok(res.fronts[0].spanKm >= 100, "and span the grid");
+  assert.ok(res.fronts[0].maxGradient < BREAK_STRONG_C_PER_KM,
+    "fixture should be a soft front (below the strong bar)");
+  // And the old calibration really did miss it — the regression guard.
+  const old = computeBreakMask(g, BBOX, { threshold: 0.1, thresholdLow: 0.05 });
+  assert.equal(old.fronts.length, 0, "old 0.1 seed should miss the smeared wall");
+});
+
+test("fronts report their peak gradient for strength grading", () => {
+  const res = computeBreakMask(grid((x) => 16 + step(x, 50, 2, 2)), BBOX);
+  assert.ok(res.fronts[0].maxGradient >= BREAK_STRONG_C_PER_KM,
+    "a 2 degC knife-edge should grade strong");
 });
 
 test("input grid is never mutated", () => {

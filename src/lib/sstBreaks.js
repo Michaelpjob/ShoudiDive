@@ -33,9 +33,21 @@
 // passes sourceFallback=true and we return null rather than draw
 // confident lines from degraded input.
 
-export const BREAK_THRESHOLD_C_PER_KM = 0.1;   // seeds a front
-export const BREAK_THRESHOLD_LOW_C_PER_KM = 0.05; // continues one
-export const BREAK_MIN_SPAN_KM = 20;           // endpoints this far apart
+// Recalibrated 2026-08-12 after the San Nicolas / Tanner miss: the warm
+// pool's west wall carried 1.0-1.85 degC of contrast per 30 km — a
+// textbook fishable break — but MUR (a gap-filled ANALYSIS) smears sharp
+// fronts over tens of km, so its local gradient peaked at 0.06-0.08,
+// below the old 0.1 seed, and the entire wall never drew. 0.1 was
+// calibrated for knife-edges; on MUR, real major fronts live in the
+// 0.05-0.13 band (corridor transects, 2026-08-09 grid). Span floor
+// raised 20 -> 30 km to keep the lower thresholds from admitting
+// short-lived wiggles.
+export const BREAK_THRESHOLD_C_PER_KM = 0.06;  // seeds a front
+export const BREAK_THRESHOLD_LOW_C_PER_KM = 0.035; // continues one
+export const BREAK_MIN_SPAN_KM = 30;           // endpoints this far apart
+// A front whose peak gradient reaches the old knife-edge bar is a HARD
+// break — the UI draws those solid and bold, softer edges thin + dashed.
+export const BREAK_STRONG_C_PER_KM = 0.1;
 
 // 1D binomial kernel; separable pass ≈ gaussian sigma ~0.85px. Cheap and
 // enough to kill quantization noise without eating real fronts.
@@ -171,7 +183,7 @@ export function computeBreakMask(grid, bbox, opts = {}) {
     if (!crest[start] || seen[start]) continue;
     // Flood this component.
     const px = [];
-    let hasSeed = false;
+    let maxG = 0;
     let minX = w, maxX = 0, minY = h, maxY = 0;
     stack.length = 0;
     stack.push(start);
@@ -180,7 +192,7 @@ export function computeBreakMask(grid, bbox, opts = {}) {
       const c = stack.pop();
       px.push(c);
       const cx = c % w, cy = (c / w) | 0;
-      if (gmag[c] >= thHigh) hasSeed = true;
+      if (gmag[c] > maxG) maxG = gmag[c];
       if (cx < minX) minX = cx;
       if (cx > maxX) maxX = cx;
       if (cy < minY) minY = cy;
@@ -198,12 +210,13 @@ export function computeBreakMask(grid, bbox, opts = {}) {
     const spanKm = Math.sqrt(
       ((maxX - minX) * kmX) ** 2 + ((maxY - minY) * kmY) ** 2
     );
-    if (hasSeed && spanKm >= minSpanKm) {
+    if (maxG >= thHigh && spanKm >= minSpanKm) {
       for (const c of px) mask[c] = 1;
       breakPx += px.length;
       fronts.push({
         px: px.length,
         spanKm: Math.round(spanKm),
+        maxGradient: Math.round(maxG * 1000) / 1000,
         points: mainStem(px, w, kmX, kmY),
       });
     }

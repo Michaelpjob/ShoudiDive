@@ -25,8 +25,9 @@ export const CHANGELOG = [
           "The water temperature layer now traces temperature breaks as " +
           "lines: the long edges where warm and cold water meet, like the " +
           "boundary of a warm push running between the islands toward the " +
-          "coast. A break has to run at least 20 km end to end to draw, so " +
-          "you see the fronts worth pointing a boat at, not local speckle. " +
+          "coast. A break has to run at least 30 km end to end to draw, and " +
+          "the strongest walls draw bold while softer edges stay thin, so "
+          + "you see the fronts worth pointing a boat at, not local speckle. " +
           "These edges are where bait and pelagic fish tend to stack up, " +
           "and where water color often changes. The lines come straight " +
           "from the same satellite temperature data the map already shows, " +
