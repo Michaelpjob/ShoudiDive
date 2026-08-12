@@ -82,8 +82,12 @@ function smoothNaNAware(data, w, h) {
  * @param bbox  {latMin, latMax, lngMin, lngMax} of the grid — the same
  *              object shape mapData.js exports as BBOX.
  * @param opts  {threshold?, thresholdLow?, minSpanKm?, sourceFallback?}
- * @returns {mask, width, height, breakPx, oceanPx, fronts: [{px, spanKm}]}
- *          or null when the input can't support honest gradients
+ * @returns {mask, width, height, breakPx, oceanPx,
+ *           fronts: [{px, spanKm, points: [[gx,gy],...]}]} where `points`
+ *          is the front's main stem as an ORDERED, simplified polyline in
+ *          grid coordinates (endpoint to endpoint — what the UI renders
+ *          as an SVG path and what the GPS popup reads start/end from).
+ *          Returns null when the input can't support honest gradients
  *          (fallback source, tiny grid, or no finite cells).
  */
 export function computeBreakMask(grid, bbox, opts = {}) {
@@ -197,9 +201,93 @@ export function computeBreakMask(grid, bbox, opts = {}) {
     if (hasSeed && spanKm >= minSpanKm) {
       for (const c of px) mask[c] = 1;
       breakPx += px.length;
-      fronts.push({ px: px.length, spanKm: Math.round(spanKm) });
+      fronts.push({
+        px: px.length,
+        spanKm: Math.round(spanKm),
+        points: mainStem(px, w, kmX, kmY),
+      });
     }
   }
 
   return { mask, width: w, height: h, breakPx, oceanPx, fronts };
+}
+
+// ---- main-stem extraction -------------------------------------------------
+//
+// A traced component is a thin pixel chain, occasionally with short spurs
+// at junctions. The UI wants ONE clean line per front — so we take the
+// component's diameter path (the longest endpoint-to-endpoint walk):
+// two BFS passes, the standard tree-diameter trick, which naturally
+// ignores spurs. Then Douglas-Peucker to cut the point count before it
+// becomes an SVG path.
+
+function mainStem(pxList, w, kmX, kmY) {
+  const inComp = new Map(); // cell -> index into pxList
+  for (let i = 0; i < pxList.length; i++) inComp.set(pxList[i], i);
+
+  const bfs = (startCell) => {
+    const dist = new Map([[startCell, 0]]);
+    const parent = new Map();
+    const q = [startCell];
+    let far = startCell;
+    for (let qi = 0; qi < q.length; qi++) {
+      const c = q[qi];
+      const cx = c % w, cy = (c / w) | 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (!dx && !dy) continue;
+          const n = (cy + dy) * w + (cx + dx);
+          if (!inComp.has(n) || dist.has(n)) continue;
+          dist.set(n, dist.get(c) + 1);
+          parent.set(n, c);
+          if (dist.get(n) > dist.get(far)) far = n;
+          q.push(n);
+        }
+      }
+    }
+    return { far, parent };
+  };
+
+  const a = bfs(pxList[0]).far;      // farthest from an arbitrary start
+  const { far: b, parent } = bfs(a); // farthest from THAT = diameter ends
+  const chain = [];
+  for (let c = b; c !== undefined; c = parent.get(c)) {
+    chain.push([c % w, (c / w) | 0]);
+    if (c === a) break;
+  }
+
+  return simplify(chain, 1.2, kmX, kmY);
+}
+
+// Douglas-Peucker in km-space so tolerance means the same thing on
+// anisotropic grids. Tolerance in PIXELS of the finer axis.
+function simplify(points, tolPx, kmX, kmY) {
+  if (points.length <= 2) return points;
+  const tol = tolPx * Math.min(kmX, kmY);
+  const sq = (v) => v * v;
+  const keep = new Uint8Array(points.length);
+  keep[0] = keep[points.length - 1] = 1;
+  const stack = [[0, points.length - 1]];
+  while (stack.length) {
+    const [i0, i1] = stack.pop();
+    if (i1 - i0 < 2) continue;
+    const [x0, y0] = points[i0], [x1, y1] = points[i1];
+    const ax = x0 * kmX, ay = y0 * kmY, bx = x1 * kmX, by = y1 * kmY;
+    const abLen2 = sq(bx - ax) + sq(by - ay) || 1e-9;
+    let maxD = -1, maxI = -1;
+    for (let i = i0 + 1; i < i1; i++) {
+      const px = points[i][0] * kmX, py = points[i][1] * kmY;
+      const t = Math.max(0, Math.min(1,
+        ((px - ax) * (bx - ax) + (py - ay) * (by - ay)) / abLen2));
+      const d = Math.sqrt(sq(px - (ax + t * (bx - ax))) + sq(py - (ay + t * (by - ay))));
+      if (d > maxD) { maxD = d; maxI = i; }
+    }
+    if (maxD > tol) {
+      keep[maxI] = 1;
+      stack.push([i0, maxI], [maxI, i1]);
+    }
+  }
+  const out = [];
+  for (let i = 0; i < points.length; i++) if (keep[i]) out.push(points[i]);
+  return out;
 }

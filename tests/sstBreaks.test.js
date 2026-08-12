@@ -156,3 +156,22 @@ test("input grid is never mutated", () => {
   computeBreakMask(g, BBOX);
   assert.deepEqual(Array.from(g.data.slice(0, 200)), before);
 });
+
+test("each front carries an ordered main-stem polyline", () => {
+  const res = computeBreakMask(grid((x) => 16 + step(x, 50, 2, 2)), BBOX);
+  const pts = res.fronts[0].points;
+  assert.ok(Array.isArray(pts) && pts.length >= 2, "polyline missing");
+  // Ends of the stem sit at the top and bottom of the grid (the front
+  // runs the full height), and every point hugs the crest column.
+  const ys = pts.map((p) => p[1]);
+  assert.ok(Math.min(...ys) <= 3 && Math.max(...ys) >= H - 4,
+    `stem should span the grid, got rows ${Math.min(...ys)}..${Math.max(...ys)}`);
+  for (const [x] of pts) assert.ok(Math.abs(x - 50) <= 3, `stem point at column ${x}`);
+  // Ordered: monotonic along the line, not a scrambled pixel bag.
+  const dirs = new Set();
+  for (let i = 1; i < ys.length; i++) dirs.add(Math.sign(ys[i] - ys[i - 1]));
+  dirs.delete(0);
+  assert.equal(dirs.size, 1, "polyline rows should progress in one direction");
+  // Simplified: a straight line must not carry hundreds of points.
+  assert.ok(pts.length <= 12, `expected a simplified stem, got ${pts.length} points`);
+});

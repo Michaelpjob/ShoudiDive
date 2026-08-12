@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { sstColor, sstTrendColor, chlColor, getFitted, BBOX } from "../lib/mapData.js";
-import { getLayerGrid, isSstSourceFallback } from "../lib/dataSource.js";
-import { computeBreakMask } from "../lib/sstBreaks.js";
+import { sstColor, sstTrendColor, chlColor, getFitted } from "../lib/mapData.js";
+import { getLayerGrid } from "../lib/dataSource.js";
 
 // Layers rendered as discrete per-cell blocks (nearest-neighbour) rather than
 // a smoothly-interpolated field. For the observed-only clarity layers the grid
@@ -132,7 +131,7 @@ function rgbStrToArr(rgb) {
   return m ? [+m[1], +m[2], +m[3]] : [128, 128, 128];
 }
 
-export default function DataOverlay({ width, height, layer, composite, opacity, dataReady, showBreaks = false }) {
+export default function DataOverlay({ width, height, layer, composite, opacity, dataReady }) {
   // Why an offscreen canvas piped to an SVG <image> instead of a
   // <foreignObject><canvas/></foreignObject>:
   //
@@ -251,49 +250,9 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
     }
   }, [layer, composite, dataReady]);
 
-  // Temperature-break outline — a SECOND transparent canvas layered above
-  // the SST field. The SST pixels are never modified; breaks derive from
-  // the same already-loaded grid (no new fetch, no pipeline surface).
-  // Rendered only for the observed-analysis "sst" layer: sst5d is a
-  // forecast and sst-trend is already a derivative — outlining derivatives
-  // of derivatives invites false confidence.
-  const [breaksHref, setBreaksHref] = useState(null);
-  useEffect(() => {
-    if (!showBreaks || layer !== "sst") {
-      setBreaksHref(null);
-      return;
-    }
-    const grid = getLayerGrid(layer, composite);
-    const res = computeBreakMask(grid, BBOX, {
-      sourceFallback: isSstSourceFallback(),
-    });
-    if (!res) {
-      // Fallback-source day, tiny grid, or no data: honest silence
-      // beats confident lines from degraded input.
-      setBreaksHref(null);
-      return;
-    }
-    const cv = document.createElement("canvas");
-    cv.width = res.width;
-    cv.height = res.height;
-    const ctx = cv.getContext("2d");
-    const img = ctx.createImageData(res.width, res.height);
-    for (let i = 0; i < res.mask.length; i++) {
-      if (!res.mask[i]) continue;
-      // Dark slate, ~55% — visible on both the warm and cool ends of the
-      // SST ramp without shouting. Non-break pixels stay fully transparent.
-      img.data[i * 4] = 15;
-      img.data[i * 4 + 1] = 23;
-      img.data[i * 4 + 2] = 42;
-      img.data[i * 4 + 3] = 140;
-    }
-    ctx.putImageData(img, 0, 0);
-    try {
-      setBreaksHref(cv.toDataURL("image/png"));
-    } catch {
-      setBreaksHref(null);
-    }
-  }, [layer, composite, dataReady, showBreaks]);
+  // Temperature-break lines moved OUT of this component (2026-08-12):
+  // they now render as clickable vector paths in BreaksLayer.jsx, drawn
+  // after the land basemap. This component paints the raster field only.
 
   // The overlay's pixel grid is a linear lng/lat raster across the bbox, so
   // it has to live inside the same fitted rectangle that project() uses.
@@ -318,17 +277,6 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
         // into an adjacent blank one. Other layers keep smooth interpolation.
         style={{ imageRendering: PIXELATED_LAYERS.has(layer) ? "pixelated" : "auto" }}
       />
-      {breaksHref && (
-        <image
-          x={marginX}
-          y={marginY}
-          width={innerW}
-          height={innerH}
-          href={breaksHref}
-          preserveAspectRatio="none"
-          style={{ imageRendering: "auto" }}
-        />
-      )}
     </g>
   );
 }

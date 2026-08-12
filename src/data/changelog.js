@@ -35,6 +35,15 @@ export const CHANGELOG = [
           "temperature falls back to a coarser backup satellite, the lines " +
           "hide themselves rather than draw from blurry data.",
       },
+      {
+        type: "new",
+        text:
+          "Tap any break line to get its coordinates: where it starts, " +
+          "where it ends, and waypoints along the way, in both degrees " +
+          "decimal minutes and decimal degrees. One button copies the " +
+          "whole set, ready to paste into a GPS or chartplotter. A Breaks " +
+          "button next to MPAs and Bottom turns the lines on and off.",
+      },
     ],
   },
   {

@@ -146,6 +146,7 @@ export default function DesktopLayout({
   // MPA/bathy toggles (state owned by App, side-effect wrappers in MapShell)
   mpaOn, bathyOn, updateMpaOn, updateBathyOn,
   closuresOn, updateClosuresOn,
+  breaksOn, updateBreaksOn,
   // Map viewport (zoom +/− buttons + recenter)
   size, zoomAt, resetView,
   // Manifest data state (legend "no data" indicator)
@@ -243,6 +244,17 @@ export default function DesktopLayout({
               aria-pressed={closuresOn}
             >
               Navy
+            </button>
+            <button
+              type="button"
+              className={"mpa-pill" + (breaksOn ? " active" : "")}
+              onClick={(e) => { e.stopPropagation(); updateBreaksOn(!breaksOn); }}
+              title={breaksOn
+                ? "Temperature breaks traced on the Temp layer · click to hide"
+                : "Temperature breaks hidden · click to trace the fronts where warm and cold water meet"}
+              aria-pressed={breaksOn}
+            >
+              Breaks
             </button>
             <Chevron open={controlsOpen} />
           </span>
