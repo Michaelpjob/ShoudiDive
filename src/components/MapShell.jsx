@@ -31,6 +31,8 @@ import { SeaBasemap, LandBasemap, OceanMaskDefs, PLACE_LABELS } from "./Basemap.
 import DataOverlay from "./DataOverlay.jsx";
 import WindParticles from "./WindParticles.jsx";
 import MpaLayer from "./MpaLayer.jsx";
+import BreaksLayer from "./BreaksLayer.jsx";
+import BreaksPopup from "./BreaksPopup.jsx";
 import BathyLayer, {
   visibleBathyFeatures,
   bathyLabels,
@@ -67,6 +69,7 @@ import {
   getWind5dSummary,
   getCurrent5dSummary,
   getSwell5dSummary,
+  getSstWindowDates,
 } from "../lib/dataSource.js";
 import { activeRegion, dataPath } from "../lib/region.js";
 import {
@@ -246,6 +249,15 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
     const value = typeof next === "function" ? next(closuresOn) : next;
     if (!value) setSelectedClosure(null);
     setClosuresOn(value);
+  };
+  // Selected temperature break: { idx, front, grid } from BreaksLayer.
+  // Cleared when the layer is toggled off, same contract as MPA/bathy.
+  const [selectedBreak, setSelectedBreak] = useState(null);
+  const updateBreaksOn = (next) => {
+    const value = typeof next === "function" ? next(breaksOn) : next;
+    if (!value) setSelectedBreak(null);
+    setPref("breaksOn", value);
+    track("settings_change", { key: "breaksOn", value });
   };
   // Selected day index (0..6) for the closures overlay's own day-strip — it's
   // an overlay shown alongside any heatmap layer, so it owns its day state
@@ -668,7 +680,6 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
                 composite={activeComposite}
                 opacity={opacity}
                 dataReady={dataState?.ready}
-                showBreaks={breaksOn}
               />
 
               {/* Wind particles used to live here as a foreignObject child
@@ -691,6 +702,23 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
           onSelect={(mpa) => {
             track("popup_open", { kind: "mpa", type: mpa?.type || "unknown" });
             setSelectedMpa(mpa);
+          }}
+        />
+
+        {/* Temperature-break lines: above land + MPAs so the thin traces
+            stay crisp and clickable. Draws only on the observed SST layer;
+            the tracer refuses fallback-source days on its own. */}
+        <BreaksLayer
+          width={size.w}
+          height={size.h}
+          active={breaksOn}
+          layer={layer}
+          composite={activeComposite}
+          dataReady={dataState?.ready}
+          selectedIdx={selectedBreak?.idx ?? -1}
+          onSelect={(idx, front, grid) => {
+            track("popup_open", { kind: "tempbreak", span_km: front.spanKm });
+            setSelectedBreak({ idx, front, grid });
           }}
         />
 
@@ -875,8 +903,9 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
         timeOpts={timeOpts}
         layerIsReal={layerIsReal}
         activeSpot={activeSpot} setActiveSpot={setActiveSpot}
-        mpaOn={mpaOn} bathyOn={bathyOn} closuresOn={closuresOn}
+        mpaOn={mpaOn} bathyOn={bathyOn} closuresOn={closuresOn} breaksOn={breaksOn}
         updateMpaOn={updateMpaOn} updateBathyOn={updateBathyOn} updateClosuresOn={updateClosuresOn}
+        updateBreaksOn={updateBreaksOn}
         size={size} zoomAt={zoomAt} resetView={resetView}
         dataState={dataState}
         isMobile={isMobile}
@@ -894,6 +923,15 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
 
       {selectedMpa && (
         <MpaPopup mpa={selectedMpa} onClose={() => setSelectedMpa(null)} />
+      )}
+
+      {selectedBreak && (
+        <BreaksPopup
+          front={selectedBreak.front}
+          grid={selectedBreak.grid}
+          dataDate={getSstWindowDates(activeComposite)}
+          onClose={() => setSelectedBreak(null)}
+        />
       )}
 
       {selectedBathy && (
@@ -935,6 +973,7 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
         setMpaOn={updateMpaOn}
         setBathyOn={updateBathyOn}
         setClosuresOn={updateClosuresOn}
+        setBreaksOn={updateBreaksOn}
         activeSpot={activeSpot} setActiveSpot={setActiveSpot}
         bundledSpots={bundledSpots}
         openSpotDetail={openSpotDetail}

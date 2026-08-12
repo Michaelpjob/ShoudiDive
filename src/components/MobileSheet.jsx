@@ -132,6 +132,7 @@ export default function MobileShell({
   setMpaOn,
   setBathyOn,
   setClosuresOn,
+  setBreaksOn,
   activeSpot, setActiveSpot,
   timeOpts,
   compositeText,
@@ -147,7 +148,7 @@ export default function MobileShell({
   // wraps them with a popup-clearing side effect before passing them in
   // (see updateMpaOn/updateBathyOn there).
   const { prefs } = usePrefs();
-  const { units, mpaOn, bathyOn, closuresOn } = prefs;
+  const { units, mpaOn, bathyOn, closuresOn, breaksOn } = prefs;
   // wind + swell + current use slot keys; sst uses history/forecast slots
   // when loaded; chl/viz use integer composites.
   //
@@ -356,6 +357,17 @@ export default function MobileShell({
                 aria-pressed={closuresOn}
               >
                 Navy Closures
+              </button>
+              <button
+                type="button"
+                className={"mpa-pill" + (breaksOn ? " active" : "")}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setBreaksOn(!breaksOn);
+                }}
+                aria-pressed={breaksOn}
+              >
+                Temp Breaks
               </button>
             </div>
           </section>

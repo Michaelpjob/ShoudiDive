@@ -254,6 +254,14 @@ export function isSstSourceFallback() {
   return state.manifest?.layers?.sst?.source_fallback === true;
 }
 
+// Latest observation date of the SST window the map is showing — the
+// breaks popup cites it so copied waypoints carry their data vintage.
+export function getSstWindowDates(composite = 1) {
+  const win = state.layers.sst?.[slotKey("sst", composite)];
+  const dates = win?.dates;
+  return Array.isArray(dates) && dates.length ? dates[dates.length - 1] : null;
+}
+
 export function getSstHistoryStats(slotKeyStr) {
   const summary = getSstHistorySummary();
   if (!summary) return null;
