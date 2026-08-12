@@ -18,11 +18,11 @@
       "fit_against": null
     },
     {
-      "name": "sst_breaks.threshold",
-      "where": "src/lib/sstBreaks.js (BREAK_THRESHOLD_C_PER_KM = 0.1)",
+      "name": "sst_breaks.front_tracing",
+      "where": "src/lib/sstBreaks.js (BREAK_THRESHOLD_C_PER_KM=0.1, BREAK_THRESHOLD_LOW_C_PER_KM=0.05, BREAK_MIN_SPAN_KM=20)",
       "status": "provisional",
-      "affects": "which SST cells draw the temperature-break outline on the map",
-      "note": "Data-anchored, not fit: on live prod MUR grids (2026-08-11) the gradient distribution is p50=0.013, p99=0.079, p99.9=0.116 degC/km; 0.1 marks ~0.2% of ocean pixels and 69% of marked pixels recur next day (persistent structures). To earn 'fit', validate against reported break crossings from ground-truth observations."
+      "affects": "which SST fronts draw as temperature-break lines on the map",
+      "note": "Canny-style: crest pixels >=0.1 degC/km seed a front, hysteresis continues it through connected crest >=0.05, and only fronts spanning >=20 km end-to-end draw (user feedback 2026-08-12: breaks are long lines running for miles, never local spots). Data anchor from live prod MUR grids: gradient p50 0.013 / p99 0.079 / p99.9 0.116 degC/km; 69% of >=0.1 px recur next day. To earn fit, validate traced lines against reported break crossings."
     }
   ]
 }

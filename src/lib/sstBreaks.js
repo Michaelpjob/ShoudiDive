@@ -1,27 +1,41 @@
-// Temperature-break (SST front) outline, derived client-side from the SST
+// Temperature-break (SST front) LINES, derived client-side from the SST
 // grid the map is ALREADY displaying. No pipeline change, no new artifact,
-// and the SST pixels themselves are never modified — the outline renders on
-// its own transparent canvas layered above the temperature field.
+// and the SST pixels themselves are never modified — the lines render on
+// their own transparent canvas layered above the temperature field.
 //
-// Method: NaN-aware 3x3 gaussian smoothing (to suppress the 8-bit
-// quantization steps of the published PNG — range 9..25 degC over 254
-// levels = 0.063 degC/step), central-difference gradient converted to
-// degC/km via the region bbox, thresholded at BREAK_THRESHOLD_C_PER_KM.
+// v2 (2026-08-12): threshold-only masking drew BLOBS — locally-steep
+// patches that read as "dark spots". A real break is a long edge: the
+// boundary of a warm tongue pushing between Catalina and San Clemente can
+// run tens of miles to the coast, strong in places and faint in others,
+// but it is ONE line. So this now traces fronts the way Canny traces
+// edges:
 //
-// The threshold is a user-facing knob → registered provisional in
-// pipeline/validation/knobs_registry.json ("sst_breaks.threshold").
-// Empirical anchor (2026-08-11, live prod MUR grids): median gradient
-// 0.013 degC/km, p99 0.079, p99.9 0.116 — at 0.1 the mask covers ~0.2% of
-// ocean pixels and 69% of masked pixels recur the next day (real fronts
-// persist; daily wobble does not).
+//   1. smooth (NaN-aware) + gradient in degC/km          — same as v1
+//   2. non-maximum suppression along the gradient        — thin the steep
+//      direction                                            band to its
+//                                                           1-px crest
+//   3. hysteresis: pixels >= THRESHOLD seed a front; the front CONTINUES
+//      through connected crest pixels >= THRESHOLD_LOW — a strong segment
+//      carries the faded middle of the same edge, so one physical front
+//      stays one line instead of splitting into fragments
+//   4. span filter: keep only fronts whose endpoints are >= MIN_SPAN_KM
+//      apart — a locally-steep patch that doesn't RUN anywhere is noise,
+//      not a break
 //
-// Honesty (STRICT-SCIENCE): this derives from MUR L4, itself a gap-filled
-// ANALYSIS — breaks are analysis-derived, not direct observations. On days
-// SST falls back to the ~9 km blended source, gradients smear into mush;
-// the caller must pass sourceFallback=true and we return null rather than
-// draw confident lines from degraded input.
+// All three numbers are user-facing knobs → registered provisional in
+// pipeline/validation/knobs_registry.json. Empirical anchor (2026-08-11,
+// live prod MUR grids): gradient p50 0.013 / p99 0.079 / p99.9 0.116
+// degC/km; 69% of >=0.1 pixels recur next day (real fronts persist).
+//
+// Honesty (STRICT-SCIENCE): derived from MUR L4, itself a gap-filled
+// ANALYSIS — lines are analysis-derived, not direct observations. On days
+// SST falls back to the ~9 km blended source, gradients smear; the caller
+// passes sourceFallback=true and we return null rather than draw
+// confident lines from degraded input.
 
-export const BREAK_THRESHOLD_C_PER_KM = 0.1;
+export const BREAK_THRESHOLD_C_PER_KM = 0.1;   // seeds a front
+export const BREAK_THRESHOLD_LOW_C_PER_KM = 0.05; // continues one
+export const BREAK_MIN_SPAN_KM = 20;           // endpoints this far apart
 
 // 1D binomial kernel; separable pass ≈ gaussian sigma ~0.85px. Cheap and
 // enough to kill quantization noise without eating real fronts.
@@ -61,19 +75,21 @@ function smoothNaNAware(data, w, h) {
 }
 
 /**
- * Compute the break mask for an SST grid.
+ * Trace temperature-break lines on an SST grid.
  *
  * @param grid  {data: Float32Array|number[], width, height} — decoded degC,
  *              NaN = no data. NOT modified.
  * @param bbox  {latMin, latMax, lngMin, lngMax} of the grid — the same
  *              object shape mapData.js exports as BBOX.
- * @param opts  {threshold?: degC/km, sourceFallback?: boolean}
- * @returns {mask: Uint8Array, width, height, breakPx, oceanPx} or null when
- *          the input can't support honest gradients (fallback source, tiny
- *          grid, or no finite cells).
+ * @param opts  {threshold?, thresholdLow?, minSpanKm?, sourceFallback?}
+ * @returns {mask, width, height, breakPx, oceanPx, fronts: [{px, spanKm}]}
+ *          or null when the input can't support honest gradients
+ *          (fallback source, tiny grid, or no finite cells).
  */
 export function computeBreakMask(grid, bbox, opts = {}) {
-  const threshold = opts.threshold ?? BREAK_THRESHOLD_C_PER_KM;
+  const thHigh = opts.threshold ?? BREAK_THRESHOLD_C_PER_KM;
+  const thLow = opts.thresholdLow ?? BREAK_THRESHOLD_LOW_C_PER_KM;
+  const minSpanKm = opts.minSpanKm ?? BREAK_MIN_SPAN_KM;
   if (opts.sourceFallback) return null;
   if (!grid || !grid.data || !grid.width || !grid.height) return null;
   const { width: w, height: h, data } = grid;
@@ -89,25 +105,101 @@ export function computeBreakMask(grid, bbox, opts = {}) {
 
   const s = smoothNaNAware(data, w, h);
 
-  const mask = new Uint8Array(w * h);
-  let breakPx = 0;
+  // Gradient field (degC/km). Cells whose 4-neighbourhood isn't fully
+  // finite stay NaN — the honesty guard that keeps land-sea edges and
+  // no-data boundaries from ever reading as fronts.
+  const gmag = new Float32Array(w * h).fill(NaN);
+  const gxArr = new Float32Array(w * h);
+  const gyArr = new Float32Array(w * h);
   let oceanPx = 0;
   for (let y = 1; y < h - 1; y++) {
     for (let x = 1; x < w - 1; x++) {
       const c = y * w + x;
-      if (!Number.isFinite(data[c])) continue;   // honest: never mark no-data
+      if (!Number.isFinite(data[c])) continue;
       oceanPx++;
       const l = s[c - 1], r = s[c + 1], u = s[c - w], d = s[c + w];
       if (!Number.isFinite(l) || !Number.isFinite(r) ||
           !Number.isFinite(u) || !Number.isFinite(d)) continue;
       const gx = (r - l) / (2 * kmX);
       const gy = (d - u) / (2 * kmY);
-      if (Math.sqrt(gx * gx + gy * gy) >= threshold) {
-        mask[c] = 1;
-        breakPx++;
-      }
+      gxArr[c] = gx;
+      gyArr[c] = gy;
+      gmag[c] = Math.sqrt(gx * gx + gy * gy);
     }
   }
   if (oceanPx === 0) return null;
-  return { mask, width: w, height: h, breakPx, oceanPx };
+
+  // Non-maximum suppression: keep a pixel only if it is the crest of the
+  // gradient ALONG the gradient direction (i.e., across the front). This
+  // collapses the steep band to a ~1-px line that follows the edge.
+  const crest = new Uint8Array(w * h);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const c = y * w + x;
+      const g = gmag[c];
+      if (!Number.isFinite(g) || g < thLow) continue;
+      // Quantize gradient direction to 0/45/90/135 degrees.
+      const ang = Math.atan2(gyArr[c], gxArr[c]);
+      const deg = ((ang * 180) / Math.PI + 180) % 180;
+      let n1, n2;
+      if (deg < 22.5 || deg >= 157.5) { n1 = c - 1; n2 = c + 1; }
+      else if (deg < 67.5)            { n1 = c - w - 1; n2 = c + w + 1; }
+      else if (deg < 112.5)           { n1 = c - w; n2 = c + w; }
+      else                            { n1 = c - w + 1; n2 = c + w - 1; }
+      const g1 = gmag[n1], g2 = gmag[n2];
+      // A NaN neighbour never suppresses (treat as weaker).
+      if ((!Number.isFinite(g1) || g >= g1) && (!Number.isFinite(g2) || g >= g2)) {
+        crest[c] = 1;
+      }
+    }
+  }
+
+  // Hysteresis + span filter in one pass: flood each 8-connected crest
+  // component, note whether it contains a strong (>= thHigh) seed and how
+  // far apart its extremes sit. Keep components that are both seeded and
+  // long enough to be a break someone can run a boat along.
+  const mask = new Uint8Array(w * h);
+  const seen = new Uint8Array(w * h);
+  const stack = [];
+  const fronts = [];
+  let breakPx = 0;
+  for (let start = 0; start < w * h; start++) {
+    if (!crest[start] || seen[start]) continue;
+    // Flood this component.
+    const px = [];
+    let hasSeed = false;
+    let minX = w, maxX = 0, minY = h, maxY = 0;
+    stack.length = 0;
+    stack.push(start);
+    seen[start] = 1;
+    while (stack.length) {
+      const c = stack.pop();
+      px.push(c);
+      const cx = c % w, cy = (c / w) | 0;
+      if (gmag[c] >= thHigh) hasSeed = true;
+      if (cx < minX) minX = cx;
+      if (cx > maxX) maxX = cx;
+      if (cy < minY) minY = cy;
+      if (cy > maxY) maxY = cy;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (!dx && !dy) continue;
+          const nx = cx + dx, ny = cy + dy;
+          if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+          const n = ny * w + nx;
+          if (crest[n] && !seen[n]) { seen[n] = 1; stack.push(n); }
+        }
+      }
+    }
+    const spanKm = Math.sqrt(
+      ((maxX - minX) * kmX) ** 2 + ((maxY - minY) * kmY) ** 2
+    );
+    if (hasSeed && spanKm >= minSpanKm) {
+      for (const c of px) mask[c] = 1;
+      breakPx += px.length;
+      fronts.push({ px: px.length, spanKm: Math.round(spanKm) });
+    }
+  }
+
+  return { mask, width: w, height: h, breakPx, oceanPx, fronts };
 }

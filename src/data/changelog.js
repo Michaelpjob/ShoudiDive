@@ -22,16 +22,18 @@ export const CHANGELOG = [
       {
         type: "new",
         text:
-          "The water temperature layer now draws a thin dark line wherever " +
-          "the temperature changes sharply over a short distance (about 1 " +
-          "degree C over 10 km or steeper). These breaks are where bait and " +
-          "pelagic fish tend to stack up, and where water color often " +
-          "changes. The lines come straight from the same satellite " +
-          "temperature data the map already shows, nothing is added or " +
-          "smoothed in the temperature field itself. Turn it off in " +
-          "Settings under Temp breaks. On days when temperature falls back " +
-          "to a coarser backup satellite, the lines hide themselves rather " +
-          "than draw from blurry data.",
+          "The water temperature layer now traces temperature breaks as " +
+          "lines: the long edges where warm and cold water meet, like the " +
+          "boundary of a warm push running between the islands toward the " +
+          "coast. A break has to run at least 20 km end to end to draw, so " +
+          "you see the fronts worth pointing a boat at, not local speckle. " +
+          "These edges are where bait and pelagic fish tend to stack up, " +
+          "and where water color often changes. The lines come straight " +
+          "from the same satellite temperature data the map already shows, " +
+          "nothing is added or smoothed in the temperature field itself. " +
+          "Turn it off in Settings under Temp breaks. On days when " +
+          "temperature falls back to a coarser backup satellite, the lines " +
+          "hide themselves rather than draw from blurry data.",
       },
     ],
   },
