@@ -65,6 +65,25 @@ export default function SettingsPopover({ onClose }) {
           </div>
         </div>
         <div className="sp-row">
+          <span>
+            Temp breaks <span className="lt-beta">BETA</span>
+          </span>
+          <div className="sp-seg">
+            <button
+              className={prefs.breaksOn ? "active" : ""}
+              onClick={() => setPref("breaksOn", true)}
+            >
+              On
+            </button>
+            <button
+              className={!prefs.breaksOn ? "active" : ""}
+              onClick={() => setPref("breaksOn", false)}
+            >
+              Off
+            </button>
+          </div>
+        </div>
+        <div className="sp-row">
           <span>Overlay opacity</span>
           <span className="sp-val mono">{Math.round(prefs.opacity * 100)}%</span>
         </div>

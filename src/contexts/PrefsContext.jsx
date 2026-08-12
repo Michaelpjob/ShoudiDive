@@ -25,12 +25,12 @@ const OVERLAY_DEFAULTS_MIGRATION_KEY = "ca-coast-conditions:prefs:migrations:ove
 // water-column D2) — ON by default with a BETA badge, matching how
 // Current/Vis ship as visible-with-BETA-tag; the settings toggle is
 // the off-switch.
-// Declutter: Navy closures (San Clemente Island military schedule) is a
-// niche overlay that floated an ~85px card over the map on first load.
-// Default it OFF so a first-time visitor gets a clean map; the NAVY toggle
-// opts back in. Only affects users with no saved pref — existing users who
-// turned it on keep their choice.
-const DEFAULT_PREFS = { theme: "light", opacity: 0.62, units: "F", mpaOn: true, bathyOn: true, waterColumnOn: true, closuresOn: false };
+// Declutter (dev): Navy closures default OFF here — keeps dev's in-flight
+// declutter experiment; users who turned it on keep their choice.
+// breaksOn: temperature-break outline on the SST layer. Default ON — the
+// mask is sparse (~0.2% of ocean pixels at the provisional threshold) and
+// drawn thin, so presence is subtle; the Settings toggle turns it off.
+const DEFAULT_PREFS = { theme: "light", opacity: 0.62, units: "F", mpaOn: true, bathyOn: true, waterColumnOn: true, closuresOn: false, breaksOn: true };
 
 function loadPrefs() {
   try {

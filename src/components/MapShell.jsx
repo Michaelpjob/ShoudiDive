@@ -139,7 +139,7 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
   // PrefsContext — extracted in Stage 5c (2026-05-23) so they no
   // longer have to be drilled through App → MapShell as props.
   const { prefs, setPref } = usePrefs();
-  const { opacity, units, mpaOn, bathyOn, closuresOn } = prefs;
+  const { opacity, units, mpaOn, bathyOn, closuresOn, breaksOn } = prefs;
   const setMpaOn = (v) => setPref("mpaOn", v);
   const setBathyOn = (v) => setPref("bathyOn", v);
   const setClosuresOn = (v) => setPref("closuresOn", v);
@@ -668,6 +668,7 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
                 composite={activeComposite}
                 opacity={opacity}
                 dataReady={dataState?.ready}
+                showBreaks={breaksOn}
               />
 
               {/* Wind particles used to live here as a foreignObject child
