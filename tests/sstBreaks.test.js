@@ -1,15 +1,22 @@
-// Unit tests for the temperature-break mask (src/lib/sstBreaks.js).
+// Unit tests for the temperature-break line tracer (src/lib/sstBreaks.js).
 //
-// The break outline derives client-side from the SST grid the map already
-// shows. These tests pin the honesty contract: breaks appear exactly where
-// a real gradient crosses the threshold, never on no-data cells, and the
-// whole computation refuses degraded input (fallback source, tiny grids)
-// rather than drawing confident lines from mush.
+// v2 traces FRONTS, not patches: gradient crest thinning (non-maximum
+// suppression), hysteresis continuation, and a minimum end-to-end span.
+// These tests pin the product contract from user feedback (2026-08-12):
+// a break is a long line that runs for miles — the edge of a warm tongue
+// between Catalina and San Clemente reaching to the coast — never a
+// local dark spot. And the honesty contract: no-data cells are never
+// marked, land-sea edges produce nothing, degraded input is refused.
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
-import { computeBreakMask, BREAK_THRESHOLD_C_PER_KM } from "../src/lib/sstBreaks.js";
+import {
+  computeBreakMask,
+  BREAK_THRESHOLD_C_PER_KM,
+  BREAK_THRESHOLD_LOW_C_PER_KM,
+  BREAK_MIN_SPAN_KM,
+} from "../src/lib/sstBreaks.js";
 
 // 100x100 grid over a ~1° box near 33N: ~1.1 km/px both axes. Same object
 // shape as mapData.js's exported BBOX (the real caller's argument).
@@ -23,36 +30,78 @@ function grid(fill) {
   return { data, width: W, height: H };
 }
 
+// Smooth thermal step centred at x=c: tanh ramp `width` px wide, `amp`
+// degC of total contrast. Gives a controllable peak gradient without the
+// binomial smoothing changing the answer much.
+const step = (x, c, width, amp) => amp * 0.5 * (1 + Math.tanh((x - c) / width));
+
 test("uniform field has zero breaks", () => {
   const res = computeBreakMask(grid(() => 18.0), BBOX);
   assert.ok(res, "uniform field should still compute");
   assert.equal(res.breakPx, 0);
+  assert.equal(res.fronts.length, 0);
 });
 
-test("a sharp thermal step is outlined along the step, nowhere else", () => {
-  // 2 degC step at x=50 → gradient ~2/(2*1.1) ≈ 0.9 degC/km at the edge,
-  // far above threshold; far field is flat.
-  const res = computeBreakMask(grid((x) => (x < 50 ? 16 : 18)), BBOX);
-  assert.ok(res.breakPx > 0, "step should produce break pixels");
+test("a long thermal step traces as ONE thin front spanning the grid", () => {
+  const res = computeBreakMask(grid((x) => 16 + step(x, 50, 2, 2)), BBOX);
+  assert.equal(res.fronts.length, 1, "one physical edge = one front");
+  assert.ok(res.fronts[0].spanKm >= 100, `should span the grid, got ${res.fronts[0].spanKm} km`);
+  // Thin: crest suppression should keep it ~1-2 px wide, so total pixels
+  // stay close to the grid height, nowhere near a band.
+  assert.ok(res.breakPx <= 3 * H, `expected a thin line, got ${res.breakPx} px`);
   const cols = new Set();
   for (let y = 0; y < H; y++)
     for (let x = 0; x < W; x++)
       if (res.mask[y * W + x]) cols.add(x);
-  for (const c of cols) {
-    assert.ok(Math.abs(c - 50) <= 3, `break at column ${c}, expected near 50`);
-  }
+  for (const c of cols) assert.ok(Math.abs(c - 50) <= 3, `crest at column ${c}, expected near 50`);
 });
 
-test("a gentle basin-scale ramp stays below threshold", () => {
-  // 1 degC across the full 100 px (~110 km) = 0.009 degC/km — an order of
-  // magnitude under the threshold. Normal SST structure must NOT light up.
+test("a locally-steep SPOT is rejected — breaks must run for miles", () => {
+  // Hot bullseye ~6 px across: its edge ring is steep (>= threshold) but
+  // the whole structure spans well under MIN_SPAN_KM. This is exactly the
+  // "dark spots" complaint — it must not survive.
+  const res = computeBreakMask(
+    grid((x, y) => 18 + 2 * Math.exp(-((x - 50) ** 2 + (y - 50) ** 2) / 8)),
+    BBOX
+  );
+  assert.equal(res.breakPx, 0, `local bump leaked ${res.breakPx} px through the span filter`);
+});
+
+test("hysteresis carries a front through its faded middle", () => {
+  // One edge, strong at the ends, SMOOTHLY fading toward the middle (a
+  // sharp amplitude jump would itself be a thermal edge — real fronts
+  // weaken gradually). At y=50 the contrast bottoms out at 0.32 degC over
+  // ~2 px ≈ 0.07 degC/km: BELOW the 0.1 seed threshold but above the
+  // 0.05 continuation floor. A real warm-tongue boundary does exactly
+  // this; it must stay ONE line, not two fragments with a gap.
+  const amp = (y) => 2.0 - 1.68 * Math.exp(-((y - 50) ** 2) / (2 * 12 ** 2));
+  const res = computeBreakMask(grid((x, y) => 16 + step(x, 50, 2, amp(y))), BBOX);
+  assert.equal(res.fronts.length, 1, `expected one connected front, got ${res.fronts.length}`);
+  const midRows = new Set();
+  for (let y = 44; y < 57; y++)
+    for (let x = 0; x < W; x++)
+      if (res.mask[y * W + x]) midRows.add(y);
+  assert.ok(midRows.size >= 10, `faded middle missing: only ${midRows.size}/13 mid rows marked`);
+  // And the faded crest really is sub-seed there — otherwise this test
+  // wouldn't be exercising hysteresis at all.
+  assert.ok(amp(50) / (4 * 1.11) < 0.1, "fixture no longer dips below the seed threshold");
+});
+
+test("a weak-everywhere edge never seeds a front", () => {
+  // Entire edge sits between the low and high thresholds: hysteresis may
+  // not bootstrap a line that nothing strong anchors.
+  const res = computeBreakMask(grid((x) => 16 + step(x, 50, 2, 0.35)), BBOX);
+  assert.equal(res.breakPx, 0);
+});
+
+test("a gentle basin-scale ramp stays silent", () => {
   const res = computeBreakMask(grid((x) => 16 + x / 100), BBOX);
   assert.equal(res.breakPx, 0);
 });
 
 test("no-data cells are never marked, even beside a strong front", () => {
   const res = computeBreakMask(
-    grid((x, y) => (y < 10 ? NaN : x < 50 ? 16 : 18)),
+    grid((x, y) => (y < 10 ? NaN : 16 + step(x, 50, 2, 2))),
     BBOX
   );
   for (let y = 0; y < 10; y++)
@@ -61,19 +110,13 @@ test("no-data cells are never marked, even beside a strong front", () => {
 });
 
 test("land-sea edges do not read as breaks", () => {
-  // Coast: NaN land against 18 degC water, uniform temperature. The
-  // NaN-aware smoothing must not fabricate a gradient at the coastline —
-  // that would outline every beach as a permanent 'break'.
-  const res = computeBreakMask(
-    grid((x) => (x < 30 ? NaN : 18.0)),
-    BBOX
-  );
+  const res = computeBreakMask(grid((x) => (x < 30 ? NaN : 18.0)), BBOX);
   assert.ok(res, "coastal field should compute");
   assert.equal(res.breakPx, 0, "uniform water beside land must have no breaks");
 });
 
 test("refuses fallback-source input entirely", () => {
-  const res = computeBreakMask(grid((x) => (x < 50 ? 16 : 18)), BBOX, {
+  const res = computeBreakMask(grid((x) => 16 + step(x, 50, 2, 2)), BBOX, {
     sourceFallback: true,
   });
   assert.equal(res, null);
@@ -85,28 +128,30 @@ test("refuses grids too coarse to mean anything", () => {
   assert.equal(computeBreakMask({ data, width: w, height: h }, BBOX), null);
 });
 
-test("threshold is the exported knob and stays registered", () => {
-  assert.equal(BREAK_THRESHOLD_C_PER_KM, 0.1);
-  // S5: the number that decides what users see must be in the registry.
-  const reg = JSON.parse(
-    readFileSync(new URL("../pipeline/validation/knobs_registry.json", import.meta.url), "utf-8")
-  );
-  const knob = (reg.knobs || []).find((k) => k.name === "sst_breaks.threshold");
-  assert.ok(knob, "sst_breaks.threshold missing from knobs_registry.json");
-  assert.ok(["provisional", "fit"].includes(knob.status));
-});
-
 test("array-style bbox is rejected, not misread", () => {
   // The first live render crashed on exactly this: an array bbox
   // destructured as an object yields undefined bounds. Must return null,
   // never throw or silently compute garbage km-per-pixel.
-  const g = grid((x) => (x < 50 ? 16 : 18));
+  const g = grid((x) => 16 + step(x, 50, 2, 2));
   assert.equal(computeBreakMask(g, [-118, 32.5, -117, 33.5]), null);
   assert.equal(computeBreakMask(g, null), null);
 });
 
+test("thresholds and span are the exported knobs and stay registered", () => {
+  assert.equal(BREAK_THRESHOLD_C_PER_KM, 0.1);
+  assert.equal(BREAK_THRESHOLD_LOW_C_PER_KM, 0.05);
+  assert.equal(BREAK_MIN_SPAN_KM, 20);
+  // S5: numbers that decide what users see must be in the registry.
+  const reg = JSON.parse(
+    readFileSync(new URL("../pipeline/validation/knobs_registry.json", import.meta.url), "utf-8")
+  );
+  const knob = (reg.knobs || []).find((k) => k.name === "sst_breaks.front_tracing");
+  assert.ok(knob, "sst_breaks.front_tracing missing from knobs_registry.json");
+  assert.ok(["provisional", "fit"].includes(knob.status));
+});
+
 test("input grid is never mutated", () => {
-  const g = grid((x) => (x < 50 ? 16 : 18));
+  const g = grid((x) => 16 + step(x, 50, 2, 2));
   const before = Array.from(g.data.slice(0, 200));
   computeBreakMask(g, BBOX);
   assert.deepEqual(Array.from(g.data.slice(0, 200)), before);
