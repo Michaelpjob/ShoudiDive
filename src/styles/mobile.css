@@ -383,9 +383,12 @@
 .ms-overlay-row {
   display: flex;
   gap: 10px;
+  /* 4 overlay pills since Temp Breaks (2026-08-12): let the row wrap
+     into a 2x2 instead of crushing four labels onto one line. */
+  flex-wrap: wrap;
 }
 .ms-overlay-row .mpa-pill {
-  flex: 1;
+  flex: 1 1 40%;
   /* Bumped from padding: 9px 8px (~29px tall) to a 44px tappable
      button. User report 2026-05-04: "the turning on and off of
      the mpa + bottom layer is difficult". */

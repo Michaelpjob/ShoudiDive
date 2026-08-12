@@ -217,7 +217,7 @@ export default function DesktopLayout({
           onClick={() => setControlsOpen((v) => !v)}
         >
           <span className="panel-title">Layer</span>
-          <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", justifyContent: "flex-end", rowGap: 4 }}>
             <button
               type="button"
               className={"mpa-pill" + (mpaOn ? " active" : "")}

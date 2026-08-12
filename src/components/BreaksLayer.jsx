@@ -44,10 +44,25 @@ export default function BreaksLayer({
     const px = (gx) => marginX + ((gx + 0.5) / traced.gw) * innerW;
     const py = (gy) => marginY + ((gy + 0.5) / traced.gh) * innerH;
     return traced.fronts.map((f, idx) => {
-      let d = "";
-      for (let i = 0; i < f.points.length; i++) {
-        const [gx, gy] = f.points[i];
-        d += `${i ? "L" : "M"}${px(gx).toFixed(2)} ${py(gy).toFixed(2)}`;
+      // Catmull-Rom spline through the stem points, emitted as cubic
+      // Béziers. The stem is a Douglas-Peucker skeleton — straight L
+      // segments between its vertices render as angular pixel-walks
+      // ("clunky", user 2026-08-12); the spline turns the same skeleton
+      // into the flowing contour a front actually is. Endpoints are
+      // interpolated exactly, so the GPS popup's start/end coordinates
+      // still sit on the drawn line.
+      const pts = f.points.map(([gx, gy]) => [px(gx), py(gy)]);
+      let d = `M${pts[0][0].toFixed(2)} ${pts[0][1].toFixed(2)}`;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = pts[Math.max(0, i - 1)];
+        const p1 = pts[i];
+        const p2 = pts[i + 1];
+        const p3 = pts[Math.min(pts.length - 1, i + 2)];
+        const c1x = p1[0] + (p2[0] - p0[0]) / 6;
+        const c1y = p1[1] + (p2[1] - p0[1]) / 6;
+        const c2x = p2[0] - (p3[0] - p1[0]) / 6;
+        const c2y = p2[1] - (p3[1] - p1[1]) / 6;
+        d += `C${c1x.toFixed(2)} ${c1y.toFixed(2)} ${c2x.toFixed(2)} ${c2y.toFixed(2)} ${p2[0].toFixed(2)} ${p2[1].toFixed(2)}`;
       }
       return { idx, d, front: f };
     });
@@ -66,13 +81,14 @@ export default function BreaksLayer({
         return (
           <g key={p.idx}>
             {/* white casing under the core = readable on warm reds,
-                cold blues, and the land basemap alike */}
+                cold blues, and the land basemap alike. Kept slim — the
+                heavy casing is what made v3 read as outlined worms. */}
             <path
               d={p.d}
               fill="none"
               stroke="#ffffff"
-              strokeWidth={sel ? 5 : strong ? 3.8 : 2.8}
-              strokeOpacity={sel ? 0.95 : strong ? 0.8 : 0.6}
+              strokeWidth={sel ? 4 : strong ? 2.8 : 2.2}
+              strokeOpacity={sel ? 0.9 : strong ? 0.65 : 0.5}
               strokeLinecap="round"
               strokeLinejoin="round"
               pointerEvents="none"
@@ -80,12 +96,14 @@ export default function BreaksLayer({
             <path
               d={p.d}
               fill="none"
-              stroke={sel ? "#b91c1c" : "#0f172a"}
-              strokeWidth={sel ? 2.4 : strong ? 2 : 1.3}
-              strokeOpacity={sel ? 0.9 : strong ? 0.9 : 0.7}
+              stroke={sel ? "#b91c1c" : "#1e293b"}
+              strokeWidth={sel ? 2.2 : strong ? 1.6 : 1.2}
+              strokeOpacity={sel ? 0.9 : strong ? 0.85 : 0.65}
               strokeLinecap="round"
               strokeLinejoin="round"
-              strokeDasharray={sel || strong ? "none" : "6 4"}
+              // Soft fronts: round-cap bead dots — quieter than dashes,
+              // still clearly "a traced line, lighter than the solid ones".
+              strokeDasharray={sel || strong ? "none" : "0.1 5"}
               pointerEvents="none"
             />
             {/* fat invisible hit target — a 1.7px line is unclickable,
