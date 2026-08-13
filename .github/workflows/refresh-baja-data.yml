@@ -13,6 +13,11 @@ name: Refresh baja — data (daily)
 on:
   schedule:
     - cron: "30 7 * * *"
+    # Second daily pass — same rationale as refresh-ca-data.yml: MUR
+    # publishes mid-day UTC, after the morning cron has already run.
+    # Offset 30 min from CA's 18:00 pass so the two never contend for
+    # the same upstream window or push-race on main.
+    - cron: "30 18 * * *"
   workflow_dispatch:
     inputs:
       branch:
