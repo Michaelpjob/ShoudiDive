@@ -1,6 +1,6 @@
 name: Refresh CA — data (daily)
 
-# California — DAILY data refresh at 06:00 UTC.
+# California — data refresh at 06:00 and 18:00 UTC (see cron comments).
 # Pulls SST + chl + kd490 + viz + precip + rivers + tides + bathy +
 # coastline + MPA. Bathy + coastline are one-shots (idempotent). The
 # wind/swell/currents layers refresh on their own hourly schedule —
@@ -13,6 +13,16 @@ name: Refresh CA — data (daily)
 on:
   schedule:
     - cron: "0 6 * * *"
+    # Second daily pass (2026-08-13, user-approved): MUR publishes its
+    # daily analysis mid-day UTC, hours AFTER the 06:00 run — on
+    # 2026-08-12 the morning cron 404'd Aug 10-12 across all three SST
+    # sources, then MUR published both Aug 10 and 11 later that same
+    # day, leaving prod a needless 2 days staler until the next
+    # morning. The 18:00 pass catches same-day publications and holds
+    # typical SST staleness at the ~2-day source floor. Idempotent:
+    # when nothing new is published, the unchanged-data sentinel makes
+    # the run a cheap no-op commit-wise.
+    - cron: "0 18 * * *"
   workflow_dispatch:
     inputs:
       branch:

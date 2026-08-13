@@ -278,7 +278,7 @@ silently displays wrong ocean conditions to divers.
 
 ### Auto-data refresh
 
-`refresh-data.yml` runs daily at 06:00 UTC and on push to `main`. It
+`refresh-data.yml` runs twice daily (06:00 + 18:00 UTC; the afternoon pass catches MUR's mid-day publication) and on push to `main`. It
 ALSO deploys to production (Cloudflare Pages) and commits refreshed
 PNGs back to main. This is the one workflow that touches main
 directly — it runs as `github-actions[bot]`, scoped to the
