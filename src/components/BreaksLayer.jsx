@@ -87,8 +87,8 @@ export default function BreaksLayer({
               d={p.d}
               fill="none"
               stroke="#ffffff"
-              strokeWidth={sel ? 4 : strong ? 2.8 : 2.2}
-              strokeOpacity={sel ? 0.9 : strong ? 0.65 : 0.5}
+              strokeWidth={sel ? 3.2 : strong ? 2 : 1.6}
+              strokeOpacity={sel ? 0.9 : strong ? 0.55 : 0.4}
               strokeLinecap="round"
               strokeLinejoin="round"
               pointerEvents="none"
@@ -97,7 +97,7 @@ export default function BreaksLayer({
               d={p.d}
               fill="none"
               stroke={sel ? "#b91c1c" : "#1e293b"}
-              strokeWidth={sel ? 2.2 : strong ? 1.6 : 1.2}
+              strokeWidth={sel ? 1.8 : strong ? 1.1 : 0.8}
               strokeOpacity={sel ? 0.9 : strong ? 0.85 : 0.65}
               strokeLinecap="round"
               strokeLinejoin="round"
