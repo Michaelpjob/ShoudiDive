@@ -16,6 +16,13 @@
       "affects": "viz_p10/p50/p90 everywhere (the app's primary output)",
       "note": "The visibility model's turbidity/chl/wind/swell coefficients are expert-set, not regression-fit. Current hindcast on the handful of scored pairs shows r near 0, we do not yet have evidence they track reality. Refitting against residuals.jsonl is Phase 2 of the remediation plan.",
       "fit_against": null
+    },
+    {
+      "name": "sst_breaks.front_tracing",
+      "where": "src/lib/sstBreaks.js (BREAK_THRESHOLD_C_PER_KM=0.06, BREAK_THRESHOLD_LOW_C_PER_KM=0.035, BREAK_MIN_SPAN_KM=30, BREAK_STRONG_C_PER_KM=0.1)",
+      "status": "provisional",
+      "affects": "which SST fronts draw as temperature-break lines on the map",
+      "note": "Recalibrated 2026-08-12 after the San Nicolas/Tanner miss: the warm-pool west wall held 1.0-1.85 degC per 30 km (a textbook fishable break) but MUR smears fronts, capping its local gradient at 0.06-0.08 \u2014 below the old 0.1 seed, so the whole wall was invisible. New calibration on the 2026-08-09 grid: seed 0.06 / continue 0.035 / span 30 km traces the wall continuously on 3 consecutive days (55/57/37 fronts statewide, 1.5% of ocean px). Fronts peaking >= 0.1 style as strong (solid/bold), softer ones thin/dashed. To earn fit, validate traced lines against reported break crossings."
     }
   ]
 }

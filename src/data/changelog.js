@@ -15,6 +15,39 @@
 
 export const CHANGELOG = [
   {
+    id: "2026-08-12",
+    date: "August 12, 2026",
+    title: "Temperature breaks, outlined on the map",
+    items: [
+      {
+        type: "new",
+        text:
+          "The water temperature layer now traces temperature breaks as " +
+          "lines: the long edges where warm and cold water meet, like the " +
+          "boundary of a warm push running between the islands toward the " +
+          "coast. A break has to run at least 30 km end to end to draw, and " +
+          "the strongest walls draw bold while softer edges stay thin, so "
+          + "you see the fronts worth pointing a boat at, not local speckle. " +
+          "These edges are where bait and pelagic fish tend to stack up, " +
+          "and where water color often changes. The lines come straight " +
+          "from the same satellite temperature data the map already shows, " +
+          "nothing is added or smoothed in the temperature field itself. " +
+          "Turn it off in Settings under Temp breaks. On days when " +
+          "temperature falls back to a coarser backup satellite, the lines " +
+          "hide themselves rather than draw from blurry data.",
+      },
+      {
+        type: "new",
+        text:
+          "Tap any break line to get its coordinates: where it starts, " +
+          "where it ends, and waypoints along the way, in both degrees " +
+          "decimal minutes and decimal degrees. One button copies the " +
+          "whole set, ready to paste into a GPS or chartplotter. A Breaks " +
+          "button next to MPAs and Bottom turns the lines on and off.",
+      },
+    ],
+  },
+  {
     id: "2026-08-08",
     date: "August 8, 2026",
     title: "Water clarity is updating again",

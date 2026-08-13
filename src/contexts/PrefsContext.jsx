@@ -25,7 +25,10 @@ const OVERLAY_DEFAULTS_MIGRATION_KEY = "ca-coast-conditions:prefs:migrations:ove
 // water-column D2) — ON by default with a BETA badge, matching how
 // Current/Vis ship as visible-with-BETA-tag; the settings toggle is
 // the off-switch.
-const DEFAULT_PREFS = { theme: "light", opacity: 0.62, units: "F", mpaOn: true, bathyOn: true, waterColumnOn: true, closuresOn: true };
+// breaksOn: temperature-break outline on the SST layer. Default ON — the
+// mask is sparse (~0.2% of ocean pixels at the provisional threshold) and
+// drawn thin, so presence is subtle; the Settings toggle turns it off.
+const DEFAULT_PREFS = { theme: "light", opacity: 0.62, units: "F", mpaOn: true, bathyOn: true, waterColumnOn: true, closuresOn: true, breaksOn: true };
 
 function loadPrefs() {
   try {

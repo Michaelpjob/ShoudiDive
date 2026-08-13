@@ -250,6 +250,10 @@ export default function DataOverlay({ width, height, layer, composite, opacity, 
     }
   }, [layer, composite, dataReady]);
 
+  // Temperature-break lines moved OUT of this component (2026-08-12):
+  // they now render as clickable vector paths in BreaksLayer.jsx, drawn
+  // after the land basemap. This component paints the raster field only.
+
   // The overlay's pixel grid is a linear lng/lat raster across the bbox, so
   // it has to live inside the same fitted rectangle that project() uses.
   // Otherwise the canvas stretches one way while the coastline geometry
