@@ -467,35 +467,35 @@
         "width": 140,
         "height": 110
       },
-      "source": "NOAA HRRR + GFS",
+      "source": "NOAA HRRR + GFS blended with ECMWF",
       "windows": {
         "now": {
           "speed_url": "/data/wind_speed_now.png",
           "uv_url": "/data/wind_uv_now.png",
-          "valid_at": "2026-08-15T13:00:00Z",
-          "fcst_hour": 7,
-          "source": "HRRR+buoy"
+          "valid_at": "2026-08-15T12:00:00Z",
+          "fcst_hour": 6,
+          "source": "HRRR+ECMWF+buoy"
         },
         "p6h": {
           "speed_url": "/data/wind_speed_p6h.png",
           "uv_url": "/data/wind_uv_p6h.png",
-          "valid_at": "2026-08-15T19:00:00Z",
-          "fcst_hour": 13,
-          "source": "HRRR"
+          "valid_at": "2026-08-15T18:00:00Z",
+          "fcst_hour": 12,
+          "source": "HRRR+ECMWF"
         },
         "p24h": {
           "speed_url": "/data/wind_speed_p24h.png",
           "uv_url": "/data/wind_uv_p24h.png",
-          "valid_at": "2026-08-16T13:00:00Z",
-          "fcst_hour": 31,
-          "source": "HRRR"
+          "valid_at": "2026-08-16T12:00:00Z",
+          "fcst_hour": 30,
+          "source": "HRRR+ECMWF"
         },
         "p72h": {
           "speed_url": "/data/wind_speed_p72h.png",
           "uv_url": "/data/wind_uv_p72h.png",
-          "valid_at": "2026-08-18T13:00:00Z",
-          "fcst_hour": 79,
-          "source": "GFS"
+          "valid_at": "2026-08-18T12:00:00Z",
+          "fcst_hour": 78,
+          "source": "GFS+ECMWF"
         }
       },
       "buoy_correction": {
@@ -504,18 +504,18 @@
         "anemometer_height_m": 5.0,
         "n_anchors_total": 6,
         "n_anchors_active": 6,
-        "mean_resid_ms": 1.73,
+        "mean_resid_ms": 1.17,
         "anchors": [
           {
             "stn": "46086",
             "name": "San Clemente Basin",
             "lat": 32.499,
             "lng": -118.034,
-            "buoy_spd_kt": 6.6,
-            "n_samples": 15,
-            "age_hours": 0.6,
-            "model_spd_kt": 7.6,
-            "resid_ms": 2.1,
+            "buoy_spd_kt": 6.4,
+            "n_samples": 16,
+            "age_hours": 0.4,
+            "model_spd_kt": 5.5,
+            "resid_ms": 0.8,
             "skipped": null
           },
           {
@@ -523,11 +523,11 @@
             "name": "Tanner Bank",
             "lat": 32.418,
             "lng": -119.535,
-            "buoy_spd_kt": 9.7,
+            "buoy_spd_kt": 10.4,
             "n_samples": 16,
             "age_hours": 0.4,
             "model_spd_kt": 9.0,
-            "resid_ms": 0.7,
+            "resid_ms": 0.8,
             "skipped": null
           },
           {
@@ -535,11 +535,11 @@
             "name": "Santa Monica Basin",
             "lat": 33.765,
             "lng": -119.077,
-            "buoy_spd_kt": 3.3,
-            "n_samples": 14,
-            "age_hours": 0.4,
-            "model_spd_kt": 4.9,
-            "resid_ms": 2.2,
+            "buoy_spd_kt": 3.5,
+            "n_samples": 15,
+            "age_hours": 0.6,
+            "model_spd_kt": 3.5,
+            "resid_ms": 1.9,
             "skipped": null
           },
           {
@@ -547,11 +547,11 @@
             "name": "Santa Maria",
             "lat": 34.937,
             "lng": -120.999,
-            "buoy_spd_kt": 9.8,
-            "n_samples": 15,
-            "age_hours": 0.6,
-            "model_spd_kt": 11.3,
-            "resid_ms": 3.5,
+            "buoy_spd_kt": 9.7,
+            "n_samples": 16,
+            "age_hours": 0.4,
+            "model_spd_kt": 11.0,
+            "resid_ms": 1.9,
             "skipped": null
           },
           {
@@ -559,11 +559,11 @@
             "name": "Cape San Martin",
             "lat": 35.763,
             "lng": -121.893,
-            "buoy_spd_kt": 13.3,
-            "n_samples": 15,
-            "age_hours": 0.6,
-            "model_spd_kt": 11.4,
-            "resid_ms": 1.9,
+            "buoy_spd_kt": 13.9,
+            "n_samples": 16,
+            "age_hours": 0.4,
+            "model_spd_kt": 13.9,
+            "resid_ms": 0.5,
             "skipped": null
           },
           {
@@ -571,11 +571,11 @@
             "name": "Monterey",
             "lat": 36.787,
             "lng": -122.408,
-            "buoy_spd_kt": 10.5,
+            "buoy_spd_kt": 10.8,
             "n_samples": 16,
             "age_hours": 0.4,
-            "model_spd_kt": 10.5,
-            "resid_ms": 0.0,
+            "model_spd_kt": 10.4,
+            "resid_ms": 1.1,
             "skipped": null
           }
         ]
@@ -602,7 +602,7 @@
           "source": "GFS"
         }
       },
-      "generated_at": "2026-08-15T13:05:17Z"
+      "generated_at": "2026-08-15T12:26:44Z"
     },
     "viz": {
       "range_ft": [
@@ -643,15 +643,15 @@
         "height": 110
       },
       "source": "NOAA gfswave (WaveWatch III)",
-      "generated_at": "2026-08-15T13:06:38Z",
+      "generated_at": "2026-08-15T06:12:35Z",
       "windows": {
         "now": {
           "url": "/data/wave_now.png",
-          "valid_at": "2026-08-15T06:00:00Z"
+          "valid_at": "2026-08-15T00:00:00Z"
         },
         "max_3d": {
           "url": "/data/wave_max_3d.png",
-          "valid_at": "2026-08-15T06:00:00Z"
+          "valid_at": "2026-08-15T00:00:00Z"
         }
       }
     },
@@ -696,7 +696,7 @@
         30.0
       ],
       "tz": "America/Los_Angeles",
-      "generated_at": "2026-08-15T13:05:56Z",
+      "generated_at": "2026-08-15T12:27:24Z",
       "best_window": {
         "day": 0,
         "bucket": "midday",
@@ -718,7 +718,7 @@
         25.0
       ],
       "tz": "America/Los_Angeles",
-      "generated_at": "2026-08-15T13:06:32Z"
+      "generated_at": "2026-08-15T06:12:30Z"
     },
     "kd490": {
       "range": [
@@ -773,9 +773,9 @@
       ],
       "unit": "kt",
       "vector_convention": "direction_to",
-      "generated_at": "2026-08-15T13:06:39Z",
+      "generated_at": "2026-08-15T06:12:36Z",
       "best_window": {
-        "day": 0,
+        "day": 1,
         "bucket": "afternoon",
         "mean_kt": 0.41
       }
