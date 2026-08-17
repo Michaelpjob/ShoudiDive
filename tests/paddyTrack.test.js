@@ -199,3 +199,40 @@ test("junk and impossible coordinates are refused, not guessed", () => {
   assert.equal(PT.parseLatLng("32"), null, "one number is not a position");
   assert.equal(PT.parseLatLng("95 00.000 117 52.000"), null, "latitude past the pole");
 });
+
+// ---- forcing plumbing ---------------------------------------------------
+// These pin the two bugs that silently starved the drift of its ocean
+// model: region-prefixed URLs that hit the SPA fallback (200 + HTML, so
+// the <img> decode fails without throwing), and a compact-ISO init_cycle
+// that Date.parse rejects.
+
+test("region-prefixed data URLs are rewritten to the served path", () => {
+  assert.equal(PT.fixUrl("/data/ca/rtofs/uv_d1.png"), "/data/rtofs/uv_d1.png");
+  assert.equal(PT.fixUrl("/data/baja/rtofs/uv_d3.png"), "/data/rtofs/uv_d3.png");
+  assert.equal(PT.fixUrl("/data/currents/buckets/d1_midday_uv.png"),
+    "/data/currents/buckets/d1_midday_uv.png", "already-correct paths untouched");
+});
+
+test("compact-ISO init_cycle parses (Date.parse alone returns NaN)", () => {
+  assert.ok(Number.isNaN(Date.parse("20260816T00:00:00Z")), "premise: plain parse fails");
+  const t = PT.parseCycle("20260816T00:00:00Z");
+  assert.ok(Number.isFinite(t), "should parse");
+  assert.equal(new Date(t).toISOString(), "2026-08-16T00:00:00.000Z");
+  assert.ok(Number.isFinite(PT.parseCycle("2026-08-16T00:00:00Z")), "normal ISO still works");
+  assert.ok(Number.isNaN(PT.parseCycle("")), "junk stays NaN");
+});
+
+test("drift stops at the end of the current forecast, never on a frozen field", () => {
+  // Forcing that only covers 48 h. Asking for a week must truncate rather
+  // than clamp to the last field and coast on a stale current.
+  const g = { u: new Float32Array(60 * 60).fill(0.4), v: new Float32Array(60 * 60).fill(0), w: 60, h: 60 };
+  const F = {
+    bbox: BBOX, currentHorizonH: 48,
+    rtofs: [{ t: 0, g, k: 1 }, { t: 48, g, k: 1 }],
+    surface: [], wind: [],
+  };
+  const tr = PT.integrate(F, -119.0, 33.0, 168, false, 1);
+  const lastT = tr[tr.length - 1].t;
+  assert.ok(lastT <= 56, `should stop near the 48 h horizon, ran to ${lastT} h`);
+  assert.ok(lastT >= 40, `should still use the forcing it has, only reached ${lastT} h`);
+});
