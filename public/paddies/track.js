@@ -595,11 +595,53 @@ var PT = (function () {
     }
     return left.concat(right.reverse());
   }
-  // Indices whose along-track distance from `i` is within +-alongKm.
+  // Indices within +-alongKm of `i` measured ALONG THE TRACK.
+  //
+  // This used to test straight-line distance from steps[i], which is a
+  // different quantity and runs away whenever the track turns: a paddy
+  // curving back toward its own position stays close as the crow flies
+  // however far it has actually drifted. Measured on a steadily turning
+  // ensemble, a +-23.5 km reach selected 135 hours of track that swung
+  // through 224 degrees and bowed 39 km off an 8 km chord - so the band
+  // wrapped most of a loop while its label claimed +-23.5 km.
+  //
+  // Arc length is also the plain reading of "+-41 km along it". Since
+  // arc length >= straight-line distance, this only ever tightens the
+  // span.
+  // The span also stops where the track stops being a LINE. A band is a
+  // stretch you can run down; once the heading has swung far enough the
+  // track doubles back, the ribbon wraps its own tail, and the drawn
+  // shape becomes a lobed blob covering water the paddy passed hours
+  // apart. Same principle as laneEndH: stop drawing a lane where there
+  // is no longer a lane, rather than drawing a misleading one.
+  //
+  // 90 degrees separates the two regimes cleanly on live forcing: bands
+  // out to hour 48 swing 8-17 deg, while hours 60-84 swing ~147 deg and
+  // are exactly the ones that rendered as blobs.
+  var MAX_SWING_DEG = 90;
+  function headingDeg(steps, i) {
+    var d = dirAt(steps, i);
+    return (Math.atan2(d[0], d[1]) * 180 / Math.PI + 360) % 360;
+  }
   function alongSpan(steps, i) {
-    var reach = steps[i].alongKm, lo = i, hi = i;
-    while (lo > 0 && haversineKm(steps[i].lat, steps[i].lng, steps[lo - 1].lat, steps[lo - 1].lng) < reach) lo--;
-    while (hi < steps.length - 1 && haversineKm(steps[i].lat, steps[i].lng, steps[hi + 1].lat, steps[hi + 1].lng) < reach) hi++;
+    var reach = steps[i].alongKm, lo = i, hi = i, d = 0, sw = 0, delta;
+    while (lo > 0) {
+      d += haversineKm(steps[lo].lat, steps[lo].lng, steps[lo - 1].lat, steps[lo - 1].lng);
+      if (d > reach) break;
+      delta = ((headingDeg(steps, lo - 1) - headingDeg(steps, lo) + 540) % 360) - 180;
+      sw += delta;
+      if (Math.abs(sw) > MAX_SWING_DEG) break;
+      lo--;
+    }
+    d = 0; sw = 0;
+    while (hi < steps.length - 1) {
+      d += haversineKm(steps[hi].lat, steps[hi].lng, steps[hi + 1].lat, steps[hi + 1].lng);
+      if (d > reach) break;
+      delta = ((headingDeg(steps, hi + 1) - headingDeg(steps, hi) + 540) % 360) - 180;
+      sw += delta;
+      if (Math.abs(sw) > MAX_SWING_DEG) break;
+      hi++;
+    }
     return [lo, hi];
   }
 
