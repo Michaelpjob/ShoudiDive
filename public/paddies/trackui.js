@@ -123,8 +123,12 @@ var PTUI = (function () {
     if (step) {
       // Where it plausibly is AT THIS TIME: the stretch of lane within the
       // along-track error, highlighted — not a circle around a fake pin.
-      var i = steps.indexOf(step);
-      if (i < 0) i = 0;
+      // `si`, not `i` - the polyline loop above already declares a
+      // function-scoped `var i`, and re-declaring it here reassigned the
+      // same binding. Harmless as written, but exactly the shadowing that
+      // goes wrong the moment either block moves.
+      var si = steps.indexOf(step);
+      if (si < 0) si = 0;
       // Where the ensemble ACTUALLY is at this time — one dot per member.
       // This replaces the drawn amber blob: the dots cannot stray onto
       // land the model never sent them to, and their density shows the
@@ -137,7 +141,7 @@ var PTUI = (function () {
         // ONE width for the whole stretch — the cross-track spread at the
         // selected hour. Per-step widths here drew a lopsided wedge that
         // ramped from well under to well over the +-km the panel quotes.
-        var sp = PT.alongSpan(steps, i);
+        var sp = PT.alongSpan(steps, si);
         L.polygon(PT.corridor(steps, sp[0], sp[1], fixedWidth(step.crossKm)),
           { color: '#fbbf24', weight: 1.5, opacity: 0.85, fillColor: '#fbbf24', fillOpacity: 0.09 })
           .bindTooltip('Likely stretch of lane at the selected time', { sticky: true }).addTo(layer);
