@@ -15,6 +15,37 @@
 
 export const CHANGELOG = [
   {
+    id: "2026-08-16",
+    date: "August 16, 2026",
+    title: "Track a paddy you found",
+    items: [
+      {
+        type: "new",
+        text:
+          "Found a kelp paddy and want to know where it goes? The Kelp " +
+          "Paddy Finder has a new Track a paddy panel: punch in the GPS " +
+          "position (it reads plotter formats like 32 56 0000 117 52 000, " +
+          "or plain decimal degrees), and it drifts the paddy forward a " +
+          "week using forecast currents and wind. Pick a day and a time of " +
+          "day and it gives you the predicted position, ready to copy into " +
+          "a GPS.",
+      },
+      {
+        type: "new",
+        text:
+          "The forecast draws as a corridor, not a dot, because that is " +
+          "what the data supports. A paddy runs down the current, so the " +
+          "real question is how far along it got, not which way it went. " +
+          "The map shows the lane it should be in and the readout tells " +
+          "you how wide that lane is at the moment you picked. Day one is " +
+          "usually tight enough to run straight down; by day four or five " +
+          "the lane is wide and the honest answer is a direction and a " +
+          "search, not a waypoint. Modelled drift, not an observation — " +
+          "treat it as a search line.",
+      },
+    ],
+  },
+  {
     id: "2026-08-12",
     date: "August 12, 2026",
     title: "Temperature breaks, outlined on the map",
