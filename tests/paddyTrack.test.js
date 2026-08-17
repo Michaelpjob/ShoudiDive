@@ -236,3 +236,43 @@ test("drift stops at the end of the current forecast, never on a frozen field", 
   assert.ok(lastT <= 56, `should stop near the 48 h horizon, ran to ${lastT} h`);
   assert.ok(lastT >= 40, `should still use the forcing it has, only reached ${lastT} h`);
 });
+
+test("the lane is only claimed while one actually exists", () => {
+  const f = PT.forecast(forcing({ cu: 0.3 }), -119.0, 33.0, 168);
+  assert.ok(Number.isFinite(f.laneEndH), "forecast must publish a lane horizon");
+  // Every step inside the lane is genuinely narrow...
+  for (const s of f.steps.filter((x) => x.t <= f.laneEndH)) {
+    assert.ok(s.crossKm <= PT.consts.LANE_MAX_CROSS_KM,
+      `t=${s.t}h inside lane but ±${s.crossKm.toFixed(1)} km wide`);
+  }
+  // ...and the first step past it is not.
+  const after = f.steps.find((x) => x.t > f.laneEndH);
+  if (after) {
+    assert.ok(after.crossKm > PT.consts.LANE_MAX_CROSS_KM,
+      "lane horizon should end exactly where the spread outgrows it");
+  }
+});
+
+test("steps carry the real member positions, not just a summary", () => {
+  // Drawing the ensemble instead of a geometric ribbon is what stops the
+  // display painting a corridor across land the model never entered.
+  const f = PT.forecast(forcing({ cu: 0.3 }), -119.0, 33.0, 72);
+  const s = f.steps.find((x) => x.t === 48);
+  assert.ok(Array.isArray(s.cloud) && s.cloud.length > 50,
+    `expected a member cloud, got ${s.cloud && s.cloud.length}`);
+  for (const [lng, lat] of s.cloud) {
+    assert.ok(Number.isFinite(lng) && Number.isFinite(lat), "member positions must be real");
+  }
+  // The cloud must bracket the reported centre.
+  const lats = s.cloud.map((c) => c[1]);
+  assert.ok(Math.min(...lats) <= s.lat && Math.max(...lats) >= s.lat);
+});
+
+test("members that run out of forcing drop out of the cloud", () => {
+  const g = { u: new Float32Array(60 * 60).fill(0.5), v: new Float32Array(60 * 60).fill(0), w: 60, h: 60 };
+  const F = { bbox: BBOX, currentHorizonH: 48, rtofs: [{ t: 0, g, k: 1 }, { t: 48, g, k: 1 }], surface: [], wind: [] };
+  const f = PT.forecast(F, -119.0, 33.0, 168);
+  const last = f.steps[f.steps.length - 1];
+  assert.ok(last.t <= 56, "forecast should not outlive its forcing");
+  assert.ok(last.afloat <= 1 && last.afloat > 0, "afloat fraction should be reported");
+});

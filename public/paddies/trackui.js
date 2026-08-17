@@ -61,6 +61,7 @@ var PTUI = (function () {
           '<div class="tk-legend">' +
             '<span><i class="tk-sw tk-sw-lane"></i>7-day lane</span>' +
             '<span><i class="tk-sw tk-sw-sel"></i>likely now</span>' +
+            '<span><i class="tk-sw tk-sw-dot"></i>model runs</span>' +
           '</div>' +
           '<div id="tkNote" class="tk-note"></div>' +
           '<div id="tkSrc" class="tk-src"></div>' +
@@ -124,10 +125,16 @@ var PTUI = (function () {
     if (!FC) return;
     var steps = FC.steps;
 
-    // Full-week lane: quiet, so the selected window can read on top of it.
-    L.polygon(corridor(steps, 0, steps.length - 1),
-      { color: '#38bdf8', weight: 1, opacity: 0.3, fillColor: '#38bdf8', fillOpacity: 0.05,
-        dashArray: '4 4' }).addTo(layer);
+    // Lane, ONLY for as long as one exists. Past FC.laneEndH the ensemble
+    // has fanned out and a ribbon would be inventing structure — and, drawn
+    // geometrically, would happily paint across San Diego.
+    var laneEnd = 0;
+    for (var q = 0; q < steps.length; q++) if (steps[q].t <= FC.laneEndH) laneEnd = q;
+    if (laneEnd > 1) {
+      L.polygon(corridor(steps, 0, laneEnd),
+        { color: '#38bdf8', weight: 1, opacity: 0.35, fillColor: '#38bdf8', fillOpacity: 0.06,
+          dashArray: '4 4' }).addTo(layer);
+    }
 
     // The drifted path, coloured by how tight the lane still is.
     for (var i = 1; i < steps.length; i++) {
@@ -151,16 +158,23 @@ var PTUI = (function () {
       // along-track error, highlighted — not a circle around a fake pin.
       var i = steps.indexOf(step);
       if (i < 0) i = 0;
-      var sp = alongSpan(steps, i);
-      // Amber, not red: this is "where it probably is at the time you
-      // picked", not a warning. Red read as danger and swamped the lane.
-      L.polygon(corridor(steps, sp[0], sp[1]),
-        { color: '#f59e0b', weight: 2, opacity: 0.9, fillColor: '#f59e0b', fillOpacity: 0.16 })
-        .bindTooltip('Likely position at the selected time (±' +
-          Math.round(step.alongKm) + ' km along the lane)', { sticky: true }).addTo(layer);
+      // Where the ensemble ACTUALLY is at this time — one dot per member.
+      // This replaces the drawn amber blob: the dots cannot stray onto
+      // land the model never sent them to, and their density shows the
+      // real shape of the answer instead of a smooth invented one.
+      (step.cloud || []).forEach(function (c) {
+        L.circleMarker([c[1], c[0]], { radius: 2.2, stroke: false,
+          fillColor: '#fbbf24', fillOpacity: 0.5, interactive: false }).addTo(layer);
+      });
+      if (step.t <= FC.laneEndH) {
+        var sp = alongSpan(steps, i);
+        L.polygon(corridor(steps, sp[0], sp[1]),
+          { color: '#f59e0b', weight: 2, opacity: 0.9, fillColor: '#f59e0b', fillOpacity: 0.14 })
+          .bindTooltip('Likely stretch of lane at the selected time', { sticky: true }).addTo(layer);
+      }
       L.circleMarker([step.lat, step.lng], { radius: 6, color: '#0b1220', weight: 2,
         fillColor: '#fbbf24', fillOpacity: 1 })
-        .bindTooltip('Best estimate', { direction: 'top' }).addTo(layer);
+        .bindTooltip('Centre of the ensemble', { direction: 'top' }).addTo(layer);
     }
     var pts = steps.map(function (s) { return [s.lat, s.lng]; });
     if (pts.length > 1) map.fitBounds(L.latLngBounds(pts).pad(0.3));
@@ -183,9 +197,14 @@ var PTUI = (function () {
       ' <span class="tk-sub">(±' + Math.round(s.alongKm) + ' km along it)</span>';
     el('tkDM').textContent = f.dm;
     el('tkDD').textContent = f.dd;
-    el('tkNote').textContent = tier.note +
+    var afloatPct = Math.round((s.afloat != null ? s.afloat : 1) * 100);
+    el('tkNote').textContent =
+      (s.t > FC.laneEndH
+        ? 'No usable lane this far out — the forecast has fanned out, so the dots are the honest answer. '
+        : tier.note + ' ') +
+      (afloatPct < 95 ? afloatPct + '% of runs still afloat here. ' : '') +
       (FC.truncated && s.t >= FC.hoursCovered - 1
-        ? ' Track ends here: the paddy left the forecast area.' : '');
+        ? 'Track ends here: the paddy left the forecast area.' : '');
     el('tkScrub').value = s.t;
     el('tkDay').value = String(Math.floor(s.t / 24));
     // The Time control is the CLOCK time of day the user would be on the

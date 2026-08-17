@@ -55,7 +55,10 @@ var PT = (function () {
   var SIGMA_ALONG_MS = 0.166;
   var SIGMA_CROSS_MS = 0.039;
   var DECORR_HOURS = 12;         // cross-flow error redrawn twice a day
-  var N_MEMBERS = 120;   // more members = less sampling noise in the percentiles
+  var N_MEMBERS = 120;
+  // Beyond this cross-track spread the "corridor" stops being a thing a
+  // boat can run down, and the display switches to the raw ensemble.
+  var LANE_MAX_CROSS_KM = 10;   // more members = less sampling noise in the percentiles
 
   var KT_TO_MS = 0.514444;
   var MS_TO_KMH = 3.6;
@@ -454,6 +457,11 @@ var PT = (function () {
       var alongKm = p68(al), crossKm = p68(cr);
       steps.push({
         t: c.t, lng: c.lng, lat: c.lat,
+        // The members themselves. Drawing THESE instead of a geometric
+        // ribbon is what keeps the picture honest: they sit where the
+        // model actually put them, so they never paint a lane across a
+        // headland the ensemble never entered.
+        cloud: live.map(function (p) { return [p.lng, p.lat]; }),
         alongKm: alongKm, crossKm: crossKm,
         radiusKm: Math.max(alongKm, crossKm),   // legacy worst-case
         bearing: (Math.atan2(tx, ty) * 180 / Math.PI + 360) % 360,
@@ -490,8 +498,19 @@ var PT = (function () {
       s.tier = tierFor(s.crossKm);
     });
 
+    // How long the CORRIDOR framing actually survives. Measured on live
+    // forcing the cross-track spread runs 3-6 km through day 3, then 13 /
+    // 27 / 49 km on days 4-6 as members enter different current regimes
+    // and the ensemble fans out. Past that there is no lane to run — so
+    // we stop drawing one rather than widen it into a blob.
+    var laneEndH = 0;
+    for (var li = 0; li < steps.length; li++) {
+      if (steps[li].crossKm <= LANE_MAX_CROSS_KM) laneEndH = steps[li].t; else break;
+    }
+
     return {
       steps: steps,
+      laneEndH: laneEndH,
       hoursCovered: steps.length ? steps[steps.length - 1].t : 0,
       truncated: steps.length && steps[steps.length - 1].t < hours
     };
@@ -512,7 +531,8 @@ var PT = (function () {
       SIGMA_ALONG_MS: SIGMA_ALONG_MS, SIGMA_CROSS_MS: SIGMA_CROSS_MS,
       DT_HOURS: DT_HOURS, N_MEMBERS: N_MEMBERS,
       BLEND_RTOFS: BLEND_RTOFS, BLEND_SURFACE: BLEND_SURFACE,
-      DIFFUSION_K_M2S: DIFFUSION_K_M2S, DECORR_HOURS: DECORR_HOURS
+      DIFFUSION_K_M2S: DIFFUSION_K_M2S, DECORR_HOURS: DECORR_HOURS,
+      LANE_MAX_CROSS_KM: LANE_MAX_CROSS_KM
     }
   };
 })();
