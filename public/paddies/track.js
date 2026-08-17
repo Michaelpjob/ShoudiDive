@@ -645,6 +645,153 @@ var PT = (function () {
     return [lo, hi];
   }
 
+  /* ---- origin & age -------------------------------------------------
+     A paddy the user just found is NOT on day zero of its life: it broke
+     off a bed some days ago and has been aging in warm water since. The
+     tool used to ignore that entirely. These functions estimate where it
+     likely came from, how long it has been adrift, and how much float
+     time is plausibly left, so the 7-day forecast can be honest about
+     the paddy still existing at its far end.
+
+     Everything here is an ESTIMATE built on stated assumptions, and the
+     UI labels it that way. In particular, source attribution is "most
+     consistent with", never "came from": bearing alignment is not proof
+     of origin (deep-research verdict on the Catalina question: plausible
+     and within the drift ceiling, but unproven as the dominant source).
+
+     RAFT LIFESPAN ANCHORS, literature-verified (Hobday 2000 SCB drift
+     modelling; Graiff / Rothausler et al. temperature experiments):
+       - cool water:        median float life ~41 d
+       - warm (>=19 C):     median ~22 d  (fouling ballast, sub-lethal
+                            stress at 19-21 C; kill is bryozoan weight,
+                            not heat directly)
+       - >24 C:             hard-sink regime, order 2 weeks  (provisional
+                            - anchored to the hard-sink observation, not
+                            to a fitted curve)
+       - max observed:      63-109 d (survivors, not medians)         */
+  var LIFE = {
+    COOL_D: 41, WARM_D: 22, HOT_D: 14,
+    COOL_BELOW_C: 16, WARM_FROM_C: 19, HOT_FROM_C: 24,
+    MAX_OBSERVED_D: [63, 109]
+  };
+  function lifespanDays(tC) {
+    if (tC == null || !isFinite(tC)) {
+      // No temperature available: report the cool/warm band, claim no more.
+      return { typical: null, lo: LIFE.WARM_D, hi: LIFE.COOL_D, band: 'unknown' };
+    }
+    if (tC < LIFE.COOL_BELOW_C) return { typical: LIFE.COOL_D, lo: LIFE.WARM_D, hi: LIFE.MAX_OBSERVED_D[0], band: 'cool' };
+    if (tC >= LIFE.HOT_FROM_C)  return { typical: LIFE.HOT_D,  lo: 7,           hi: LIFE.WARM_D,           band: 'hot' };
+    if (tC >= LIFE.WARM_FROM_C) return { typical: LIFE.WARM_D, lo: LIFE.HOT_D,  hi: LIFE.COOL_D,           band: 'warm' };
+    // 16-19 C: interpolate the medians
+    var f = (tC - LIFE.COOL_BELOW_C) / (LIFE.WARM_FROM_C - LIFE.COOL_BELOW_C);
+    return { typical: Math.round(LIFE.COOL_D + f * (LIFE.WARM_D - LIFE.COOL_D)),
+             lo: LIFE.WARM_D, hi: LIFE.COOL_D, band: 'mild' };
+  }
+
+  // The drift regime over the paddy's PAST is unknown; we proxy it with
+  // the forecast's own drift speed and widen. 0.6-1.8x spans the day-to-
+  // day spread we see in the current products (same disagreement that
+  // seeds the ensemble).
+  var REGIME_SPEED_LO = 0.6, REGIME_SPEED_HI = 1.8;
+  // Beds within +-50 deg of straight up-flow count as candidate sources.
+  var SOURCE_CONE_DEG = 50;
+
+  function bearingDeg(lng1, lat1, lng2, lat2) {
+    var kd = kmPerDeg((lat1 + lat2) / 2);
+    var dx = (lng2 - lng1) * kd.lng, dy = (lat2 - lat1) * kd.lat;
+    return (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
+  }
+  function angDiff(a, b) { return Math.abs(((a - b + 540) % 360) - 180); }
+
+  /* Candidate source beds for a sighting at (lng, lat).
+     beds:       GeoJSON FeatureCollection of bed points, properties
+                 { bed, island, detach_now }
+     flowBrgDeg: local downstream drift bearing at the sighting (deg true)
+     speedKmDay: drift speed measured off the forecast's own centre track
+     windowDays: how far back the shed model looks (data.json window_days)
+     timeline:   [{days_ago, shed}] shedding intensity, newest first
+     Returns top candidates sorted by weight:
+       { lng, lat, distKm, transitLo, transitHi, transitMid, weight, island }
+     Weight = bearing alignment x shedding intensity at the implied shed
+     date x survival to the implied age. A heuristic, and labelled as one. */
+  function sourceCandidates(lng, lat, beds, flowBrgDeg, speedKmDay, windowDays, timeline, lifeTypicalD) {
+    if (!beds || !beds.features || !isFinite(speedKmDay) || speedKmDay <= 0) return [];
+    var shedAt = function (d) {
+      if (!timeline || !timeline.length) return 1;
+      var best = null;
+      for (var i = 0; i < timeline.length; i++) {
+        if (best == null || Math.abs(timeline[i].days_ago - d) < Math.abs(timeline[best].days_ago - d)) best = i;
+      }
+      return Math.max(0.05, timeline[best].shed || 0);
+    };
+    var life = lifeTypicalD || LIFE.WARM_D;
+    var out = [];
+    for (var i = 0; i < beds.features.length; i++) {
+      var f = beds.features[i];
+      if (!f.geometry || f.geometry.type !== 'Point') continue;
+      var bl = f.geometry.coordinates;                     // [lng, lat]
+      var dist = haversineKm(lat, lng, bl[1], bl[0]);
+      if (dist < 2) continue;                              // sitting on the bed
+      // Bearing FROM the bed TO the sighting should match the flow.
+      var brg = bearingDeg(bl[0], bl[1], lng, lat);
+      var d = angDiff(brg, flowBrgDeg);
+      if (d > SOURCE_CONE_DEG) continue;
+      var tLo = dist / (speedKmDay * REGIME_SPEED_HI);
+      var tHi = Math.min(windowDays || 24, dist / (speedKmDay * REGIME_SPEED_LO));
+      if (tLo > (windowDays || 24)) continue;              // unreachably far
+      var tMid = Math.min(windowDays || 24, dist / speedKmDay);
+      var w = Math.cos(d * Math.PI / 180) * shedAt(Math.round(tMid)) * Math.exp(-tMid / life);
+      out.push({ lng: bl[0], lat: bl[1], distKm: dist, island: !!(f.properties && f.properties.island),
+                 transitLo: tLo, transitHi: tHi, transitMid: tMid, weight: w });
+    }
+    out.sort(function (a, b) { return b.weight - a.weight; });
+    return out.slice(0, 3);
+  }
+
+  // Age range across the candidates, and the float-time outlook it implies.
+  function paddyOutlook(cands, life) {
+    if (!cands.length) return null;
+    var aLo = Infinity, aHi = 0;
+    for (var i = 0; i < cands.length; i++) {
+      aLo = Math.min(aLo, cands[i].transitLo);
+      aHi = Math.max(aHi, cands[i].transitHi);
+    }
+    var typ = life.typical != null ? life.typical : LIFE.WARM_D;
+    return {
+      ageLo: aLo, ageHi: aHi,
+      leftLo: Math.max(0, Math.round(typ - aHi)),
+      leftHi: Math.max(0, Math.round((life.typical != null ? life.typical : LIFE.COOL_D) - aLo))
+    };
+  }
+
+  // Coarse landmark names so a candidate reads as a place, not a tuple.
+  // Geographic facts, not model output.
+  var LANDMARKS = [
+    ['Catalina',            -118.42, 33.39],
+    ['San Clemente Is.',    -118.48, 32.90],
+    ['Santa Barbara Is.',   -119.03, 33.48],
+    ['San Nicolas Is.',     -119.49, 33.24],
+    ['Santa Rosa Is.',      -120.08, 33.95],
+    ['Santa Cruz Is.',      -119.72, 34.00],
+    ['Anacapa',             -119.40, 34.00],
+    ['Pt. Conception',      -120.47, 34.45],
+    ['Palos Verdes',        -118.40, 33.74],
+    ['Laguna / Crystal Cove', -117.80, 33.55],
+    ['San Onofre',          -117.60, 33.38],
+    ['Carlsbad',            -117.35, 33.13],
+    ['La Jolla',            -117.28, 32.85],
+    ['Point Loma',          -117.26, 32.68],
+    ['Coronados',           -117.28, 32.42]
+  ];
+  function nearestLandmark(lng, lat) {
+    var best = null, bd = Infinity;
+    for (var i = 0; i < LANDMARKS.length; i++) {
+      var d = haversineKm(lat, lng, LANDMARKS[i][2], LANDMARKS[i][1]);
+      if (d < bd) { bd = d; best = LANDMARKS[i][0]; }
+    }
+    return bd < 60 ? best : null;
+  }
+
   return {
     loadForcing: loadForcing,
     parseLatLng: parseLatLng,
@@ -659,6 +806,12 @@ var PT = (function () {
     alongSpan: alongSpan,
     dirAt: dirAt,
     offsetKm: offsetKm,
+    lifespanDays: lifespanDays,
+    sourceCandidates: sourceCandidates,
+    paddyOutlook: paddyOutlook,
+    nearestLandmark: nearestLandmark,
+    bearingDeg: bearingDeg,
+    LIFE: LIFE,
     consts: {
       LEEWAY_ALPHA: LEEWAY_ALPHA,
       SIGMA_ALONG_MS: SIGMA_ALONG_MS, SIGMA_CROSS_MS: SIGMA_CROSS_MS,
