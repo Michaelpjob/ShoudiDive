@@ -78,26 +78,73 @@ var PTUI = (function () {
     m.textContent = s || ''; m.className = 'tk-msg' + (bad ? ' bad' : '');
   }
 
+  // Offset a point by km in the km-space direction (dx east, dy north).
+  function offKm(lat, lng, dx, dy, km) {
+    var kLat = 111.132, kLng = 111.320 * Math.cos(lat * Math.PI / 180);
+    return [lat + (dy * km) / kLat, lng + (dx * km) / Math.max(1e-6, kLng)];
+  }
+  // Unit along-track direction at step i, in km-space. Uses a WIDE stencil
+  // (+-6 h): a 1-hour stencil follows every wiggle in the hourly track, and
+  // when the direction flips the left/right offsets cross over and the
+  // ribbon renders as spikes. Smoothing the heading keeps the lane clean.
+  var DIR_STENCIL = 6;
+  function dirAt(steps, i) {
+    var a = steps[Math.max(0, i - DIR_STENCIL)],
+        b = steps[Math.min(steps.length - 1, i + DIR_STENCIL)];
+    var kLat = 111.132, kLng = 111.320 * Math.cos(steps[i].lat * Math.PI / 180);
+    var dx = (b.lng - a.lng) * kLng, dy = (b.lat - a.lat) * kLat;
+    var L = Math.sqrt(dx * dx + dy * dy);
+    return L < 1e-6 ? [1, 0] : [dx / L, dy / L];
+  }
+  // The corridor: centre track offset +-crossKm, as one closed ribbon.
+  // Vertices are DECIMATED to every 6th hour. At full hourly density the
+  // offset points on the inside of every small bend overlap each other and
+  // the polygon self-intersects, which Leaflet renders as long spikes.
+  // Sampling the lane every 6 h keeps the ribbon simple and convex enough
+  // to draw cleanly, and 6 h of drift is far finer than the lane is wide.
+  var RIBBON_STEP = 6;
+  function corridor(steps, from, to) {
+    var left = [], right = [], idx = [];
+    for (var i = from; i <= to; i += RIBBON_STEP) idx.push(i);
+    if (idx[idx.length - 1] !== to) idx.push(to);
+    for (var k = 0; k < idx.length; k++) {
+      var i = idx[k], d = dirAt(steps, i), s = steps[i];
+      var px = -d[1], py = d[0];                 // left-hand perpendicular
+      left.push(offKm(s.lat, s.lng, px, py, s.crossKm));
+      right.push(offKm(s.lat, s.lng, -px, -py, s.crossKm));
+    }
+    return left.concat(right.reverse());
+  }
+  // Indices whose along-track distance from `i` is within +-alongKm.
+  function alongSpan(steps, i) {
+    var reach = steps[i].alongKm, lo = i, hi = i;
+    while (lo > 0 && PT.haversineKm(steps[i].lat, steps[i].lng, steps[lo - 1].lat, steps[lo - 1].lng) < reach) lo--;
+    while (hi < steps.length - 1 && PT.haversineKm(steps[i].lat, steps[i].lng, steps[hi + 1].lat, steps[hi + 1].lng) < reach) hi++;
+    return [lo, hi];
+  }
+
   function draw(step) {
     if (!layer) return;
     layer.clearLayers();
     if (!FC) return;
-    var pts = FC.steps.map(function (s) { return [s.lat, s.lng]; });
+    var steps = FC.steps;
 
-    // The drifted path, coloured by how usable it still is.
-    for (var i = 1; i < FC.steps.length; i++) {
-      var s = FC.steps[i];
-      L.polyline([[FC.steps[i - 1].lat, FC.steps[i - 1].lng], [s.lat, s.lng]],
-        { color: TIER_COLOR[s.tier.key], weight: 3, opacity: 0.85 }).addTo(layer);
+    // Full-week corridor: a narrow ribbon, not a disc. Cross-track error is
+    // ~4x smaller than along-track, so the honest shape is a lane you run.
+    L.polygon(corridor(steps, 0, steps.length - 1),
+      { color: '#38bdf8', weight: 1, opacity: 0.45, fillColor: '#38bdf8', fillOpacity: 0.07 }).addTo(layer);
+
+    // The drifted path, coloured by how tight the lane still is.
+    for (var i = 1; i < steps.length; i++) {
+      L.polyline([[steps[i - 1].lat, steps[i - 1].lng], [steps[i].lat, steps[i].lng]],
+        { color: TIER_COLOR[steps[i].tier.key], weight: 3, opacity: 0.9 }).addTo(layer);
     }
-    // Daily search areas — the honest product: circles, not pins.
-    FC.steps.forEach(function (s) {
+    // Day ticks along the lane.
+    steps.forEach(function (s) {
       if (s.t === 0 || s.t % 24 !== 0) return;
-      L.circle([s.lat, s.lng], { radius: s.radiusKm * 1000, color: TIER_COLOR[s.tier.key],
-        weight: 1, opacity: 0.55, fillColor: TIER_COLOR[s.tier.key], fillOpacity: 0.07 }).addTo(layer);
       L.circleMarker([s.lat, s.lng], { radius: 3, color: '#0b1220', weight: 1,
         fillColor: TIER_COLOR[s.tier.key], fillOpacity: 1 })
-        .bindTooltip('Day ' + (s.t / 24) + ' · ±' + Math.round(s.radiusKm) + ' km',
+        .bindTooltip('Day ' + (s.t / 24) + ' · ±' + Math.round(s.crossKm) + ' km either side',
           { direction: 'top' }).addTo(layer);
     });
     if (startLL) {
@@ -105,12 +152,18 @@ var PTUI = (function () {
         fillColor: '#38bdf8', fillOpacity: 1 }).bindTooltip('Paddy seen here').addTo(layer);
     }
     if (step) {
-      L.circle([step.lat, step.lng], { radius: step.radiusKm * 1000, color: '#dc2626',
-        weight: 2, opacity: 0.9, fillColor: '#dc2626', fillOpacity: 0.10 }).addTo(layer);
+      // Where it plausibly is AT THIS TIME: the stretch of lane within the
+      // along-track error, highlighted — not a circle around a fake pin.
+      var i = steps.indexOf(step);
+      if (i < 0) i = 0;
+      var sp = alongSpan(steps, i);
+      L.polygon(corridor(steps, sp[0], sp[1]),
+        { color: '#dc2626', weight: 2, opacity: 0.95, fillColor: '#dc2626', fillOpacity: 0.18 }).addTo(layer);
       L.circleMarker([step.lat, step.lng], { radius: 6, color: '#fff', weight: 2,
         fillColor: '#dc2626', fillOpacity: 1 }).addTo(layer);
     }
-    if (pts.length > 1) map.fitBounds(L.latLngBounds(pts).pad(0.35));
+    var pts = steps.map(function (s) { return [s.lat, s.lng]; });
+    if (pts.length > 1) map.fitBounds(L.latLngBounds(pts).pad(0.3));
   }
 
   function stepAt(t) {
@@ -126,7 +179,8 @@ var PTUI = (function () {
     el('tkWhen').textContent = hoursLabel(s.t) + '  ·  ' + clockLabel(s.t);
     var tier = s.tier;
     el('tkTier').innerHTML = '<span class="tk-dot" style="background:' + TIER_COLOR[tier.key] + '"></span>' +
-      '<b>' + tier.label + '</b> · ±' + Math.round(s.radiusKm) + ' km search radius';
+      '<b>' + tier.label + '</b> · ±' + Math.round(s.crossKm) + ' km either side of the line' +
+      ' <span class="tk-sub">(±' + Math.round(s.alongKm) + ' km along it)</span>';
     el('tkDM').textContent = f.dm;
     el('tkDD').textContent = f.dd;
     el('tkNote').textContent = tier.note +
@@ -232,7 +286,8 @@ var PTUI = (function () {
       var f = fmtLL(s.lat, s.lng);
       var txt = 'Paddy drift forecast — ' + hoursLabel(s.t) + ' (' + clockLabel(s.t) + ')\n' +
         f.dm + '  (' + f.dd + ')\n' +
-        'Search radius ±' + Math.round(s.radiusKm) + ' km — ' + s.tier.label + '. ' +
+        'Corridor ±' + Math.round(s.crossKm) + ' km either side, ±' +
+        Math.round(s.alongKm) + ' km along the line — ' + s.tier.label + '. ' +
         s.tier.note + '\nModelled drift, not an observation.';
       if (navigator.clipboard) navigator.clipboard.writeText(txt).then(function () {
         el('tkCopy').textContent = '✓'; setTimeout(function () { el('tkCopy').textContent = 'Copy'; }, 1500);
