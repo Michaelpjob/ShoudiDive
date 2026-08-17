@@ -258,7 +258,9 @@ function boot(d){D=d;F=D.default_frame;LCH=D.default_launch;
  Object.keys(D.launches).forEach(function(n){var o=document.createElement('option');o.value=n;o.textContent=n;sel.appendChild(o);});
  sel.value=LCH;sel.onchange=function(e){setL(e.target.value);};
  setFrame(D.default_frame);
- updateMeas();}
+ updateMeas();
+ // Track-my-paddy UI (trackui.js) mounts once the map exists.
+ if(window.PTUI)PTUI.init(map);}
 
 fetch('data.json',{cache:'no-cache'}).then(function(r){return r.json();}).then(boot).catch(function(){
  document.getElementById('panel').innerHTML='<b>Could not load paddy data.</b><br/><span class=mut>data.json failed to fetch.</span>';});
