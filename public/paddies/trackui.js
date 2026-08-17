@@ -58,7 +58,12 @@ var PTUI = (function () {
           '<div id="tkTier" class="tk-tier"></div>' +
           '<div class="tk-coord"><code id="tkDM"></code><code id="tkDD"></code>' +
             '<button id="tkCopy" class="tk-btn tk-ghost">Copy</button></div>' +
+          '<div class="tk-legend">' +
+            '<span><i class="tk-sw tk-sw-lane"></i>7-day lane</span>' +
+            '<span><i class="tk-sw tk-sw-sel"></i>likely now</span>' +
+          '</div>' +
           '<div id="tkNote" class="tk-note"></div>' +
+          '<div id="tkSrc" class="tk-src"></div>' +
         '</div>' +
       '</div>';
   }
@@ -119,10 +124,10 @@ var PTUI = (function () {
     if (!FC) return;
     var steps = FC.steps;
 
-    // Full-week corridor: a narrow ribbon, not a disc. Cross-track error is
-    // ~4x smaller than along-track, so the honest shape is a lane you run.
+    // Full-week lane: quiet, so the selected window can read on top of it.
     L.polygon(corridor(steps, 0, steps.length - 1),
-      { color: '#38bdf8', weight: 1, opacity: 0.45, fillColor: '#38bdf8', fillOpacity: 0.07 }).addTo(layer);
+      { color: '#38bdf8', weight: 1, opacity: 0.3, fillColor: '#38bdf8', fillOpacity: 0.05,
+        dashArray: '4 4' }).addTo(layer);
 
     // The drifted path, coloured by how tight the lane still is.
     for (var i = 1; i < steps.length; i++) {
@@ -147,10 +152,15 @@ var PTUI = (function () {
       var i = steps.indexOf(step);
       if (i < 0) i = 0;
       var sp = alongSpan(steps, i);
+      // Amber, not red: this is "where it probably is at the time you
+      // picked", not a warning. Red read as danger and swamped the lane.
       L.polygon(corridor(steps, sp[0], sp[1]),
-        { color: '#dc2626', weight: 2, opacity: 0.95, fillColor: '#dc2626', fillOpacity: 0.18 }).addTo(layer);
-      L.circleMarker([step.lat, step.lng], { radius: 6, color: '#fff', weight: 2,
-        fillColor: '#dc2626', fillOpacity: 1 }).addTo(layer);
+        { color: '#f59e0b', weight: 2, opacity: 0.9, fillColor: '#f59e0b', fillOpacity: 0.16 })
+        .bindTooltip('Likely position at the selected time (±' +
+          Math.round(step.alongKm) + ' km along the lane)', { sticky: true }).addTo(layer);
+      L.circleMarker([step.lat, step.lng], { radius: 6, color: '#0b1220', weight: 2,
+        fillColor: '#fbbf24', fillOpacity: 1 })
+        .bindTooltip('Best estimate', { direction: 'top' }).addTo(layer);
     }
     var pts = steps.map(function (s) { return [s.lat, s.lng]; });
     if (pts.length > 1) map.fitBounds(L.latLngBounds(pts).pad(0.3));
@@ -234,6 +244,10 @@ var PTUI = (function () {
           return;
         }
         var days = Math.floor(FC.hoursCovered / 24);
+        var src = F.sources || {};
+        el('tkSrc').textContent = 'Forcing: ' + (src.rtofs || 0) + ' ocean-model + ' +
+          (src.surface || 0) + ' surface-current + ' + (src.wind || 0) + ' wind fields' +
+          (F.notes && F.notes.length ? ' — ' + F.notes.join('; ') : '');
         setMsg('Read as ' + echo.dm + ' (' + ll.how + '). ' + (FC.truncated
           ? 'Tracked ' + days + ' day(s) — it drifts out of the forecast area after that.'
           : '7-day drift, ' + PT.consts.N_MEMBERS + '-member ensemble.'));
