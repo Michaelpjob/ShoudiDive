@@ -24,18 +24,8 @@ var PTUI = (function () {
     return { dm: ddm(lat, 'N', 'S') + '  ' + ddm(lng, 'E', 'W'),
              dd: lat.toFixed(4) + ', ' + lng.toFixed(4) };
   }
-  // Accepts "33.4667, -119.3987", "33.4667 -119.3987", or two fields.
-  function parseLL(s) {
-    if (!s) return null;
-    var m = String(s).replace(/[^\d.\-+, ]/g, ' ').match(/(-?\d+(?:\.\d+)?)[ ,]+(-?\d+(?:\.\d+)?)/);
-    if (!m) return null;
-    var a = parseFloat(m[1]), b = parseFloat(m[2]);
-    if (!isFinite(a) || !isFinite(b)) return null;
-    // SoCal: lat ~31-42 N, lng ~-128..-116. Accept either order.
-    if (Math.abs(a) <= 90 && Math.abs(b) > 90) return { lat: a, lng: b };
-    if (Math.abs(b) <= 90 && Math.abs(a) > 90) return { lat: b, lng: a };
-    return { lat: a, lng: b };
-  }
+  function parseLL(s) { return PT.parseLatLng(s); }
+
   function hoursLabel(t) {
     var d = Math.floor(t / 24), h = Math.round(t % 24);
     return d === 0 ? ('+' + h + ' h') : ('Day ' + d + (h ? ' +' + h + ' h' : ''));
@@ -214,7 +204,14 @@ var PTUI = (function () {
   function run() {
     if (busy) return;
     var ll = parseLL(el('tkLL').value);
-    if (!ll) { setMsg('Enter a position like 33.4667, -119.3987', true); return; }
+    if (!ll) {
+      setMsg('Could not read that. Try 32 56 0000 117 52 000, ' +
+             '32 56.000 117 52.000, or 32.9333 -117.8667', true);
+      return;
+    }
+    // Echo the reading back — several plotter formats look alike, and a
+    // misparse would silently forecast the wrong piece of ocean.
+    var echo = fmtLL(ll.lat, ll.lng);
     startLL = ll; busy = true;
     setMsg('Loading forecast currents and wind…');
     var t0 = Date.now();
@@ -237,9 +234,9 @@ var PTUI = (function () {
           return;
         }
         var days = Math.floor(FC.hoursCovered / 24);
-        setMsg(FC.truncated
-          ? 'Tracked ' + days + ' day(s) — the paddy drifts out of the forecast area after that.'
-          : '7-day drift from ' + PT.consts.N_MEMBERS + '-member ensemble.');
+        setMsg('Read as ' + echo.dm + ' (' + ll.how + '). ' + (FC.truncated
+          ? 'Tracked ' + days + ' day(s) — it drifts out of the forecast area after that.'
+          : '7-day drift, ' + PT.consts.N_MEMBERS + '-member ensemble.'));
         el('tkOut').hidden = false;
         var dsel = el('tkDay'); dsel.innerHTML = '';
         for (var d = 0; d <= days; d++) {
