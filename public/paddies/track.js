@@ -12,13 +12,39 @@
  *   /data/wind/      7 days x 5 buckets  wind, [-30,30] kt   -> windage
  *   /data/rtofs/     leads +1/+3/+5/+7d  RTOFS model current, m/s [-2,2]
  *
- * PHYSICS — deliberately identical to the calibrated research prototype
- * (kelp-drift-proto/config.py) so the browser and the offline model
- * cannot silently diverge:
- *   v_paddy = current + WINDAGE_ALPHA * wind      (RK2, dt = 1 h)
- *   WINDAGE_ALPHA = 0.02   floating kelp makes ~2% of wind speed
+ * PHYSICS
+ *   v_paddy = current + LEEWAY_ALPHA * wind        (RK2, dt = 1 h)
  *   Currents blend RTOFS (model backbone, reaches +7 d) with the
  *   published surface-current field (HFR-informed detail, +5 d).
+ *
+ * LEEWAY IS THE *COMBINED* WIND TERM, NOT PURE WINDAGE. This differs
+ * from kelp-drift-proto/config.py, which applies 2% windage AND a
+ * separate explicit Stokes term. Literature splits the surface-drift
+ * wind response two ways and warns against mixing them:
+ *   - published Lagrangian macroalgae-raft models use a windage/leeway
+ *     factor of ~1% chosen by sensitivity simulation;
+ *   - Stokes drift at the surface runs ~1.0-1.5% of the 10 m wind for a
+ *     fully developed sea, is predominantly downwind, and is routinely
+ *     left out of trajectory models because it is "already present in
+ *     the empirical leeway coefficients" (the implicit-leeway model).
+ * 1% windage + 1-1.5% Stokes lands on ~2-2.5% total, so the single 2%
+ * coefficient here IS the implicit-leeway model and is consistent with
+ * both. Adding an explicit Stokes term on top would double-count the
+ * downwind response, which is what the prototype appears to do.
+ *
+ * WHY WE DO NOT COMPUTE STOKES EXPLICITLY, even though the wave data is
+ * published and the formula is one line. Us = (2*pi^3/g) * Hs^2 / Tp^3
+ * needs the wind-sea period, but gfswave gives us Hs(total) with
+ * Tp(PEAK), and the SoCal peak is nearly always long-period groundswell.
+ * Evaluated against the live wave forecast (25 buckets, mean Tp 11.6 s)
+ * that yields a mean Stokes of 0.006 m/s / 0.55 km per day — under 8% of
+ * the surface current, and an order of magnitude below what the same
+ * formula gives for a short-period wind sea (Hs 2 m / Tp 7 s ->
+ * 0.074 m/s). Because Us scales as Tp^-3, a groundswell-dominated peak
+ * period biases the estimate LOW by roughly that order. An explicit term
+ * built on it would add a systematically wrong small number while
+ * risking the double-count above. Revisit if the pipeline ever publishes
+ * partitioned wind-sea Hs/Tp, or a Stokes field directly.
  *
  * UNCERTAINTY IS MEASURED, NOT ASSUMED. On 2026-08-16 the two current
  * products we publish for the same water disagreed by 0.166 m/s RMS —
@@ -34,7 +60,7 @@
 var PT = (function () {
 
   // ---- physics constants (mirror kelp-drift-proto/config.py) -----------
-  var WINDAGE_ALPHA = 0.02;      // floating kelp drifts at ~2% of wind
+  var LEEWAY_ALPHA = 0.02;       // combined wind response: windage + Stokes (see header)
   var DIFFUSION_K_M2S = 5.0;     // sub-grid eddy diffusivity
   var DT_HOURS = 1.0;
   var BLEND_RTOFS = 0.65;        // model backbone
@@ -342,7 +368,7 @@ var PT = (function () {
     else if (sf)  { cu = sf.u; cv = sf.v; got = true; }
     if (!got) return null;
     var wd = sampleSeries(F.wind, F.bbox, t, lng, lat);
-    if (wd) { cu += WINDAGE_ALPHA * wd.u; cv += WINDAGE_ALPHA * wd.v; }
+    if (wd) { cu += LEEWAY_ALPHA * wd.u; cv += LEEWAY_ALPHA * wd.v; }
     return { u: cu * MS_TO_KMH, v: cv * MS_TO_KMH };
   }
 
@@ -465,7 +491,11 @@ var PT = (function () {
         alongKm: alongKm, crossKm: crossKm,
         radiusKm: Math.max(alongKm, crossKm),   // legacy worst-case
         bearing: (Math.atan2(tx, ty) * 180 / Math.PI + 360) % 360,
-        afloat: live.length / N_MEMBERS,
+        // NOT a flotation estimate: a run leaves `live` when it exits the
+        // grid or hits a no-data (land) cell. Sinking is not modelled at
+        // all — see the header note on raft lifespan.
+        inDomain: live.length / N_MEMBERS,
+        afloat: live.length / N_MEMBERS,   // deprecated alias
         tier: tierFor(crossKm)                  // usability = how wide the LINE is
       });
     }
@@ -527,7 +557,7 @@ var PT = (function () {
     tierFor: tierFor,
     haversineKm: haversineKm,
     consts: {
-      WINDAGE_ALPHA: WINDAGE_ALPHA,
+      LEEWAY_ALPHA: LEEWAY_ALPHA,
       SIGMA_ALONG_MS: SIGMA_ALONG_MS, SIGMA_CROSS_MS: SIGMA_CROSS_MS,
       DT_HOURS: DT_HOURS, N_MEMBERS: N_MEMBERS,
       BLEND_RTOFS: BLEND_RTOFS, BLEND_SURFACE: BLEND_SURFACE,

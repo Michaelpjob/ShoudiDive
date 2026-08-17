@@ -197,12 +197,13 @@ var PTUI = (function () {
       ' <span class="tk-sub">(±' + Math.round(s.alongKm) + ' km along it)</span>';
     el('tkDM').textContent = f.dm;
     el('tkDD').textContent = f.dd;
-    var afloatPct = Math.round((s.afloat != null ? s.afloat : 1) * 100);
+    // "still being tracked", NOT "still floating" — sinking is not modelled.
+    var inDomainPct = Math.round((s.inDomain != null ? s.inDomain : 1) * 100);
     el('tkNote').textContent =
       (s.t > FC.laneEndH
         ? 'No usable lane this far out — the forecast has fanned out, so the dots are the honest answer. '
         : tier.note + ' ') +
-      (afloatPct < 95 ? afloatPct + '% of runs still afloat here. ' : '') +
+      (inDomainPct < 95 ? inDomainPct + '% of runs still in the forecast area here. ' : '') +
       (FC.truncated && s.t >= FC.hoursCovered - 1
         ? 'Track ends here: the paddy left the forecast area.' : '');
     el('tkScrub').value = s.t;
