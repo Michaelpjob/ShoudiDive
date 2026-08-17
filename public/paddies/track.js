@@ -125,6 +125,29 @@ var PT = (function () {
     return { lat: lat, lng: lng, how: how[0] };
   }
 
+
+  /* Published URLs carry a region segment (/data/ca/rtofs/uv_d1.png) that
+   * only the React app rewrites. Served from /data/rtofs/ for the active
+   * region, the prefixed path hits the SPA fallback and returns 200 with
+   * an HTML body — an <img> then fails to decode SILENTLY. That is how
+   * RTOFS, the ocean-model backbone and the only forcing past +5 d, went
+   * missing while the drift quietly ran on surface currents alone.
+   */
+  function fixUrl(u) {
+    return typeof u === 'string' ? u.replace(/^\/data\/(ca|baja|pnw|tropical)\//, '/data/') : u;
+  }
+
+  /* RTOFS publishes init_cycle as "20260816T00:00:00Z" — compact ISO,
+   * which Date.parse rejects (NaN). Insert the separators before parsing.
+   */
+  function parseCycle(v) {
+    if (!v) return NaN;
+    var t = Date.parse(v);
+    if (!isNaN(t)) return t;
+    var m = String(v).match(/^(\d{4})(\d{2})(\d{2})T(.+)$/);
+    return m ? Date.parse(m[1] + '-' + m[2] + '-' + m[3] + 'T' + m[4]) : NaN;
+  }
+
   function kmPerDeg(lat) {
     var r = lat * Math.PI / 180;
     return { lat: 111.132, lng: 111.320 * Math.cos(r) };
@@ -195,7 +218,7 @@ var PT = (function () {
 
         // --- published surface currents (kt, direction_to) ---
         if (L.current5d && L.current5d.summary_url) {
-          jobs.push(fetch(L.current5d.summary_url, { cache: 'no-cache' })
+          jobs.push(fetch(fixUrl(L.current5d.summary_url), { cache: 'no-cache' })
             .then(function (r) { return r.json(); })
             .then(function (s) {
               var rng = L.current5d.uv_range || [-1.5, 1.5];
@@ -206,7 +229,7 @@ var PT = (function () {
                   if (!bk.uv_url) return;
                   var when = bk.valid_at ? Date.parse(bk.valid_at)
                     : anchor + (day.day * 24 + midHour(bk.hours)) * 3600e3;
-                  subs.push(decodeUV(bk.uv_url, rng[0], rng[1]).then(function (g) {
+                  subs.push(decodeUV(fixUrl(bk.uv_url), rng[0], rng[1]).then(function (g) {
                     if (g) out.surface.push({ t: (when - t0) / 3600e3, g: g, k: KT_TO_MS });
                   }));
                 });
@@ -217,7 +240,7 @@ var PT = (function () {
 
         // --- wind (kt) for windage ---
         if (L.wind5d && L.wind5d.summary_url) {
-          jobs.push(fetch(L.wind5d.summary_url, { cache: 'no-cache' })
+          jobs.push(fetch(fixUrl(L.wind5d.summary_url), { cache: 'no-cache' })
             .then(function (r) { return r.json(); })
             .then(function (s) {
               var rng = L.wind5d.uv_range || [-30, 30];
@@ -228,7 +251,7 @@ var PT = (function () {
                   if (!bk.uv_url) return;
                   var when = bk.valid_at ? Date.parse(bk.valid_at)
                     : anchor + (day.day * 24 + midHour(bk.hours)) * 3600e3;
-                  subs.push(decodeUV(bk.uv_url, rng[0], rng[1]).then(function (g) {
+                  subs.push(decodeUV(fixUrl(bk.uv_url), rng[0], rng[1]).then(function (g) {
                     if (g) out.wind.push({ t: (when - t0) / 3600e3, g: g, k: KT_TO_MS });
                   }));
                 });
@@ -239,16 +262,17 @@ var PT = (function () {
 
         // --- RTOFS model currents (m/s) — the only forcing past +5 d ---
         if (L.rtofs5d && L.rtofs5d.summary_url) {
-          jobs.push(fetch(L.rtofs5d.summary_url, { cache: 'no-cache' })
+          jobs.push(fetch(fixUrl(L.rtofs5d.summary_url), { cache: 'no-cache' })
             .then(function (r) { return r.json(); })
             .then(function (s) {
               var rng = L.rtofs5d.uv_range || [-2, 2];
-              var init = Date.parse(s.init_cycle || '');
+              var init = parseCycle(s.init_cycle);
               var subs = [];
+              if (isNaN(init)) { out.notes.push('RTOFS init_cycle unparseable'); return; }
               (s.days || []).forEach(function (day) {
                 if (!day.uv_url) return;
                 var when = init + (day.lead_hours || day.day_offset * 24) * 3600e3;
-                subs.push(decodeUV(day.uv_url, rng[0], rng[1]).then(function (g) {
+                subs.push(decodeUV(fixUrl(day.uv_url), rng[0], rng[1]).then(function (g) {
                   if (g) out.rtofs.push({ t: (when - t0) / 3600e3, g: g, k: 1.0 });
                 }));
               });
@@ -260,8 +284,17 @@ var PT = (function () {
       })
       .then(function () {
         ['surface', 'wind', 'rtofs'].forEach(function (k) {
+          out[k] = out[k].filter(function (e) { return isFinite(e.t); });
           out[k].sort(function (a, b) { return a.t - b.t; });
         });
+        // How far the CURRENT forcing actually reaches. Past this the old
+        // code clamped to the last field and drifted on a frozen current
+        // for days, which is what made the tail of the track unrealistic.
+        var last = function (l) { return l.length ? l[l.length - 1].t : -Infinity; };
+        out.currentHorizonH = Math.max(last(out.rtofs), last(out.surface));
+        out.sources = { rtofs: out.rtofs.length, surface: out.surface.length, wind: out.wind.length };
+        if (!out.rtofs.length) out.notes.push('no ocean-model currents (RTOFS) — short horizon');
+        if (!out.surface.length) out.notes.push('no surface-current field');
         return out;
       });
   }
@@ -293,6 +326,10 @@ var PT = (function () {
 
   // Full paddy velocity in km/h at (t, lng, lat). null = off-grid / beached.
   function velocity(F, t, lng, lat) {
+    // Refuse to drift past the end of the current forecast. Clamping to
+    // the last field silently advects on a frozen current, which looks
+    // like a confident straight run and is not one.
+    if (isFinite(F.currentHorizonH) && t > F.currentHorizonH + 6) return null;
     var rt = sampleSeries(F.rtofs, F.bbox, t, lng, lat);
     var sf = sampleSeries(F.surface, F.bbox, t, lng, lat);
     var cu = 0, cv = 0, got = false;
@@ -463,6 +500,8 @@ var PT = (function () {
   return {
     loadForcing: loadForcing,
     parseLatLng: parseLatLng,
+    fixUrl: fixUrl,
+    parseCycle: parseCycle,
     forecast: forecast,
     integrate: integrate,
     sampleUV: sampleUV,
