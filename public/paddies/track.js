@@ -60,6 +60,71 @@ var PT = (function () {
   var KT_TO_MS = 0.514444;
   var MS_TO_KMH = 3.6;
 
+
+  /* ---- coordinate parsing ---------------------------------------------
+   * Skippers type what their plotter shows, and plotters show several
+   * things. All of these are the same point and all must work:
+   *
+   *   32 56 0000 117 52 000      <- deg, min, decimal-minutes split out
+   *   32 56.000 117 52.000       <- deg + decimal minutes
+   *   32°56.000'N 117°52.000'W
+   *   32 56 30 117 52 15         <- deg min SEC
+   *   32.9333, -117.8667         <- decimal degrees
+   *
+   * Ambiguity that matters: in "D M X", X is seconds if it is a 1-2 digit
+   * value <= 59, but decimal-minutes if it carries 3+ digits (0000, 000)
+   * — which is exactly how the split-minutes plotters print it. We return
+   * `how` so the UI can echo back the reading and the user can catch a
+   * misparse before running a forecast on the wrong water.
+   *
+   * Hemisphere: honoured from N/S/E/W or a minus sign. With neither, we
+   * assume the western hemisphere, because every region this app covers
+   * (CA, Baja, PNW) is west — stated rather than silent.
+   */
+  function parseLatLng(str) {
+    if (!str) return null;
+    var S = String(str).toUpperCase();
+    var toks = S.match(/-?\d+(?:\.\d+)?/g);
+    if (!toks) return null;
+
+    var groups;
+    if (toks.length === 2)      groups = [toks.slice(0, 1), toks.slice(1, 2)];
+    else if (toks.length === 4) groups = [toks.slice(0, 2), toks.slice(2, 4)];
+    else if (toks.length === 6) groups = [toks.slice(0, 3), toks.slice(3, 6)];
+    else return null;
+
+    var how = [];
+    function toDeg(g) {
+      var lead = parseFloat(g[0]);
+      var sign = lead < 0 ? -1 : 1;
+      var d = Math.abs(lead);
+      if (g.length === 1) { how.push('decimal degrees'); return sign * d; }
+      var m = parseFloat(g[1]);
+      if (g.length === 2) { how.push('deg + decimal minutes'); return sign * (d + m / 60); }
+      var third = g[2], v = parseFloat(third);
+      var digits = third.replace(/[^0-9]/g, '').length;
+      var mins;
+      if (digits >= 3 || v > 59) {
+        mins = m + v / Math.pow(10, digits);   // 56 0000 -> 56.0000'
+        how.push('deg + minutes + decimal minutes');
+      } else {
+        mins = m + v / 60;                     // 56 30 -> 56'30"
+        how.push('deg + min + sec');
+      }
+      return sign * (d + mins / 60);
+    }
+
+    var lat = toDeg(groups[0]), lng = toDeg(groups[1]);
+    if (/S/.test(S)) lat = -Math.abs(lat);
+    if (/W/.test(S)) lng = -Math.abs(lng);
+    else if (/E/.test(S)) lng = Math.abs(lng);
+    else if (lng > 0) lng = -lng;              // western hemisphere assumed
+
+    if (!isFinite(lat) || !isFinite(lng)) return null;
+    if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+    return { lat: lat, lng: lng, how: how[0] };
+  }
+
   function kmPerDeg(lat) {
     var r = lat * Math.PI / 180;
     return { lat: 111.132, lng: 111.320 * Math.cos(r) };
@@ -397,6 +462,7 @@ var PT = (function () {
 
   return {
     loadForcing: loadForcing,
+    parseLatLng: parseLatLng,
     forecast: forecast,
     integrate: integrate,
     sampleUV: sampleUV,

@@ -144,3 +144,58 @@ test("land / no-data cells stop the track rather than sampling through them", ()
   const tr = PT.integrate(f, -119.0, 33.0, 168, false, 1);
   assert.ok(tr.length < 169, "should stop at the no-data boundary");
 });
+
+// ---- coordinate parsing -------------------------------------------------
+// Skippers type whatever their plotter shows. All of these are the same
+// point off San Diego and all must land within a few metres of each other.
+const near = (a, b, tol = 0.0005) => Math.abs(a - b) < tol;
+
+test("reads split degrees/minutes/decimal-minutes: '32 56 0000 117 52 000'", () => {
+  const p = PT.parseLatLng("32 56 0000 117 52 000");
+  assert.ok(p, "should parse");
+  assert.ok(near(p.lat, 32 + 56 / 60), `lat ${p.lat}`);
+  assert.ok(near(p.lng, -(117 + 52 / 60)), `lng ${p.lng}`);
+  assert.match(p.how, /decimal minutes/);
+});
+
+test("split minutes keep their fraction: '32 56 5000' = 32°56.5'", () => {
+  const p = PT.parseLatLng("32 56 5000 117 52 2500");
+  assert.ok(near(p.lat, 32 + 56.5 / 60), `lat ${p.lat}`);
+  assert.ok(near(p.lng, -(117 + 52.25 / 60)), `lng ${p.lng}`);
+});
+
+test("the same point in every other plotter format agrees", () => {
+  const ref = PT.parseLatLng("32 56 0000 117 52 000");
+  for (const s of [
+    "32 56.000 117 52.000",
+    "32°56.000'N 117°52.000'W",
+    "3256.000N 11752.000W".replace("3256.000", "32 56.000").replace("11752.000", "117 52.000"),
+    "32.93333 -117.86667",
+  ]) {
+    const p = PT.parseLatLng(s);
+    assert.ok(p, `failed to parse: ${s}`);
+    assert.ok(near(p.lat, ref.lat, 0.001) && near(p.lng, ref.lng, 0.001),
+      `${s} -> ${p.lat.toFixed(5)},${p.lng.toFixed(5)} != ${ref.lat.toFixed(5)},${ref.lng.toFixed(5)}`);
+  }
+});
+
+test("2-digit third group is SECONDS, not decimal minutes", () => {
+  // 32 56 30 -> 32°56'30" = 32.94166, NOT 32°56.30' = 32.93833
+  const p = PT.parseLatLng("32 56 30 117 52 15");
+  assert.ok(near(p.lat, 32 + 56 / 60 + 30 / 3600), `lat ${p.lat}`);
+  assert.match(p.how, /sec/);
+});
+
+test("hemisphere honoured, and western assumed when unmarked", () => {
+  assert.ok(PT.parseLatLng("32 56.000 117 52.000").lng < 0, "unmarked lng -> west");
+  assert.ok(PT.parseLatLng("32 56.000 S 117 52.000 E").lat < 0, "S -> negative lat");
+  assert.ok(PT.parseLatLng("32 56.000 S 117 52.000 E").lng > 0, "E -> positive lng");
+  assert.ok(PT.parseLatLng("32.9333, -117.8667").lng < 0, "explicit minus preserved");
+});
+
+test("junk and impossible coordinates are refused, not guessed", () => {
+  assert.equal(PT.parseLatLng(""), null);
+  assert.equal(PT.parseLatLng("no numbers here"), null);
+  assert.equal(PT.parseLatLng("32"), null, "one number is not a position");
+  assert.equal(PT.parseLatLng("95 00.000 117 52.000"), null, "latitude past the pole");
+});
