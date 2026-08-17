@@ -298,3 +298,91 @@ test("survival fraction is domain-tracking, not flotation", () => {
   const s = f.steps.find((x) => x.t === 48);
   assert.ok(s.inDomain > 0 && s.inDomain <= 1, "inDomain fraction reported");
 });
+
+/* ---- corridor geometry ---------------------------------------------
+   The drawn band and the number in the panel have to be the same claim.
+   They were not: the selected-hour band reused the 7-day lane's
+   per-step width, so on live forcing a band labelled "+-2.49 km either
+   side" was drawn ramping +-1.02 -> +-3.68 km, i.e. 2.0 km wide at the
+   near end and 7.4 km at the far end. Visually it read as a lopsided
+   orange wedge spilling off one side of the track. */
+
+// Half-width of a ribbon at vertex k, recovered from the closed polygon.
+// corridor() returns left[0..n-1] ++ reverse(right[0..n-1]), so vertex k
+// pairs with poly[len-1-k].
+function halfWidthAt(poly, k) {
+  const a = poly[k], b = poly[poly.length - 1 - k];
+  const kLat = 111.132, kLng = 111.32 * Math.cos((a[0] * Math.PI) / 180);
+  return Math.hypot((b[1] - a[1]) * kLng, (b[0] - a[0]) * kLat) / 2;
+}
+
+// A curving track with a genuinely growing spread, which is the case
+// that exposed the bug.
+function curvedForecast() {
+  const F = {
+    bbox: BBOX,
+    rtofs: [{ t: 0, g: uniform(0.25, -0.18), k: 1 }, { t: 200, g: uniform(0.25, -0.18), k: 1 }],
+    surface: [],
+    wind: [{ t: 0, g: uniform(4, -3), k: 1 }, { t: 200, g: uniform(4, -3), k: 1 }],
+  };
+  return PT.forecast(F, -119.0, 33.5, 168);
+}
+
+test("selected-hour band is ONE width — the spread at that hour", () => {
+  const f = curvedForecast();
+  const i = f.steps.findIndex((s) => s.t === 24);
+  const [lo, hi] = PT.alongSpan(f.steps, i);
+  const want = f.steps[i].crossKm;
+  const poly = PT.corridor(f.steps, lo, hi, () => want);
+  const n = poly.length / 2;
+  // 0.5% covers the spherical round-trip in halfWidthAt (it recovers the
+  // scale at the offset point, not the centre). The regression it guards
+  // against was a 3.6x ramp, so this is nowhere near too loose.
+  for (let k = 0; k < n; k++) {
+    const got = halfWidthAt(poly, k);
+    assert.ok(Math.abs(got - want) / want < 0.005,
+      `vertex ${k}: half-width ${got.toFixed(4)} km, expected a constant ${want.toFixed(4)} km`);
+  }
+});
+
+test("the 7-day lane still widens — growth is real, not a bug to flatten", () => {
+  const f = curvedForecast();
+  let laneEnd = 0;
+  f.steps.forEach((s, i) => { if (s.t <= f.laneEndH) laneEnd = i; });
+  const poly = PT.corridor(f.steps, 0, laneEnd, (i) => f.steps[i].crossKm);
+  const n = poly.length / 2;
+  const first = halfWidthAt(poly, 0), last = halfWidthAt(poly, n - 1);
+  assert.ok(last > first, `lane should widen: ${first.toFixed(2)} -> ${last.toFixed(2)} km`);
+  // crossKm is built as a non-decreasing envelope, so the drawn lane
+  // must never narrow either.
+  for (let k = 1; k < n; k++) {
+    assert.ok(halfWidthAt(poly, k) >= halfWidthAt(poly, k - 1) - 1e-9,
+      `lane narrows at vertex ${k} — uncertainty does not shrink with time`);
+  }
+});
+
+test("a corridor contains the stretch of track it is drawn around", () => {
+  const f = curvedForecast();
+  const i = f.steps.findIndex((s) => s.t === 24);
+  const [lo, hi] = PT.alongSpan(f.steps, i);
+  const poly = PT.corridor(f.steps, lo, hi, () => f.steps[i].crossKm);
+  const inside = (pt) => {
+    let c = false;
+    for (let a = 0, b = poly.length - 1; a < poly.length; b = a++) {
+      const yi = poly[a][0], xi = poly[a][1], yj = poly[b][0], xj = poly[b][1];
+      if ((yi > pt[0]) !== (yj > pt[0]) &&
+          pt[1] < ((xj - xi) * (pt[0] - yi)) / (yj - yi) + xi) c = !c;
+    }
+    return c;
+  };
+  for (let k = lo + 1; k < hi; k++) {
+    assert.ok(inside([f.steps[k].lat, f.steps[k].lng]),
+      `hour ${f.steps[k].t} falls outside its own corridor`);
+  }
+});
+
+test("corridor geometry is pure — no DOM, no Leaflet", () => {
+  // It used to live in trackui.js, which cannot be loaded headlessly.
+  ["corridor", "alongSpan", "dirAt", "offsetKm"].forEach((fn) =>
+    assert.equal(typeof PT[fn], "function", `PT.${fn} should be exported`));
+});
