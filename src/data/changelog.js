@@ -15,6 +15,24 @@
 
 export const CHANGELOG = [
   {
+    id: "2026-08-17-3",
+    date: "August 17, 2026",
+    title: "Beta tools, one tap from the top bar",
+    items: [
+      {
+        type: "new",
+        text:
+          "A new grid button in the top bar opens the beta tools menu on " +
+          "every screen size: the Kelp Paddy Finder, and Track a paddy, " +
+          "which now opens straight into the tracker with its panel " +
+          "ready for your GPS mark. On phones the tools used to be " +
+          "buried at the bottom of the info sheet; now they are two taps " +
+          "from anywhere. California region only, same as the tools " +
+          "themselves.",
+      },
+    ],
+  },
+  {
     id: "2026-08-17-2",
     date: "August 17, 2026",
     title: "Tracked paddies now come with an age",
