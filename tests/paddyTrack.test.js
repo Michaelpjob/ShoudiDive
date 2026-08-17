@@ -42,7 +42,7 @@ function forcing({ cu = 0, cv = 0, wu = 0, wv = 0 } = {}) {
 
 test("constants match the calibrated prototype", () => {
   const c = PT.consts;
-  assert.equal(c.WINDAGE_ALPHA, 0.02, "floating kelp = 2% of wind");
+  assert.equal(c.LEEWAY_ALPHA, 0.02, "combined wind response (windage + Stokes)");
   // Measured flow-frame decomposition of the current-product disagreement.
   assert.equal(c.SIGMA_ALONG_MS, 0.166);
   assert.equal(c.SIGMA_CROSS_MS, 0.039);
@@ -275,4 +275,26 @@ test("members that run out of forcing drop out of the cloud", () => {
   const last = f.steps[f.steps.length - 1];
   assert.ok(last.t <= 56, "forecast should not outlive its forcing");
   assert.ok(last.afloat <= 1 && last.afloat > 0, "afloat fraction should be reported");
+});
+
+test("leeway is the COMBINED wind term — no separate Stokes, no double count", () => {
+  // Literature splits surface wind response into windage (~1% for
+  // macroalgae rafts) and Stokes (~1-1.5% of wind, predominantly
+  // downwind). Models use one OR the other, never both. This engine uses
+  // the implicit-leeway form: a single 2% coefficient standing for both.
+  assert.equal(PT.consts.LEEWAY_ALPHA, 0.02);
+  assert.equal(PT.consts.STOKES_COEF, undefined,
+    "an explicit Stokes term would double-count the downwind response");
+  // 10 m/s of wind, no current -> 0.2 m/s -> 17.28 km/day, nothing more.
+  const tr = PT.integrate(forcing({ wu: 10 }), -119.0, 33.0, 24, false, 1);
+  const km = PT.haversineKm(33.0, -119.0, tr[tr.length - 1].lat, tr[tr.length - 1].lng);
+  assert.ok(Math.abs(km - 17.28) < 0.6, `expected ~17.3 km, got ${km.toFixed(1)}`);
+});
+
+test("survival fraction is domain-tracking, not flotation", () => {
+  // Sinking is not modelled. A run leaves the ensemble by exiting the
+  // grid or hitting land — calling that "afloat" would overclaim.
+  const f = PT.forecast(forcing({ cu: 0.3 }), -119.0, 33.0, 72);
+  const s = f.steps.find((x) => x.t === 48);
+  assert.ok(s.inDomain > 0 && s.inDomain <= 1, "inDomain fraction reported");
 });
