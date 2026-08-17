@@ -43,6 +43,10 @@ function forcing({ cu = 0, cv = 0, wu = 0, wv = 0 } = {}) {
 test("constants match the calibrated prototype", () => {
   const c = PT.consts;
   assert.equal(c.WINDAGE_ALPHA, 0.02, "floating kelp = 2% of wind");
+  // Measured flow-frame decomposition of the current-product disagreement.
+  assert.equal(c.SIGMA_ALONG_MS, 0.166);
+  assert.equal(c.SIGMA_CROSS_MS, 0.039);
+  assert.ok(c.SIGMA_ALONG_MS / c.SIGMA_CROSS_MS > 4, "error is along-flow dominated");
   assert.equal(c.DT_HOURS, 1.0);
   assert.equal(c.DIFFUSION_K_M2S, 5.0);
   assert.equal(c.BLEND_RTOFS + c.BLEND_SURFACE, 1.0);
@@ -79,20 +83,46 @@ test("uncertainty grows with lead time and is reported per hour", () => {
   const f = PT.forecast(forcing({ cu: 0.3 }), -119.0, 33.0, 168);
   const at = (h) => f.steps.find((s) => s.t === h);
   assert.ok(f.steps.length > 100, "should produce hourly steps across the week");
-  assert.equal(at(0).radiusKm, 0, "no spread at the observed position");
-  const d1 = at(24).radiusKm, d3 = at(72).radiusKm, d7 = at(168).radiusKm;
-  assert.ok(d1 > 3, `day-1 spread should be real, got ${d1.toFixed(1)} km`);
+  assert.equal(at(0).alongKm, 0, "no spread at the observed position");
+  const d1 = at(24).alongKm, d3 = at(72).alongKm, d7 = at(168).alongKm;
+  assert.ok(d1 > 3, `day-1 along spread should be real, got ${d1.toFixed(1)} km`);
   assert.ok(d3 > d1 && d7 > d3, `spread must grow: ${d1.toFixed(1)} < ${d3.toFixed(1)} < ${d7.toFixed(1)}`);
-  // The measured current disagreement (0.166 m/s) is the seed, so a
-  // week out the search radius must be tens of km — never a pin.
-  assert.ok(d7 > 20, `day-7 radius should be tens of km, got ${d7.toFixed(1)}`);
+  assert.ok(d7 > 20, `day-7 along spread should be tens of km, got ${d7.toFixed(1)}`);
 });
 
-test("confidence tiers stop calling a wide spread a position", () => {
-  assert.equal(PT.tierFor(8).key, "search");
-  assert.equal(PT.tierFor(25).key, "wide");
-  assert.equal(PT.tierFor(60).key, "region");
-  assert.match(PT.tierFor(60).note, /[Nn]ot a waypoint/);
+test("the spread is a CORRIDOR: along-track error dwarfs cross-track", () => {
+  // A paddy runs down the flow; it does not wander back upstream. So the
+  // uncertainty is "how far along", not "which way" — the shape must be a
+  // lane, never a disc. (User feedback 2026-08-16, backed by the measured
+  // 4.3x along/cross anisotropy.)
+  const f = PT.forecast(forcing({ cu: 0.3 }), -119.0, 33.0, 168);
+  for (const h of [24, 72, 168]) {
+    const s = f.steps.find((x) => x.t === h);
+    assert.ok(s.alongKm > 2.5 * s.crossKm,
+      `day ${h / 24}: along ${s.alongKm.toFixed(1)} should dwarf cross ${s.crossKm.toFixed(1)}`);
+  }
+  const d7 = f.steps.find((x) => x.t === 168);
+  // The lane must stay narrow enough to actually run down.
+  assert.ok(d7.crossKm < 15, `day-7 lane should stay runnable, got ±${d7.crossKm.toFixed(1)} km`);
+  // And a corridor must be far smaller than the circle it replaces.
+  const ell = Math.PI * d7.alongKm * d7.crossKm;
+  const circ = Math.PI * Math.pow(Math.max(d7.alongKm, d7.crossKm), 2);
+  assert.ok(circ / ell > 4, `corridor should shrink the search a lot, got ${(circ / ell).toFixed(1)}x`);
+});
+
+test("every step carries a track bearing for orienting the corridor", () => {
+  const f = PT.forecast(forcing({ cu: 0.3 }), -119.0, 33.0, 48);
+  const s = f.steps.find((x) => x.t === 24);
+  assert.ok(Number.isFinite(s.bearing) && s.bearing >= 0 && s.bearing < 360);
+  // Pure eastward flow -> heading ~090.
+  assert.ok(Math.abs(s.bearing - 90) < 25, `expected ~090 bearing, got ${s.bearing.toFixed(0)}`);
+});
+
+test("tiers grade the corridor WIDTH — what a boat actually sweeps", () => {
+  assert.equal(PT.tierFor(3).key, "search");
+  assert.equal(PT.tierFor(9).key, "wide");
+  assert.equal(PT.tierFor(20).key, "region");
+  assert.match(PT.tierFor(3).note, /[Rr]un the line/);
 });
 
 test("a particle that leaves the data truncates instead of inventing drift", () => {

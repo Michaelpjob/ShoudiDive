@@ -40,10 +40,22 @@ var PT = (function () {
   var BLEND_RTOFS = 0.65;        // model backbone
   var BLEND_SURFACE = 0.35;      // published surface-current detail
 
-  // ---- measured uncertainty (see header) -------------------------------
-  var SIGMA_V_MS = 0.166;        // RMS disagreement between our current products
-  var DECORR_HOURS = 12;         // error redrawn twice a day
-  var N_MEMBERS = 60;
+  // ---- measured uncertainty, DECOMPOSED IN THE FLOW FRAME ---------------
+  // Drift error is not isotropic and a circular spread badly oversells the
+  // search. Projecting the RTOFS-vs-surface disagreement onto the local
+  // flow direction (12,972 cells with a defined direction, 2026-08-16):
+  //     along-flow  0.166 m/s   <- how FAR it gets (speed error)
+  //     cross-flow  0.039 m/s   <- which WAY it goes (heading error)
+  //     ratio 4.3x
+  // A paddy does not wander back upstream; it runs down the flow and the
+  // question is how far along. So the along error is treated as largely a
+  // PERSISTENT speed bias (drawn once per member -> stretches the corridor)
+  // while the cross error decorrelates (-> a narrow ribbon, not a blob).
+  // Day-7 footprint drops from ~31,600 km2 (circle) to ~2,000 km2 (corridor).
+  var SIGMA_ALONG_MS = 0.166;
+  var SIGMA_CROSS_MS = 0.039;
+  var DECORR_HOURS = 12;         // cross-flow error redrawn twice a day
+  var N_MEMBERS = 120;   // more members = less sampling noise in the percentiles
 
   var KT_TO_MS = 0.514444;
   var MS_TO_KMH = 3.6;
@@ -247,17 +259,25 @@ var PT = (function () {
    * if the particle leaves the grid (beached / off-domain). */
   function integrate(F, lng0, lat0, hours, pert, seed) {
     var r = rnd(seed || 1), lng = lng0, lat = lat0, out = [{ t: 0, lng: lng, lat: lat }];
-    var eu = 0, ev = 0, nextRedraw = 0;
+    // Along-flow error is a persistent speed bias: drawn ONCE so the member
+    // consistently runs fast or slow, which is what stretches the corridor
+    // lengthwise instead of fattening it into a disc.
+    var eAlong = pert ? gauss(r) * SIGMA_ALONG_MS * MS_TO_KMH : 0;
+    var eCross = 0, nextRedraw = 0;
     var diffKm = Math.sqrt(2 * DIFFUSION_K_M2S * DT_HOURS * 3600) / 1000;
     for (var t = 0; t < hours; t += DT_HOURS) {
-      if (pert && t >= nextRedraw) {          // decorrelated velocity error
-        eu = gauss(r) * SIGMA_V_MS / Math.SQRT2 * MS_TO_KMH;
-        ev = gauss(r) * SIGMA_V_MS / Math.SQRT2 * MS_TO_KMH;
+      if (pert && t >= nextRedraw) {          // heading error decorrelates
+        eCross = gauss(r) * SIGMA_CROSS_MS * MS_TO_KMH;
         nextRedraw = t + DECORR_HOURS;
       }
       var k = kmPerDeg(lat);
       var v1 = velocity(F, t, lng, lat);
       if (!v1) break;
+      // Rotate the flow-frame error into u/v using this step's direction.
+      var sp = Math.sqrt(v1.u * v1.u + v1.v * v1.v);
+      var ax = sp > 1e-6 ? v1.u / sp : 1, ay = sp > 1e-6 ? v1.v / sp : 0;
+      var eu = eAlong * ax - eCross * ay;
+      var ev = eAlong * ay + eCross * ax;
       var latM = lat + 0.5 * DT_HOURS * (v1.v + ev) / k.lat;
       var lngM = lng + 0.5 * DT_HOURS * (v1.u + eu) / Math.max(1e-6, k.lng);
       var v2 = velocity(F, t + 0.5 * DT_HOURS, lngM, latM);
@@ -286,13 +306,13 @@ var PT = (function () {
    * ensemble radius crosses distances that change what a boat should do.
    * A typical run to the paddies is 20-40 nm, so once the search radius
    * approaches that, "position" stops being the right word. */
-  function tierFor(radiusKm) {
-    if (radiusKm <= 15) return { key: 'search', label: 'Search area',
-      note: 'Workable — run to the centre and search outward.' };
-    if (radiusKm <= 35) return { key: 'wide', label: 'Wide area',
-      note: 'Rough. Direction is meaningful, the exact spot is not.' };
-    return { key: 'region', label: 'Region only',
-      note: 'Not a waypoint. This is a drift direction over a large area.' };
+  function tierFor(crossKm) {
+    if (crossKm <= 5) return { key: 'search', label: 'Tight corridor',
+      note: 'Run the line — the paddy should be within a few miles either side.' };
+    if (crossKm <= 12) return { key: 'wide', label: 'Wide corridor',
+      note: 'Run the line, but sweep wider across it.' };
+    return { key: 'region', label: 'Loose corridor',
+      note: 'Direction still holds; the corridor is broad enough to need a real search.' };
   }
 
   /* Public: forecast a paddy seen at (lng, lat) at time `seenAt` (Date).
@@ -310,16 +330,64 @@ var PT = (function () {
       for (var j = 0; j < members.length; j++) {
         if (members[j].length > i) live.push(members[j][i]);
       }
-      var ds = live.map(function (p) { return haversineKm(c.lat, c.lng, p.lat, p.lng); })
-                   .sort(function (a, b) { return a - b; });
-      var r68 = ds.length ? ds[Math.min(ds.length - 1, Math.floor(ds.length * 0.68))] : 0;
+      // Local track direction, so the spread can be split the way a skipper
+      // thinks about it: how far ALONG the line vs how far OFF it.
+      var prev = centre[Math.max(0, i - 1)], next = centre[Math.min(centre.length - 1, i + 1)];
+      var kd = kmPerDeg(c.lat);
+      var tx = (next.lng - prev.lng) * kd.lng, ty = (next.lat - prev.lat) * kd.lat;
+      var tl = Math.sqrt(tx * tx + ty * ty);
+      if (tl < 1e-6) { tx = 1; ty = 0; tl = 1; }
+      tx /= tl; ty /= tl;
+      var al = [], cr = [];
+      for (var q = 0; q < live.length; q++) {
+        var ex = (live[q].lng - c.lng) * kd.lng, ey = (live[q].lat - c.lat) * kd.lat;
+        al.push(Math.abs(ex * tx + ey * ty));
+        cr.push(Math.abs(-ex * ty + ey * tx));
+      }
+      var p68 = function (arr) {
+        if (!arr.length) return 0;
+        arr.sort(function (a, b) { return a - b; });
+        return arr[Math.min(arr.length - 1, Math.floor(arr.length * 0.68))];
+      };
+      var alongKm = p68(al), crossKm = p68(cr);
       steps.push({
         t: c.t, lng: c.lng, lat: c.lat,
-        radiusKm: r68,
-        afloat: live.length / N_MEMBERS,     // fraction still on-grid
-        tier: tierFor(r68)
+        alongKm: alongKm, crossKm: crossKm,
+        radiusKm: Math.max(alongKm, crossKm),   // legacy worst-case
+        bearing: (Math.atan2(tx, ty) * 180 / Math.PI + 360) % 360,
+        afloat: live.length / N_MEMBERS,
+        tier: tierFor(crossKm)                  // usability = how wide the LINE is
       });
     }
+    // Smooth the spread into a monotone ENVELOPE before anyone draws it.
+    // Raw per-step percentiles off a finite ensemble are noisy (measured:
+    // 6.9 -> 14.7 -> 27.2 km on consecutive samples), and a corridor that
+    // narrows and re-widens is both physically wrong — knowledge of where
+    // the paddy is does not improve with time — and renders as spikes,
+    // because neighbouring ribbon vertices jump sideways past each other.
+    // Running mean, then a non-decreasing envelope: conservative (never
+    // narrower than measured) and clean to draw.
+    var W = 5;
+    ['alongKm', 'crossKm'].forEach(function (key) {
+      var sm = steps.map(function (_, i) {
+        var a = Math.max(0, i - W), b = Math.min(steps.length - 1, i + W), sum = 0, n = 0;
+        for (var j = a; j <= b; j++) { sum += steps[j][key]; n++; }
+        return sum / n;
+      });
+      var run = 0;
+      for (var i = 0; i < steps.length; i++) {
+        run = Math.max(run, sm[i]);
+        steps[i][key] = run;
+      }
+    });
+    // The observed position has zero uncertainty by definition — the user
+    // watched it there. The smoothing window looks forward, so re-anchor it.
+    if (steps.length) { steps[0].alongKm = 0; steps[0].crossKm = 0; }
+    steps.forEach(function (s) {
+      s.radiusKm = Math.max(s.alongKm, s.crossKm);
+      s.tier = tierFor(s.crossKm);
+    });
+
     return {
       steps: steps,
       hoursCovered: steps.length ? steps[steps.length - 1].t : 0,
@@ -335,7 +403,8 @@ var PT = (function () {
     tierFor: tierFor,
     haversineKm: haversineKm,
     consts: {
-      WINDAGE_ALPHA: WINDAGE_ALPHA, SIGMA_V_MS: SIGMA_V_MS,
+      WINDAGE_ALPHA: WINDAGE_ALPHA,
+      SIGMA_ALONG_MS: SIGMA_ALONG_MS, SIGMA_CROSS_MS: SIGMA_CROSS_MS,
       DT_HOURS: DT_HOURS, N_MEMBERS: N_MEMBERS,
       BLEND_RTOFS: BLEND_RTOFS, BLEND_SURFACE: BLEND_SURFACE,
       DIFFUSION_K_M2S: DIFFUSION_K_M2S, DECORR_HOURS: DECORR_HOURS
