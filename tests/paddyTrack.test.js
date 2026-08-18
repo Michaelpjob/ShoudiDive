@@ -510,3 +510,94 @@ test("a band never wraps a turn into a blob", () => {
     }
   }
 });
+
+/* ---- origin & age ---------------------------------------------------
+   The tool used to treat a sighted paddy as day zero of its life. It is
+   not: it broke off a bed days ago and has been fouling since. These pin
+   the estimate that replaces that assumption. Lifespan anchors are the
+   deep-research-verified literature values (Hobday 2000; Graiff /
+   Rothausler temperature work) — a test failing here means someone
+   changed a cited number, which needs a citation, not a tweak. */
+
+test("lifespan anchors match the literature", () => {
+  assert.equal(PT.LIFE.COOL_D, 41, "cool-water median (Graiff)");
+  assert.equal(PT.LIFE.WARM_D, 22, "warm-water median (Graiff)");
+  // element-wise: the array comes from the vm sandbox realm, so
+  // deepStrictEqual would fail on the prototype, not the values
+  assert.equal(PT.LIFE.MAX_OBSERVED_D[0], 63, "SCB survivors lo (Hobday)");
+  assert.equal(PT.LIFE.MAX_OBSERVED_D[1], 109, "SCB survivors hi (Hobday)");
+  assert.equal(PT.lifespanDays(14).typical, 41);
+  assert.equal(PT.lifespanDays(20).typical, 22);
+  assert.equal(PT.lifespanDays(24.5).band, "hot", ">24 C is the hard-sink regime");
+  // interpolation between the anchors is monotone in temperature
+  let prev = Infinity;
+  for (const t of [12, 16, 17, 18, 19, 21, 24, 26]) {
+    const d = PT.lifespanDays(t).typical;
+    assert.ok(d <= prev, `lifespan should not lengthen as water warms (${t}C)`);
+    prev = d;
+  }
+  // no temperature -> a band, not a fabricated point estimate
+  const u = PT.lifespanDays(null);
+  assert.equal(u.typical, null);
+  assert.ok(u.lo === 22 && u.hi === 41);
+});
+
+function bedsFC(points) {
+  return { type: "FeatureCollection", features: points.map(([lng, lat, detach, island]) => ({
+    type: "Feature", properties: { bed: "t", island: !!island, detach_now: detach ?? 1 },
+    geometry: { type: "Point", coordinates: [lng, lat] },
+  })) };
+}
+
+test("source candidates sit up-current, not just nearby", () => {
+  // Flow is due EAST at the sighting, so the paddy came FROM the west.
+  // One bed west (upstream), one equally near bed east (downstream).
+  const beds = bedsFC([[-119.5, 33.0], [-118.5, 33.0]]);
+  const sight = { lng: -119.0, lat: 33.0 };
+  const c = PT.sourceCandidates(sight.lng, sight.lat, beds, 90, 20, 24, null, 22);
+  assert.equal(c.length, 1, "only the upstream bed qualifies");
+  assert.ok(c[0].lng === -119.5, "the WEST bed is the source candidate");
+  // ~46.7 km at 20 km/day, regime 0.6-1.8x -> ~1.3 to ~3.9 days
+  assert.ok(c[0].transitLo > 1 && c[0].transitLo < 2, `lo ${c[0].transitLo}`);
+  assert.ok(c[0].transitHi > 3 && c[0].transitHi < 5, `hi ${c[0].transitHi}`);
+});
+
+test("unreachably distant beds are excluded by the shed window", () => {
+  // ~514 km upstream at 20 km/day: the fast end of the regime (1.8x)
+  // makes that ~14 days, so it IS reachable inside a 24-day window and
+  // must be excluded only when the window is shorter than that.
+  const beds = bedsFC([[-124.5, 33.0]]);
+  const wide = PT.sourceCandidates(-119.0, 33.0, beds, 90, 20, 24, null, 22);
+  assert.equal(wide.length, 1, "reachable inside 24 days at the fast end");
+  const tight = PT.sourceCandidates(-119.0, 33.0, beds, 90, 20, 10, null, 22);
+  assert.equal(tight.length, 0, "beyond a 10-day shed window");
+});
+
+test("shedding history weights the implied shed date", () => {
+  // Two beds, same bearing, different distances -> different implied shed
+  // dates. A timeline with all the shedding 5 days ago should favour the
+  // bed whose transit time is ~5 days over the one at ~1 day.
+  const beds = bedsFC([[-119.22, 33.0], [-120.08, 33.0]]);   // ~20 km and ~100 km west
+  const tl = [];
+  for (let d = 0; d <= 20; d++) tl.push({ days_ago: d, shed: d === 5 ? 2.0 : 0.1 });
+  const c = PT.sourceCandidates(-119.0, 33.0, beds, 90, 20, 24, tl, 22);
+  assert.equal(c.length, 2);
+  assert.ok(Math.abs(c[0].transitMid - 5) < 1.2,
+    `the ~5-day bed should rank first (got transitMid ${c[0].transitMid.toFixed(1)})`);
+});
+
+test("outlook subtracts age from lifespan and clamps at zero", () => {
+  const life = PT.lifespanDays(20);            // warm: typical 22
+  const young = PT.paddyOutlook([{ transitLo: 2, transitHi: 6 }], life);
+  assert.equal(young.leftLo, 16, "22 - 6");
+  assert.equal(young.leftHi, 20, "22 - 2");
+  const old = PT.paddyOutlook([{ transitLo: 20, transitHi: 30 }], life);
+  assert.equal(old.leftLo, 0, "never negative");
+  assert.equal(PT.paddyOutlook([], life), null, "no candidates, no claim");
+});
+
+test("landmarks name the neighbourhood, and stay silent far offshore", () => {
+  assert.equal(PT.nearestLandmark(-118.45, 33.35), "Catalina");
+  assert.equal(PT.nearestLandmark(-117.27, 32.70), "Point Loma");
+  assert.equal(PT.nearestLandmark(-125.0, 35.0), null, "no name 500 km out");
+});

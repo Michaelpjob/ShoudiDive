@@ -15,6 +15,29 @@
 
 export const CHANGELOG = [
   {
+    id: "2026-08-17-2",
+    date: "August 17, 2026",
+    title: "Tracked paddies now come with an age",
+    items: [
+      {
+        type: "new",
+        text:
+          "A paddy you just found is not brand new — it broke off a bed " +
+          "days ago and has been aging in warm water since. Track a paddy " +
+          "now estimates where it likely came from and how old it is: it " +
+          "looks up-current for kelp beds, checks how much they were " +
+          "shedding on the implied break-off date, and shows the likely " +
+          "origin with a days-adrift range (say, Catalina beds, 36 nm " +
+          "up-current, 2 to 6 days adrift). Combined with water " +
+          "temperature it estimates float time left — warm water sinks " +
+          "paddies in about two to three weeks — and the forecast tells " +
+          "you when it is predicting a paddy that may no longer exist. " +
+          "All of it is labelled estimated: consistent-with, not " +
+          "confirmed.",
+      },
+    ],
+  },
+  {
     id: "2026-08-17",
     date: "August 17, 2026",
     title: "Paddy corridor now matches the number next to it",

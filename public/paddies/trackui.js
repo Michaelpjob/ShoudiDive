@@ -12,6 +12,10 @@
 
 var PTUI = (function () {
   var map, layer, F = null, FC = null, startLL = null, busy = false;
+  // SITE: the paddy hindcast bundle (data.json) handed in by app.js —
+  // bed positions, shedding timeline, water temp. ORIGIN: the origin/age
+  // estimate for the current run, or null when none could be made.
+  var SITE = null, ORIGIN = null;
   var TIER_COLOR = { search: '#22c55e', wide: '#eab308', region: '#f97316' };
 
   function el(id) { return document.getElementById(id); }
@@ -64,6 +68,7 @@ var PTUI = (function () {
             '<span><i class="tk-sw tk-sw-dot"></i>model runs</span>' +
           '</div>' +
           '<div id="tkNote" class="tk-note"></div>' +
+          '<div id="tkOrigin" class="tk-origin" hidden></div>' +
           '<div id="tkSrc" class="tk-src"></div>' +
         '</div>' +
       '</div>';
@@ -161,6 +166,96 @@ var PTUI = (function () {
     return best;
   }
 
+  /* Origin & age estimate for the run that just finished.
+
+     The old assumption was that a tracked paddy is on day zero of its
+     life. It almost never is: it broke off a bed days ago and has been
+     fouling in warm water since. This estimates (a) which mapped beds
+     the sighting is most consistent with, (b) how many days adrift that
+     implies, and (c) how much float time is plausibly left at the
+     current water temperature — so the 7-day forecast can say when it
+     is forecasting a paddy that may no longer exist.
+
+     Assumptions, all surfaced in the UI: recent currents resemble the
+     forecast's drift regime (widened 0.6-1.8x); sources are mapped beds;
+     alignment is consistency, not proof. */
+  function computeOrigin() {
+    ORIGIN = null;
+    var box = el('tkOrigin');
+    if (box) { box.hidden = true; box.innerHTML = ''; }
+    if (!SITE || !SITE.beds || !FC || !FC.steps || FC.steps.length < 6) return;
+
+    var steps = FC.steps;
+    // Drift regime off the forecast's own centre track: arc length over
+    // the first 48 h (or what exists), in km/day.
+    var lastI = 0;
+    for (var i = 0; i < steps.length; i++) if (steps[i].t <= 48) lastI = i;
+    var arc = 0;
+    for (i = 1; i <= lastI; i++) arc += PT.haversineKm(steps[i - 1].lat, steps[i - 1].lng, steps[i].lat, steps[i].lng);
+    var speedKmDay = arc / Math.max(1 / 24, steps[lastI].t / 24);
+    // Local downstream bearing near the start.
+    var d0 = PT.dirAt(steps, Math.min(3, steps.length - 1));
+    var flowBrg = (Math.atan2(d0[0], d0[1]) * 180 / Math.PI + 360) % 360;
+
+    var meta = (SITE.frames && SITE.frames[SITE.default_frame] && SITE.frames[SITE.default_frame].meta) || {};
+    var tl = (SITE.frames && SITE.frames[SITE.default_frame] && SITE.frames[SITE.default_frame].timeline) || null;
+    var tempM = /\((\d+(?:\.\d+)?)\s*°C\)/.exec(meta.why || '');
+    var tempC = tempM ? parseFloat(tempM[1]) : null;
+    var life = PT.lifespanDays(tempC);
+
+    var cands = PT.sourceCandidates(startLL.lng, startLL.lat, SITE.beds, flowBrg,
+                                    speedKmDay, meta.window_days || 24, tl, life.typical);
+    var box2 = el('tkOrigin'); if (!box2) return;
+
+    if (!cands.length) {
+      ORIGIN = { life: life, out: null };
+      box2.innerHTML = '<b>Origin unclear.</b> No mapped beds sit up-current within the ' +
+        'model’s ' + (meta.window_days || 24) + '-day window — an older paddy, or an unmapped source. ' +
+        lifeLine(life, tempC, null);
+      box2.hidden = false;
+      return;
+    }
+    var out = PT.paddyOutlook(cands, life);
+    ORIGIN = { life: life, out: out };
+
+    // Several beds on the same island qualify together; merge rows that
+    // resolve to the same landmark so the list reads as places.
+    var groups = {};
+    cands.forEach(function (c) {
+      var name = PT.nearestLandmark(c.lng, c.lat) || (c.island ? 'island' : 'coastal');
+      var g = groups[name] || (groups[name] = { nmLo: Infinity, nmHi: 0, tLo: Infinity, tHi: 0 });
+      var nm = c.distKm / 1.852;
+      g.nmLo = Math.min(g.nmLo, nm); g.nmHi = Math.max(g.nmHi, nm);
+      g.tLo = Math.min(g.tLo, c.transitLo); g.tHi = Math.max(g.tHi, c.transitHi);
+    });
+    var rows = Object.keys(groups).map(function (name) {
+      var g = groups[name];
+      var nmStr = Math.round(g.nmLo) === Math.round(g.nmHi)
+        ? Math.round(g.nmLo) + ' nm' : Math.round(g.nmLo) + '–' + Math.round(g.nmHi) + ' nm';
+      return '<span class="tk-orow">' + name + ' beds · ' + nmStr + ' up-current · ~' +
+        fmtD(g.tLo) + '–' + fmtD(g.tHi) + ' d adrift</span>';
+    });
+    box2.innerHTML = '<b>Likely origin &amp; age (estimated)</b>' + rows.join('') +
+      lifeLine(life, tempC, out) +
+      '<span class="tk-ocaveat">From bed positions, shedding history and today’s drift regime. ' +
+      'Consistent-with, not confirmed.</span>';
+    box2.hidden = false;
+  }
+  function fmtD(d) { return d < 1 ? '<1' : String(Math.round(d)); }
+  function lifeLine(life, tempC, out) {
+    var s = '<span class="tk-olife">';
+    s += tempC != null
+      ? 'Water ~' + tempC + '°C: typical raft life ~' + (life.typical || PT.LIFE.WARM_D) + ' d '
+      : 'Typical raft life ' + PT.LIFE.WARM_D + '–' + PT.LIFE.COOL_D + ' d depending on water temp ';
+    s += '(max observed ' + PT.LIFE.MAX_OBSERVED_D[0] + '–' + PT.LIFE.MAX_OBSERVED_D[1] + ' d).';
+    if (out) {
+      s += out.leftLo <= 0
+        ? ' It may already be at the end of its float life — or from a nearer, younger shed.'
+        : ' Roughly ' + out.leftLo + '–' + out.leftHi + ' d of float left.';
+    }
+    return s + '</span>';
+  }
+
   function show(t) {
     var s = stepAt(t); if (!s) return;
     var f = fmtLL(s.lat, s.lng);
@@ -179,7 +274,8 @@ var PTUI = (function () {
         : tier.note + ' ') +
       (inDomainPct < 95 ? inDomainPct + '% of runs still in the forecast area here. ' : '') +
       (FC.truncated && s.t >= FC.hoursCovered - 1
-        ? 'Track ends here: the paddy left the forecast area.' : '');
+        ? 'Track ends here: the paddy left the forecast area.' : '') +
+      ageNote(s.t);
     el('tkScrub').value = s.t;
     el('tkDay').value = String(Math.floor(s.t / 24));
     // The Time control is the CLOCK time of day the user would be on the
@@ -187,6 +283,18 @@ var PTUI = (function () {
     // it is right now, and showing the offset read as a wrong clock.
     el('tkHour').value = String(new Date(t0Of() + s.t * 3600e3).getHours());
     draw(s);
+  }
+
+  // The forecast positions are conditional on the paddy still floating.
+  // Once its estimated age at the selected day passes the typical raft
+  // life for this water, say so — the day-zero assumption was the lie.
+  function ageNote(t) {
+    if (!ORIGIN || !ORIGIN.out) return '';
+    var typ = ORIGIN.life.typical != null ? ORIGIN.life.typical : PT.LIFE.WARM_D;
+    var ageMin = ORIGIN.out.ageLo + t / 24;
+    if (ageMin <= typ) return '';
+    return ' By this day it would be ≥' + Math.round(ageMin) +
+      ' d adrift — past typical raft life for this water; it may have sunk.';
   }
 
   function t0Of() { return (FC && FC.t0) || Date.now(); }
@@ -257,6 +365,7 @@ var PTUI = (function () {
           oh.textContent = (h < 10 ? '0' : '') + h + ':00'; hsel.appendChild(oh);
         }
         el('tkScrub').max = FC.hoursCovered;
+        computeOrigin();
         show(Math.min(24, FC.hoursCovered));
       }, 30);
     }).catch(function (e) {
@@ -264,8 +373,9 @@ var PTUI = (function () {
     });
   }
 
-  function init(m) {
+  function init(m, data) {
     map = m;
+    SITE = data || null;   // beds + shedding hindcast, for the origin estimate
     layer = L.layerGroup().addTo(map);
     var wrap = document.createElement('div');
     wrap.className = 'tkpanel'; wrap.id = 'tkpanel'; wrap.hidden = true;
