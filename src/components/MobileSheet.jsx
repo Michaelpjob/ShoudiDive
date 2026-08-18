@@ -444,11 +444,18 @@ export default function MobileShell({
             <div className="ms-section-h">More</div>
             <div className="ms-links">
               {activeRegion() === "ca" && (
-                <a href="/paddies/" className="ms-link-row">
-                  <span aria-hidden="true">🪸</span>
-                  Kelp Paddy Finder
-                  <span className="ms-link-sub">beta tool</span>
-                </a>
+                <>
+                  <a href="/paddies/" className="ms-link-row">
+                    <span aria-hidden="true">🪸</span>
+                    Kelp Paddy Finder
+                    <span className="ms-link-sub">beta tool</span>
+                  </a>
+                  <a href="/paddies/?track=1" className="ms-link-row">
+                    <span aria-hidden="true">◎</span>
+                    Track a paddy
+                    <span className="ms-link-sub">drift forecast from your mark</span>
+                  </a>
+                </>
               )}
               <a
                 href="https://venmo.com/u/michaelpjob"

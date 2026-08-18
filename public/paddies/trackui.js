@@ -390,6 +390,10 @@ var PTUI = (function () {
     if (bar) bar.appendChild(btn);
 
     btn.onclick = function () { wrap.hidden = !wrap.hidden; };
+    // Deep link from the main site's tools menu: /paddies/?track=1 lands
+    // with the tracker panel already open, so "Track a paddy" on the
+    // phone is one tap, not tap-then-find-the-button.
+    if (location.search.indexOf('track=1') !== -1) wrap.hidden = false;
     el('tkClose').onclick = function () { wrap.hidden = true; };
     el('tkRun').onclick = run;
     el('tkLL').addEventListener('keydown', function (e) { if (e.key === 'Enter') run(); });
