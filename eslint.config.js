@@ -33,7 +33,18 @@ export default [
       "mobile/**",                // mobile/ has its own toolchain
       "flutter_app/**",           // Flutter app graveyard
       "pipeline/**",              // Python — out of scope
-      "public/**",                // static assets (incl. third-party)
+      // public/ is mostly static assets, but public/paddies/ ships OUR
+      // code as plain <script> bundles rather than through Vite. Ignoring
+      // the whole tree left the entire Kelp Paddy Finder unlinted, which
+      // is not a hypothetical gap: the corridor geometry lives there and
+      // shipped a drawn width that disagreed with its own printed number.
+      //
+      // So name the files that aren't ours instead of the directory. A
+      // "public/**" entry cannot be walked back with a "!" negation —
+      // ESLint prunes an ignored directory wholesale rather than
+      // descending into it — so the exclusion has to be this specific.
+      "public/paddies/leaflet.js", // vendored third-party
+      "public/sw.js",              // service worker, its own global scope
       "**/*.min.js",
       "scripts/**",               // bash + node setup scripts
     ],
@@ -127,6 +138,56 @@ export default [
       // class as the 2026-05-07 white-screen incident this whole
       // config exists to prevent — close the door.
       "react/jsx-no-undef":          "error",
+    },
+  },
+
+  // ---------------------------------------------------------------------
+  // public/paddies/ — the Kelp Paddy Finder bundle. Plain <script> files,
+  // NOT modules and NOT built by Vite, so they need their own parser
+  // settings: script sourceType (top-level `var PT = ...` is a global,
+  // not an export) and no JSX/React.
+  //
+  // They share globals across files the way script tags do: track.js
+  // defines PT, trackui.js and app.js consume it, and leaflet provides L.
+  // Declaring those here is what lets no-undef stay on and still be
+  // meaningful, rather than drowning in false positives.
+  // ---------------------------------------------------------------------
+  {
+    files: ["public/paddies/{app,track,trackui}.js"],
+    languageOptions: {
+      ecmaVersion: 2020,          // the bundle targets older mobile Safari
+      sourceType: "script",
+      globals: {
+        ...globals.browser,
+        L: "readonly",            // leaflet, loaded by its own script tag
+        PT: "writable",           // defined in track.js, read by trackui.js
+        PTUI: "writable",         // defined in trackui.js, mounted by app.js
+      },
+    },
+    rules: {
+      ...js.configs.recommended.rules,
+      "no-undef":                  "error",
+      // PT and PTUI look unused to a single-file linter: each is defined
+      // in one script and consumed by another via the shared global scope.
+      "no-unused-vars":            ["warn", {
+        args: "none",
+        varsIgnorePattern: "^_|^(PT|PTUI)$",
+      }],
+      "no-unreachable":            "error",
+      "no-self-compare":           "error",
+      "no-self-assign":            "error",
+      "no-constant-condition":     ["error", { checkLoops: false }],
+      "no-empty":                  ["error", { allowEmptyCatch: true }],
+      "no-cond-assign":            ["error", "except-parens"],
+      // `var` in these files is deliberate (script scope, old targets), so
+      // redeclaration is the realistic footgun rather than a style nit. It
+      // caught a real one on first run: draw() declared `var i` for a loop
+      // and again for the step index. builtinGlobals is off because PT and
+      // PTUI are declared above as shared globals AND defined with `var` in
+      // their own file, which is the correct pattern for script tags.
+      "no-redeclare":              ["error", { builtinGlobals: false }],
+      "no-dupe-keys":              "error",
+      "no-fallthrough":            "error",
     },
   },
 ];

@@ -66,6 +66,7 @@ const ALLOWED_NAMES = new Set([
   "zoom",
   "share_click",
   "tip_click",
+  "tool_open",     // beta-tools menu: which tool got launched
   "whatsnew_open",
   "column_open",
   "column_depth_set",

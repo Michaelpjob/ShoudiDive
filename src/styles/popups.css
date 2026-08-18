@@ -942,3 +942,60 @@
   overflow-x: auto;
   user-select: all; /* one tap selects the whole block if Copy is denied */
 }
+
+/* Tools menu — the beta-tools breakout in the topbar. Mirrors the
+   settings popover's surface so the two read as one family. The trigger
+   is a plain .icon-btn, which is exactly what the phone topbar keeps,
+   so this is the one tools entry point that exists at every width. */
+.tools-menu { position: relative; display: inline-flex; }
+.tools-pop {
+  position: absolute;
+  top: 38px;
+  right: -8px;
+  z-index: 40;
+  width: 264px;
+  background: var(--bg-panel);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  box-shadow: var(--shadow-2);
+  padding: 8px;
+}
+.tools-pop-h {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding: 2px 6px 6px;
+}
+.tools-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 6px;
+  border-radius: var(--r-2, 8px);
+  text-decoration: none;
+  color: inherit;
+}
+.tools-row:hover { background: var(--bg-sunken); }
+.tools-row-icon { font-size: 16px; width: 22px; text-align: center; }
+.tools-row-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.tools-row-name { font-size: 13px; font-weight: 600; }
+.tools-row-sub { font-size: 11px; color: var(--ink-3); }
+@media (max-width: 760px), (hover: none) and (pointer: coarse) {
+  /* One-handed reach: full-width sheet-style menu under the bar, and
+     44px rows per the HIG tap minimum. */
+  .tools-pop {
+    position: fixed;
+    top: calc(50px + env(safe-area-inset-top));
+    left: 8px;
+    right: 8px;
+    width: auto;
+  }
+  .tools-row { padding: 11px 8px; }
+}

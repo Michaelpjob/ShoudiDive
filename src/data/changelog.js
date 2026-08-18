@@ -15,6 +15,68 @@
 
 export const CHANGELOG = [
   {
+    id: "2026-08-17-3",
+    date: "August 17, 2026",
+    title: "Beta tools, one tap from the top bar",
+    items: [
+      {
+        type: "new",
+        text:
+          "A new grid button in the top bar opens the beta tools menu on " +
+          "every screen size: the Kelp Paddy Finder, and Track a paddy, " +
+          "which now opens straight into the tracker with its panel " +
+          "ready for your GPS mark. On phones the tools used to be " +
+          "buried at the bottom of the info sheet; now they are two taps " +
+          "from anywhere. California region only, same as the tools " +
+          "themselves.",
+      },
+    ],
+  },
+  {
+    id: "2026-08-17-2",
+    date: "August 17, 2026",
+    title: "Tracked paddies now come with an age",
+    items: [
+      {
+        type: "new",
+        text:
+          "A paddy you just found is not brand new — it broke off a bed " +
+          "days ago and has been aging in warm water since. Track a paddy " +
+          "now estimates where it likely came from and how old it is: it " +
+          "looks up-current for kelp beds, checks how much they were " +
+          "shedding on the implied break-off date, and shows the likely " +
+          "origin with a days-adrift range (say, Catalina beds, 36 nm " +
+          "up-current, 2 to 6 days adrift). Combined with water " +
+          "temperature it estimates float time left — warm water sinks " +
+          "paddies in about two to three weeks — and the forecast tells " +
+          "you when it is predicting a paddy that may no longer exist. " +
+          "All of it is labelled estimated: consistent-with, not " +
+          "confirmed.",
+      },
+    ],
+  },
+  {
+    id: "2026-08-17",
+    date: "August 17, 2026",
+    title: "Paddy corridor now matches the number next to it",
+    items: [
+      {
+        type: "fixed",
+        text:
+          "The corridor drawn on the map was wider than the width printed " +
+          "beside it, and the gap grew the further out you looked. A band " +
+          "labelled 5 km either side of the line could be drawn 32 km wide " +
+          "at its far end, and past about three days it could wrap a bend " +
+          "in the track into a big lopsided blob. If you were searching off " +
+          "the shape rather than the number, you were sweeping far more " +
+          "water than the forecast actually claimed. The shape now holds " +
+          "the width it quotes, measures its length along the track rather " +
+          "than straight across, and stops where the track turns back on " +
+          "itself instead of drawing a lane you cannot run.",
+      },
+    ],
+  },
+  {
     id: "2026-08-16",
     date: "August 16, 2026",
     title: "Track a paddy you found",

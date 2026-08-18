@@ -6,6 +6,7 @@
 import { useState } from "react";
 import RegionSwitcher from "./RegionSwitcher.jsx";
 import WhatsNew from "./WhatsNew.jsx";
+import ToolsMenu from "./ToolsMenu.jsx";
 import { LATEST_CHANGELOG_ID } from "../data/changelog.js";
 import { activeRegion } from "../lib/region.js";
 import { getLayerConfidence } from "../lib/confidence.js";
@@ -103,17 +104,11 @@ export default function TopBar({ onSettings, settingsOpen, dataState, layer, hor
         {/* Standalone beta tool — the kelp-paddy drift finder. SCB-only, so
             shown on the CA region only. Separate page (public/paddies/),
             outside the overlay; full-nav link, tool carries its own back-link. */}
-        {activeRegion() === "ca" && (
-        <a
-          href="/paddies/"
-          className="tool-link"
-          title="Kelp Paddy Finder — where drifting kelp paddies are offshore (beta)"
-        >
-          <span aria-hidden="true">🪸</span>
-          Paddy Finder
-          <span className="tool-link-beta">BETA</span>
-        </a>
-        )}
+        {/* Beta tools break out of a compact menu instead of a pill link:
+            the pill was hidden on phones (no room in the bar) and its only
+            mobile home was buried in the sheet's More section. The menu
+            costs one icon on every screen size. */}
+        {activeRegion() === "ca" && <ToolsMenu />}
         {(() => {
           // Active-layer confidence badge. Updates as the user clicks
           // between layer chips (Temp / Chl / Wind / Swell / Current /

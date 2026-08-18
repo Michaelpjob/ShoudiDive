@@ -12,6 +12,10 @@
 
 var PTUI = (function () {
   var map, layer, F = null, FC = null, startLL = null, busy = false;
+  // SITE: the paddy hindcast bundle (data.json) handed in by app.js —
+  // bed positions, shedding timeline, water temp. ORIGIN: the origin/age
+  // estimate for the current run, or null when none could be made.
+  var SITE = null, ORIGIN = null;
   var TIER_COLOR = { search: '#22c55e', wide: '#eab308', region: '#f97316' };
 
   function el(id) { return document.getElementById(id); }
@@ -64,6 +68,7 @@ var PTUI = (function () {
             '<span><i class="tk-sw tk-sw-dot"></i>model runs</span>' +
           '</div>' +
           '<div id="tkNote" class="tk-note"></div>' +
+          '<div id="tkOrigin" class="tk-origin" hidden></div>' +
           '<div id="tkSrc" class="tk-src"></div>' +
         '</div>' +
       '</div>';
@@ -74,49 +79,16 @@ var PTUI = (function () {
     m.textContent = s || ''; m.className = 'tk-msg' + (bad ? ' bad' : '');
   }
 
-  // Offset a point by km in the km-space direction (dx east, dy north).
-  function offKm(lat, lng, dx, dy, km) {
-    var kLat = 111.132, kLng = 111.320 * Math.cos(lat * Math.PI / 180);
-    return [lat + (dy * km) / kLat, lng + (dx * km) / Math.max(1e-6, kLng)];
+  // Corridor geometry lives in track.js (PT) so it can be unit-tested
+  // without a DOM. Two width rules, deliberately different:
+  //   growingWidth - the 7-day lane, which widens as the ensemble spreads
+  //   fixedWidth   - the selected-hour band, one width for the whole
+  //                  stretch, because the spread AT that hour is one number
+  function growingWidth(steps) {
+    return function (i) { return steps[i].crossKm; };
   }
-  // Unit along-track direction at step i, in km-space. Uses a WIDE stencil
-  // (+-6 h): a 1-hour stencil follows every wiggle in the hourly track, and
-  // when the direction flips the left/right offsets cross over and the
-  // ribbon renders as spikes. Smoothing the heading keeps the lane clean.
-  var DIR_STENCIL = 6;
-  function dirAt(steps, i) {
-    var a = steps[Math.max(0, i - DIR_STENCIL)],
-        b = steps[Math.min(steps.length - 1, i + DIR_STENCIL)];
-    var kLat = 111.132, kLng = 111.320 * Math.cos(steps[i].lat * Math.PI / 180);
-    var dx = (b.lng - a.lng) * kLng, dy = (b.lat - a.lat) * kLat;
-    var L = Math.sqrt(dx * dx + dy * dy);
-    return L < 1e-6 ? [1, 0] : [dx / L, dy / L];
-  }
-  // The corridor: centre track offset +-crossKm, as one closed ribbon.
-  // Vertices are DECIMATED to every 6th hour. At full hourly density the
-  // offset points on the inside of every small bend overlap each other and
-  // the polygon self-intersects, which Leaflet renders as long spikes.
-  // Sampling the lane every 6 h keeps the ribbon simple and convex enough
-  // to draw cleanly, and 6 h of drift is far finer than the lane is wide.
-  var RIBBON_STEP = 6;
-  function corridor(steps, from, to) {
-    var left = [], right = [], idx = [];
-    for (var i = from; i <= to; i += RIBBON_STEP) idx.push(i);
-    if (idx[idx.length - 1] !== to) idx.push(to);
-    for (var k = 0; k < idx.length; k++) {
-      var i = idx[k], d = dirAt(steps, i), s = steps[i];
-      var px = -d[1], py = d[0];                 // left-hand perpendicular
-      left.push(offKm(s.lat, s.lng, px, py, s.crossKm));
-      right.push(offKm(s.lat, s.lng, -px, -py, s.crossKm));
-    }
-    return left.concat(right.reverse());
-  }
-  // Indices whose along-track distance from `i` is within +-alongKm.
-  function alongSpan(steps, i) {
-    var reach = steps[i].alongKm, lo = i, hi = i;
-    while (lo > 0 && PT.haversineKm(steps[i].lat, steps[i].lng, steps[lo - 1].lat, steps[lo - 1].lng) < reach) lo--;
-    while (hi < steps.length - 1 && PT.haversineKm(steps[i].lat, steps[i].lng, steps[hi + 1].lat, steps[hi + 1].lng) < reach) hi++;
-    return [lo, hi];
+  function fixedWidth(km) {
+    return function () { return km; };
   }
 
   function draw(step) {
@@ -131,7 +103,7 @@ var PTUI = (function () {
     var laneEnd = 0;
     for (var q = 0; q < steps.length; q++) if (steps[q].t <= FC.laneEndH) laneEnd = q;
     if (laneEnd > 1) {
-      L.polygon(corridor(steps, 0, laneEnd),
+      L.polygon(PT.corridor(steps, 0, laneEnd, growingWidth(steps)),
         { color: '#38bdf8', weight: 1, opacity: 0.35, fillColor: '#38bdf8', fillOpacity: 0.06,
           dashArray: '4 4' }).addTo(layer);
     }
@@ -156,8 +128,12 @@ var PTUI = (function () {
     if (step) {
       // Where it plausibly is AT THIS TIME: the stretch of lane within the
       // along-track error, highlighted — not a circle around a fake pin.
-      var i = steps.indexOf(step);
-      if (i < 0) i = 0;
+      // `si`, not `i` - the polyline loop above already declares a
+      // function-scoped `var i`, and re-declaring it here reassigned the
+      // same binding. Harmless as written, but exactly the shadowing that
+      // goes wrong the moment either block moves.
+      var si = steps.indexOf(step);
+      if (si < 0) si = 0;
       // Where the ensemble ACTUALLY is at this time — one dot per member.
       // This replaces the drawn amber blob: the dots cannot stray onto
       // land the model never sent them to, and their density shows the
@@ -167,9 +143,12 @@ var PTUI = (function () {
           fillColor: '#fbbf24', fillOpacity: 0.5, interactive: false }).addTo(layer);
       });
       if (step.t <= FC.laneEndH) {
-        var sp = alongSpan(steps, i);
-        L.polygon(corridor(steps, sp[0], sp[1]),
-          { color: '#f59e0b', weight: 2, opacity: 0.9, fillColor: '#f59e0b', fillOpacity: 0.14 })
+        // ONE width for the whole stretch — the cross-track spread at the
+        // selected hour. Per-step widths here drew a lopsided wedge that
+        // ramped from well under to well over the +-km the panel quotes.
+        var sp = PT.alongSpan(steps, si);
+        L.polygon(PT.corridor(steps, sp[0], sp[1], fixedWidth(step.crossKm)),
+          { color: '#fbbf24', weight: 1.5, opacity: 0.85, fillColor: '#fbbf24', fillOpacity: 0.09 })
           .bindTooltip('Likely stretch of lane at the selected time', { sticky: true }).addTo(layer);
       }
       L.circleMarker([step.lat, step.lng], { radius: 6, color: '#0b1220', weight: 2,
@@ -185,6 +164,96 @@ var PTUI = (function () {
     var best = FC.steps[0], bd = 1e9;
     FC.steps.forEach(function (s) { var d = Math.abs(s.t - t); if (d < bd) { bd = d; best = s; } });
     return best;
+  }
+
+  /* Origin & age estimate for the run that just finished.
+
+     The old assumption was that a tracked paddy is on day zero of its
+     life. It almost never is: it broke off a bed days ago and has been
+     fouling in warm water since. This estimates (a) which mapped beds
+     the sighting is most consistent with, (b) how many days adrift that
+     implies, and (c) how much float time is plausibly left at the
+     current water temperature — so the 7-day forecast can say when it
+     is forecasting a paddy that may no longer exist.
+
+     Assumptions, all surfaced in the UI: recent currents resemble the
+     forecast's drift regime (widened 0.6-1.8x); sources are mapped beds;
+     alignment is consistency, not proof. */
+  function computeOrigin() {
+    ORIGIN = null;
+    var box = el('tkOrigin');
+    if (box) { box.hidden = true; box.innerHTML = ''; }
+    if (!SITE || !SITE.beds || !FC || !FC.steps || FC.steps.length < 6) return;
+
+    var steps = FC.steps;
+    // Drift regime off the forecast's own centre track: arc length over
+    // the first 48 h (or what exists), in km/day.
+    var lastI = 0;
+    for (var i = 0; i < steps.length; i++) if (steps[i].t <= 48) lastI = i;
+    var arc = 0;
+    for (i = 1; i <= lastI; i++) arc += PT.haversineKm(steps[i - 1].lat, steps[i - 1].lng, steps[i].lat, steps[i].lng);
+    var speedKmDay = arc / Math.max(1 / 24, steps[lastI].t / 24);
+    // Local downstream bearing near the start.
+    var d0 = PT.dirAt(steps, Math.min(3, steps.length - 1));
+    var flowBrg = (Math.atan2(d0[0], d0[1]) * 180 / Math.PI + 360) % 360;
+
+    var meta = (SITE.frames && SITE.frames[SITE.default_frame] && SITE.frames[SITE.default_frame].meta) || {};
+    var tl = (SITE.frames && SITE.frames[SITE.default_frame] && SITE.frames[SITE.default_frame].timeline) || null;
+    var tempM = /\((\d+(?:\.\d+)?)\s*°C\)/.exec(meta.why || '');
+    var tempC = tempM ? parseFloat(tempM[1]) : null;
+    var life = PT.lifespanDays(tempC);
+
+    var cands = PT.sourceCandidates(startLL.lng, startLL.lat, SITE.beds, flowBrg,
+                                    speedKmDay, meta.window_days || 24, tl, life.typical);
+    var box2 = el('tkOrigin'); if (!box2) return;
+
+    if (!cands.length) {
+      ORIGIN = { life: life, out: null };
+      box2.innerHTML = '<b>Origin unclear.</b> No mapped beds sit up-current within the ' +
+        'model’s ' + (meta.window_days || 24) + '-day window — an older paddy, or an unmapped source. ' +
+        lifeLine(life, tempC, null);
+      box2.hidden = false;
+      return;
+    }
+    var out = PT.paddyOutlook(cands, life);
+    ORIGIN = { life: life, out: out };
+
+    // Several beds on the same island qualify together; merge rows that
+    // resolve to the same landmark so the list reads as places.
+    var groups = {};
+    cands.forEach(function (c) {
+      var name = PT.nearestLandmark(c.lng, c.lat) || (c.island ? 'island' : 'coastal');
+      var g = groups[name] || (groups[name] = { nmLo: Infinity, nmHi: 0, tLo: Infinity, tHi: 0 });
+      var nm = c.distKm / 1.852;
+      g.nmLo = Math.min(g.nmLo, nm); g.nmHi = Math.max(g.nmHi, nm);
+      g.tLo = Math.min(g.tLo, c.transitLo); g.tHi = Math.max(g.tHi, c.transitHi);
+    });
+    var rows = Object.keys(groups).map(function (name) {
+      var g = groups[name];
+      var nmStr = Math.round(g.nmLo) === Math.round(g.nmHi)
+        ? Math.round(g.nmLo) + ' nm' : Math.round(g.nmLo) + '–' + Math.round(g.nmHi) + ' nm';
+      return '<span class="tk-orow">' + name + ' beds · ' + nmStr + ' up-current · ~' +
+        fmtD(g.tLo) + '–' + fmtD(g.tHi) + ' d adrift</span>';
+    });
+    box2.innerHTML = '<b>Likely origin &amp; age (estimated)</b>' + rows.join('') +
+      lifeLine(life, tempC, out) +
+      '<span class="tk-ocaveat">From bed positions, shedding history and today’s drift regime. ' +
+      'Consistent-with, not confirmed.</span>';
+    box2.hidden = false;
+  }
+  function fmtD(d) { return d < 1 ? '<1' : String(Math.round(d)); }
+  function lifeLine(life, tempC, out) {
+    var s = '<span class="tk-olife">';
+    s += tempC != null
+      ? 'Water ~' + tempC + '°C: typical raft life ~' + (life.typical || PT.LIFE.WARM_D) + ' d '
+      : 'Typical raft life ' + PT.LIFE.WARM_D + '–' + PT.LIFE.COOL_D + ' d depending on water temp ';
+    s += '(max observed ' + PT.LIFE.MAX_OBSERVED_D[0] + '–' + PT.LIFE.MAX_OBSERVED_D[1] + ' d).';
+    if (out) {
+      s += out.leftLo <= 0
+        ? ' It may already be at the end of its float life — or from a nearer, younger shed.'
+        : ' Roughly ' + out.leftLo + '–' + out.leftHi + ' d of float left.';
+    }
+    return s + '</span>';
   }
 
   function show(t) {
@@ -205,7 +274,8 @@ var PTUI = (function () {
         : tier.note + ' ') +
       (inDomainPct < 95 ? inDomainPct + '% of runs still in the forecast area here. ' : '') +
       (FC.truncated && s.t >= FC.hoursCovered - 1
-        ? 'Track ends here: the paddy left the forecast area.' : '');
+        ? 'Track ends here: the paddy left the forecast area.' : '') +
+      ageNote(s.t);
     el('tkScrub').value = s.t;
     el('tkDay').value = String(Math.floor(s.t / 24));
     // The Time control is the CLOCK time of day the user would be on the
@@ -213,6 +283,18 @@ var PTUI = (function () {
     // it is right now, and showing the offset read as a wrong clock.
     el('tkHour').value = String(new Date(t0Of() + s.t * 3600e3).getHours());
     draw(s);
+  }
+
+  // The forecast positions are conditional on the paddy still floating.
+  // Once its estimated age at the selected day passes the typical raft
+  // life for this water, say so — the day-zero assumption was the lie.
+  function ageNote(t) {
+    if (!ORIGIN || !ORIGIN.out) return '';
+    var typ = ORIGIN.life.typical != null ? ORIGIN.life.typical : PT.LIFE.WARM_D;
+    var ageMin = ORIGIN.out.ageLo + t / 24;
+    if (ageMin <= typ) return '';
+    return ' By this day it would be ≥' + Math.round(ageMin) +
+      ' d adrift — past typical raft life for this water; it may have sunk.';
   }
 
   function t0Of() { return (FC && FC.t0) || Date.now(); }
@@ -283,6 +365,7 @@ var PTUI = (function () {
           oh.textContent = (h < 10 ? '0' : '') + h + ':00'; hsel.appendChild(oh);
         }
         el('tkScrub').max = FC.hoursCovered;
+        computeOrigin();
         show(Math.min(24, FC.hoursCovered));
       }, 30);
     }).catch(function (e) {
@@ -290,8 +373,9 @@ var PTUI = (function () {
     });
   }
 
-  function init(m) {
+  function init(m, data) {
     map = m;
+    SITE = data || null;   // beds + shedding hindcast, for the origin estimate
     layer = L.layerGroup().addTo(map);
     var wrap = document.createElement('div');
     wrap.className = 'tkpanel'; wrap.id = 'tkpanel'; wrap.hidden = true;
@@ -306,6 +390,10 @@ var PTUI = (function () {
     if (bar) bar.appendChild(btn);
 
     btn.onclick = function () { wrap.hidden = !wrap.hidden; };
+    // Deep link from the main site's tools menu: /paddies/?track=1 lands
+    // with the tracker panel already open, so "Track a paddy" on the
+    // phone is one tap, not tap-then-find-the-button.
+    if (location.search.indexOf('track=1') !== -1) wrap.hidden = false;
     el('tkClose').onclick = function () { wrap.hidden = true; };
     el('tkRun').onclick = run;
     el('tkLL').addEventListener('keydown', function (e) { if (e.key === 'Enter') run(); });
