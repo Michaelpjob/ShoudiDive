@@ -74,49 +74,16 @@ var PTUI = (function () {
     m.textContent = s || ''; m.className = 'tk-msg' + (bad ? ' bad' : '');
   }
 
-  // Offset a point by km in the km-space direction (dx east, dy north).
-  function offKm(lat, lng, dx, dy, km) {
-    var kLat = 111.132, kLng = 111.320 * Math.cos(lat * Math.PI / 180);
-    return [lat + (dy * km) / kLat, lng + (dx * km) / Math.max(1e-6, kLng)];
+  // Corridor geometry lives in track.js (PT) so it can be unit-tested
+  // without a DOM. Two width rules, deliberately different:
+  //   growingWidth - the 7-day lane, which widens as the ensemble spreads
+  //   fixedWidth   - the selected-hour band, one width for the whole
+  //                  stretch, because the spread AT that hour is one number
+  function growingWidth(steps) {
+    return function (i) { return steps[i].crossKm; };
   }
-  // Unit along-track direction at step i, in km-space. Uses a WIDE stencil
-  // (+-6 h): a 1-hour stencil follows every wiggle in the hourly track, and
-  // when the direction flips the left/right offsets cross over and the
-  // ribbon renders as spikes. Smoothing the heading keeps the lane clean.
-  var DIR_STENCIL = 6;
-  function dirAt(steps, i) {
-    var a = steps[Math.max(0, i - DIR_STENCIL)],
-        b = steps[Math.min(steps.length - 1, i + DIR_STENCIL)];
-    var kLat = 111.132, kLng = 111.320 * Math.cos(steps[i].lat * Math.PI / 180);
-    var dx = (b.lng - a.lng) * kLng, dy = (b.lat - a.lat) * kLat;
-    var L = Math.sqrt(dx * dx + dy * dy);
-    return L < 1e-6 ? [1, 0] : [dx / L, dy / L];
-  }
-  // The corridor: centre track offset +-crossKm, as one closed ribbon.
-  // Vertices are DECIMATED to every 6th hour. At full hourly density the
-  // offset points on the inside of every small bend overlap each other and
-  // the polygon self-intersects, which Leaflet renders as long spikes.
-  // Sampling the lane every 6 h keeps the ribbon simple and convex enough
-  // to draw cleanly, and 6 h of drift is far finer than the lane is wide.
-  var RIBBON_STEP = 6;
-  function corridor(steps, from, to) {
-    var left = [], right = [], idx = [];
-    for (var i = from; i <= to; i += RIBBON_STEP) idx.push(i);
-    if (idx[idx.length - 1] !== to) idx.push(to);
-    for (var k = 0; k < idx.length; k++) {
-      var i = idx[k], d = dirAt(steps, i), s = steps[i];
-      var px = -d[1], py = d[0];                 // left-hand perpendicular
-      left.push(offKm(s.lat, s.lng, px, py, s.crossKm));
-      right.push(offKm(s.lat, s.lng, -px, -py, s.crossKm));
-    }
-    return left.concat(right.reverse());
-  }
-  // Indices whose along-track distance from `i` is within +-alongKm.
-  function alongSpan(steps, i) {
-    var reach = steps[i].alongKm, lo = i, hi = i;
-    while (lo > 0 && PT.haversineKm(steps[i].lat, steps[i].lng, steps[lo - 1].lat, steps[lo - 1].lng) < reach) lo--;
-    while (hi < steps.length - 1 && PT.haversineKm(steps[i].lat, steps[i].lng, steps[hi + 1].lat, steps[hi + 1].lng) < reach) hi++;
-    return [lo, hi];
+  function fixedWidth(km) {
+    return function () { return km; };
   }
 
   function draw(step) {
@@ -131,7 +98,7 @@ var PTUI = (function () {
     var laneEnd = 0;
     for (var q = 0; q < steps.length; q++) if (steps[q].t <= FC.laneEndH) laneEnd = q;
     if (laneEnd > 1) {
-      L.polygon(corridor(steps, 0, laneEnd),
+      L.polygon(PT.corridor(steps, 0, laneEnd, growingWidth(steps)),
         { color: '#38bdf8', weight: 1, opacity: 0.35, fillColor: '#38bdf8', fillOpacity: 0.06,
           dashArray: '4 4' }).addTo(layer);
     }
@@ -156,8 +123,12 @@ var PTUI = (function () {
     if (step) {
       // Where it plausibly is AT THIS TIME: the stretch of lane within the
       // along-track error, highlighted — not a circle around a fake pin.
-      var i = steps.indexOf(step);
-      if (i < 0) i = 0;
+      // `si`, not `i` - the polyline loop above already declares a
+      // function-scoped `var i`, and re-declaring it here reassigned the
+      // same binding. Harmless as written, but exactly the shadowing that
+      // goes wrong the moment either block moves.
+      var si = steps.indexOf(step);
+      if (si < 0) si = 0;
       // Where the ensemble ACTUALLY is at this time — one dot per member.
       // This replaces the drawn amber blob: the dots cannot stray onto
       // land the model never sent them to, and their density shows the
@@ -167,9 +138,12 @@ var PTUI = (function () {
           fillColor: '#fbbf24', fillOpacity: 0.5, interactive: false }).addTo(layer);
       });
       if (step.t <= FC.laneEndH) {
-        var sp = alongSpan(steps, i);
-        L.polygon(corridor(steps, sp[0], sp[1]),
-          { color: '#f59e0b', weight: 2, opacity: 0.9, fillColor: '#f59e0b', fillOpacity: 0.14 })
+        // ONE width for the whole stretch — the cross-track spread at the
+        // selected hour. Per-step widths here drew a lopsided wedge that
+        // ramped from well under to well over the +-km the panel quotes.
+        var sp = PT.alongSpan(steps, si);
+        L.polygon(PT.corridor(steps, sp[0], sp[1], fixedWidth(step.crossKm)),
+          { color: '#fbbf24', weight: 1.5, opacity: 0.85, fillColor: '#fbbf24', fillOpacity: 0.09 })
           .bindTooltip('Likely stretch of lane at the selected time', { sticky: true }).addTo(layer);
       }
       L.circleMarker([step.lat, step.lng], { radius: 6, color: '#0b1220', weight: 2,

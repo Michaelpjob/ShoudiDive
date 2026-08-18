@@ -15,6 +15,27 @@
 
 export const CHANGELOG = [
   {
+    id: "2026-08-17",
+    date: "August 17, 2026",
+    title: "Paddy corridor now matches the number next to it",
+    items: [
+      {
+        type: "fixed",
+        text:
+          "The corridor drawn on the map was wider than the width printed " +
+          "beside it, and the gap grew the further out you looked. A band " +
+          "labelled 5 km either side of the line could be drawn 32 km wide " +
+          "at its far end, and past about three days it could wrap a bend " +
+          "in the track into a big lopsided blob. If you were searching off " +
+          "the shape rather than the number, you were sweeping far more " +
+          "water than the forecast actually claimed. The shape now holds " +
+          "the width it quotes, measures its length along the track rather " +
+          "than straight across, and stops where the track turns back on " +
+          "itself instead of drawing a lane you cannot run.",
+      },
+    ],
+  },
+  {
     id: "2026-08-16",
     date: "August 16, 2026",
     title: "Track a paddy you found",

@@ -546,6 +546,105 @@ var PT = (function () {
     };
   }
 
+  /* ---- corridor geometry -------------------------------------------
+     Lives here, not in trackui.js, so it can be unit-tested without a
+     DOM or Leaflet. These are pure functions of the steps array. */
+
+  // Offset a point by km in km-space (dx east, dy north).
+  function offsetKm(lat, lng, dx, dy, km) {
+    var kd = kmPerDeg(lat);
+    return [lat + (dy * km) / kd.lat, lng + (dx * km) / Math.max(1e-6, kd.lng)];
+  }
+  // Unit along-track direction at step i. Uses a WIDE stencil (+-6 h): a
+  // 1-hour stencil follows every wiggle in the hourly track, and when the
+  // direction flips the left/right offsets cross over and the ribbon
+  // renders as spikes.
+  var DIR_STENCIL = 6;
+  function dirAt(steps, i) {
+    var a = steps[Math.max(0, i - DIR_STENCIL)],
+        b = steps[Math.min(steps.length - 1, i + DIR_STENCIL)];
+    var kd = kmPerDeg(steps[i].lat);
+    var dx = (b.lng - a.lng) * kd.lng, dy = (b.lat - a.lat) * kd.lat;
+    var L = Math.sqrt(dx * dx + dy * dy);
+    return L < 1e-6 ? [1, 0] : [dx / L, dy / L];
+  }
+  // A closed ribbon: the centre track from..to, offset +-halfKmAt(i).
+  //
+  // halfKmAt is a FUNCTION on purpose. The two call sites want different
+  // widths and conflating them was a real bug: the 7-day lane widens with
+  // time (uncertainty genuinely grows), but the "where is it at the
+  // selected hour" band is a single number - the spread AT that hour -
+  // held constant along the whole stretch. Drawing the latter with
+  // per-step widths produced a lopsided wedge that ramped +-1.0 -> +-3.7 km
+  // across a band whose own label said +-2.5 km.
+  //
+  // Vertices are decimated to every 6th hour: at full hourly density the
+  // offset points on the inside of small bends overlap and the polygon
+  // self-intersects, which Leaflet renders as spikes.
+  var RIBBON_STEP = 6;
+  function corridor(steps, from, to, halfKmAt) {
+    var left = [], right = [], idx = [], i, k;
+    for (i = from; i <= to; i += RIBBON_STEP) idx.push(i);
+    if (idx.length && idx[idx.length - 1] !== to) idx.push(to);
+    for (k = 0; k < idx.length; k++) {
+      i = idx[k];
+      var d = dirAt(steps, i), s = steps[i], half = halfKmAt(i);
+      var px = -d[1], py = d[0];               // left-hand perpendicular
+      left.push(offsetKm(s.lat, s.lng, px, py, half));
+      right.push(offsetKm(s.lat, s.lng, -px, -py, half));
+    }
+    return left.concat(right.reverse());
+  }
+  // Indices within +-alongKm of `i` measured ALONG THE TRACK.
+  //
+  // This used to test straight-line distance from steps[i], which is a
+  // different quantity and runs away whenever the track turns: a paddy
+  // curving back toward its own position stays close as the crow flies
+  // however far it has actually drifted. Measured on a steadily turning
+  // ensemble, a +-23.5 km reach selected 135 hours of track that swung
+  // through 224 degrees and bowed 39 km off an 8 km chord - so the band
+  // wrapped most of a loop while its label claimed +-23.5 km.
+  //
+  // Arc length is also the plain reading of "+-41 km along it". Since
+  // arc length >= straight-line distance, this only ever tightens the
+  // span.
+  // The span also stops where the track stops being a LINE. A band is a
+  // stretch you can run down; once the heading has swung far enough the
+  // track doubles back, the ribbon wraps its own tail, and the drawn
+  // shape becomes a lobed blob covering water the paddy passed hours
+  // apart. Same principle as laneEndH: stop drawing a lane where there
+  // is no longer a lane, rather than drawing a misleading one.
+  //
+  // 90 degrees separates the two regimes cleanly on live forcing: bands
+  // out to hour 48 swing 8-17 deg, while hours 60-84 swing ~147 deg and
+  // are exactly the ones that rendered as blobs.
+  var MAX_SWING_DEG = 90;
+  function headingDeg(steps, i) {
+    var d = dirAt(steps, i);
+    return (Math.atan2(d[0], d[1]) * 180 / Math.PI + 360) % 360;
+  }
+  function alongSpan(steps, i) {
+    var reach = steps[i].alongKm, lo = i, hi = i, d = 0, sw = 0, delta;
+    while (lo > 0) {
+      d += haversineKm(steps[lo].lat, steps[lo].lng, steps[lo - 1].lat, steps[lo - 1].lng);
+      if (d > reach) break;
+      delta = ((headingDeg(steps, lo - 1) - headingDeg(steps, lo) + 540) % 360) - 180;
+      sw += delta;
+      if (Math.abs(sw) > MAX_SWING_DEG) break;
+      lo--;
+    }
+    d = 0; sw = 0;
+    while (hi < steps.length - 1) {
+      d += haversineKm(steps[hi].lat, steps[hi].lng, steps[hi + 1].lat, steps[hi + 1].lng);
+      if (d > reach) break;
+      delta = ((headingDeg(steps, hi + 1) - headingDeg(steps, hi) + 540) % 360) - 180;
+      sw += delta;
+      if (Math.abs(sw) > MAX_SWING_DEG) break;
+      hi++;
+    }
+    return [lo, hi];
+  }
+
   return {
     loadForcing: loadForcing,
     parseLatLng: parseLatLng,
@@ -556,6 +655,10 @@ var PT = (function () {
     sampleUV: sampleUV,
     tierFor: tierFor,
     haversineKm: haversineKm,
+    corridor: corridor,
+    alongSpan: alongSpan,
+    dirAt: dirAt,
+    offsetKm: offsetKm,
     consts: {
       LEEWAY_ALPHA: LEEWAY_ALPHA,
       SIGMA_ALONG_MS: SIGMA_ALONG_MS, SIGMA_CROSS_MS: SIGMA_CROSS_MS,
