@@ -503,7 +503,10 @@
 /* ---------- Responsive overrides ---------- */
 
 @media (max-width: 760px), (hover: none) and (pointer: coarse) {
-  .topbar { padding: env(safe-area-inset-top) 10px 0 10px; }
+  /* 8px side padding, not 10: adding the tools icon made the bar
+     399px wide at the 390px guard viewport. 2px a side + the 6px gap
+     below buys the fourth icon its 36px without hiding anything. */
+  .topbar { padding: env(safe-area-inset-top) 8px 0 8px; }
   .brand-tag { display: none; }
   /* Sources line + the long Last-update line both vanish on phones —
      the new MobileShell peek strip carries layer/value/time info, so
@@ -512,7 +515,7 @@
   /* ...except the beta-tools breakout — the whole point of the menu is
      that it IS the phone entry to the tools, one icon wide. */
   .topbar-meta > span.tools-menu { display: inline-flex; }
-  .topbar-meta { gap: 8px; }
+  .topbar-meta { gap: 6px; }
   /* Phone topbar = brand + region + What's New + Settings, nothing
      else. The Paddy Finder link, confidence badge, and tip jar used
      to overflow the bar ~320px past the right edge (they carried
