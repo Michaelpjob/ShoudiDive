@@ -67,6 +67,14 @@ const ALLOWED_NAMES = new Set([
   "share_click",
   "tip_click",
   "tool_open",     // beta-tools menu: which tool got launched
+  // Track-a-paddy runs. Props carry the ENTERED POSITION (lat/lng to
+  // ~11 m) plus the parse format — the coordinates are the product
+  // signal (where do people actually find paddies vs where the model
+  // says they should). Same anonymity contract as everything else
+  // here: no IP, no UA, session dies with the tab, and the client
+  // honors DNT + the analytics opt-out. The paddies page discloses
+  // the logging in the panel.
+  "paddy_track_run",
   "whatsnew_open",
   "column_open",
   "column_depth_set",

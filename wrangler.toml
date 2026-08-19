@@ -1,0 +1,38 @@
+# Cloudflare Pages config-as-code for the `shouldidive` project.
+#
+# Introduced 2026-08-19 to attach ANALYTICS_KV, the Phase-2 analytics
+# store that functions/api/analytics/event.js has written to since PR
+# #223 whenever the binding exists. The binding was never attached in
+# the dashboard, so the namespace sat empty and every event fell back
+# to Phase-1 console logs, which are not stored anywhere.
+#
+# Baseline captured with `wrangler pages download config shouldidive`
+# so the pre-existing REPORTS_KV bindings (paddy catch reports) are
+# preserved verbatim — hand-writing this file without that download
+# would have silently dropped them on the next deploy, killing
+# /api/paddies/reports.
+#
+# With pages_build_output_dir set, `wrangler pages deploy` treats this
+# file as the source of truth for bindings on every deploy. Dashboard
+# binding edits will be overwritten — change THIS file instead.
+name = "shouldidive"
+compatibility_date = "2026-04-26"
+pages_build_output_dir = "dist"
+
+# Preview environments (dev, ca-beta, etc.)
+[[kv_namespaces]]
+id = "515946cfd3154194bf7dabb2a7fa0565"
+binding = "REPORTS_KV"
+
+[[kv_namespaces]]
+id = "e6eec2aa8e73403bb962a78c4d747e00"
+binding = "ANALYTICS_KV"
+
+# Production (shouldidive.com)
+[[env.production.kv_namespaces]]
+id = "4e4c80119bb745339ca345e134027240"
+binding = "REPORTS_KV"
+
+[[env.production.kv_namespaces]]
+id = "e6eec2aa8e73403bb962a78c4d747e00"
+binding = "ANALYTICS_KV"
