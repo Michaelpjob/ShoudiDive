@@ -15,6 +15,26 @@
 
 export const CHANGELOG = [
   {
+    id: "2026-08-19",
+    date: "August 19, 2026",
+    title: "Drift forecasts now beach instead of sailing through islands",
+    items: [
+      {
+        type: "fixed",
+        text:
+          "The ocean-current grids that drive Track a paddy are too " +
+          "coarse to know the islands exist, so a forecast could drift a " +
+          "paddy straight through Catalina. Now every simulated run " +
+          "checks the real coastline as it moves: hit a shore and it " +
+          "beaches there, shown as a grey dot frozen where it landed, " +
+          "with the readout telling you what share of runs have beached " +
+          "and on which shore. If the main track grounds, the forecast " +
+          "ends there and says so. Kelp does not wash through an island, " +
+          "and now the model knows it too.",
+      },
+    ],
+  },
+  {
     id: "2026-08-17-3",
     date: "August 17, 2026",
     title: "Beta tools, one tap from the top bar",

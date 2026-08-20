@@ -66,6 +66,7 @@ var PTUI = (function () {
             '<span><i class="tk-sw tk-sw-lane"></i>7-day lane</span>' +
             '<span><i class="tk-sw tk-sw-sel"></i>likely now</span>' +
             '<span><i class="tk-sw tk-sw-dot"></i>model runs</span>' +
+            '<span><i class="tk-sw tk-sw-beach"></i>beached</span>' +
           '</div>' +
           '<div id="tkNote" class="tk-note"></div>' +
           '<div id="tkOrigin" class="tk-origin" hidden></div>' +
@@ -141,6 +142,12 @@ var PTUI = (function () {
       (step.cloud || []).forEach(function (c) {
         L.circleMarker([c[1], c[0]], { radius: 2.2, stroke: false,
           fillColor: '#fbbf24', fillOpacity: 0.5, interactive: false }).addTo(layer);
+      });
+      // Runs that BEACHED by this hour, frozen where they hit shore. Grey,
+      // not amber: they are no longer floating and never move again.
+      (step.beached || []).forEach(function (c) {
+        L.circleMarker([c[1], c[0]], { radius: 2.4, color: '#0b1220', weight: 0.5,
+          fillColor: '#94a3b8', fillOpacity: 0.85, interactive: false }).addTo(layer);
       });
       if (step.t <= FC.laneEndH) {
         // ONE width for the whole stretch — the cross-track spread at the
@@ -274,8 +281,9 @@ var PTUI = (function () {
         : tier.note + ' ') +
       (inDomainPct < 95 ? inDomainPct + '% of runs still in the forecast area here. ' : '') +
       (FC.truncated && s.t >= FC.hoursCovered - 1
-        ? 'Track ends here: the paddy left the forecast area.' : '') +
-      ageNote(s.t);
+        ? (FC.grounded ? 'Track ends here: the central forecast beaches.'
+                       : 'Track ends here: the paddy left the forecast area.') : '') +
+      beachNote(s) + ageNote(s.t);
     el('tkScrub').value = s.t;
     el('tkDay').value = String(Math.floor(s.t / 24));
     // The Time control is the CLOCK time of day the user would be on the
@@ -288,6 +296,20 @@ var PTUI = (function () {
   // The forecast positions are conditional on the paddy still floating.
   // Once its estimated age at the selected day passes the typical raft
   // life for this water, say so — the day-zero assumption was the lie.
+  // Grounding is part of the forecast, not a footnote: past ~5% beached,
+  // say how much of the ensemble is on a shore, and name the shore.
+  function beachNote(s) {
+    if (!s.beachedFrac || s.beachedFrac < 0.05) return '';
+    var pct = Math.round(s.beachedFrac * 100);
+    var name = null;
+    if (s.beached && s.beached.length) {
+      var mx = 0, my = 0;
+      s.beached.forEach(function (b) { mx += b[0]; my += b[1]; });
+      name = PT.nearestLandmark(mx / s.beached.length, my / s.beached.length);
+    }
+    return ' ' + pct + '% of runs have beached by now' + (name ? ' — nearest shore ' + name : '') + '.';
+  }
+
   function ageNote(t) {
     if (!ORIGIN || !ORIGIN.out) return '';
     var typ = ORIGIN.life.typical != null ? ORIGIN.life.typical : PT.LIFE.WARM_D;
@@ -350,7 +372,9 @@ var PTUI = (function () {
         el('tkSrc').textContent = 'Forcing: ' + (src.rtofs || 0) + ' ocean-model + ' +
           (src.surface || 0) + ' surface-current + ' + (src.wind || 0) + ' wind fields' +
           (F.notes && F.notes.length ? ' — ' + F.notes.join('; ') : '');
-        setMsg('Read as ' + echo.dm + ' (' + ll.how + '). ' + (FC.truncated
+        setMsg('Read as ' + echo.dm + ' (' + ll.how + '). ' + (FC.grounded
+          ? 'Tracked ' + days + ' day(s) — the central forecast beaches there. Grey dots are runs already ashore.'
+          : FC.truncated
           ? 'Tracked ' + days + ' day(s) — it drifts out of the forecast area after that.'
           : '7-day drift, ' + PT.consts.N_MEMBERS + '-member ensemble.'));
         el('tkOut').hidden = false;
