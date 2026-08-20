@@ -15,6 +15,31 @@
 
 export const CHANGELOG = [
   {
+    id: "2026-08-20",
+    date: "August 20, 2026",
+    title: "Drift forecasts now account for paddies sinking",
+    items: [
+      {
+        type: "new",
+        text:
+          "A drifting paddy does not last forever. Kelp rafts sink when " +
+          "bryozoans foul them heavily enough to drag them under, and " +
+          "warm water speeds that up a lot: about six weeks of float " +
+          "life in cool water, roughly three in water at 19°C and above, " +
+          "around two past 24°C. Track a paddy now runs that clock " +
+          "forward for every simulated run, using the actual water " +
+          "temperature each run drifts through rather than one number " +
+          "for the whole Bight, and starting from how old the paddy " +
+          "already was when you found it. The readout tells you what " +
+          "share of runs have sunk by the day you are looking at, and " +
+          "when too few are left still floating it says the width is " +
+          "indicative rather than measured instead of quoting a corridor " +
+          "off a handful of survivors. Estimated from published raft " +
+          "survival studies, not from paddies we have tracked ourselves.",
+      },
+    ],
+  },
+  {
     id: "2026-08-19",
     date: "August 19, 2026",
     title: "Drift forecasts now beach instead of sailing through islands",

@@ -228,13 +228,15 @@ var PTUI = (function () {
      Assumptions, all surfaced in the UI: recent currents resemble the
      forecast's drift regime (widened 0.6-1.8x); sources are mapped beds;
      alignment is consistency, not proof. */
-  function computeOrigin() {
+  // Takes the steps to reason over so it can run on the cheap centre-only
+  // SCOUT pass, before the full ensemble — the ensemble needs the age
+  // estimate to seed sinking, and the age estimate needs a drift speed.
+  function computeOrigin(stepsIn) {
     ORIGIN = null;
     var box = el('tkOrigin');
     if (box) { box.hidden = true; box.innerHTML = ''; }
-    if (!SITE || !SITE.beds || !FC || !FC.steps || FC.steps.length < 6) return;
-
-    var steps = FC.steps;
+    var steps = stepsIn || (FC && FC.steps);
+    if (!SITE || !SITE.beds || !steps || steps.length < 6) return;
     // Drift regime off the forecast's own centre track: arc length over
     // the first 48 h (or what exists), in km/day.
     var lastI = 0;
@@ -287,6 +289,8 @@ var PTUI = (function () {
     box2.innerHTML = '<b>Likely origin &amp; age (estimated)</b>' + rows.join('') +
       lifeLine(life, tempC, out) +
       '<span class="tk-ocaveat">From bed positions, shedding history and today’s drift regime. ' +
+      'Sinking is modelled forward from this age using the water each run drifts through, ' +
+      'charging its pre-sighting life at the temperature where you found it. ' +
       'Consistent-with, not confirmed.</span>';
     box2.hidden = false;
   }
@@ -325,7 +329,7 @@ var PTUI = (function () {
       (FC.truncated && s.t >= FC.hoursCovered - 1
         ? (FC.grounded ? 'Track ends here: the central forecast beaches.'
                        : 'Track ends here: the paddy left the forecast area.') : '') +
-      beachNote(s) + ageNote(s.t);
+      beachNote(s) + sinkNote(s) + thinNote(s) + ageNote(s.t);
     el('tkScrub').value = s.t;
     el('tkDay').value = String(Math.floor(s.t / 24));
     // The Time control is the CLOCK time of day the user would be on the
@@ -352,13 +356,30 @@ var PTUI = (function () {
     return ' ' + pct + '% of runs have beached by now' + (name ? ' — nearest shore ' + name : '') + '.';
   }
 
+  // Sinking is a forecast output now, not a caveat. Report it once it is
+  // material, and name the mechanism — divers reasonably assume a paddy
+  // that drifts is a paddy that persists.
+  function sinkNote(s) {
+    if (!s.sunkFrac || s.sunkFrac < 0.05) return '';
+    var pct = Math.round(s.sunkFrac * 100);
+    return ' ' + pct + '% of runs have sunk by now (fouling ballast in warm water).';
+  }
+  // The corridor percentiles are computed from the runs still floating.
+  // Once few remain, the width is sampling noise dressed as precision.
+  var MIN_LIVE_FOR_WIDTH = 12;
+  function thinNote(s) {
+    if (s.liveCount == null || s.liveCount >= MIN_LIVE_FOR_WIDTH) return '';
+    return ' Only ' + s.liveCount + ' of ' + PT.consts.N_MEMBERS +
+      ' runs are still afloat here, so treat the width as indicative, not measured.';
+  }
+
   function ageNote(t) {
     if (!ORIGIN || !ORIGIN.out) return '';
     var typ = ORIGIN.life.typical != null ? ORIGIN.life.typical : PT.LIFE.WARM_D;
     var ageMin = ORIGIN.out.ageLo + t / 24;
     if (ageMin <= typ) return '';
     return ' By this day it would be ≥' + Math.round(ageMin) +
-      ' d adrift — past typical raft life for this water; it may have sunk.';
+      ' d adrift, past typical raft life for this water.';
   }
 
   function t0Of() { return (FC && FC.t0) || Date.now(); }
@@ -402,7 +423,24 @@ var PTUI = (function () {
       // Yield so the message paints before the (synchronous) ensemble.
       setTimeout(function () {
         try {
-          FC = PT.forecast(F, ll.lng, ll.lat, 168);
+          // SCOUT: one cheap centre-only track (no ensemble) purely to
+          // get a drift speed and bearing, so the origin model can date
+          // the paddy. That age then seeds the ensemble's sinking, which
+          // is why this runs before the real forecast rather than after.
+          // Identical call to the one forecast() makes for its centre
+          // track (same seed, unperturbed, never sinks), so the age this
+          // produces is the same age the panel finally displays — the
+          // number driving sinking and the number shown cannot diverge.
+          // computeOrigin reads only position and time, so the spread
+          // fields the real steps carry are not needed here.
+          var scout = PT.integrate(F, ll.lng, ll.lat, 168, false, 1);
+          var scoutSteps = scout.map(function (pt) {
+            return { t: pt.t, lat: pt.lat, lng: pt.lng };
+          });
+          computeOrigin(scoutSteps);
+          var ageRange = ORIGIN && ORIGIN.out
+            ? { lo: ORIGIN.out.ageLo, hi: ORIGIN.out.ageHi } : null;
+          FC = PT.forecast(F, ll.lng, ll.lat, 168, { startAgeDays: ageRange });
           FC.t0 = t0;
         } catch (e) { setMsg('Drift failed: ' + e.message, true); busy = false; return; }
         busy = false;
@@ -432,7 +470,7 @@ var PTUI = (function () {
           oh.textContent = (h < 10 ? '0' : '') + h + ':00'; hsel.appendChild(oh);
         }
         el('tkScrub').max = FC.hoursCovered;
-        computeOrigin();
+        computeOrigin(FC.steps);      // re-render against the real track
         show(Math.min(24, FC.hoursCovered));
       }, 30);
     }).catch(function (e) {
