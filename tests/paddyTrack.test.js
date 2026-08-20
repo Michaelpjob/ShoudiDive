@@ -601,3 +601,100 @@ test("landmarks name the neighbourhood, and stay silent far offshore", () => {
   assert.equal(PT.nearestLandmark(-117.27, 32.70), "Point Loma");
   assert.equal(PT.nearestLandmark(-125.0, 35.0), null, "no name 500 km out");
 });
+
+/* ---- grounding -------------------------------------------------------
+   The forcing grids are too coarse to know the islands exist, so before
+   this a drift track could sail straight through Catalina. Real paddies
+   ground on the windward shore and stay there. These tests pin the land
+   mask and the grounding rule with a synthetic island. */
+
+// A square island: 0.2 x 0.2 deg centred at (-119, 33.4), directly east
+// of the standard start point under an eastward current.
+const ISLAND = {
+  type: "FeatureCollection",
+  features: [{
+    type: "Feature",
+    geometry: { type: "Polygon", coordinates: [[
+      [-119.1, 33.3], [-118.9, 33.3], [-118.9, 33.5], [-119.1, 33.5], [-119.1, 33.3],
+    ]] },
+  }],
+};
+const islandMask = () => PT.buildLandMask(ISLAND, BBOX);
+
+test("the land mask resolves the island, and only the island", () => {
+  const m = islandMask();
+  assert.ok(PT.landAt(m, -119.0, 33.4), "island centre is land");
+  assert.ok(PT.landAt(m, -119.09, 33.31), "island corner is land");
+  assert.ok(!PT.landAt(m, -119.2, 33.4), "water west of it is water");
+  assert.ok(!PT.landAt(m, -119.0, 33.6), "water north of it is water");
+  assert.ok(!PT.landAt(m, -130, 45), "outside the bbox is not land");
+});
+
+test("a track grounds on the windward shore instead of crossing the island", () => {
+  // 0.5 m/s eastward from 60 km west of the island: reaches the shore in
+  // ~30 h, and without land data it would cross to the far side.
+  const F = forcing({ cu: 0.5 });
+  const control = PT.integrate(F, -119.75, 33.4, 168, false, 1);
+  assert.ok(control[control.length - 1].lng > -118.5, "control (no land) sails through");
+  F.land = islandMask();
+  const tr = PT.integrate(F, -119.75, 33.4, 168, false, 1);
+  assert.ok(tr.grounded, "track should be flagged grounded");
+  const last = tr[tr.length - 1];
+  assert.ok(last.lng < -119.1, `ends WEST of the island shore, got ${last.lng.toFixed(3)}`);
+  assert.ok(last.lng > -119.25, `ends NEAR the shore, got ${last.lng.toFixed(3)}`);
+  for (const pt of tr) {
+    assert.ok(!PT.landAt(F.land, pt.lng, pt.lat), `track point on land at t=${pt.t}`);
+  }
+});
+
+test("the ensemble reports beached runs, frozen at the shore", () => {
+  const F = forcing({ cu: 0.5 });
+  F.land = islandMask();
+  const fc = PT.forecast(F, -119.75, 33.4, 168);
+  const last = fc.steps[fc.steps.length - 1];
+  assert.ok(fc.grounded, "central forecast beaches");
+  // The step list follows the CENTRE track (existing truncation design),
+  // so it ends the hour the centre beaches — when the slower half of the
+  // ensemble is still afloat and inbound. Beached fraction at that moment
+  // is therefore substantial but not total.
+  assert.ok(last.t < 168, "steps end when the centre grounds");
+  assert.ok(last.beachedFrac > 0.25, `a real share should have beached, got ${(last.beachedFrac * 100).toFixed(0)}%`);
+  // Every member grounds eventually — none crosses the island.
+  let groundedAll = 0;
+  for (let m = 0; m < 40; m++) {
+    const tr = PT.integrate(F, -119.75, 33.4, 168, true, 1000 + m * 7919);
+    if (tr.grounded) groundedAll++;
+    for (const pt of tr) assert.ok(!PT.landAt(F.land, pt.lng, pt.lat), "member steps onto land");
+  }
+  assert.equal(groundedAll, 40, "every sampled member beaches rather than crossing");
+  assert.equal(last.beached.length, Math.round(last.beachedFrac * PT.consts.N_MEMBERS));
+  for (const [blng, blat] of last.beached) {
+    assert.ok(!PT.landAt(F.land, blng, blat), "beached dots sit at the shore, not on land");
+    assert.ok(Math.abs(blng - -119.1) < 0.12 || Math.abs(blat - 33.3) < 0.12 || Math.abs(blat - 33.5) < 0.12,
+      `beached run should be near the island's windward edges (${blng.toFixed(2)}, ${blat.toFixed(2)})`);
+  }
+  // beached fraction is monotone: nothing refloats
+  let prev = 0;
+  for (const s of fc.steps) {
+    assert.ok(s.beachedFrac >= prev - 1e-9, "beached runs never refloat");
+    prev = s.beachedFrac;
+  }
+});
+
+test("a start position that rasterizes onto land gets a grace window", () => {
+  // Paddy marked from the beach: start ON the island, current pushing it
+  // west into open water. It should escape, not be declared beached at t=0.
+  const F = forcing({ cu: -0.5 });
+  F.land = islandMask();
+  const tr = PT.integrate(F, -119.095, 33.4, 48, false, 1);
+  assert.ok(!tr.grounded, "westward flow carries it off the mask slop");
+  assert.ok(tr.length > 40, "and it keeps integrating");
+});
+
+test("no land data means no grounding — graceful, not wrong", () => {
+  // 96 h at 0.5 m/s stays inside the bbox; 168 h would exit the domain
+  // east of -116.8 and truncate for the OTHER reason.
+  const tr = PT.integrate(forcing({ cu: 0.5 }), -119.75, 33.4, 96, false, 1);
+  assert.ok(!tr.grounded);
+  assert.equal(tr.length, 97);
+});
