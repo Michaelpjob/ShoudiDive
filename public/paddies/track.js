@@ -46,6 +46,12 @@
  * risking the double-count above. Revisit if the pipeline ever publishes
  * partitioned wind-sea Hs/Tp, or a Stokes field directly.
  *
+ * GROUNDING IS MODELLED; SINKING IS NOT. A run that steps onto the
+ * rasterized land polygons beaches there and stays (the hindcast runs
+ * ~76% beached, so this is a large real term, and it is what stops
+ * tracks sailing through Catalina). Sinking has no term — see the raft
+ * lifespan notes in the origin/age block.
+ *
  * UNCERTAINTY IS MEASURED, NOT ASSUMED. On 2026-08-16 the two current
  * products we publish for the same water disagreed by 0.166 m/s RMS —
  * against an RTOFS mean speed of 0.179 m/s, i.e. the disagreement is
@@ -245,6 +251,12 @@ var PT = (function () {
         var L = m.layers || {};
         var jobs = [];
 
+        // --- land polygons -> grounding mask (see buildLandMask) ---
+        jobs.push(fetch('/data/land.geojson', { cache: 'force-cache' })
+          .then(function (r) { return r.json(); })
+          .then(function (gj) { out.land = buildLandMask(gj, bbox); })
+          .catch(function () { out.notes.push('no land data — grounding not modelled this run'); }));
+
         // --- published surface currents (kt, direction_to) ---
         if (L.current5d && L.current5d.summary_url) {
           jobs.push(fetch(fixUrl(L.current5d.summary_url), { cache: 'no-cache' })
@@ -388,8 +400,79 @@ var PT = (function () {
   /* Integrate one member. `pert` 0 = unperturbed centre track.
    * Returns an array of {t, lng, lat} at DT_HOURS spacing, ending early
    * if the particle leaves the grid (beached / off-domain). */
+  /* ---- grounding ----------------------------------------------------
+     The forcing grids are far too coarse to know the islands exist —
+     RTOFS and the wind fields happily interpolate right across
+     Catalina, so a drift track could sail through a landmass no paddy
+     survives. Real paddies GROUND: they hit the windward shore and stay
+     there (the hindcast model runs ~76% beached).
+
+     The published land polygons (196 rings, ~45k vertices, all eight
+     Channel Islands) are rasterized once per forcing load into a
+     ~0.008 deg (~800 m) hit-test mask via polygon scanline fill. That
+     resolution resolves every island (smallest, Anacapa, is ~4 km) and
+     costs ~2 MB + well under a second, and makes the per-step test O(1)
+     for the 40k+ positions a 120-member forecast integrates. */
+  var LAND_RES_DEG = 0.008;
+  function buildLandMask(geojson, bbox, res) {
+    res = res || LAND_RES_DEG;
+    var w = Math.ceil((bbox.lngMax - bbox.lngMin) / res);
+    var h = Math.ceil((bbox.latMax - bbox.latMin) / res);
+    var grid = new Uint8Array(w * h);
+    var feats = geojson.features || [geojson];
+    for (var f = 0; f < feats.length; f++) {
+      var geom = feats[f].geometry || feats[f];
+      var polys = geom.type === 'Polygon' ? [geom.coordinates]
+                : geom.type === 'MultiPolygon' ? geom.coordinates : [];
+      for (var pi = 0; pi < polys.length; pi++) {
+        var rings = polys[pi];
+        // polygon bbox -> row range
+        var minLat = 90, maxLat = -90;
+        for (var ri = 0; ri < rings.length; ri++) {
+          for (var vi = 0; vi < rings[ri].length; vi++) {
+            var la = rings[ri][vi][1];
+            if (la < minLat) minLat = la;
+            if (la > maxLat) maxLat = la;
+          }
+        }
+        var r0 = Math.max(0, Math.floor((minLat - bbox.latMin) / res));
+        var r1 = Math.min(h - 1, Math.ceil((maxLat - bbox.latMin) / res));
+        for (var row = r0; row <= r1; row++) {
+          // scanline at the CELL CENTRE latitude; even-odd fill handles
+          // holes (none exist in this dataset, but correctness is free)
+          var y = bbox.latMin + (row + 0.5) * res;
+          var xs = [];
+          for (ri = 0; ri < rings.length; ri++) {
+            var ring = rings[ri];
+            for (vi = 0; vi < ring.length - 1; vi++) {
+              var y1 = ring[vi][1], y2 = ring[vi + 1][1];
+              if ((y1 <= y) === (y2 <= y)) continue;
+              var x1 = ring[vi][0], x2 = ring[vi + 1][0];
+              xs.push(x1 + (y - y1) / (y2 - y1) * (x2 - x1));
+            }
+          }
+          xs.sort(function (a, b) { return a - b; });
+          for (var si = 0; si + 1 < xs.length; si += 2) {
+            var c0 = Math.max(0, Math.round((xs[si] - bbox.lngMin) / res - 0.5));
+            var c1 = Math.min(w - 1, Math.round((xs[si + 1] - bbox.lngMin) / res - 0.5));
+            for (var c = c0; c <= c1; c++) grid[row * w + c] = 1;
+          }
+        }
+      }
+    }
+    return { grid: grid, w: w, h: h, lngMin: bbox.lngMin, latMin: bbox.latMin, res: res };
+  }
+  function landAt(mask, lng, lat) {
+    if (!mask) return false;
+    var c = Math.floor((lng - mask.lngMin) / mask.res);
+    var r = Math.floor((lat - mask.latMin) / mask.res);
+    if (c < 0 || r < 0 || c >= mask.w || r >= mask.h) return false;
+    return mask.grid[r * mask.w + c] === 1;
+  }
+
   function integrate(F, lng0, lat0, hours, pert, seed) {
     var r = rnd(seed || 1), lng = lng0, lat = lat0, out = [{ t: 0, lng: lng, lat: lat }];
+    var onLandStart = !!(F.land && landAt(F.land, lng0, lat0));
     // Along-flow error is a persistent speed bias: drawn ONCE so the member
     // consistently runs fast or slow, which is what stretches the corridor
     // lengthwise instead of fattening it into a disc.
@@ -418,6 +501,16 @@ var PT = (function () {
       if (pert) {                              // sub-grid dispersion
         nlat += gauss(r) * diffKm / k.lat;
         nlng += gauss(r) * diffKm / Math.max(1e-6, k.lng);
+      }
+      // GROUNDING. A step onto land beaches the paddy: it stays at the
+      // last water position (within ~1 km of the shore it hit) and the
+      // track ends. One tolerance: if the START rasterized onto land
+      // (nearshore mask slop, or a paddy marked from the beach), give it
+      // six hours to reach open water before calling it beached.
+      if (F.land && landAt(F.land, nlng, nlat)) {
+        if (!onLandStart || t >= 6) { out.grounded = true; break; }
+      } else if (onLandStart) {
+        onLandStart = false;                   // reached water; normal rules
       }
       lng = nlng; lat = nlat;
       out.push({ t: t + DT_HOURS, lng: lng, lat: lat });
@@ -457,9 +550,17 @@ var PT = (function () {
     }
     var steps = [];
     for (var i = 0; i < centre.length; i++) {
-      var c = centre[i], live = [];
+      var c = centre[i], live = [], beached = [];
       for (var j = 0; j < members.length; j++) {
         if (members[j].length > i) live.push(members[j][i]);
+        else if (members[j].grounded) {
+          // Beached members stay ON the beach — their last water position,
+          // within ~1 km of the shore they hit. Out of the corridor stats
+          // (they are not floating), but shown, because "a third of runs
+          // beach on Catalina's backside" IS the forecast.
+          var g = members[j][members[j].length - 1];
+          beached.push([g.lng, g.lat]);
+        }
       }
       // Local track direction, so the spread can be split the way a skipper
       // thinks about it: how far ALONG the line vs how far OFF it.
@@ -496,6 +597,8 @@ var PT = (function () {
         // all — see the header note on raft lifespan.
         inDomain: live.length / N_MEMBERS,
         afloat: live.length / N_MEMBERS,   // deprecated alias
+        beachedFrac: beached.length / N_MEMBERS,
+        beached: beached,
         tier: tierFor(crossKm)                  // usability = how wide the LINE is
       });
     }
@@ -542,7 +645,9 @@ var PT = (function () {
       steps: steps,
       laneEndH: laneEndH,
       hoursCovered: steps.length ? steps[steps.length - 1].t : 0,
-      truncated: steps.length && steps[steps.length - 1].t < hours
+      truncated: steps.length && steps[steps.length - 1].t < hours,
+      // The CENTRAL track beached (members carry their own grounded flags).
+      grounded: !!centre.grounded
     };
   }
 
@@ -804,6 +909,8 @@ var PT = (function () {
     haversineKm: haversineKm,
     corridor: corridor,
     alongSpan: alongSpan,
+    buildLandMask: buildLandMask,
+    landAt: landAt,
     dirAt: dirAt,
     offsetKm: offsetKm,
     lifespanDays: lifespanDays,
