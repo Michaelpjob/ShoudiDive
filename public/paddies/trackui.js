@@ -16,6 +16,7 @@ var PTUI = (function () {
   // bed positions, shedding timeline, water temp. ORIGIN: the origin/age
   // estimate for the current run, or null when none could be made.
   var SITE = null, ORIGIN = null;
+  var lastVia = 'typed';           // how the position was entered: typed | tap
   var TIER_COLOR = { search: '#22c55e', wide: '#eab308', region: '#f97316' };
 
   function el(id) { return document.getElementById(id); }
@@ -51,6 +52,8 @@ var PTUI = (function () {
           '<button id="tkPick" class="tk-btn tk-ghost" title="Then tap the map">Tap map</button>' +
         '</div>' +
         '<button id="tkRun" class="tk-btn tk-go">Forecast 7-day drift</button>' +
+        '<div class="tk-disclose">Runs are logged anonymously (position + format) to improve the model. ' +
+          'Honors Do&nbsp;Not&nbsp;Track.</div>' +
         '<div id="tkMsg" class="tk-msg"></div>' +
         '<div id="tkOut" class="tk-out" hidden>' +
           '<div class="tk-pick">' +
@@ -73,6 +76,45 @@ var PTUI = (function () {
           '<div id="tkSrc" class="tk-src"></div>' +
         '</div>' +
       '</div>';
+  }
+
+  /* Anonymous run logging. One event per forecast run carrying the
+     ENTERED position and how it was given (typed format vs map tap) —
+     the product question is where people actually find paddies vs
+     where the model says they should be. Mirrors the main site's
+     analytics contract exactly: same endpoint, same payload shape,
+     same sessionStorage session id (dies with the tab), no IP or UA
+     server-side, and the same two opt-outs (browser DNT and
+     localStorage sd:analytics:off). Disclosed in the panel. */
+  function logRun(ll, via) {
+    try {
+      if (navigator.doNotTrack === '1' || window.doNotTrack === '1') return;
+      if (localStorage.getItem('sd:analytics:off') === '1') return;
+      var sid = sessionStorage.getItem('sd:sid');
+      if (!sid) {
+        var a = new Uint32Array(2);
+        (window.crypto || {}).getRandomValues ? crypto.getRandomValues(a) : (a = [Date.now(), 0]);
+        sid = a[0].toString(16) + a[1].toString(16);
+        sessionStorage.setItem('sd:sid', sid);
+      }
+      var payload = JSON.stringify({
+        session_id: sid,
+        viewport: window.innerWidth < 600 ? 'mobile' : (window.innerWidth < 1024 ? 'tablet' : 'desktop'),
+        sent_at: new Date().toISOString().slice(0, 16) + 'Z',
+        events: [{
+          name: 'paddy_track_run',
+          ts: new Date().toISOString().slice(0, 16) + 'Z',
+          props: { lat: Math.round(ll.lat * 1e4) / 1e4, lng: Math.round(ll.lng * 1e4) / 1e4,
+                   fmt: String(ll.how || ''), via: via }
+        }]
+      });
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon('/api/analytics/event', new Blob([payload], { type: 'application/json' }));
+      } else {
+        fetch('/api/analytics/event', { method: 'POST', body: payload,
+          headers: { 'Content-Type': 'application/json' }, keepalive: true }).catch(function () {});
+      }
+    } catch (e) { /* logging must never break a run */ }
   }
 
   function setMsg(s, bad) {
@@ -347,6 +389,7 @@ var PTUI = (function () {
     // misparse would silently forecast the wrong piece of ocean.
     var echo = fmtLL(ll.lat, ll.lng);
     startLL = ll; busy = true;
+    logRun(ll, lastVia);
     setMsg('Loading forecast currents and wind…');
     var t0 = Date.now();
     var job = F ? Promise.resolve(F) : PT.loadForcing(t0);
@@ -421,6 +464,7 @@ var PTUI = (function () {
     el('tkClose').onclick = function () { wrap.hidden = true; };
     el('tkRun').onclick = run;
     el('tkLL').addEventListener('keydown', function (e) { if (e.key === 'Enter') run(); });
+    el('tkLL').addEventListener('input', function () { lastVia = 'typed'; });
     el('tkScrub').addEventListener('input', function () { show(parseInt(this.value, 10)); });
     el('tkDay').addEventListener('change', syncFromPickers);
     el('tkHour').addEventListener('change', syncFromPickers);
@@ -442,6 +486,7 @@ var PTUI = (function () {
       if (!picking) return;
       picking = false;
       el('tkLL').value = e.latlng.lat.toFixed(4) + ', ' + e.latlng.lng.toFixed(4);
+      lastVia = 'tap';
       setMsg('');
     });
   }
