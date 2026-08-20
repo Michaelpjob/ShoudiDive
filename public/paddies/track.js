@@ -215,6 +215,40 @@ var PT = (function () {
     });
   }
 
+  // ---- PNG -> Float32 SCALAR grid --------------------------------------
+  // NOT the same encoding as the UV pairs. The pipeline writes scalar
+  // fields as 8-bit greyscale (mode "L", no alpha), where pixel 0 is the
+  // NO-DATA sentinel and 1..255 map linearly onto [lo, hi] as
+  // (px - 1) / 254 (pipeline/fetch_sst_5day.py, mirrored in
+  // src/lib/loaders/decoders.js). Decoding it with decodeUV's px/255
+  // would read every land pixel as 9 degC water and skew the rest low.
+  // Returns the array under BOTH u and v (same reference) so sampleUV's
+  // tested bilinear + land-guard can be reused unchanged.
+  function decodeScalar(url, lo, hi) {
+    return new Promise(function (resolve) {
+      var img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = function () {
+        var w = img.naturalWidth, h = img.naturalHeight;
+        var cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        var ctx = cv.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        var d;
+        try { d = ctx.getImageData(0, 0, w, h).data; }
+        catch (e) { resolve(null); return; }
+        var a = new Float32Array(w * h);
+        for (var i = 0; i < w * h; i++) {
+          var px = d[i * 4];
+          a[i] = px === 0 ? NaN : lo + ((px - 1) / 254) * (hi - lo);
+        }
+        resolve({ u: a, v: a, w: w, h: h });
+      };
+      img.onerror = function () { resolve(null); };
+      img.src = url;
+    });
+  }
+
   // Bilinear sample of a UV grid laid over `bbox`. Row 0 = latMax.
   function sampleUV(g, bbox, lng, lat) {
     if (!g) return null;
@@ -240,7 +274,7 @@ var PT = (function () {
   // Each source becomes a time-sorted list of {tHours, grid} where tHours
   // is hours from `t0` (the forecast start).
   function loadForcing(t0) {
-    var bbox = null, out = { surface: [], wind: [], rtofs: [], bbox: null, notes: [] };
+    var bbox = null, out = { surface: [], wind: [], rtofs: [], sst: [], bbox: null, notes: [] };
 
     return fetch('/data/manifest.json', { cache: 'no-cache' })
       .then(function (r) { return r.json(); })
@@ -250,6 +284,25 @@ var PT = (function () {
         out.bbox = bbox;
         var L = m.layers || {};
         var jobs = [];
+
+        // --- forecast SST -> the fouling clock (see the sinking block) ---
+        if (L.sst5d && L.sst5d.summary_url) {
+          jobs.push(fetch(fixUrl(L.sst5d.summary_url), { cache: 'no-cache' })
+            .then(function (r) { return r.json(); })
+            .then(function (sm) {
+              var rng = sm.range_c || sm.range || [9, 25];
+              var subs = [];
+              (sm.days || []).forEach(function (d) {
+                if (!d.url || !d.date) return;
+                var when = Date.parse(d.date + 'T12:00:00Z');   // daily field, midday
+                if (isNaN(when)) return;
+                subs.push(decodeScalar(fixUrl(d.url), rng[0], rng[1]).then(function (g) {
+                  if (g) out.sst.push({ t: (when - t0) / 3600e3, g: g, k: 1 });
+                }));
+              });
+              return Promise.all(subs);
+            }).catch(function () { out.notes.push('no SST forecast — sinking not modelled'); }));
+        }
 
         // --- land polygons -> grounding mask (see buildLandMask) ---
         jobs.push(fetch('/data/land.geojson', { cache: 'force-cache' })
@@ -324,7 +377,7 @@ var PT = (function () {
         return Promise.all(jobs);
       })
       .then(function () {
-        ['surface', 'wind', 'rtofs'].forEach(function (k) {
+        ['surface', 'wind', 'rtofs', 'sst'].forEach(function (k) {
           out[k] = out[k].filter(function (e) { return isFinite(e.t); });
           out[k].sort(function (a, b) { return a.t - b.t; });
         });
@@ -333,7 +386,9 @@ var PT = (function () {
         // for days, which is what made the tail of the track unrealistic.
         var last = function (l) { return l.length ? l[l.length - 1].t : -Infinity; };
         out.currentHorizonH = Math.max(last(out.rtofs), last(out.surface));
-        out.sources = { rtofs: out.rtofs.length, surface: out.surface.length, wind: out.wind.length };
+        out.sources = { rtofs: out.rtofs.length, surface: out.surface.length,
+                        wind: out.wind.length, sst: out.sst.length };
+        if (!out.sst.length) out.notes.push('no SST forecast — sinking not modelled');
         if (!out.rtofs.length) out.notes.push('no ocean-model currents (RTOFS) — short horizon');
         if (!out.surface.length) out.notes.push('no surface-current field');
         return out;
@@ -400,6 +455,47 @@ var PT = (function () {
   /* Integrate one member. `pert` 0 = unperturbed centre track.
    * Returns an array of {t, lng, lat} at DT_HOURS spacing, ending early
    * if the particle leaves the grid (beached / off-domain). */
+  /* ---- sinking ------------------------------------------------------
+     Until now sinking was annotated but never simulated: every run
+     drifted the full week regardless of how old the paddy already was.
+     The literature is clear that Macrocystis rafts sink from BRYOZOAN
+     FOULING BALLAST rather than heat directly — warm water accelerates
+     the fouling, 19-21 degC is sub-lethal stress, and past ~24 degC the
+     raft is in a hard-sink regime (Hobday 2000; Graiff / Rothausler).
+
+     So the model is a thermal DOSE integrated along the track, not a
+     fixed clock. Each member carries a fouling burden B:
+
+         dB/dt = 1 / L(T)      T = SST the member is actually drifting
+                               through, L = median float life at T
+
+     B = 1 is the median raft's end. Each member draws its own threshold
+     from a lognormal with median 1, so half sink before B = 1 and half
+     after, and the member sinks when B crosses it.
+
+     SINK_SIGMA is the spread of that lognormal, and it is PROVISIONAL
+     (registered in knobs_registry.json). Derivation, stated so it can be
+     argued with: the warm-water median is 22 d and the longest rafts
+     actually tracked in the Bight ran 63-109 d. Treating ~63 d as a
+     ~99th-percentile survivor gives sigma = ln(63/22) / z(0.99)
+     = 1.052 / 2.326 = 0.45. That reproduces the observed tail from the
+     observed median; it is not fitted to our own data, because we have
+     none — no paddy in this app has ever been re-sighted.
+
+     The paddy is ALSO already partly through its life when the user
+     sees it, so B starts non-zero: the origin/age estimate supplies a
+     start-age range and each member draws from it. Its pre-sighting
+     history used the SST at the sighting position as the best available
+     proxy, which is stated in the UI. */
+  var SINK_SIGMA = 0.45;
+  // Fouling rate per day at temperature T. lifespanDays() carries the
+  // literature anchors; this just inverts the median into a rate.
+  function foulRatePerDay(tC) {
+    var L = lifespanDays(tC);
+    var typ = L.typical != null ? L.typical : LIFE.WARM_D;
+    return 1 / Math.max(1, typ);
+  }
+
   /* ---- grounding ----------------------------------------------------
      The forcing grids are far too coarse to know the islands exist —
      RTOFS and the wind fields happily interpolate right across
@@ -470,9 +566,30 @@ var PT = (function () {
     return mask.grid[r * mask.w + c] === 1;
   }
 
-  function integrate(F, lng0, lat0, hours, pert, seed) {
+  // sstAt: the SST a member is drifting through, or null if unavailable.
+  function sstAt(F, t, lng, lat) {
+    if (!F.sst || !F.sst.length) return null;
+    var g = sampleSeries(F.sst, F.bbox, t, lng, lat);
+    return g && isFinite(g.u) ? g.u : null;
+  }
+
+  function integrate(F, lng0, lat0, hours, pert, seed, opts) {
     var r = rnd(seed || 1), lng = lng0, lat = lat0, out = [{ t: 0, lng: lng, lat: lat }];
     var onLandStart = !!(F.land && landAt(F.land, lng0, lat0));
+    /* Fouling burden. Only runs when SST is available AND the caller
+       supplied a sink draw — the centre track and the unit tests
+       integrate without one, and get the old behaviour. */
+    opts = opts || {};
+    var sink = opts.sink || null;
+    var burden = 0, sinkThresh = Infinity;
+    if (sink && F.sst && F.sst.length) {
+      sinkThresh = sink.threshold;
+      // Pre-sighting history: charge the drawn start age at the SST
+      // where the user found it — the best proxy we have for the water
+      // it came through, and stated as such in the UI.
+      var t0C = sstAt(F, 0, lng0, lat0);
+      burden = sink.startAgeDays * foulRatePerDay(t0C);
+    }
     // Along-flow error is a persistent speed bias: drawn ONCE so the member
     // consistently runs fast or slow, which is what stretches the corridor
     // lengthwise instead of fattening it into a disc.
@@ -502,6 +619,14 @@ var PT = (function () {
         nlat += gauss(r) * diffKm / k.lat;
         nlng += gauss(r) * diffKm / Math.max(1e-6, k.lng);
       }
+      // SINKING. Charge this hour's fouling at the temperature the
+      // member is actually in, then check its own threshold. A sunk raft
+      // is gone: no position, no beach, out of the cloud entirely.
+      if (sinkThresh < Infinity) {
+        var tC = sstAt(F, t, lng, lat);
+        burden += (DT_HOURS / 24) * foulRatePerDay(tC);
+        if (burden >= sinkThresh) { out.sunk = true; break; }
+      }
       // GROUNDING. A step onto land beaches the paddy: it stays at the
       // last water position (within ~1 km of the shore it hit) and the
       // track ends. One tolerance: if the START rasterized onto land
@@ -515,6 +640,7 @@ var PT = (function () {
       lng = nlng; lat = nlat;
       out.push({ t: t + DT_HOURS, lng: lng, lat: lat });
     }
+    out.burden = burden;          // fraction of a median raft life used
     return out;
   }
 
@@ -541,18 +667,39 @@ var PT = (function () {
 
   /* Public: forecast a paddy seen at (lng, lat) at time `seenAt` (Date).
    * Returns hourly centre positions with a measured 68% radius each. */
-  function forecast(F, lng, lat, hours) {
+  /* opts.startAgeDays = {lo, hi}: how long the paddy has ALREADY been
+     adrift, from the origin estimate. Supplying it turns sinking on (SST
+     permitting); omitting it reproduces the old always-floats behaviour,
+     which is what the centre track and the physics tests want. */
+  function forecast(F, lng, lat, hours, opts) {
     hours = hours || 168;                    // 7 days
+    opts = opts || {};
+    var age = opts.startAgeDays || null;
+    var sinkOn = !!(age && F.sst && F.sst.length);
+    // The centre track never sinks: it is the reference line, and a
+    // median-threshold centre would vanish at exactly the median, which
+    // is a coin flip, not a forecast. The ENSEMBLE carries the mortality.
     var centre = integrate(F, lng, lat, hours, false, 1);
-    var members = [];
+    var members = [], sr = rnd(4242);
     for (var m = 0; m < N_MEMBERS; m++) {
-      members.push(integrate(F, lng, lat, hours, true, 1000 + m * 7919));
+      var sink = null;
+      if (sinkOn) {
+        sink = {
+          // uniform across the estimated age range — the origin model
+          // gives a range, not a shape, so pretending to a shape would
+          // be inventing precision
+          startAgeDays: age.lo + sr() * Math.max(0, age.hi - age.lo),
+          threshold: Math.exp(gauss(sr) * SINK_SIGMA)   // lognormal, median 1
+        };
+      }
+      members.push(integrate(F, lng, lat, hours, true, 1000 + m * 7919, { sink: sink }));
     }
     var steps = [];
     for (var i = 0; i < centre.length; i++) {
-      var c = centre[i], live = [], beached = [];
+      var c = centre[i], live = [], beached = [], sunk = 0;
       for (var j = 0; j < members.length; j++) {
         if (members[j].length > i) live.push(members[j][i]);
+        else if (members[j].sunk) sunk++;    // gone: no position to draw
         else if (members[j].grounded) {
           // Beached members stay ON the beach — their last water position,
           // within ~1 km of the shore they hit. Out of the corridor stats
@@ -599,6 +746,11 @@ var PT = (function () {
         afloat: live.length / N_MEMBERS,   // deprecated alias
         beachedFrac: beached.length / N_MEMBERS,
         beached: beached,
+        sunkFrac: sunk / N_MEMBERS,
+        // How many runs still float here. The corridor percentiles come
+        // from these, so when it gets small the spread is sampling noise
+        // and the UI has to stop quoting a width.
+        liveCount: live.length,
         tier: tierFor(crossKm)                  // usability = how wide the LINE is
       });
     }
@@ -911,6 +1063,9 @@ var PT = (function () {
     alongSpan: alongSpan,
     buildLandMask: buildLandMask,
     landAt: landAt,
+    decodeScalar: decodeScalar,
+    foulRatePerDay: foulRatePerDay,
+    sstAt: sstAt,
     dirAt: dirAt,
     offsetKm: offsetKm,
     lifespanDays: lifespanDays,
@@ -925,6 +1080,7 @@ var PT = (function () {
       DT_HOURS: DT_HOURS, N_MEMBERS: N_MEMBERS,
       BLEND_RTOFS: BLEND_RTOFS, BLEND_SURFACE: BLEND_SURFACE,
       DIFFUSION_K_M2S: DIFFUSION_K_M2S, DECORR_HOURS: DECORR_HOURS,
+      SINK_SIGMA: SINK_SIGMA,
       LANE_MAX_CROSS_KM: LANE_MAX_CROSS_KM
     }
   };
