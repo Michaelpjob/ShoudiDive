@@ -698,3 +698,102 @@ test("no land data means no grounding — graceful, not wrong", () => {
   assert.ok(!tr.grounded);
   assert.equal(tr.length, 97);
 });
+
+/* ---- sinking ---------------------------------------------------------
+   Sinking used to be a caveat in the copy while every run drifted the
+   full week regardless of age. It is now a thermal DOSE integrated along
+   each member's own track: rafts sink from bryozoan fouling ballast, and
+   warm water accelerates it. These pin the mechanism, the anchors, and
+   the honesty guards. */
+
+// A uniform SST field at a given temperature, encoded like the pipeline's
+// scalar grids (same array under u and v, as decodeScalar returns).
+function sstField(tempC, w = 60, h = 60) {
+  const a = new Float32Array(w * h).fill(tempC);
+  return { u: a, v: a, w, h };
+}
+function forcingWithSst({ cu = 0.05, tempC = 20 } = {}) {
+  const F = forcing({ cu });
+  F.sst = [{ t: 0, g: sstField(tempC), k: 1 }, { t: 400, g: sstField(tempC), k: 1 }];
+  return F;
+}
+const AGE0 = { lo: 0, hi: 0 };   // brand-new paddy: isolates the forward model
+
+test("fouling rate inverts the literature median, and rises with heat", () => {
+  // 1/L(T): a cool raft accumulates burden slowly, a hot one fast.
+  const cool = PT.foulRatePerDay(12), warm = PT.foulRatePerDay(20), hot = PT.foulRatePerDay(26);
+  assert.ok(Math.abs(cool - 1 / 41) < 1e-9, "cool = 1/41 per day");
+  assert.ok(Math.abs(warm - 1 / 22) < 1e-9, "warm = 1/22 per day");
+  assert.ok(Math.abs(hot - 1 / 14) < 1e-9, "hot = 1/14 per day");
+  assert.ok(hot > warm && warm > cool, "warmer water must foul faster");
+  assert.equal(PT.consts.SINK_SIGMA, 0.45, "provisional; see knobs_registry");
+});
+
+test("warm water sinks more of the ensemble than cool water", () => {
+  const last = (F) => {
+    const fc = PT.forecast(F, -119.0, 33.0, 168, { startAgeDays: AGE0 });
+    return fc.steps[fc.steps.length - 1];
+  };
+  const cool = last(forcingWithSst({ tempC: 12 }));
+  const hot = last(forcingWithSst({ tempC: 26 }));
+  assert.ok(hot.sunkFrac > cool.sunkFrac,
+    `hot ${(hot.sunkFrac * 100).toFixed(0)}% should exceed cool ${(cool.sunkFrac * 100).toFixed(0)}%`);
+  // 7 days at 1/14 per day = half a median life: a real but minority share.
+  assert.ok(hot.sunkFrac > 0.02 && hot.sunkFrac < 0.5,
+    `hot-week sinking should be material but not a wipeout, got ${(hot.sunkFrac * 100).toFixed(0)}%`);
+  // 7 days at 1/41 is a sixth of a life — almost nothing should go.
+  assert.ok(cool.sunkFrac < 0.05, `cool week should barely sink, got ${(cool.sunkFrac * 100).toFixed(0)}%`);
+});
+
+test("an old paddy sinks far more than a fresh one in the same water", () => {
+  const F = forcingWithSst({ tempC: 22 });
+  const frac = (age) => {
+    const fc = PT.forecast(F, -119.0, 33.0, 168, { startAgeDays: age });
+    return fc.steps[fc.steps.length - 1].sunkFrac;
+  };
+  const fresh = frac({ lo: 0, hi: 1 });
+  const old = frac({ lo: 18, hi: 22 });    // already near the warm median
+  assert.ok(old > fresh + 0.2,
+    `age must dominate: fresh ${(fresh * 100).toFixed(0)}% vs old ${(old * 100).toFixed(0)}%`);
+});
+
+test("sunk runs vanish — they are not drawn as beached, and never come back", () => {
+  const fc = PT.forecast(forcingWithSst({ tempC: 26 }), -119.0, 33.0, 168,
+    { startAgeDays: { lo: 10, hi: 14 } });
+  let prev = 0;
+  for (const s of fc.steps) {
+    assert.ok(s.sunkFrac >= prev - 1e-9, "sunk fraction must never decrease");
+    prev = s.sunkFrac;
+    // a sunk run has no position: it is not in the cloud and not beached
+    assert.equal(s.cloud.length, s.liveCount, "cloud holds exactly the live runs");
+    const accounted = s.liveCount / PT.consts.N_MEMBERS + s.sunkFrac + s.beachedFrac;
+    assert.ok(accounted <= 1 + 1e-9, `fates must not double-count (${accounted.toFixed(3)})`);
+  }
+  assert.ok(prev > 0.3, `a fortnight-old raft in 26C water should mostly go, got ${(prev * 100).toFixed(0)}%`);
+});
+
+test("no age estimate or no SST means no sinking — the old behaviour", () => {
+  const withSst = PT.forecast(forcingWithSst({ tempC: 26 }), -119.0, 33.0, 168);  // no startAgeDays
+  assert.equal(withSst.steps[withSst.steps.length - 1].sunkFrac, 0, "no age -> no sinking");
+  const noSst = PT.forecast(forcing({ cu: 0.05 }), -119.0, 33.0, 168, { startAgeDays: { lo: 30, hi: 40 } });
+  assert.equal(noSst.steps[noSst.steps.length - 1].sunkFrac, 0, "no SST -> no sinking");
+});
+
+test("the centre track never sinks — the ensemble carries mortality", () => {
+  // A median-threshold centre would vanish at exactly the median, which
+  // is a coin flip presented as a line.
+  const fc = PT.forecast(forcingWithSst({ tempC: 26 }), -119.0, 33.0, 168,
+    { startAgeDays: { lo: 20, hi: 24 } });
+  assert.ok(fc.steps.length > 100, "centre still runs the week");
+  assert.ok(fc.steps[fc.steps.length - 1].sunkFrac > 0.4, "while most members are gone");
+});
+
+test("liveCount is reported so the UI can stop quoting a width", () => {
+  const fc = PT.forecast(forcingWithSst({ tempC: 26 }), -119.0, 33.0, 168,
+    { startAgeDays: { lo: 20, hi: 24 } });
+  for (const s of fc.steps) {
+    assert.ok(Number.isInteger(s.liveCount) && s.liveCount >= 0);
+    assert.ok(s.liveCount <= PT.consts.N_MEMBERS);
+  }
+  assert.ok(fc.steps[0].liveCount === PT.consts.N_MEMBERS, "all afloat at the sighting");
+});
