@@ -35,7 +35,7 @@ function json(raw) {
 
 const since = new Date(Date.now() - days * 86400e3).toISOString().slice(0, 10);
 console.log(`listing paddy_track_run keys since ${since}…`);
-const keys = json(wrangler("kv", "key", "list", "--namespace-id", NAMESPACE_ID, "--prefix", "ev/"))
+const keys = json(wrangler("kv", "key", "list", "--namespace-id", NAMESPACE_ID, "--prefix", "ev/", "--remote"))
   .map((k) => k.name)
   .filter((n) => {
     const p = n.split("/");
@@ -47,7 +47,7 @@ const rows = [["day", "session", "country", "viewport", "lat", "lng", "format", 
 for (const name of keys) {
   const [, day, , session] = name.split("/");
   try {
-    const v = JSON.parse(wrangler("kv", "key", "get", name, "--namespace-id", NAMESPACE_ID));
+    const v = JSON.parse(wrangler("kv", "key", "get", name, "--namespace-id", NAMESPACE_ID, "--remote"));
     const p = v.props || {};
     rows.push([day, session, v.cc || "", v.vp || "", p.lat ?? "", p.lng ?? "", p.fmt || "", p.via || ""]);
   } catch (e) {
