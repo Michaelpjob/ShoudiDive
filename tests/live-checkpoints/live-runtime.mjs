@@ -133,6 +133,16 @@ async function run() {
       if (m) bundleHashes.push(m[1]);
     });
 
+    // Opt this probe OUT of analytics before any page script runs.
+    // Without it every post-deploy and 8-hourly monitoring run counts as
+    // a visitor: on 2026-08-20 that was 29 of 38 recorded pageviews, all
+    // at the headless default 800x600 (so they also read as "tablet"
+    // users). Uses the same documented opt-out real users get, so the
+    // probe exercises the identical code path a DNT visitor does.
+    await page.evaluateOnNewDocument(() => {
+      try { localStorage.setItem("sd:analytics:off", "1"); } catch { /* private mode */ }
+    });
+
     console.log(`[live-runtime] navigating…`);
     const navStart = Date.now();
     const resp = await page.goto(`${LIVE_BASE_URL}/${CACHE_BUSTER}`, {
