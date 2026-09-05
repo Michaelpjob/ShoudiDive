@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-09-05T03:37:21Z",
+  "generated_at": "2026-09-05T06:43:31Z",
   "tz": "America/Los_Angeles",
   "anchor_date": "2026-09-04",
   "hrrr_cycle": "2026-09-05T00:00:00Z",
-  "gfs_cycle": "2026-09-04T18:00:00Z",
+  "gfs_cycle": "2026-09-05T00:00:00Z",
   "buckets_def": [
     {
       "name": "predawn",
@@ -52,7 +52,7 @@
           "mean_dir_deg": 5.0,
           "uv_url": "/data/wind/buckets/d0_afternoon_uv.png",
           "sources": [
-            "hrrr"
+            "hrrr+gfs"
           ]
         },
         {
@@ -68,7 +68,7 @@
           "mean_dir_deg": 19.0,
           "uv_url": "/data/wind/buckets/d0_evening_uv.png",
           "sources": [
-            "hrrr"
+            "hrrr+gfs"
           ]
         }
       ],
@@ -94,37 +94,78 @@
           "mean_dir_deg": 7.0,
           "uv_url": "/data/wind/buckets/d1_predawn_uv.png",
           "sources": [
-            "hrrr"
+            "hrrr+gfs"
           ]
         },
         {
           "day": 1,
           "bucket": "morning",
           "hours": [
-            6
+            6,
+            7,
+            8,
+            9
           ],
-          "mean_kt": 5.8,
+          "mean_kt": 5.9,
           "min_kt": 5.8,
-          "max_kt": 5.8,
-          "mean_dir_deg": 6.0,
+          "max_kt": 6.0,
+          "mean_dir_deg": 14.0,
           "uv_url": "/data/wind/buckets/d1_morning_uv.png",
           "sources": [
-            "hrrr"
+            "hrrr+gfs"
+          ]
+        },
+        {
+          "day": 1,
+          "bucket": "midday",
+          "hours": [
+            10,
+            11,
+            12,
+            13
+          ],
+          "mean_kt": 6.4,
+          "min_kt": 6.1,
+          "max_kt": 6.8,
+          "mean_dir_deg": 26.0,
+          "uv_url": "/data/wind/buckets/d1_midday_uv.png",
+          "sources": [
+            "hrrr+gfs"
+          ]
+        },
+        {
+          "day": 1,
+          "bucket": "afternoon",
+          "hours": [
+            14,
+            15,
+            16,
+            17,
+            18
+          ],
+          "mean_kt": 7.3,
+          "min_kt": 7.0,
+          "max_kt": 7.6,
+          "mean_dir_deg": 2.0,
+          "uv_url": "/data/wind/buckets/d1_afternoon_uv.png",
+          "sources": [
+            "hrrr+gfs"
           ]
         },
         {
           "day": 1,
           "bucket": "evening",
           "hours": [
+            19,
             20
           ],
-          "mean_kt": 8.1,
-          "min_kt": 8.1,
+          "mean_kt": 8.0,
+          "min_kt": 7.9,
           "max_kt": 8.1,
-          "mean_dir_deg": 5.0,
+          "mean_dir_deg": 3.0,
           "uv_url": "/data/wind/buckets/d1_evening_uv.png",
           "sources": [
-            "hrrr"
+            "hrrr+gfs"
           ]
         }
       ],
@@ -136,7 +177,96 @@
       "label": "+2",
       "weekday": "Sunday",
       "confidence": "medium",
-      "buckets": [],
+      "buckets": [
+        {
+          "day": 2,
+          "bucket": "predawn",
+          "hours": [
+            4,
+            5
+          ],
+          "mean_kt": 7.5,
+          "min_kt": 7.5,
+          "max_kt": 7.6,
+          "mean_dir_deg": 2.0,
+          "uv_url": "/data/wind/buckets/d2_predawn_uv.png",
+          "sources": [
+            "hrrr+gfs"
+          ]
+        },
+        {
+          "day": 2,
+          "bucket": "morning",
+          "hours": [
+            6,
+            7,
+            8,
+            9
+          ],
+          "mean_kt": 7.6,
+          "min_kt": 7.6,
+          "max_kt": 7.7,
+          "mean_dir_deg": 2.0,
+          "uv_url": "/data/wind/buckets/d2_morning_uv.png",
+          "sources": [
+            "hrrr+gfs"
+          ]
+        },
+        {
+          "day": 2,
+          "bucket": "midday",
+          "hours": [
+            10,
+            11,
+            12,
+            13
+          ],
+          "mean_kt": 7.4,
+          "min_kt": 7.2,
+          "max_kt": 7.7,
+          "mean_dir_deg": 357.0,
+          "uv_url": "/data/wind/buckets/d2_midday_uv.png",
+          "sources": [
+            "hrrr+gfs"
+          ]
+        },
+        {
+          "day": 2,
+          "bucket": "afternoon",
+          "hours": [
+            14,
+            15,
+            16,
+            17,
+            18
+          ],
+          "mean_kt": 9.5,
+          "min_kt": 7.9,
+          "max_kt": 12.4,
+          "mean_dir_deg": 337.0,
+          "uv_url": "/data/wind/buckets/d2_afternoon_uv.png",
+          "sources": [
+            "gfs",
+            "hrrr+gfs"
+          ]
+        },
+        {
+          "day": 2,
+          "bucket": "evening",
+          "hours": [
+            19,
+            20
+          ],
+          "mean_kt": 12.5,
+          "min_kt": 12.5,
+          "max_kt": 12.5,
+          "mean_dir_deg": 329.0,
+          "uv_url": "/data/wind/buckets/d2_evening_uv.png",
+          "sources": [
+            "gfs"
+          ]
+        }
+      ],
       "hourly_url_template": "/data/wind/hourly/d2_h{HH}_uv.png"
     },
     {
@@ -148,14 +278,86 @@
       "buckets": [
         {
           "day": 3,
+          "bucket": "predawn",
+          "hours": [
+            4,
+            5
+          ],
+          "mean_kt": 9.8,
+          "min_kt": 9.6,
+          "max_kt": 9.9,
+          "mean_dir_deg": 317.0,
+          "uv_url": "/data/wind/buckets/d3_predawn_uv.png",
+          "sources": [
+            "gfs"
+          ]
+        },
+        {
+          "day": 3,
+          "bucket": "morning",
+          "hours": [
+            6,
+            7,
+            8,
+            9
+          ],
+          "mean_kt": 8.6,
+          "min_kt": 7.9,
+          "max_kt": 9.3,
+          "mean_dir_deg": 314.0,
+          "uv_url": "/data/wind/buckets/d3_morning_uv.png",
+          "sources": [
+            "gfs"
+          ]
+        },
+        {
+          "day": 3,
+          "bucket": "midday",
+          "hours": [
+            10,
+            11,
+            12,
+            13
+          ],
+          "mean_kt": 7.5,
+          "min_kt": 7.4,
+          "max_kt": 7.7,
+          "mean_dir_deg": 307.0,
+          "uv_url": "/data/wind/buckets/d3_midday_uv.png",
+          "sources": [
+            "gfs"
+          ]
+        },
+        {
+          "day": 3,
+          "bucket": "afternoon",
+          "hours": [
+            14,
+            15,
+            16,
+            17,
+            18
+          ],
+          "mean_kt": 9.1,
+          "min_kt": 8.1,
+          "max_kt": 9.8,
+          "mean_dir_deg": 318.0,
+          "uv_url": "/data/wind/buckets/d3_afternoon_uv.png",
+          "sources": [
+            "gfs"
+          ]
+        },
+        {
+          "day": 3,
           "bucket": "evening",
           "hours": [
+            19,
             20
           ],
-          "mean_kt": 8.7,
-          "min_kt": 8.7,
-          "max_kt": 8.7,
-          "mean_dir_deg": 344.0,
+          "mean_kt": 9.9,
+          "min_kt": 9.8,
+          "max_kt": 9.9,
+          "mean_dir_deg": 335.0,
           "uv_url": "/data/wind/buckets/d3_evening_uv.png",
           "sources": [
             "gfs"
@@ -170,7 +372,95 @@
       "label": "+4",
       "weekday": "Tuesday",
       "confidence": "low",
-      "buckets": [],
+      "buckets": [
+        {
+          "day": 4,
+          "bucket": "predawn",
+          "hours": [
+            4,
+            5
+          ],
+          "mean_kt": 11.0,
+          "min_kt": 10.9,
+          "max_kt": 11.1,
+          "mean_dir_deg": 1.0,
+          "uv_url": "/data/wind/buckets/d4_predawn_uv.png",
+          "sources": [
+            "gfs"
+          ]
+        },
+        {
+          "day": 4,
+          "bucket": "morning",
+          "hours": [
+            6,
+            7,
+            8,
+            9
+          ],
+          "mean_kt": 12.0,
+          "min_kt": 11.4,
+          "max_kt": 12.4,
+          "mean_dir_deg": 4.0,
+          "uv_url": "/data/wind/buckets/d4_morning_uv.png",
+          "sources": [
+            "gfs"
+          ]
+        },
+        {
+          "day": 4,
+          "bucket": "midday",
+          "hours": [
+            10,
+            11,
+            12,
+            13
+          ],
+          "mean_kt": 13.0,
+          "min_kt": 12.5,
+          "max_kt": 13.7,
+          "mean_dir_deg": 1.0,
+          "uv_url": "/data/wind/buckets/d4_midday_uv.png",
+          "sources": [
+            "gfs"
+          ]
+        },
+        {
+          "day": 4,
+          "bucket": "afternoon",
+          "hours": [
+            14,
+            15,
+            16,
+            17,
+            18
+          ],
+          "mean_kt": 16.2,
+          "min_kt": 14.6,
+          "max_kt": 17.3,
+          "mean_dir_deg": 352.0,
+          "uv_url": "/data/wind/buckets/d4_afternoon_uv.png",
+          "sources": [
+            "gfs"
+          ]
+        },
+        {
+          "day": 4,
+          "bucket": "evening",
+          "hours": [
+            19,
+            20
+          ],
+          "mean_kt": 17.4,
+          "min_kt": 17.4,
+          "max_kt": 17.5,
+          "mean_dir_deg": 352.0,
+          "uv_url": "/data/wind/buckets/d4_evening_uv.png",
+          "sources": [
+            "gfs"
+          ]
+        }
+      ],
       "hourly_url_template": "/data/wind/hourly/d4_h{HH}_uv.png"
     },
     {
@@ -179,7 +469,23 @@
       "label": "+5",
       "weekday": "Wednesday",
       "confidence": "low",
-      "buckets": [],
+      "buckets": [
+        {
+          "day": 5,
+          "bucket": "predawn",
+          "hours": [
+            4
+          ],
+          "mean_kt": 15.0,
+          "min_kt": 15.0,
+          "max_kt": 15.0,
+          "mean_dir_deg": 358.0,
+          "uv_url": "/data/wind/buckets/d5_predawn_uv.png",
+          "sources": [
+            "gfs"
+          ]
+        }
+      ],
       "hourly_url_template": "/data/wind/hourly/d5_h{HH}_uv.png"
     },
     {
