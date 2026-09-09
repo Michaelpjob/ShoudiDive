@@ -25,29 +25,29 @@
         "now": {
           "speed_url": "/data/wind_speed_now.png",
           "uv_url": "/data/wind_uv_now.png",
-          "valid_at": "2026-09-09T19:00:00Z",
-          "fcst_hour": 7,
+          "valid_at": "2026-09-09T20:00:00Z",
+          "fcst_hour": 2,
           "source": "HRRR+ECMWF+buoy"
         },
         "p6h": {
           "speed_url": "/data/wind_speed_p6h.png",
           "uv_url": "/data/wind_uv_p6h.png",
-          "valid_at": "2026-09-10T01:00:00Z",
-          "fcst_hour": 13,
+          "valid_at": "2026-09-10T02:00:00Z",
+          "fcst_hour": 8,
           "source": "HRRR+ECMWF"
         },
         "p24h": {
           "speed_url": "/data/wind_speed_p24h.png",
           "uv_url": "/data/wind_uv_p24h.png",
-          "valid_at": "2026-09-10T19:00:00Z",
-          "fcst_hour": 31,
+          "valid_at": "2026-09-10T20:00:00Z",
+          "fcst_hour": 26,
           "source": "HRRR+ECMWF"
         },
         "p72h": {
           "speed_url": "/data/wind_speed_p72h.png",
           "uv_url": "/data/wind_uv_p72h.png",
-          "valid_at": "2026-09-12T19:00:00Z",
-          "fcst_hour": 79,
+          "valid_at": "2026-09-12T20:00:00Z",
+          "fcst_hour": 80,
           "source": "GFS+ECMWF"
         }
       },
@@ -55,17 +55,41 @@
         "method": "buoy_kriging_uv",
         "length_km": 45.0,
         "anemometer_height_m": 5.0,
-        "n_anchors_total": 1,
+        "n_anchors_total": 3,
         "n_anchors_active": 0,
         "mean_resid_ms": null,
         "anchors": [
           {
-            "stn": "46025",
-            "name": "Santa Monica Basin",
-            "lat": 33.765,
-            "lng": -119.077,
-            "buoy_spd_kt": 6.3,
+            "stn": "46086",
+            "name": "San Clemente Basin",
+            "lat": 32.499,
+            "lng": -118.034,
+            "buoy_spd_kt": 5.6,
+            "n_samples": 3,
+            "age_hours": 1.6,
+            "model_spd_kt": null,
+            "resid_ms": null,
+            "skipped": "no model coverage at buoy"
+          },
+          {
+            "stn": "46011",
+            "name": "Santa Maria",
+            "lat": 34.937,
+            "lng": -120.999,
+            "buoy_spd_kt": 12.6,
             "n_samples": 1,
+            "age_hours": 2.1,
+            "model_spd_kt": null,
+            "resid_ms": null,
+            "skipped": "no model coverage at buoy"
+          },
+          {
+            "stn": "46028",
+            "name": "Cape San Martin",
+            "lat": 35.763,
+            "lng": -121.893,
+            "buoy_spd_kt": 10.5,
+            "n_samples": 2,
             "age_hours": 2.1,
             "model_spd_kt": null,
             "resid_ms": null,
@@ -95,7 +119,7 @@
           "source": "GFS"
         }
       },
-      "generated_at": "2026-09-09T19:07:24Z"
+      "generated_at": "2026-09-09T20:08:53Z"
     },
     "wind5d": {
       "summary_url": "/data/wind/summary.json",
@@ -112,9 +136,9 @@
         30.0
       ],
       "tz": "America/Los_Angeles",
-      "generated_at": "2026-09-09T19:07:59Z",
+      "generated_at": "2026-09-09T20:09:47Z",
       "best_window": {
-        "day": 0,
+        "day": 1,
         "bucket": "midday",
         "mean_kt": 5.4
       }
