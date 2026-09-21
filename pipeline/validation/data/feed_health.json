@@ -1,28 +1,28 @@
 {
-  "computed_at": "2026-09-21T06:27:00Z",
+  "computed_at": "2026-09-21T18:13:29Z",
   "total": 23,
-  "green": 21,
-  "yellow": 0,
-  "red": 2,
+  "green": 22,
+  "yellow": 1,
+  "red": 0,
   "skipped": 0,
   "results": [
     {
       "feed_id": "sst_mur_l4_pfeg",
       "category": "satellite",
-      "status": "red",
-      "http_status": 403,
-      "duration_ms": 1354,
-      "bytes_seen": 415,
+      "status": "green",
+      "http_status": 200,
+      "duration_ms": 244,
+      "bytes_seen": 65421,
       "error": null,
-      "notes": "MUR L4 1km gap-filled SST. PFEG mirror. \u2014 unexpected http 403"
+      "notes": "MUR L4 1km gap-filled SST. PFEG mirror."
     },
     {
       "feed_id": "chl_dineof_nrt_4km",
       "category": "satellite",
       "status": "green",
-      "http_status": 200,
-      "duration_ms": 54,
-      "bytes_seen": 79679,
+      "http_status": 206,
+      "duration_ms": 256,
+      "bytes_seen": 12445,
       "error": null,
       "notes": "VIIRS S-NPP+N20 DINEOF NRT 4km. Fallback when NASA OB.DAAC tokens unset."
     },
@@ -31,7 +31,7 @@
       "category": "satellite",
       "status": "green",
       "http_status": 206,
-      "duration_ms": 198,
+      "duration_ms": 276,
       "bytes_seen": 12230,
       "error": null,
       "notes": "DINEOF Science-Quality 9km. ~12 day publication lag."
@@ -40,9 +40,9 @@
       "feed_id": "kd490_dineof_9km",
       "category": "satellite",
       "status": "green",
-      "http_status": 200,
-      "duration_ms": 96,
-      "bytes_seen": 94096,
+      "http_status": 206,
+      "duration_ms": 367,
+      "bytes_seen": 12212,
       "error": null,
       "notes": "Multi-sensor Kd_490. Direct viz proxy. Sole source \u2014 no fallback."
     },
@@ -51,7 +51,7 @@
       "category": "satellite",
       "status": "green",
       "http_status": 200,
-      "duration_ms": 78,
+      "duration_ms": 236,
       "bytes_seen": 0,
       "error": null,
       "notes": "NASA OB.DAAC. Bearer token required for actual download; we just check reachability."
@@ -59,19 +59,19 @@
     {
       "feed_id": "chl_climo_modis_pfeg",
       "category": "satellite",
-      "status": "red",
-      "http_status": 403,
-      "duration_ms": 1303,
-      "bytes_seen": 415,
+      "status": "green",
+      "http_status": 200,
+      "duration_ms": 259,
+      "bytes_seen": 62756,
       "error": null,
-      "notes": "MODIS Aqua W-US (lng 0..360\u00b0). Used for monthly chl climatology. \u2014 unexpected http 403"
+      "notes": "MODIS Aqua W-US (lng 0..360\u00b0). Used for monthly chl climatology."
     },
     {
       "feed_id": "nomads_hrrr",
       "category": "model",
       "status": "green",
       "http_status": 206,
-      "duration_ms": 173,
+      "duration_ms": 360,
       "bytes_seen": 2323,
       "error": null,
       "notes": "3km HRRR conus. Updates every 6h; we use 00/06/12/18z runs."
@@ -81,8 +81,8 @@
       "category": "model",
       "status": "green",
       "http_status": 206,
-      "duration_ms": 55,
-      "bytes_seen": 3822,
+      "duration_ms": 154,
+      "bytes_seen": 3905,
       "error": null,
       "notes": "0.25\u00b0 GFS atmos. Used for wind history + days 5-7 forecast."
     },
@@ -91,8 +91,8 @@
       "category": "model",
       "status": "green",
       "http_status": 206,
-      "duration_ms": 53,
-      "bytes_seen": 3822,
+      "duration_ms": 125,
+      "bytes_seen": 3905,
       "error": null,
       "notes": "WaveWatch III packaged in GFS. wcoast 0.16\u00b0 subdomain."
     },
@@ -101,8 +101,8 @@
       "category": "model",
       "status": "green",
       "http_status": 200,
-      "duration_ms": 1159,
-      "bytes_seen": 40597,
+      "duration_ms": 1330,
+      "bytes_seen": 40535,
       "error": null,
       "notes": "IOOS/NDBC HFRNet U.S. West Coast 6 km near-real-time surface currents."
     },
@@ -111,8 +111,8 @@
       "category": "point_obs",
       "status": "green",
       "http_status": 206,
-      "duration_ms": 424,
-      "bytes_seen": 3884,
+      "duration_ms": 239,
+      "bytes_seen": 3805,
       "error": null,
       "notes": "Scripps CDIP justdar parameter table. Buoy 201 = La Jolla nearshore."
     },
@@ -121,7 +121,7 @@
       "category": "point_obs",
       "status": "green",
       "http_status": 200,
-      "duration_ms": 169,
+      "duration_ms": 117,
       "bytes_seen": 0,
       "error": null,
       "notes": "NOAA NDBC realtime2 plain text. 46086 = San Clemente Basin."
@@ -131,7 +131,7 @@
       "category": "point_obs",
       "status": "green",
       "http_status": 200,
-      "duration_ms": 65,
+      "duration_ms": 114,
       "bytes_seen": 0,
       "error": null,
       "notes": "USGS NWIS instantaneous values. Site 11023340 = San Diego River."
@@ -141,7 +141,7 @@
       "category": "point_obs",
       "status": "green",
       "http_status": 200,
-      "duration_ms": 352,
+      "duration_ms": 714,
       "bytes_seen": 0,
       "error": null,
       "notes": "USGS NWIS multi-decade monthly statistics."
@@ -151,7 +151,7 @@
       "category": "point_obs",
       "status": "green",
       "http_status": 200,
-      "duration_ms": 46,
+      "duration_ms": 199,
       "bytes_seen": 224,
       "error": null,
       "notes": "NOAA CO-OPS Tides & Currents. Station 9410230 = La Jolla."
@@ -161,7 +161,7 @@
       "category": "point_obs",
       "status": "green",
       "http_status": 200,
-      "duration_ms": 228,
+      "duration_ms": 175,
       "bytes_seen": 24750,
       "error": null,
       "notes": "NOAA PSL THREDDS \u2014 CPC US Unified Daily Precip RT."
@@ -171,7 +171,7 @@
       "category": "static",
       "status": "green",
       "http_status": 200,
-      "duration_ms": 73,
+      "duration_ms": 256,
       "bytes_seen": 0,
       "error": null,
       "notes": "GMRT (Lamont-Doherty). Probe via homepage; GridServer probe was triggering slow server-side build."
@@ -179,19 +179,19 @@
     {
       "feed_id": "osm_overpass_main",
       "category": "static",
-      "status": "green",
+      "status": "yellow",
       "http_status": 206,
-      "duration_ms": 395,
-      "bytes_seen": 212,
+      "duration_ms": 10260,
+      "bytes_seen": 272,
       "error": null,
-      "notes": "OpenStreetMap Overpass API \u2014 primary mirror. Has fallbacks."
+      "notes": "OpenStreetMap Overpass API \u2014 primary mirror. Has fallbacks. \u2014 slow (10260 ms)"
     },
     {
       "feed_id": "cdfw_mpa",
       "category": "static",
       "status": "green",
       "http_status": 200,
-      "duration_ms": 635,
+      "duration_ms": 1671,
       "bytes_seen": 0,
       "error": null,
       "notes": "CDFW ArcGIS Open Data \u2014 California MPAs."
@@ -201,7 +201,7 @@
       "category": "ingest",
       "status": "green",
       "http_status": 200,
-      "duration_ms": 303,
+      "duration_ms": 340,
       "bytes_seen": 0,
       "error": null,
       "notes": "Just Get Wet (Shopify dive shop blog)."
@@ -211,7 +211,7 @@
       "category": "ingest",
       "status": "green",
       "http_status": 200,
-      "duration_ms": 417,
+      "duration_ms": 307,
       "bytes_seen": 0,
       "error": null,
       "notes": "DiveViz (LLM-extracted, requires ANTHROPIC_API_KEY)."
@@ -221,7 +221,7 @@
       "category": "ingest",
       "status": "green",
       "http_status": 200,
-      "duration_ms": 399,
+      "duration_ms": 389,
       "bytes_seen": 0,
       "error": null,
       "notes": "BD Outdoors XenForo RSS (4 sub-forums)."
@@ -231,7 +231,7 @@
       "category": "ingest",
       "status": "green",
       "http_status": 200,
-      "duration_ms": 642,
+      "duration_ms": 759,
       "bytes_seen": 0,
       "error": null,
       "notes": "Reddit Atom feeds (.rss path; .json blocked from CI IPs)."
