@@ -1,5 +1,5 @@
 {
-  "computed_at": "2026-09-21T18:16:06Z",
+  "computed_at": "2026-09-22T06:26:09Z",
   "manifest": "public/data/manifest.json",
   "layers_checked": [
     "sst",
@@ -14,8 +14,23 @@
     "current5d"
   ],
   "summary": {
-    "total_findings": 0,
-    "healthy": true
+    "total_findings": 2,
+    "healthy": false
   },
-  "findings": []
+  "findings": [
+    {
+      "severity": "high",
+      "code": "layer_date_stale",
+      "title": "Layer precip is 3.3d old",
+      "layer": "precip",
+      "detail": "threshold=3d window=now"
+    },
+    {
+      "severity": "high",
+      "code": "summary_day_sparse",
+      "title": "Layer swell5d has sparse day summaries",
+      "layer": "swell5d",
+      "detail": "d0 buckets=2"
+    }
+  ]
 }
