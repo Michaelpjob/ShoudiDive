@@ -1,10 +1,10 @@
-# Validation watchdog — 2026-09-22T06:26Z
+# Validation watchdog — 2026-09-22T18:25Z
 
 **3 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
-### 🔴 1. Only 24 observations in the last 24h (floor: 50)
+### 🔴 1. Only 23 observations in the last 24h (floor: 50)
 
 Multiple scrapers may be silently broken.
 
@@ -16,9 +16,9 @@ Red feeds: chl_dineof_nrt_4km, chl_dineof_sci_9km, kd490_dineof_9km. Fallbacks m
 
 **Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
 
-### 🔴 3. Published-data freshness gate found 2 issue(s)
+### 🔴 3. Published-data freshness gate found 1 issue(s)
 
-Freshness/completeness failures: precip:layer_date_stale, swell5d:summary_day_sparse.
+Freshness/completeness failures: precip:layer_date_stale.
 
 **Suggested action:** Open `pipeline/validation/data/freshness_health.json`; fix the failing fetcher or rerun the matching workflow before trusting the deploy.
 
@@ -26,16 +26,16 @@ Freshness/completeness failures: precip:layer_date_stale, swell5d:summary_day_sp
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_nearshore` | 4 | 7.78 | +4.51 | 0% | 1.00 |
-| `central_nearshore` | 1 | 4.12 | -4.12 | 100% | — |
+| `bight_nearshore` | 4 | 9.68 | +7.42 | 25% | 1.00 |
+| `central_nearshore` | 1 | 4.06 | -4.06 | 100% | — |
 
 ## Per-source bias (informational)
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `cencoos` | 1 | -4.12 ft |
-| `dive-shop-diveviz` | 1 | -6.47 ft |
-| `dive-shop-justgetwet` | 3 | +8.17 ft |
+| `cencoos` | 1 | -4.06 ft |
+| `dive-shop-diveviz` | 1 | -3.36 ft |
+| `dive-shop-justgetwet` | 3 | +11.01 ft |
 
 ## How to act on this issue
 
