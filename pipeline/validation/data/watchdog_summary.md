@@ -1,10 +1,10 @@
-# Validation watchdog — 2026-09-24T06:23Z
+# Validation watchdog — 2026-09-24T18:18Z
 
 **2 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
-### 🔴 1. Only 23 observations in the last 24h (floor: 50)
+### 🔴 1. Only 21 observations in the last 24h (floor: 50)
 
 Multiple scrapers may be silently broken.
 
@@ -20,14 +20,14 @@ Freshness/completeness failures: swell5d:summary_day_sparse.
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_nearshore` | 4 | 7.68 | +4.09 | 0% | 1.00 |
+| `bight_nearshore` | 4 | 9.91 | +7.28 | 25% | -1.00 |
 
 ## Per-source bias (informational)
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `dive-shop-diveviz` | 1 | -7.15 ft |
-| `dive-shop-justgetwet` | 3 | +7.84 ft |
+| `dive-shop-diveviz` | 1 | -4.34 ft |
+| `dive-shop-justgetwet` | 3 | +11.16 ft |
 
 ## How to act on this issue
 
