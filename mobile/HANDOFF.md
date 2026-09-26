@@ -1,5 +1,13 @@
 # Mobile app handoff — for the next agent
 
+> **⚠️ UPDATE (2026-06-17) — the launch path in this doc is superseded.**
+> Expo Go cannot run this app (`@shopify/react-native-skia` isn't in the Go runtime —
+> that's the "grey box"). Use the **EAS development build** instead:
+> see **[`RUNBOOK.md`](RUNBOOK.md)**. `eas.json` is committed and `expo-dev-client` is
+> now a dependency. Ignore every "Expo Go / scan QR in Expo Go" step below. The
+> grey-box item (#1) is expected to resolve on a real dev build (Skia baked in), or
+> when colorization moves server-side / to the planned Mapbox raster overlay.
+
 You're picking up the React Native (Expo) port of ShouldIDive. The
 prior agent (Claude in agent mode, Windows host) shipped the
 scaffolding + a 7-layer validation pipeline but did NOT successfully
