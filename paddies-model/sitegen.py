@@ -119,6 +119,15 @@ SITE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8"/>
 SITE_JS = r"""'use strict';
 var LAND_URL='/data/land.geojson';
 var BAND={Minimal:'#64748b',Low:'#0ea5e9',Moderate:'#eab308',High:'#f97316',Extreme:'#dc2626'};
+// Expected paddy DENSITY by shedding band, anchored to Hobday's measured SCB
+// raft density (~1-3 rafts/km2). This is a modelled expectation from shedding +
+// drift, NOT a count -- it replaces the old falsely-precise "~N paddies" total.
+var DENSITY={
+ Minimal:'very few — scattered, no real concentration',
+ Low:'sparse — well under 1 paddy/km², even where greenest',
+ Moderate:'~1 paddy/km² in the green cores',
+ High:'~1–2 paddies/km² in the cores — fresh sheds offshore',
+ Extreme:'~2–3 paddies/km² — heavy fresh shedding'};
 var LABEL={live:'Live',storm:'Storm 3d ago',swell:'+2m Swell',warm:'+4°C Warm'};
 var toR=function(x){return x*Math.PI/180;},toD=function(x){return x*180/Math.PI;};
 function nm(a,b){var R=6371,dp=toR(b[0]-a[0]),dl=toR(b[1]-a[1]);
@@ -281,10 +290,10 @@ function drawPanel(){var m=D.frames[F].meta;
    +' &middot; ±'+(m.pos_pm_nm||0)+' nm &middot; widen to ~'+(m.area50_km2||0)+' km² if slow</span></div>';}
  document.getElementById('panel').innerHTML='<div class="panel-head"><span class="chev">▾</span>'+tHdr+best+'</div><div class="panel-body">'
   +'<div class=mut style="margin:-2px 0 7px">Green = <b>model-estimated paddy likelihood</b>, not confirmed paddies. Drag the <b style="color:#38bdf8">⊕</b> to measure nm. <b style="color:#fca5a5">Red dots</b> = catch reports — faint until <b>confirmed by corroboration or a trusted reporter</b>. Tap the map then <b style="color:#fca5a5">Log a catch</b> to add yours.</div>'
-  +'<div class=mut>est. floating paddies in the Bight</div>'
-  +'<div class=score>~'+m.est_floating_paddies.toLocaleString()+'</div>'
+  +'<div class=mut>expected paddy density &middot; where it&rsquo;s greenest</div>'
+  +'<div style="font-size:15px;font-weight:600;color:#86efac;margin:2px 0 5px">'+(DENSITY[m.abundance_band]||DENSITY.Low)+'</div>'
   +'<div style="margin:5px 0"><span class=band style="background:'+(BAND[m.abundance_band]||'#64748b')
-  +'">'+m.abundance_band+' input</span></div>'
+  +'">'+m.abundance_band+' shedding</span> <span class=mut style="font-size:11px">&middot; modelled, not counted (Hobday SCB density)</span></div>'
   +'<div class=mut style="margin-bottom:4px">kelp drifting <b style="color:#e2e8f0">'+(m.drift_comp||'?')
   +'</b> ~'+(m.drift_nm||0)+' nm from the beds</div>'
   +'<div class=bars><div style="width:'+fl+'%;background:#f97316"></div>'

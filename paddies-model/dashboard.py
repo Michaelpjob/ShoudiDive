@@ -81,6 +81,7 @@ def build():
     hfr = fusion_mod.prepare(fusion_mod.fetch_hfr(), raw["t0"])
     landmask = LandMask()
     forcing = forcing_mod.make_forcing(raw, "live", hfr=hfr)
+    thermal = forcing_mod.fetch_thermal_history()   # 6-wk SST -> cumulative warm-shed dose
     now_h = forcing.now_hours()
     _bedll = {b[0]: (b[1], b[2]) for b in beds_mod.SCB_BEDS}
     # Catch reports are now crowdsourced live from /api/paddies/reports (the tool
@@ -106,7 +107,8 @@ def build():
     frames, overview_items, beds_fc = [], [], None
     for off in config.TIMELINE_OFFSETS_DAYS:
         T = now_h + off * 24.0
-        det = detach_mod.compute(forcing, beds_mod.SCB_BEDS, T, config.RELEASE_AGES_DAYS)
+        det = detach_mod.compute(forcing, beds_mod.SCB_BEDS, T, config.RELEASE_AGES_DAYS,
+                                  thermal=thermal)
         result = drift_mod.run_drift(forcing, landmask, det, now_h=T)
         dens = find_mod.build(result["floating"], landmask)
         cone_feats, _ = cones_mod.build(result["floating"], beds_mod.SCB_BEDS)
