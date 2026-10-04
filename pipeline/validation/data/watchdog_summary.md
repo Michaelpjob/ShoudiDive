@@ -1,10 +1,10 @@
-# Validation watchdog — 2026-10-04T08:08Z
+# Validation watchdog — 2026-10-04T19:00Z
 
 **2 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
-### 🔴 1. Only 21 observations in the last 24h (floor: 50)
+### 🔴 1. Only 20 observations in the last 24h (floor: 50)
 
 Multiple scrapers may be silently broken.
 
@@ -12,7 +12,7 @@ Multiple scrapers may be silently broken.
 
 ### ⚠️ 2. 1 non-critical external feed(s) are red
 
-Red feeds: usgs_nwis_iv. Fallbacks may keep the model running, but redundancy is degraded.
+Red feeds: usgs_nwis_stat. Fallbacks may keep the model running, but redundancy is degraded.
 
 **Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
 
@@ -20,7 +20,7 @@ Red feeds: usgs_nwis_iv. Fallbacks may keep the model running, but redundancy is
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_nearshore` | 4 | 5.42 | +1.77 | 25% | 0.95 |
+| `bight_nearshore` | 4 | 5.69 | +3.75 | 25% | 0.95 |
 | `central_nearshore` | 1 | 5.44 | -5.44 | 100% | — |
 
 ## Per-source bias (informational)
@@ -28,8 +28,8 @@ Red feeds: usgs_nwis_iv. Fallbacks may keep the model running, but redundancy is
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
 | `cencoos` | 1 | -5.44 ft |
-| `dive-shop-diveviz` | 1 | -6.58 ft |
-| `dive-shop-justgetwet` | 3 | +4.55 ft |
+| `dive-shop-diveviz` | 1 | -2.99 ft |
+| `dive-shop-justgetwet` | 3 | +6.00 ft |
 
 ## How to act on this issue
 
