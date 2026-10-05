@@ -79,12 +79,13 @@ def berth_table(start, end):
     lat_min, lat_max = min(p[0] for p in pts) - 0.02, max(p[0] for p in pts) + 0.02
     lon_min, lon_max = min(p[1] for p in pts) - 0.02, max(p[1] for p in pts) + 0.02
     con = duckdb.connect()
-    df = con.execute(f"""
+    df = con.execute("""
         select mmsi, base_date_time as t, latitude as lat, longitude as lon
-        from read_parquet({paths!r})
-        where sog < 0.5 and latitude between {lat_min} and {lat_max}
-          and longitude between {lon_min} and {lon_max}
-    """).df()
+        from read_parquet($files)
+        where sog < 0.5 and latitude between $lat_min and $lat_max
+          and longitude between $lon_min and $lon_max
+    """, {"files": paths, "lat_min": lat_min, "lat_max": lat_max,
+          "lon_min": lon_min, "lon_max": lon_max}).df()
     con.close()
     cols = ["mmsi", "nights", "landing", "berth_lat", "berth_lon"]
     if df.empty:

@@ -40,6 +40,10 @@ jobs:
     env:
       FLEET_DATA_DIR: ${{ github.workspace }}/.fleet-data
       PYTHONIOENCODING: utf-8
+      # Inputs reach the shell as environment variables, never interpolated
+      # into `run:` text (semgrep run-shell-injection).
+      WIN_START: ${{ inputs.start }}
+      WIN_END: ${{ inputs.end }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
@@ -65,16 +69,16 @@ jobs:
           restore-keys: fleet-ais-
 
       - name: Fetch + reduce the daily AIS files (skips days already cut)
-        run: python fleet-model/fetch_ais.py --start "${{ inputs.start }}" --end "${{ inputs.end }}" --workers 4
+        run: python fleet-model/fetch_ais.py --start "$WIN_START" --end "$WIN_END" --workers 4
 
       - name: Fleet lists (checked in copy)
         run: cp fleet-model/data/roster_web.json "$FLEET_DATA_DIR/roster_web.json"
 
       - name: Roster, dock counts, model
         run: |
-          python fleet-model/roster.py --start "${{ inputs.start }}" --end "${{ inputs.end }}"
-          python fleet-model/catch.py --start "${{ inputs.start }}" --end "${{ inputs.end }}"
-          python fleet-model/build_site.py public/fleet --start "${{ inputs.start }}" --end "${{ inputs.end }}"
+          python fleet-model/roster.py --start "$WIN_START" --end "$WIN_END"
+          python fleet-model/catch.py --start "$WIN_START" --end "$WIN_END"
+          python fleet-model/build_site.py public/fleet --start "$WIN_START" --end "$WIN_END"
 
       - name: Commit refreshed data.json + roster
         run: |
@@ -84,6 +88,6 @@ jobs:
           if git diff --staged --quiet; then
             echo "No change."
           else
-            git commit -m "data(fleet): rebuild ${{ inputs.start }}..${{ inputs.end }}"
+            git commit -m "data(fleet): rebuild $WIN_START..$WIN_END"
             git push
           fi

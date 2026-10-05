@@ -4,19 +4,25 @@ html,body{margin:0;height:100%;background:#0b1220;color:#e2e8f0;font:14px/1.4 sy
 .leaflet-container.pick{cursor:crosshair}
 .leaflet-top.leaflet-left{top:74px}
 .bar{position:absolute;top:0;left:0;right:0;z-index:1000;display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;padding:8px 12px;background:rgba(11,18,32,.94);border-bottom:1px solid #1e293b}
+.bar .row{display:inline-flex;flex-wrap:wrap;gap:6px 12px;align-items:center}
+.mob{display:none}
 .brand b{font-size:15px}
 .bar .back{color:#7dd3fc;text-decoration:none;margin-right:4px}
 .beta{font-size:10px;letter-spacing:.08em;background:#1d4ed8;color:#fff;border-radius:3px;padding:1px 5px;margin-left:6px;vertical-align:middle}
 .ctl{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#94a3b8}
 .ctl label{color:#94a3b8}
 .ctl select{background:#111827;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:3px 4px;font-size:12px;max-width:230px}
-.ctl input[type=range]{width:150px;padding:0;accent-color:#f59e0b;cursor:pointer}
-#wlabel{min-width:140px;color:#e2e8f0;font-size:13px}
+.range{gap:4px}
+.range .dash{color:#94a3b8}
+#wlabel{font-size:12px}
 .chip{background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:5px;padding:2px 8px;cursor:pointer;font-size:12px;line-height:1.5}
 .chip:hover{border-color:#64748b}
 .chip.on{background:#f59e0b;color:#0b1220;border-color:#f59e0b;font-weight:600}
 .panel{position:absolute;right:10px;top:84px;width:360px;max-height:calc(100% - 100px);overflow:auto;z-index:1000;background:rgba(11,18,32,.95);border:1px solid #1e293b;border-radius:8px;padding:10px 12px;font-size:13px}
-.panel h3{margin:0 0 6px;font-size:15px;line-height:1.3}
+.panel.min .sheet-body{display:none}
+.sheet-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sheet-head h3{margin:0 0 6px;font-size:15px;line-height:1.3;flex:1 1 100%}
+.sheet-head .navrow{margin:0 0 6px;flex:1 1 100%}
 .panel h4{margin:12px 0 4px;font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em}
 .panel .mut{color:#94a3b8}
 .panel table{border-collapse:collapse;width:100%;font-size:12px;table-layout:fixed}
@@ -28,7 +34,7 @@ html,body{margin:0;height:100%;background:#0b1220;color:#e2e8f0;font:14px/1.4 sy
 .panel tr.sel td{background:#1e293b}
 .panel tr.row{cursor:pointer}
 .panel tr.row:hover td{background:#111c33}
-.navrow{display:flex;align-items:center;gap:8px;margin:0 0 8px}
+.navrow{display:flex;align-items:center;gap:8px}
 .navrow .chip{padding:3px 10px}
 .stat{display:flex;justify-content:space-between;gap:8px;padding:3px 0;border-bottom:1px solid #1e293b}
 .stat b{font-variant-numeric:tabular-nums;text-align:right}
@@ -63,17 +69,34 @@ html,body{margin:0;height:100%;background:#0b1220;color:#e2e8f0;font:14px/1.4 sy
 .caveat{font-size:11px;color:#94a3b8;margin-top:8px;line-height:1.35}
 .toast{position:absolute;z-index:1300;left:50%;bottom:18px;transform:translateX(-50%);background:rgba(15,23,42,.97);border:1px solid #334155;color:#e2e8f0;padding:8px 14px;border-radius:8px;font-size:13px}
 @media (max-width:760px){
- .bar{gap:4px 10px;padding:6px 8px}
- .ctl label:not(.chk){display:none}
- #wlabel{min-width:0}
- .ctl input[type=range]{width:90px}
- .ctl select{max-width:160px}
- .leaflet-top.leaflet-left{top:150px}
- .panel{left:10px;right:10px;width:auto;top:auto;bottom:10px;max-height:42%}
- .panel.min{max-height:44px;overflow:hidden}
- .panel h3{cursor:pointer}
- .panel h3::after{content:" ▾";color:#94a3b8;font-weight:400}
- .panel.min h3::after{content:" ▴"}
- .legend{bottom:calc(42% + 18px);top:auto;left:10px;max-width:60%}
+ .bar{display:block;padding:6px 10px 8px}
+ .bar .row{display:flex;width:100%;gap:6px 8px}
+ .bar .row1{justify-content:space-between}
+ .mob{display:inline-block}
+ .bar .row2{margin-top:6px;flex-wrap:nowrap}
+ .range{flex:1;min-width:0}
+ .range select{flex:1;min-width:0;font-size:13px;padding:6px 2px}
+ #wlabel{display:none}
+ .bar .row3{display:none;margin-top:8px;padding-top:8px;border-top:1px solid #1e293b}
+ .bar.open .row3{display:flex}
+ .row3 .ctl{width:100%;justify-content:space-between}
+ .row3 .ctl select{flex:1;max-width:none;margin-left:8px;font-size:14px;padding:6px}
+ .chip{padding:6px 10px;font-size:13px;min-height:34px}
+ .leaflet-top.leaflet-left{top:100px}
+ .leaflet-tooltip.cell-tip{display:none}
+ .panel{left:0;right:0;width:auto;top:auto;bottom:0;max-height:55%;border-radius:12px 12px 0 0;padding:0 12px 14px;box-shadow:0 -6px 20px rgba(0,0,0,.45)}
+ .panel.min{max-height:none;overflow:hidden}
+ .sheet-head{flex-wrap:nowrap;padding:10px 0 8px;cursor:pointer;position:sticky;top:0;background:rgba(11,18,32,.98);z-index:1}
+ .sheet-head h3{margin:0;font-size:14px;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .sheet-head .navrow{flex:0 0 auto;margin:0}
+ .sheet-head .chev{color:#94a3b8;font-size:14px;padding:0 2px}
+ .panel table.boats th:nth-child(6),.panel table.boats td:nth-child(6){display:none}
+ .panel table.trips th:nth-child(3),.panel table.trips td:nth-child(3){display:none}
+ .panel td,.panel th{padding:6px 4px}
+ .legend{bottom:58px;top:auto;left:8px;right:8px;max-width:none;font-size:11px;padding:5px 8px}
+ .legend .mobhide{display:none}
+ .panel:not(.min)~.legend{display:none}
  .coordbox{display:none}
+ .leaflet-popup-content{margin:10px 12px}
+ .copybtn{padding:7px 10px;font-size:12px}
 }
