@@ -37,6 +37,30 @@ def _s(x):
     return None if x is None or (isinstance(x, float) and pd.isna(x)) else str(x)
 
 
+def dive_spots(repo_root):
+    """Name + bbox-centre of each main-app dive spot in the SoCal field (same
+    rule as paddies-model/reference.py), baked in so the CSP-clean bundle
+    needs no extra fetch. Structure (banks, seamounts, reefs) is NOT baked:
+    the page reads /data/bathy-features.geojson at runtime so it tracks the
+    main app's file."""
+    import glob
+    out = []
+    for bj in sorted(glob.glob(os.path.join(repo_root, "public", "data", "spots", "*", "bundle.json"))):
+        try:
+            with open(bj, encoding="utf-8") as f:
+                d = json.load(f)
+        except (OSError, ValueError):
+            continue
+        b = d.get("bbox") or {}
+        if not all(k in b for k in ("lat_min", "lat_max", "lng_min", "lng_max")):
+            continue
+        lat = round((b["lat_min"] + b["lat_max"]) / 2, 4)
+        lng = round((b["lng_min"] + b["lng_max"]) / 2, 4)
+        if 31.0 <= lat <= 34.8 and -121.5 <= lng <= -116.8:
+            out.append({"name": d.get("name") or os.path.basename(os.path.dirname(bj)), "lat": lat, "lng": lng})
+    return out
+
+
 def load_counts():
     if not os.path.exists(COUNTS):
         return None
@@ -180,6 +204,7 @@ def main():
         },
         "summary": r["summary"],
         "landings": {k: [v[0], v[1], v[2]] for k, v in LANDINGS.items()},
+        "reference": {"spots": dive_spots(os.path.join(HERE, ".."))},
         "boats": out_boats,
         "weeks": weeks,
         "cells": cells,

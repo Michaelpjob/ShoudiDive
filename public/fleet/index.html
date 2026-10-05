@@ -1,34 +1,39 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <meta name="robots" content="noindex"/>
 <title>Fleet Tracks — ShouldIDive (beta)</title>
-<link rel="stylesheet" href="leaflet.css?v=2"/>
-<link rel="stylesheet" href="fleet.css?v=2"/>
+<link rel="stylesheet" href="leaflet.css?v=4"/>
+<link rel="stylesheet" href="fleet.css?v=4"/>
 </head><body>
 <div id="map"></div>
-<div class="bar">
- <span class="brand"><a class="back" href="/">&larr; ShouldIDive</a> <b>Fleet Tracks</b><span class="beta">BETA</span></span>
- <span class="ctl time">
+<div class="bar" id="bar">
+ <div class="row row1">
+  <span class="brand"><a class="back" href="/">&larr; ShouldIDive</a> <b>Fleet Tracks</b><span class="beta">BETA</span></span>
+  <button id="filt" class="chip mob" aria-expanded="false" title="Show the filters">Filters &#9662;</button>
+ </div>
+ <div class="row row2 time">
   <button id="wall" class="chip" title="Show the whole period">All weeks</button>
-  <button id="wprev" class="chip" title="Previous week">&#8249;</button>
-  <input type="range" id="week" min="-1" step="1" title="Week of the season"/>
-  <button id="wnext" class="chip" title="Next week">&#8250;</button>
-  <button id="play" class="chip" title="Play through the season week by week">&#9654; Play</button>
-  <span id="wlabel"></span>
- </span>
- <span class="ctl"><label for="metric">Color by</label><select id="metric">
-  <option value="fish">Fishing time</option><option value="boats">Number of boats</option>
-  <option value="trips">Number of trips</option><option value="conv">Days the fleet piled in (3+ boats)</option>
-  <option value="cpa">Fish per angler (dock counts)</option></select></span>
- <span class="ctl"><label for="boat">Boat</label><select id="boat"><option value="all">All boats</option></select></span>
- <span class="ctl"><label for="kind">Stops</label><select id="kind">
-  <option value="all">Drifting + trolling</option><option value="0">Drifting / anchored only</option><option value="1">Trolling only</option></select></span>
- <span class="ctl"><label class="chk" title="Stops within 6 km of a landing are mostly bait-making and the kelp edge; hidden by default"><input type="checkbox" id="nearshore"/> include near-dock stops</label></span>
- <span class="ctl"><button id="gps" class="chip" title="Click the map to drop a waypoint and copy its GPS coordinates (right-click works any time)">&#8982; GPS</button></span>
+  <button id="wprev" class="chip" title="Earlier: slide the window back one week">&#8249;</button>
+  <span class="ctl range"><select id="w0" title="First week shown"></select><span class="dash">–</span><select id="w1" title="Last week shown"></select></span>
+  <button id="wnext" class="chip" title="Later: slide the window forward one week">&#8250;</button>
+  <button id="play" class="chip" title="Play: sweep the window through the season">&#9654; Play</button>
+  <span id="wlabel" class="mut"></span>
+ </div>
+ <div class="row row3 filters" id="filters">
+  <span class="ctl"><label for="metric">Color by</label><select id="metric">
+   <option value="fish">Fishing time</option><option value="boats">Number of boats</option>
+   <option value="trips">Number of trips</option><option value="conv">Days the fleet piled in (3+ boats)</option>
+   <option value="cpa">Fish per angler (dock counts)</option></select></span>
+  <span class="ctl"><label for="boat">Boat</label><select id="boat"><option value="all">All boats</option></select></span>
+  <span class="ctl"><label for="kind">Stops</label><select id="kind">
+   <option value="all">Drifting + trolling</option><option value="0">Drifting / anchored only</option><option value="1">Trolling only</option></select></span>
+  <span class="ctl"><label class="chk" title="Stops within 6 km of a landing are mostly bait-making and the kelp edge; hidden by default"><input type="checkbox" id="nearshore"/> include near-dock stops</label></span>
+  <span class="ctl"><button id="gps" class="chip" title="Click the map to drop a waypoint and copy its GPS coordinates (right-click or long-press works any time)">&#8982; GPS</button></span>
+ </div>
 </div>
-<div class="panel" id="panel">Loading fleet data&hellip;</div>
+<div class="panel min" id="panel"><div class="sheet-head"><h3>Loading fleet data&hellip;</h3></div></div>
 <div class="legend" id="legend"></div>
 <div class="coordbox" id="coordbox"></div>
-<script src="leaflet.js?v=2"></script>
-<script src="app.js?v=2"></script>
+<script src="leaflet.js?v=4"></script>
+<script src="app.js?v=4"></script>
 </body></html>

@@ -125,6 +125,10 @@
 /paddies/*
   Cache-Control: public, max-age=0, must-revalidate
 
+# Fleet Tracks tool: same unhashed-bundle situation as /paddies/.
+/fleet/*
+  Cache-Control: public, max-age=0, must-revalidate
+
 # Catch-all `/*` rule REMOVED 2026-05-08 for Cache-Control reasons:
 # Cloudflare Pages MERGES every matching `_headers` rule into a
 # single response, so a fallback /* combined with the more specific

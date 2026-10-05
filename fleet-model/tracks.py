@@ -36,14 +36,14 @@ def load_positions(mmsis, start=None, end=None):
     if not files or not mmsis:
         return pd.DataFrame(columns=cols)
     con = duckdb.connect()
-    lst = ", ".join(str(int(m)) for m in mmsis)
-    df = con.execute(f"""
+    # File list and MMSI list travel as bound parameters, not SQL text.
+    df = con.execute("""
         select mmsi, base_date_time as t, latitude as lat, longitude as lon,
                sog, cog, heading
-        from read_parquet({_paths(files)!r})
-        where mmsi in ({lst})
+        from read_parquet($files)
+        where list_contains($mmsis, mmsi)
         order by mmsi, base_date_time
-    """).df()
+    """, {"files": _paths(files), "mmsis": [int(m) for m in mmsis]}).df()
     con.close()
     df["t"] = pd.to_datetime(df["t"], utc=True)
     return df
@@ -53,7 +53,7 @@ def vessel_directory(start=None, end=None):
     """One row per MMSI: most common name, type, length, position count, days seen."""
     files = socal_files(start, end)
     con = duckdb.connect()
-    df = con.execute(f"""
+    df = con.execute("""
         select mmsi,
                mode(vessel_name) as vessel_name,
                mode(vessel_type) as vessel_type,
@@ -61,8 +61,8 @@ def vessel_directory(start=None, end=None):
                mode(call_sign) as call_sign,
                count(*) as n_pos,
                count(distinct date_trunc('day', base_date_time)) as n_days
-        from read_parquet({_paths(files)!r})
+        from read_parquet($files)
         group by mmsi
-    """).df()
+    """, {"files": _paths(files)}).df()
     con.close()
     return df

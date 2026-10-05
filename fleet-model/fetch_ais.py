@@ -21,6 +21,7 @@ import sys
 import time
 
 import duckdb
+import pyarrow.parquet as pq
 import requests
 
 from config import DATA_DIR, BBOX
@@ -29,6 +30,16 @@ BASE = "https://noaaocm.blob.core.windows.net/ais/csv2/csv{year}/ais-{date}.csv.
 COLS = ("mmsi", "base_date_time", "longitude", "latitude", "sog", "cog", "heading",
         "vessel_name", "imo", "call_sign", "vessel_type", "status", "length", "width",
         "draft", "transceiver")
+# A constant statement; the path and bbox are bound parameters.
+REDUCE_SQL = """
+    select mmsi, base_date_time, longitude, latitude, sog, cog, heading,
+           vessel_name, imo, call_sign, vessel_type, status, length, width,
+           draft, transceiver
+    from read_csv($raw, compression='zstd', header=true, sample_size=20000,
+                  timestampformat='%Y-%m-%d %H:%M:%S',
+                  types={'base_date_time': 'TIMESTAMP'})
+    where latitude between $s and $n and longitude between $w and $e
+"""
 
 
 def day_range(start, end):
@@ -63,20 +74,12 @@ def reduce_day(raw, out):
     (s, w, n, e) = BBOX  # south, west, north, east
     con = duckdb.connect()
     # base_date_time is UTC in the source ("2025-07-15 07:00:00"); keep it as a
-    # naive UTC timestamp. sample_size=-1 would scan everything; 20k rows is
-    # plenty to type the columns and the WHERE prunes the rest.
-    con.execute(f"""
-        copy (
-          select {', '.join(COLS)}
-          from read_csv('{raw.replace(os.sep, '/')}', compression='zstd', header=true,
-                        sample_size=20000, timestampformat='%Y-%m-%d %H:%M:%S',
-                        types={{'base_date_time': 'TIMESTAMP'}})
-          where latitude between {s} and {n} and longitude between {w} and {e}
-        ) to '{out.replace(os.sep, '/')}' (format parquet, compression zstd)
-    """)
-    n_rows = con.execute(f"select count(*) from read_parquet('{out.replace(os.sep, '/')}')").fetchone()[0]
+    # naive UTC timestamp. sample_size=20000 is plenty to type the columns and
+    # the WHERE prunes the rest. Path and bbox are bound parameters.
+    tbl = con.execute(REDUCE_SQL, {"raw": raw.replace(os.sep, "/"), "s": s, "n": n, "w": w, "e": e}).fetch_arrow_table()
     con.close()
-    return n_rows
+    pq.write_table(tbl, out, compression="zstd")
+    return tbl.num_rows
 
 
 def process(day, keep_raw):
