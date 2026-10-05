@@ -74,6 +74,18 @@ jobs:
       - name: Fleet lists (checked in copy)
         run: cp fleet-model/data/roster_web.json "$FLEET_DATA_DIR/roster_web.json"
 
+      - name: Live days from the fleet-live branch (fills the archive's lag)
+        run: |
+          if git ls-remote --exit-code --heads origin fleet-live >/dev/null 2>&1; then
+            git fetch --depth=1 origin fleet-live
+            git worktree add "$FLEET_DATA_DIR/live-branch" FETCH_HEAD
+            mkdir -p "$FLEET_DATA_DIR/live"
+            cp "$FLEET_DATA_DIR"/live-branch/live/*.jsonl "$FLEET_DATA_DIR/live/" 2>/dev/null || true
+            python fleet-model/live_logger.py --roll-all
+          else
+            echo "no fleet-live branch yet"
+          fi
+
       - name: Roster, dock counts, model
         run: |
           python fleet-model/roster.py --start "$WIN_START" --end "$WIN_END"
