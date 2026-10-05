@@ -24,6 +24,9 @@ var LAST_AGG={};
 
 function isMobile(){return window.innerWidth<=760;}
 function fmtDate(s){var d=new Date(s+'T12:00:00Z');return d.toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'});}
+/* With more than one year on the timeline every date needs its year. */
+function multiYear(){return D&&D.meta&&D.meta.start.slice(0,4)!==D.meta.end.slice(0,4);}
+function fmtDateY(s){return fmtDate(s)+(multiYear()?' ’'+s.slice(2,4):'');}
 function hrs(m){return m<60?Math.round(m)+' min':(m/60).toFixed(m<600?1:0)+' h';}
 function pct(x){return x==null?'—':Math.round(x*100)+'%';}
 function nm(km){return Math.round(km/1.852)+' nm';}
@@ -33,7 +36,7 @@ function isSingleBoat(){return S.boat!=='all'&&S.boat.slice(0,2)!=='L:'&&S.boat.
 function boatIdx(){return isSingleBoat()?+S.boat:-1;}
 function allWeeks(){return S.w0<0;}
 function weekLabel(){if(allWeeks())return 'whole period';
- return S.w0===S.w1?'week of '+fmtDate(D.weeks[S.w0]):'weeks of '+fmtDate(D.weeks[S.w0])+' – '+fmtDate(D.weeks[S.w1]);}
+ return S.w0===S.w1?'week of '+fmtDateY(D.weeks[S.w0]):'weeks of '+fmtDateY(D.weeks[S.w0])+' – '+fmtDateY(D.weeks[S.w1]);}
 function _ddm(v,pos,neg){var h=v>=0?pos:neg;v=Math.abs(v);var d=Math.floor(v);return d+'°'+((v-d)*60).toFixed(3)+"' "+h;}
 function _fmt(ll){return {dd:ll.lat.toFixed(5)+', '+ll.lng.toFixed(5),dm:_ddm(ll.lat,'N','S')+'  '+_ddm(ll.lng,'E','W')};}
 function toast(msg){var t=document.getElementById('toast');if(!t){t=document.createElement('div');t.id='toast';t.className='toast';document.body.appendChild(t);}
@@ -77,7 +80,7 @@ function syncControls(){
  document.getElementById('w0').value=allWeeks()?'all':String(S.w0);
  document.getElementById('w1').value=allWeeks()?'all':String(S.w1);
  document.getElementById('wall').classList.toggle('on',allWeeks());
- document.getElementById('wlabel').textContent=allWeeks()?fmtDate(D.meta.start)+' – '+fmtDate(D.meta.end)+' '+D.meta.end.slice(0,4):(S.w1-S.w0+1)+' week'+(S.w1>S.w0?'s':'');}
+ document.getElementById('wlabel').textContent=allWeeks()?(multiYear()?fmtDateY(D.meta.start)+' – '+fmtDateY(D.meta.end):fmtDate(D.meta.start)+' – '+fmtDate(D.meta.end)+' '+D.meta.end.slice(0,4)):(S.w1-S.w0+1)+' week'+(S.w1>S.w0?'s':'');}
 
 /* ---------- filtering + aggregation ---------- */
 function boatMatch(bi){if(S.boat==='all')return true;
@@ -352,7 +355,7 @@ function boot(d){D=d;
  /* week window: two selects (first / last week) */
  var w0=document.getElementById('w0'),w1=document.getElementById('w1');
  [w0,w1].forEach(function(sel){var o=document.createElement('option');o.value='all';o.textContent='All';sel.appendChild(o);
-  D.weeks.forEach(function(w,i){var o2=document.createElement('option');o2.value=String(i);o2.textContent=fmtDate(w);sel.appendChild(o2);});});
+  D.weeks.forEach(function(w,i){var o2=document.createElement('option');o2.value=String(i);o2.textContent=fmtDateY(w);sel.appendChild(o2);});});
  w0.onchange=function(){stopPlay();if(w0.value==='all')setRange(-1,-1);else setRange(+w0.value,allWeeks()?+w0.value:Math.max(+w0.value,S.w1));};
  w1.onchange=function(){stopPlay();if(w1.value==='all')setRange(-1,-1);else setRange(allWeeks()?+w1.value:Math.min(S.w0,+w1.value),+w1.value);};
  document.getElementById('wprev').onclick=function(){stopPlay();var n=D.weeks.length;if(allWeeks())setRange(n-1,n-1);else if(S.w0>0)setRange(S.w0-1,S.w1-1);};
