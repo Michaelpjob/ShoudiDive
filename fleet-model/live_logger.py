@@ -96,8 +96,9 @@ async def run(api_key, mmsis, all_vessels, minutes=None):
     s, w, n, e = BBOX
     sub = {"APIKey": api_key, "BoundingBoxes": [[[s, w], [n, e]]],
            "FilterMessageTypes": ["PositionReport", "StandardClassBPositionReport"]}
-    if not all_vessels and mmsis:
-        sub["FiltersShipMMSI"] = [str(m) for m in mmsis[:50]]  # the service caps the MMSI filter at 50
+    # aisstream caps FiltersShipMMSI at 50 hulls and the roster is ~200, so
+    # subscribe to the whole SoCal box and keep the roster locally (a few
+    # hundred messages a minute; trivial).
     os.makedirs(LIVE_DIR, exist_ok=True)
     keep = set(mmsis)
     current_day = None
