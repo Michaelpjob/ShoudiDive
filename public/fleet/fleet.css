@@ -65,6 +65,21 @@ html,body{margin:0;height:100%;background:#0b1220;color:#e2e8f0;font:14px/1.4 sy
 .leaflet-tooltip.lbl::before{display:none}
 .leaflet-tooltip.border-lbl{background:none;border:0;box-shadow:none;color:#fca5a5;font-size:11px;padding:0;text-shadow:0 0 3px #000}
 .leaflet-tooltip.border-lbl::before{display:none}
+/* Reference overlays (structure / dive spots): labels are zoom-gated by a
+   class on the map container (z8/z9/z10) and the feature's importance tier. */
+.leaflet-tooltip.ref-lbl{background:none;border:0;box-shadow:none;padding:0 2px;white-space:nowrap;font:500 10px/1.1 system-ui;color:#c4b5fd;text-shadow:0 1px 2px #000,0 0 2px #000;opacity:.85;display:none}
+.leaflet-tooltip.ref-lbl::before{display:none}
+.leaflet-tooltip.ref-lbl.spot{color:#7dd3fc}
+.leaflet-tooltip.ref-lbl.marquee{font-weight:600;font-size:11px}
+.z8 .ref-lbl.marquee,.z9 .ref-lbl.marquee,.z9 .ref-lbl.major,.z10 .ref-lbl{display:block}
+.z9 .ref-lbl.spot,.z10 .ref-lbl.spot{display:block}
+.leaflet-popup-content .ref{font-size:12px;line-height:1.4}
+.leaflet-popup-content .ref b{font-size:13px}
+.leaflet-popup-content .ref .mut{color:#94a3b8}
+.leaflet-control-layers{background:rgba(11,18,32,.94);color:#e2e8f0;border:1px solid #334155;border-radius:6px}
+.leaflet-control-layers-expanded{padding:6px 10px;font-size:12px}
+.leaflet-control-layers-toggle{background-color:#1e293b;filter:invert(.85)}
+body.sheet-open .leaflet-bottom.leaflet-right{display:none}
 .panel a{color:#7dd3fc}
 .caveat{font-size:11px;color:#94a3b8;margin-top:8px;line-height:1.35}
 .toast{position:absolute;z-index:1300;left:50%;bottom:18px;transform:translateX(-50%);background:rgba(15,23,42,.97);border:1px solid #334155;color:#e2e8f0;padding:8px 14px;border-radius:8px;font-size:13px}
@@ -97,6 +112,7 @@ html,body{margin:0;height:100%;background:#0b1220;color:#e2e8f0;font:14px/1.4 sy
  .legend .mobhide{display:none}
  .panel:not(.min)~.legend{display:none}
  .coordbox{display:none}
+ .leaflet-bottom.leaflet-right{bottom:58px}
  .leaflet-popup-content{margin:10px 12px}
  .copybtn{padding:7px 10px;font-size:12px}
 }

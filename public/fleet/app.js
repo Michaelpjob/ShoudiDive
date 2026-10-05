@@ -17,7 +17,7 @@ var CONV_BOATS=3;          // "fleet piled in" = this many boats in one cell on 
    treaty), then OP-1..OP-4 of the 1978 Treaty on Maritime Boundaries (UN
    DOALOS text). Degrees from the treaty's D-M-S. */
 var MX_BORDER=[[32.5344,-117.1249],[32.58948,-117.46373],[32.62694,-117.82528],[31.13278,-118.60500],[30.54200,-121.86621]];
-var D,map,hexLayer,stopLayer,portLayer,borderLayer,wpMarker,coordbox,STOPWEEK=[],WEEKIDX={},MMSI_IDX={};
+var D,map,hexLayer,stopLayer,portLayer,borderLayer,structLayer,spotLayer,wpMarker,coordbox,STOPWEEK=[],WEEKIDX={},MMSI_IDX={};
 /* w0..w1 = inclusive week window (indices into D.weeks); both -1 = whole period */
 var S={w0:-1,w1:-1,metric:'fish',boat:'all',kind:'all',nearshore:false,cell:null,trip:null,playing:null,pick:false};
 var LAST_AGG={};
@@ -183,8 +183,35 @@ function wireCopy(e){var el=e.popup.getElement();if(!el)return;
 function togglePick(){S.pick=!S.pick;document.getElementById('gps').classList.toggle('on',S.pick);map.getContainer().classList.toggle('pick',S.pick);setReadout(map.getCenter());
  if(S.pick&&isMobile())toast('Tap the map to drop a waypoint');}
 
+/* ---------- reference overlays: structure + dive spots ---------- */
+var STRUCT_STYLE={bank:['#8b5cf6','#a78bfa',4],seamount:['#8b5cf6','#a78bfa',4.5],reef:['#0e7490','#22d3ee',3],rock:['#0e7490','#22d3ee',2.5],
+ 'community-spot':['#6d28d9','#c4b5fd',2.5],anchorage:['#475569','#94a3b8',2.5],landmark:['#475569','#94a3b8',2.5],islands:['#475569','#94a3b8',3],trough:['#1e3a8a','#60a5fa',3]};
+var REFLBL={permanent:true,direction:'right',offset:[5,0],className:'ref-lbl',interactive:false};
+function refClass(){var z=map.getZoom();return z>=10?'z10':z>=9?'z9':z>=8?'z8':'';}
+function syncRefZoom(){var c=map.getContainer();c.classList.remove('z8','z9','z10');var k=refClass();if(k)c.classList.add(k);}
+function structPopup(p){var depth=p.minDepthFt?'top ~'+p.minDepthFt+' ft':'';
+ return '<div class="ref"><b>'+esc(p.name)+'</b><br/><span class="mut">'+esc(p['class'].replace('-',' '))+(depth?' · '+depth:'')+'</span>'
+  +(p.description?'<br/>'+esc(p.description):'')+(p.commonSpecies&&p.commonSpecies.length?'<br/><span class="mut">'+esc(p.commonSpecies.join(', '))+'</span>':'')+'</div>';}
+function drawReference(){
+ /* Structure: the main app's named banks / seamounts / reefs, read at runtime
+    so the two surfaces never disagree. Labels are gated by zoom + tier. */
+ fetch('/data/bathy-features.geojson').then(function(r){return r.ok?r.json():null;}).then(function(g){
+  if(!g||!structLayer)return;
+  g.features.forEach(function(f){var c=f.geometry.coordinates,lat=c[1],lng=c[0],p=f.properties;
+   if(lat<31||lat>34.8||lng<-121.5||lng>-116.8)return;
+   var st=STRUCT_STYLE[p['class']]||STRUCT_STYLE.landmark,tier=p.importanceTier||'minor';
+   var m=L.circleMarker([lat,lng],{radius:st[2],weight:1.2,color:st[1],fillColor:st[0],fillOpacity:.75});
+   m.bindTooltip(p.shortName||p.name,Object.assign({},REFLBL,{className:'ref-lbl '+tier}));
+   m.bindPopup(structPopup(p),{closeButton:false,maxWidth:260});
+   m.addTo(structLayer);});}).catch(function(){});
+ if(spotLayer&&D.reference&&D.reference.spots){D.reference.spots.forEach(function(s){
+  L.circleMarker([s.lat,s.lng],{radius:2.5,weight:1,opacity:.6,color:'#7dd3fc',fillColor:'#0e7490',fillOpacity:.4})
+   .bindTooltip(s.name,Object.assign({},REFLBL,{className:'ref-lbl spot'})).bindPopup('<div class="ref"><b>'+esc(s.name)+'</b><br/><span class="mut">dive spot (ShouldIDive)</span></div>',{closeButton:false}).addTo(spotLayer);});}}
+function refPrefs(){try{return JSON.parse(localStorage.getItem('sd:fleet:layers')||'{}');}catch{return {};}}
+function saveRefPrefs(){try{localStorage.setItem('sd:fleet:layers',JSON.stringify({structure:map.hasLayer(structLayer),spots:map.hasLayer(spotLayer),landings:map.hasLayer(portLayer)}));}catch{}}
+
 /* ---------- panel / bottom sheet ---------- */
-function openSheet(open){var p=document.getElementById('panel');p.classList.toggle('min',!open);var c=p.querySelector('.chev');if(c)c.innerHTML=open?'&#9660;':'&#9650;';}
+function openSheet(open){var p=document.getElementById('panel');p.classList.toggle('min',!open);document.body.classList.toggle('sheet-open',open&&isMobile());var c=p.querySelector('.chev');if(c)c.innerHTML=open?'&#9660;':'&#9650;';}
 function renderPanel(A,n){var p=document.getElementById('panel');
  if(!p._wired){p._wired=true;p.addEventListener('click',onPanelClick);}
  var r;
@@ -214,7 +241,7 @@ function howTo(){var seen=isMobile();try{seen=seen||localStorage.getItem('sd:fle
   +'<li>Each hexagon is about 1.4 km across. The brighter it is, the more time the fleet spent <b>stopped and fishing</b> there, from each boat\'s public AIS track.</li>'
   +'<li>Pick a boat in the table below (or the Boat menu) to see only its stops and its trips. Tap a trip to isolate it on the map.</li>'
   +'<li>Choose a window of weeks with the two week menus; <b>‹ ›</b> slide it, <b>Play</b> sweeps it through the season, <b>All weeks</b> brings back the whole period.</li>'
-  +'<li>Tap any hexagon for who fished it and when. Zoom in to see individual stops.</li>'
+  +'<li>Tap any hexagon for who fished it and when. Zoom in to see individual stops. Purple and teal markers are named structure (banks, seamounts, reefs); the layers button at bottom right toggles them and the dive spots.</li>'
   +'<li><b>⌖ GPS</b> (or a right-click / long-press anywhere) drops a waypoint you can copy coordinates from.</li>'
   +'<li>The browser Back button undoes a selection.</li></ul></details>';}
 
@@ -299,10 +326,18 @@ function boot(d){D=d;
  borderLayer=L.layerGroup().addTo(map);
  L.polyline(MX_BORDER,{color:'#f87171',weight:2,dashArray:'6 6',opacity:.85,interactive:false}).addTo(borderLayer);
  L.marker(MX_BORDER[2],{interactive:false,icon:L.divIcon({className:'',html:'',iconSize:[0,0]})}).bindTooltip('US / Mexico maritime boundary',{permanent:true,direction:'right',offset:[8,0],className:'border-lbl'}).addTo(borderLayer);
- hexLayer=L.layerGroup().addTo(map);stopLayer=L.layerGroup().addTo(map);portLayer=L.layerGroup().addTo(map);
+ hexLayer=L.layerGroup().addTo(map);stopLayer=L.layerGroup().addTo(map);
+ var prefs=refPrefs();
+ structLayer=L.layerGroup();spotLayer=L.layerGroup();portLayer=L.layerGroup();
+ if(prefs.structure!==false)structLayer.addTo(map);
+ if(prefs.spots===true)spotLayer.addTo(map);
+ if(prefs.landings!==false)portLayer.addTo(map);
+ drawReference();syncRefZoom();
+ L.control.layers(null,{'Structure: banks, seamounts, reefs':structLayer,'Dive spots':spotLayer,'Landings':portLayer},{position:'bottomright',collapsed:true}).addTo(map);
+ map.on('overlayadd overlayremove',saveRefPrefs);
  Object.keys(D.landings).forEach(function(n){var p=D.landings[n];
   L.circleMarker([p[0],p[1]],{radius:3,weight:1,color:'#fbbf24',fillColor:'#b45309',fillOpacity:.8}).bindTooltip(n,{className:'lbl',permanent:map.getZoom()>=9,direction:'right'}).addTo(portLayer);});
- map.on('zoomend',function(){portLayer.eachLayer(function(l){var t=l.getTooltip();if(t){t.options.permanent=map.getZoom()>=9;l.unbindTooltip().bindTooltip(t.getContent(),t.options);}});drawStops();
+ map.on('zoomend',function(){syncRefZoom();portLayer.eachLayer(function(l){var t=l.getTooltip();if(t){t.options.permanent=map.getZoom()>=9;l.unbindTooltip().bindTooltip(t.getContent(),t.options);}});drawStops();
   document.getElementById('legend').innerHTML=legendHtml(1,Object.keys(LAST_AGG).length);placeReadout();});
  window.addEventListener('resize',placeReadout);
  coordbox=document.getElementById('coordbox');setReadout(map.getCenter());

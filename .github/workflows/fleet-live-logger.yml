@@ -1,0 +1,86 @@
+name: Fleet live AIS logger (aisstream.io)
+
+# Fills the ~2-month lag of the public AIS archive with a live feed. Each run
+# holds one aisstream.io WebSocket open for ~5 h 40 min, keeps only the roster
+# boats inside the SoCal box, and commits the day files to the `fleet-live`
+# data branch (never main). Runs every 6 h so consecutive jobs overlap by a
+# few minutes and no window is lost; the logger de-duplicates to one position
+# per vessel per minute when a day is rolled into parquet.
+#
+# Needs the repository secret AISSTREAM_API_KEY (free key: https://aisstream.io,
+# sign in with GitHub). Without it the job exits 0 and does nothing, so the
+# workflow can sit on main before the key exists.
+
+on:
+  schedule:
+    - cron: "5 */6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: fleet-live-logger-${{ github.run_id }}   # runs are MEANT to overlap
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  log:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    env:
+      FLEET_DATA_DIR: ${{ github.workspace }}/.fleet-data
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Key present?
+        id: key
+        env:
+          K: ${{ secrets.AISSTREAM_API_KEY }}
+        run: |
+          if [ -z "$K" ]; then echo "present=false" >> "$GITHUB_OUTPUT"; echo "AISSTREAM_API_KEY not set; nothing to do"; else echo "present=true" >> "$GITHUB_OUTPUT"; fi
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        if: steps.key.outputs.present == 'true'
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: fleet-model/requirements.txt
+
+      - name: Install
+        if: steps.key.outputs.present == 'true'
+        run: pip install -r fleet-model/requirements.txt
+
+      - name: Fetch the fleet-live data branch (if it exists)
+        if: steps.key.outputs.present == 'true'
+        run: |
+          mkdir -p "$FLEET_DATA_DIR"
+          if git ls-remote --exit-code --heads origin fleet-live >/dev/null 2>&1; then
+            git fetch --depth=1 origin fleet-live
+            git worktree add "$FLEET_DATA_DIR/live-branch" FETCH_HEAD
+          else
+            git worktree add --detach "$FLEET_DATA_DIR/live-branch"
+            (cd "$FLEET_DATA_DIR/live-branch" && git checkout --orphan fleet-live && git rm -rfq . && echo "live AIS day files, roster boats only" > README.md && git add README.md && git -c user.name=bot -c user.email=bot@local commit -qm "init fleet-live")
+          fi
+          mkdir -p "$FLEET_DATA_DIR/live-branch/live"
+          ln -s "$FLEET_DATA_DIR/live-branch/live" "$FLEET_DATA_DIR/live"
+
+      - name: Log for ~5 h 40 min
+        if: steps.key.outputs.present == 'true'
+        env:
+          AISSTREAM_API_KEY: ${{ secrets.AISSTREAM_API_KEY }}
+        run: python fleet-model/live_logger.py --minutes 340
+
+      - name: Commit the day files to fleet-live
+        if: steps.key.outputs.present == 'true'
+        run: |
+          cd "$FLEET_DATA_DIR/live-branch"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add live
+          if git diff --staged --quiet; then echo "no new positions"; exit 0; fi
+          git commit -qm "live: $(date -u +%Y-%m-%dT%H:%MZ)"
+          for attempt in 1 2 3; do
+            if git push origin HEAD:refs/heads/fleet-live; then break; fi
+            git pull --rebase origin fleet-live || true
+          done
