@@ -29,6 +29,12 @@ const TOOLS = [
     name: "Track a paddy",
     sub: "7-day drift forecast from your mark",
   },
+  {
+    href: "/fleet/",
+    icon: "⚓",
+    name: "Fleet Tracks",
+    sub: "where the sportfishing fleet stops, from AIS",
+  },
 ];
 
 export default function ToolsMenu() {

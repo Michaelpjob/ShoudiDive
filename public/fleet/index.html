@@ -1,0 +1,26 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="robots" content="noindex"/>
+<title>Fleet Tracks — ShouldIDive (beta)</title>
+<link rel="stylesheet" href="leaflet.css?v=1"/>
+<link rel="stylesheet" href="fleet.css?v=1"/>
+</head><body>
+<div id="map"></div>
+<div class="bar"><a class="back" href="/">&larr; ShouldIDive</a>
+ <b>Fleet Tracks</b><span class="beta">BETA</span>
+ <span class="ctl"><label for="week">Week</label><input type="range" id="week" min="-1" step="1"/><span id="wlabel"></span>
+ <button id="play" title="Step through the season week by week">&#9654;</button></span>
+ <span class="ctl"><label for="metric">Show</label><select id="metric">
+  <option value="fish">Fishing minutes</option><option value="boats">Boats</option>
+  <option value="trips">Trips</option><option value="conv">Fleet convergence days</option>
+  <option value="cpa">Fish per angler (dock counts)</option></select></span>
+ <span class="ctl"><label for="boat">Boat</label><select id="boat"><option value="all">All boats</option></select></span>
+ <span class="ctl"><label for="kind">Stops</label><select id="kind">
+  <option value="all">Drift + troll</option><option value="0">Drift / anchor only</option><option value="1">Troll only</option></select></span>
+ <span class="ctl"><label class="chk"><input type="checkbox" id="nearshore"/> include stops &lt; 6 km from a dock</label></span>
+</div>
+<div class="panel" id="panel">Loading fleet data&hellip;</div>
+<div class="legend" id="legend"></div>
+<script src="leaflet.js?v=1"></script>
+<script src="app.js?v=1"></script>
+</body></html>
