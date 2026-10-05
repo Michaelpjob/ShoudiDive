@@ -15,6 +15,29 @@
 
 export const CHANGELOG = [
   {
+    id: "2026-10-05",
+    date: "October 5, 2026",
+    title: "Fleet Tracks: where the sportfishing fleet actually stops",
+    highlight: true,
+    items: [
+      {
+        type: "new",
+        text:
+          "A new beta tool under Tools shows where the Southern California " +
+          "party-boat fleet stopped to fish through the 2025 season, built " +
+          "from the boats' public AIS tracks: 62 boats from San Diego to " +
+          "Santa Barbara, 2,800 trips, 8,000 fishing stops on a 1.4 km " +
+          "hexagon grid. Step through the season week by week, pick a boat " +
+          "to see its trips, click a cell for who fished it and when, and " +
+          "compare it with the landings' posted fish-per-angler counts. " +
+          "Shore receivers only hear boats out to roughly 30-50 nm, so the " +
+          "long-range fleet shows up leaving and returning, not at the " +
+          "banks; the tool says so where it matters. Drop a GPS waypoint " +
+          "with a right-click and copy the coordinates.",
+      },
+    ],
+  },
+  {
     id: "2026-08-20",
     date: "August 20, 2026",
     title: "Drift forecasts now account for paddies sinking",
