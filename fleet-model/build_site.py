@@ -28,6 +28,15 @@ def _r(x, n=1):
     return None if x is None or (isinstance(x, float) and pd.isna(x)) else round(float(x), n)
 
 
+def _i(x):
+    """int or None; pandas turns a column of ints-with-gaps into floats with NaN."""
+    return None if x is None or (isinstance(x, float) and pd.isna(x)) else int(x)
+
+
+def _s(x):
+    return None if x is None or (isinstance(x, float) and pd.isna(x)) else str(x)
+
+
 def load_counts():
     if not os.path.exists(COUNTS):
         return None
@@ -138,7 +147,7 @@ def main():
     for t in trips.itertuples(index=False):
         out_trips.append([bidx[t.mmsi], t.depart_local_date, _r(t.hours), _r(t.max_km), _r(t.coverage, 2),
                           int(t.n_stops), round(float(t.fish_min)), t.far_lat, t.far_lon,
-                          t.anglers, t.fish_kept, t.fish_released, t.count_trip_type, int(t.trip_id)])
+                          _i(t.anglers), _i(t.fish_kept), _i(t.fish_released), _s(t.count_trip_type), int(t.trip_id)])
     # stops: [boat_idx, local_date, lat, lon, minutes, kind(0 drift/1 troll), h3, trip_id, nearshore(0/1)]
     out_stops = [[bidx[s.mmsi], s.local_date, s.lat, s.lon, round(float(s.minutes)), 1 if s.kind == "troll" else 0, s.h3, int(s.trip_id), 1 if s.nearshore else 0]
                  for s in stops.itertuples(index=False)]
@@ -184,7 +193,7 @@ def main():
     }
     out = os.path.join(target, "data.json")
     with open(out, "w", encoding="utf-8") as f:
-        json.dump(data, f, separators=(",", ":"))
+        json.dump(data, f, separators=(",", ":"), allow_nan=False)  # a NaN would break JSON.parse in the browser
     print(f"wrote {out} ({os.path.getsize(out) / 1e6:.2f} MB): {len(boats)} boats, {len(trips)} trips, "
           f"{len(stops)} stops, {len(cells)} cells, {len(weeks)} weeks, {count_hits} trips with counts")
     return 0
