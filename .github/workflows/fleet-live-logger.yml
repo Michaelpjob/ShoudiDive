@@ -1,11 +1,12 @@
 name: Fleet live AIS logger (aisstream.io)
 
 # Fills the ~2-month lag of the public AIS archive with a live feed. Each run
-# holds one aisstream.io WebSocket open for ~5 h 40 min, keeps only the roster
+# holds one aisstream.io WebSocket open for ~5 h 35 min, keeps only the roster
 # boats inside the SoCal box, and commits the day files to the `fleet-live`
-# data branch (never main). Runs every 6 h so consecutive jobs overlap by a
-# few minutes and no window is lost; the logger de-duplicates to one position
-# per vessel per minute when a day is rolled into parquet.
+# data branch (never main). Runs every 6 h. aisstream allows ONE socket per
+# key, so runs must NOT overlap (a second socket kicks the first off): the
+# ~20 min gap between chunks is the price. One position per vessel per minute
+# when a day is rolled into parquet.
 #
 # Needs the repository secret AISSTREAM_API_KEY (free key: https://aisstream.io,
 # sign in with GitHub). Without it the job exits 0 and does nothing, so the
@@ -15,10 +16,15 @@ on:
   schedule:
     - cron: "5 */6 * * *"
   workflow_dispatch:
+    inputs:
+      minutes:
+        description: "How long to log (minutes). Use 2 for a connectivity check: the step log is readable once the step ends."
+        required: false
+        default: "335"
 
 concurrency:
-  group: fleet-live-logger-${{ github.run_id }}   # runs are MEANT to overlap
-  cancel-in-progress: false
+  group: fleet-live-logger
+  cancel-in-progress: true   # one socket per key: a new run replaces the old one
 
 permissions:
   contents: write
@@ -65,11 +71,12 @@ jobs:
           mkdir -p "$FLEET_DATA_DIR/live-branch/live"
           ln -s "$FLEET_DATA_DIR/live-branch/live" "$FLEET_DATA_DIR/live"
 
-      - name: Log for ~5 h 40 min
+      - name: Log (default ~5 h 35 min)
         if: steps.key.outputs.present == 'true'
         env:
           AISSTREAM_API_KEY: ${{ secrets.AISSTREAM_API_KEY }}
-        run: python fleet-model/live_logger.py --minutes 340
+          LOG_MINUTES: ${{ inputs.minutes || '335' }}
+        run: python fleet-model/live_logger.py --minutes "$LOG_MINUTES"
 
       - name: Commit the day files to fleet-live
         if: steps.key.outputs.present == 'true'
