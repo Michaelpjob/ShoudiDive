@@ -96,8 +96,9 @@ async def run(api_key, mmsis, all_vessels, minutes=None):
     s, w, n, e = BBOX
     sub = {"APIKey": api_key, "BoundingBoxes": [[[s, w], [n, e]]],
            "FilterMessageTypes": ["PositionReport", "StandardClassBPositionReport"]}
-    if not all_vessels and mmsis:
-        sub["FiltersShipMMSI"] = [str(m) for m in mmsis[:50]]  # the service caps the MMSI filter at 50
+    # aisstream caps FiltersShipMMSI at 50 hulls and the roster is ~200, so
+    # subscribe to the whole SoCal box and keep the roster locally (a few
+    # hundred messages a minute; trivial).
     os.makedirs(LIVE_DIR, exist_ok=True)
     keep = set(mmsis)
     current_day = None
@@ -111,10 +112,15 @@ async def run(api_key, mmsis, all_vessels, minutes=None):
             async with websockets.connect(URL, ping_interval=20) as ws:
                 await ws.send(json.dumps(sub))
                 print(f"connected; {len(mmsis)} roster MMSIs, all_vessels={all_vessels}", flush=True)
+                first = True
                 async for raw in ws:
                     if deadline and time.time() >= deadline:
                         break
                     msg = json.loads(raw)
+                    if "error" in msg and "Message" not in msg:
+                        # aisstream answers a bad key / bad subscription with
+                        # {"error": "..."} and closes: do not loop on it.
+                        raise SystemExit(f"aisstream error: {msg['error']}")
                     meta = msg.get("MetaData", {})
                     mmsi = meta.get("MMSI")
                     if not mmsi or (not all_vessels and mmsi not in keep):
@@ -137,11 +143,16 @@ async def run(api_key, mmsis, all_vessels, minutes=None):
                         "length": None, "width": None, "draft": None, "transceiver": "B" if "StandardClassBPositionReport" in msg["Message"] else "A",
                     }) + "\n")
                     n_rows += 1
+                    if first:
+                        first = False
+                        print(f"first position: {meta.get('ShipName', '').strip()} ({mmsi}) at {ts}", flush=True)
                     if n_rows % 500 == 0:
                         fh.flush()
                         print(f"{dt.datetime.utcnow():%H:%M} {n_rows} positions", flush=True)
             if deadline and time.time() >= deadline:
                 break
+        except SystemExit:
+            raise
         except Exception as exc:  # noqa: BLE001
             print(f"socket dropped: {exc}; reconnecting in 30 s", flush=True)
             if fh:
