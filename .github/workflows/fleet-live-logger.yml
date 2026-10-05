@@ -82,5 +82,6 @@ jobs:
           git commit -qm "live: $(date -u +%Y-%m-%dT%H:%MZ)"
           for attempt in 1 2 3; do
             if git push origin HEAD:refs/heads/fleet-live; then break; fi
+            echo "push failed (attempt $attempt); rebasing on fleet-live"
             git pull --rebase origin fleet-live || true
           done
