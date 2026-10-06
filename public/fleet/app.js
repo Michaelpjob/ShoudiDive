@@ -271,7 +271,7 @@ function renderMe(){var box=document.getElementById('mebox');if(!box)return;box.
 function onMeFix(pos){ME.ll=[pos.coords.latitude,pos.coords.longitude];ME.acc=pos.coords.accuracy;ME.t=pos.timestamp||Date.now();
  if(!ME.marker){ME.marker=L.marker(ME.ll,{icon:L.divIcon({className:'',html:'<div class="me-dot"></div>',iconSize:[16,16],iconAnchor:[8,8]}),zIndexOffset:1200,interactive:false}).addTo(map);
   ME.ring=L.circle(ME.ll,{radius:ME.acc||0,color:'#3b82f6',weight:1,fillColor:'#3b82f6',fillOpacity:.12,interactive:false}).addTo(map);
-  map.setView(ME.ll,Math.max(map.getZoom(),10));}
+  map.setView(ME.ll,Math.max(map.getZoom(),10),{animate:false});}
  else{ME.marker.setLatLng(ME.ll);ME.ring.setLatLng(ME.ll);ME.ring.setRadius(ME.acc||0);if(ME.follow)map.panTo(ME.ll,{animate:true});}
  renderMe();}
 function onMeError(err){var box=document.getElementById('mebox');if(box){box.style.display='block';box.innerHTML='<b>Position unavailable</b><div class="mut">'+esc(err&&err.message?err.message:'location access was refused')+'</div><div class="row2"><button class="chip" id="meoff">Off</button></div>';var ob=document.getElementById('meoff');if(ob)ob.onclick=toggleMe;}}
