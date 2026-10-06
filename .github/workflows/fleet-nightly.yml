@@ -1,0 +1,87 @@
+name: Fleet nightly rebuild (live days -> data.json)
+
+# Folds the live AIS days (fleet-live branch, from fleet-live-logger.yml) into
+# Fleet Tracks every night: rolls the day files into the model's cut, scrapes
+# the last two weeks of dock counts, rebuilds public/fleet/data.json on top of
+# the frozen archive base (fleet-model/data/base, export_base.py) and commits
+# it to main + deploys prod, the same way refresh-paddies.yml self-updates the
+# paddy tool. Takes a few minutes: the 40 GB archive is never touched here.
+
+on:
+  schedule:
+    - cron: "40 10 * * *"   # 03:40 Pacific, after the overnight chunk has committed
+  workflow_dispatch:
+
+concurrency:
+  group: fleet-nightly
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: write
+      actions: write   # gh workflow run deploy-prod.yml
+    env:
+      FLEET_DATA_DIR: ${{ github.workspace }}/.fleet-data
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: main
+          token: ${{ secrets.BOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: fleet-model/requirements.txt
+
+      - name: Install model dependencies
+        run: pip install -r fleet-model/requirements.txt
+
+      - name: Live day files from the fleet-live branch
+        run: |
+          mkdir -p "$FLEET_DATA_DIR/live"
+          if git ls-remote --exit-code --heads origin fleet-live >/dev/null 2>&1; then
+            git fetch --depth=1 origin fleet-live
+            git worktree add "$FLEET_DATA_DIR/live-branch" FETCH_HEAD
+            cp "$FLEET_DATA_DIR"/live-branch/live/*.jsonl "$FLEET_DATA_DIR/live/" 2>/dev/null || true
+          fi
+          echo "live day files: $(find "$FLEET_DATA_DIR/live" -name '*.jsonl' | wc -l)"
+          python fleet-model/live_logger.py --roll-all
+
+      - name: Dock counts for the last 14 days
+        continue-on-error: true   # the site being down must not stop the rebuild
+        run: |
+          python fleet-model/catch.py --start "$(date -u -d '14 days ago' +%F)" --end "$(date -u +%F)"
+
+      - name: Build data.json from the frozen base + live days
+        run: python fleet-model/build_site.py public/fleet --base fleet-model/data/base
+
+      - name: Sentinel — data.json must be today's build
+        run: |
+          python -c "import json,datetime; d=json.load(open('public/fleet/data.json')); b=d['meta']['build_utc'][:10]; t=datetime.datetime.utcnow().strftime('%Y-%m-%d'); assert b==t, f'build_utc {b} != today {t}'; print('ok: built', b, 'live through', d['meta'].get('live_through'))"
+
+      - name: Commit refreshed data.json
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/fleet/data.json
+          if git diff --staged --quiet; then
+            echo "No change in data.json."
+          else
+            git commit -m "data(fleet): nightly $(date -u +%Y-%m-%d), live through $(python -c "import json;print(json.load(open('public/fleet/data.json'))['meta'].get('live_through'))")"
+            for attempt in 1 2 3; do
+              if git push; then break; fi
+              echo "push failed (attempt $attempt) — rebasing"
+              git pull --rebase --autostash origin main
+            done
+          fi
+
+      - name: Trigger production deploy
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run deploy-prod.yml --ref main

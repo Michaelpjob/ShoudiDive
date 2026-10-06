@@ -21,6 +21,11 @@ def socal_files(start=None, end=None):
     return out
 
 
+def live_files(start=None, end=None):
+    """Parquets rolled from the live feed (live_logger.py leaves a .live sidecar)."""
+    return [f for f in socal_files(start, end) if os.path.exists(f + ".live")]
+
+
 def available_days(start=None, end=None):
     return [os.path.basename(f)[:10] for f in socal_files(start, end)]
 

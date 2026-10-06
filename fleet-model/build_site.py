@@ -61,11 +61,18 @@ def dive_spots(repo_root):
     return out
 
 
-def load_counts():
-    if not os.path.exists(COUNTS):
+def load_counts(base=None):
+    """Dock counts: the frozen base copy (archive window) plus whatever the recent
+    scrape in $FLEET_DATA_DIR holds; later rows win on (landing, boat, date, trip)."""
+    frames = []
+    if base and os.path.exists(os.path.join(base, "counts.parquet")):
+        frames.append(pd.read_parquet(os.path.join(base, "counts.parquet")))
+    if os.path.exists(COUNTS):
+        frames.append(pd.read_parquet(COUNTS))
+    if not frames:
         return None
-    c = pd.read_parquet(COUNTS)
-    return c
+    c = pd.concat(frames, ignore_index=True)
+    return c.drop_duplicates(["landing", "date", "boat", "trip_type", "anglers"], keep="last")
 
 
 def join_counts(trips, boats, counts):
@@ -115,14 +122,15 @@ def main():
     ap.add_argument("target", nargs="?", default=DEFAULT_TARGET)
     ap.add_argument("--start")
     ap.add_argument("--end")
+    ap.add_argument("--base", help="fleet-model/data/base from export_base.py: archive frozen, only live days processed")
     a = ap.parse_args()
     target = os.path.abspath(a.target)
     os.makedirs(target, exist_ok=True)
 
-    r = model.run(a.start, a.end)
+    r = model.run(a.start, a.end, base=a.base)
     boats = r["roster"]["boats"]
     trips, stops, cw, ct = r["trips"], r["stops"], r["cell_week"], r["cell_total"]
-    counts = load_counts()
+    counts = load_counts(a.base)
     trips, count_hits = join_counts(trips, boats, counts)
 
     weeks = sorted(set(cw["week"])) if len(cw) else []
@@ -196,6 +204,8 @@ def main():
             "start": r["days"][0], "end": r["days"][-1], "n_days": len(r["days"]),
             "n_boats": len(boats), "n_trips": int(len(trips)), "n_stops": int(len(stops)),
             "count_joined_trips": int(count_hits),
+            "live_days": r.get("live_days", []),
+            "live_through": (r.get("live_days") or [None])[-1],
             "h3_res": H3_RES, "harbor_km": HARBOR_KM, "nearshore_km": NEARSHORE_KM,
             "stop_rule": {"drift_max_kt": DRIFT_MAX_KT, "drift_min_min": DRIFT_MIN_MIN,
                           "troll_kt": list(TROLL_KT), "troll_min_min": TROLL_MIN_MIN},
