@@ -125,7 +125,7 @@ function draw(){
   poly.on('contextmenu',function(e){dropWp(e.latlng);});
   poly.addTo(hexLayer);});
  drawStops();
- document.getElementById('legend').innerHTML=legendHtml(vmax,n);placeReadout();
+ document.getElementById('legend').innerHTML=legendHtml(vmax,n);placeReadout();renderMe();
  if(S.cell&&!A[S.cell])S.cell=null;
  renderPanel(A,n);}
 
@@ -235,10 +235,51 @@ function drawLive(){if(!liveLayer)return;liveLayer.clearLayers();if(!LIVE||!LIVE
   m.bindTooltip(esc(boat.name)+' · '+ageText(a),{className:'ref-lbl live',direction:'right',offset:[8,0],permanent:false,interactive:false});
   m.addTo(liveLayer);});}
 function fetchLive(){fetch(LIVE_URL,{cache:'no-cache'}).then(function(r){return r.ok?r.json():null;}).then(function(j){
-  if(!j)return;LIVE=j;drawLive();var lg=document.getElementById('legend');if(lg)lg.innerHTML=legendHtml(1,Object.keys(LAST_AGG).length);placeReadout();}).catch(function(){});}
+  if(!j)return;LIVE=j;drawLive();var lg=document.getElementById('legend');if(lg)lg.innerHTML=legendHtml(1,Object.keys(LAST_AGG).length);placeReadout();renderMe();}).catch(function(){});}
 function liveSummary(){if(!LIVE||!LIVE.boats)return '';var n=0,fresh=0;LIVE.boats.forEach(function(b){if(MMSI_IDX[String(b.mmsi)]!=null){n++;if(ageMin(b.t)<=45)fresh++;}});
  if(!n)return '<div><span class="lvdot"></span>Right now: no live positions yet</div>';
  return '<div><span class="lvdot"></span><b>Right now</b>: '+n+' boats heard, '+fresh+' in the last 45 min · freshest '+(LIVE.freshest?ageText(ageMin(LIVE.freshest)):'—')+'</div>';}
+
+/* ---------- "Me": the user's own live position ---------- */
+var ME={watch:null,marker:null,ring:null,ll:null,acc:null,follow:true,t:0};
+var toR=function(x){return x*Math.PI/180;},toD=function(x){return x*180/Math.PI;};
+function distNm(a,b){var R=3440.065,dp=toR(b[0]-a[0]),dl=toR(b[1]-a[1]);
+ var h=Math.sin(dp/2)*Math.sin(dp/2)+Math.cos(toR(a[0]))*Math.cos(toR(b[0]))*Math.sin(dl/2)*Math.sin(dl/2);
+ return 2*R*Math.asin(Math.min(1,Math.sqrt(h)));}
+function brg(a,b){var y=Math.sin(toR(b[1]-a[1]))*Math.cos(toR(b[0]));
+ var x=Math.cos(toR(a[0]))*Math.sin(toR(b[0]))-Math.sin(toR(a[0]))*Math.cos(toR(b[0]))*Math.cos(toR(b[1]-a[1]));
+ return (toD(Math.atan2(y,x))+360)%360;}
+function nearestCell(from){var best=null;Object.keys(LAST_AGG).forEach(function(h){var c=D.cells[h];if(!c)return;var v=metricOf(LAST_AGG[h],h);if(v<=0)return;
+ var d=distNm(from,c.c);if(!best||d<best.d)best={h:h,d:d,b:brg(from,c.c),v:v};});return best;}
+function hottestWithin(from,nm){var best=null;Object.keys(LAST_AGG).forEach(function(h){var c=D.cells[h];if(!c)return;var v=metricOf(LAST_AGG[h],h);if(v<=0)return;
+ var d=distNm(from,c.c);if(d<=nm&&(!best||v>best.v))best={h:h,d:d,b:brg(from,c.c),v:v};});return best;}
+function nearestBoat(from){if(!LIVE||!LIVE.boats)return null;var best=null;LIVE.boats.forEach(function(b){var bi=MMSI_IDX[String(b.mmsi)];if(bi==null)return;
+ var d=distNm(from,[b.lat,b.lon]);if(!best||d<best.d)best={name:D.boats[bi].name,d:d,b:brg(from,[b.lat,b.lon]),age:ageMin(b.t),sog:b.sog};});return best;}
+function meHtml(){if(!ME.ll)return '<b>Finding your position…</b><div class="mut">allow location access when the browser asks</div>';
+ var f=_fmt({lat:ME.ll[0],lng:ME.ll[1]}),nc=nearestCell(ME.ll),hot=hottestWithin(ME.ll,10),nb=nearestBoat(ME.ll);
+ var html='<b>You</b> · '+f.dd+' <span class="mut">±'+Math.round(ME.acc||0)+' m · '+ageText(Math.round((Date.now()-ME.t)/60000))+'</span><br/><span class="mut">'+f.dm+'</span>';
+ if(nc)html+='<br/>Nearest fishing cell: <b>'+nc.d.toFixed(1)+' nm</b> at '+Math.round(nc.b)+'°';
+ if(hot&&(!nc||hot.h!==nc.h))html+='<br/>Hottest within 10 nm: <b>'+hot.d.toFixed(1)+' nm</b> at '+Math.round(hot.b)+'° ('+(S.metric==='fish'?hrs(hot.v):hot.v)+')';
+ if(nb)html+='<br/>Nearest boat: <b>'+esc(nb.name)+'</b> '+nb.d.toFixed(1)+' nm at '+Math.round(nb.b)+'°'+((nb.sog||0)>=1?', under way':', stopped')+' <span class="mut">'+ageText(nb.age)+'</span>';
+ html+='<div class="row2"><button class="chip" id="mefollow">'+(ME.follow?'Following':'Follow me')+'</button><button class="chip" id="mecenter">Centre</button><button class="chip" id="meoff">Off</button></div>';
+ return html;}
+function renderMe(){var box=document.getElementById('mebox');if(!box)return;box.style.display=ME.watch!=null?'block':'none';if(ME.watch==null)return;box.innerHTML=meHtml();
+ var fb=document.getElementById('mefollow');if(fb)fb.onclick=function(){ME.follow=!ME.follow;renderMe();if(ME.follow&&ME.ll)map.panTo(ME.ll);};
+ var cb=document.getElementById('mecenter');if(cb)cb.onclick=function(){if(ME.ll)map.setView(ME.ll,Math.max(map.getZoom(),10));};
+ var ob=document.getElementById('meoff');if(ob)ob.onclick=toggleMe;
+ var lg=document.getElementById('legend');box.style.bottom=(lg.offsetHeight+18+(coordbox&&getComputedStyle(coordbox).display!=='none'?coordbox.offsetHeight+8:0))+'px';}
+function onMeFix(pos){ME.ll=[pos.coords.latitude,pos.coords.longitude];ME.acc=pos.coords.accuracy;ME.t=pos.timestamp||Date.now();
+ if(!ME.marker){ME.marker=L.marker(ME.ll,{icon:L.divIcon({className:'',html:'<div class="me-dot"></div>',iconSize:[16,16],iconAnchor:[8,8]}),zIndexOffset:1200,interactive:false}).addTo(map);
+  ME.ring=L.circle(ME.ll,{radius:ME.acc||0,color:'#3b82f6',weight:1,fillColor:'#3b82f6',fillOpacity:.12,interactive:false}).addTo(map);
+  map.setView(ME.ll,Math.max(map.getZoom(),10),{animate:false});}
+ else{ME.marker.setLatLng(ME.ll);ME.ring.setLatLng(ME.ll);ME.ring.setRadius(ME.acc||0);if(ME.follow)map.panTo(ME.ll,{animate:true});}
+ renderMe();}
+function onMeError(err){var box=document.getElementById('mebox');if(box){box.style.display='block';box.innerHTML='<b>Position unavailable</b><div class="mut">'+esc(err&&err.message?err.message:'location access was refused')+'</div><div class="row2"><button class="chip" id="meoff">Off</button></div>';var ob=document.getElementById('meoff');if(ob)ob.onclick=toggleMe;}}
+function toggleMe(){var btn=document.getElementById('me');
+ if(ME.watch!=null){navigator.geolocation.clearWatch(ME.watch);ME.watch=null;if(ME.marker){map.removeLayer(ME.marker);map.removeLayer(ME.ring);ME.marker=ME.ring=null;}ME.ll=null;btn.classList.remove('on');renderMe();return;}
+ if(!navigator.geolocation){toast('This browser has no location service');return;}
+ ME.follow=true;ME.watch=navigator.geolocation.watchPosition(onMeFix,onMeError,{enableHighAccuracy:true,maximumAge:5000,timeout:20000});btn.classList.add('on');renderMe();
+ if(isMobile())openSheet(false);}
 
 /* ---------- panel / bottom sheet ---------- */
 function openSheet(open){var p=document.getElementById('panel');p.classList.toggle('min',!open);document.body.classList.toggle('sheet-open',open&&isMobile());var c=p.querySelector('.chev');if(c)c.innerHTML=open?'&#9660;':'&#9650;';}
@@ -273,7 +314,7 @@ function howTo(){var seen=isMobile();try{seen=seen||localStorage.getItem('sd:fle
   +'<li>Pick a boat in the table below (or the Boat menu) to see only its stops and its trips. Tap a trip to isolate it on the map.</li>'
   +'<li>Choose a window of weeks with the two week menus; <b>‹ ›</b> slide it, <b>Play</b> sweeps it through the season, <b>All weeks</b> brings back the whole period.</li>'
   +'<li>Tap any hexagon for who fished it and when. Zoom in to see individual stops. Purple and teal markers are named structure (banks, seamounts, reefs); the layers button at bottom right toggles them and the dive spots.</li>'
-  +'<li><b>⌖ GPS</b> (or a right-click / long-press anywhere) drops a waypoint you can copy coordinates from.</li>'
+  +'<li><b>⌖ GPS</b> (or a right-click / long-press anywhere) drops a waypoint you can copy coordinates from. <b>● Me</b> shows your own live position with distance and bearing to the nearest fishing cell and boat.</li>'
   +'<li>The browser Back button undoes a selection.</li></ul></details>';}
 
 function fleetPanel(n){var m=D.meta,s=D.summary;
@@ -383,6 +424,8 @@ function boot(d){D=d;
  var closeFilters=function(){bar.classList.remove('open');fb.setAttribute('aria-expanded','false');fb.innerHTML='Filters &#9662;';};
  fb.onclick=function(){var o=bar.classList.toggle('open');fb.setAttribute('aria-expanded',o?'true':'false');fb.innerHTML=o?'Filters &#9652;':'Filters &#9662;';if(o&&isMobile())openSheet(false);};
  document.getElementById('gps').onclick=function(){togglePick();if(isMobile())closeFilters();};
+ document.getElementById('me').onclick=function(){toggleMe();if(isMobile())closeFilters();};
+ map.on('dragstart',function(){if(ME.watch!=null&&ME.follow){ME.follow=false;renderMe();}});
  /* week window: two selects (first / last week) */
  var w0=document.getElementById('w0'),w1=document.getElementById('w1');
  [w0,w1].forEach(function(sel){var o=document.createElement('option');o.value='all';o.textContent='All';sel.appendChild(o);
