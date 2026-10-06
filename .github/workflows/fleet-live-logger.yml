@@ -71,24 +71,33 @@ jobs:
           mkdir -p "$FLEET_DATA_DIR/live-branch/live"
           ln -s "$FLEET_DATA_DIR/live-branch/live" "$FLEET_DATA_DIR/live"
 
-      - name: Log (default ~5 h 35 min)
+      - name: Log (default ~5 h 35 min), committing every 10 min
         if: steps.key.outputs.present == 'true'
         env:
           AISSTREAM_API_KEY: ${{ secrets.AISSTREAM_API_KEY }}
           LOG_MINUTES: ${{ inputs.minutes || '335' }}
-        run: python fleet-model/live_logger.py --minutes "$LOG_MINUTES"
-
-      - name: Commit the day files to fleet-live
-        if: steps.key.outputs.present == 'true'
         run: |
+          python fleet-model/live_logger.py --minutes "$LOG_MINUTES" &
+          LOGGER=$!
           cd "$FLEET_DATA_DIR/live-branch"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add live
-          if git diff --staged --quiet; then echo "no new positions"; exit 0; fi
-          git commit -qm "live: $(date -u +%Y-%m-%dT%H:%MZ)"
-          for attempt in 1 2 3; do
-            if git push origin HEAD:refs/heads/fleet-live; then break; fi
-            echo "push failed (attempt $attempt); rebasing on fleet-live"
-            git pull --rebase origin fleet-live || true
+          commit_push() {
+            git add live
+            if git diff --staged --quiet; then return 0; fi
+            git commit -qm "live: $(date -u +%Y-%m-%dT%H:%MZ)"
+            for attempt in 1 2 3; do
+              if git push -q origin HEAD:refs/heads/fleet-live; then return 0; fi
+              echo "push failed (attempt $attempt); rebasing on fleet-live"
+              git pull -q --rebase origin fleet-live || true
+            done
+          }
+          # The tool's "Right now" layer reads these files, so push often: a
+          # position is at most ~10 min + the 2-min edge cache old.
+          while kill -0 "$LOGGER" 2>/dev/null; do
+            sleep 600
+            commit_push
           done
+          wait "$LOGGER"; RC=$?
+          commit_push
+          exit $RC
