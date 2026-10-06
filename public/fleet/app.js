@@ -267,7 +267,7 @@ function livePanel(){var c=liveCounts();
  if(!c.n)html+='<div class="empty">No live positions yet. The logger commits every 10 minutes; the first file appears shortly after a logging chunk starts.</div>';
  html+='<table class="lvtab"><tr><th></th><th>Boat</th><th>Status</th><th>Where</th><th>Trip</th><th class="n">Age</th></tr>';
  c.list.forEach(function(x){var st=x.st,boat=D.boats[x.bi],tp=tripDep(boat.mmsi);
-  var trip=tp?'left '+fmtT(tp.dep)+'<br/><span class="mut">'+tp.dist.toFixed(0)+' nm run</span>':'<span class="mut">—</span>';
+  var trip=tp?(tp.sinceOnly?'heard since ':'left ')+fmtT(tp.dep)+'<br/><span class="mut">'+tp.dist.toFixed(0)+' nm run</span>':'<span class="mut">—</span>';
   html+='<tr class="row lvrow" data-act="flyto" data-b="'+x.bi+'"><td class="st"><span class="lvdot'+(st.state==='dock'?' dim':st.state==='stopped'?' sea':'')+'"></span></td><td>'+esc(boat.name)+'<br/><span class="mut">'+esc(short(boat.landing))+'</span></td><td>'+esc(st.txt)+'</td><td>'+esc(st.where)+'</td><td>'+trip+'</td><td class="n">'+ageText(st.age).replace(' ago','')+'</td></tr>';});
  html+='</table><div class="caveat"><b>Trip tracing.</b> The solid green line behind each boat is its path since it last left the dock (the model\'s 2.5 km harbor ring), with a tick every hour; the faint dotted trail is the rest of the last 24 hours. Hover a line or tick for the time. Positions come from the boats\' own AIS via the live feed, logged on the fleet\'s roster and refreshed here every 3 minutes (the feed itself is committed every 10). A boat silent for more than 36 h drops off. The dashed line ahead of a moving boat is where it will be in 20 minutes on its current course and speed.</div>';
  return {nav:'<button class="chip" data-act="fleet">‹ Fleet</button>',title:'Live fleet · '+c.under+' under way',body:html};}
@@ -286,7 +286,7 @@ function drawTracks(){if(!trackLayer)return;trackLayer.clearLayers();if(S.view!=
   var onTrip=k<pts.length-1&&trip.length>1;
   if(pre.length>1)L.polyline(pre,{color:'#86efac',weight:1.5,opacity:.35,dashArray:'2 6',interactive:false}).addTo(trackLayer);
   if(onTrip){var dep=pts[Math.max(0,k)][0];
-   L.polyline(trip,{color:'#4ade80',weight:2.5,opacity:.85,interactive:true}).bindTooltip(esc(boat.name)+' · left the dock '+fmtT(dep),{className:'trk-lbl',sticky:true}).addTo(trackLayer);
+   L.polyline(trip,{color:'#4ade80',weight:2.5,opacity:.85,interactive:true}).bindTooltip(esc(boat.name)+(k<0?' · heard since ':' · left the dock ')+fmtT(dep),{className:'trk-lbl',sticky:true}).addTo(trackLayer);
    // hourly ticks along the trip so the path reads as a timeline
    var next=dep+3600;for(var i=Math.max(0,k);i<pts.length;i++){if(pts[i][0]>=next){next+=3600;
     L.marker([pts[i][1],pts[i][2]],{icon:L.divIcon({className:'',html:'<div class="trk-tick"></div>',iconSize:[7,7],iconAnchor:[3.5,3.5]}),interactive:true,zIndexOffset:800})
@@ -294,7 +294,7 @@ function drawTracks(){if(!trackLayer)return;trackLayer.clearLayers();if(S.view!=
    b._dep=dep;}else b._dep=null;});}
 function fetchTracks(){fetch(TRACKS_URL,{cache:'no-cache'}).then(function(r){return r.ok?r.json():null;}).then(function(j){if(!j)return;TRACKS=j;drawTracks();if(S.view==='live')renderPanel(LAST_AGG,Object.keys(LAST_AGG).length);}).catch(function(){});}
 function tripDep(mmsi){if(!TRACKS||!TRACKS.boats)return null;var b=null;TRACKS.boats.forEach(function(x){if(x.mmsi===mmsi)b=x;});if(!b||b.pts.length<2)return null;
- var k=tripStart(b.pts);if(k>=b.pts.length-1)return null;return {dep:b.pts[Math.max(0,k)][0],pts:b.pts.length-Math.max(0,k),dist:b.pts.slice(Math.max(0,k)).reduce(function(a,p,i,arr){return i?a+distNm([arr[i-1][1],arr[i-1][2]],[p[1],p[2]]):0;},0)};}
+ var k=tripStart(b.pts);if(k>=b.pts.length-1)return null;return {dep:b.pts[Math.max(0,k)][0],sinceOnly:k<0,pts:b.pts.length-Math.max(0,k),dist:b.pts.slice(Math.max(0,k)).reduce(function(a,p,i,arr){return i?a+distNm([arr[i-1][1],arr[i-1][2]],[p[1],p[2]]):0;},0)};}
 
 /* ---------- "Me": the user's own live position ---------- */
 var ME={watch:null,marker:null,ring:null,ll:null,acc:null,follow:true,t:0};
