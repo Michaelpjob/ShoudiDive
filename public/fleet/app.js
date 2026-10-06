@@ -17,7 +17,7 @@ var CONV_BOATS=3;          // "fleet piled in" = this many boats in one cell on 
    treaty), then OP-1..OP-4 of the 1978 Treaty on Maritime Boundaries (UN
    DOALOS text). Degrees from the treaty's D-M-S. */
 var MX_BORDER=[[32.5344,-117.1249],[32.58948,-117.46373],[32.62694,-117.82528],[31.13278,-118.60500],[30.54200,-121.86621]];
-var D,map,hexLayer,stopLayer,portLayer,borderLayer,structLayer,spotLayer,wpMarker,coordbox,STOPWEEK=[],WEEKIDX={},MMSI_IDX={};
+var D,map,hexLayer,stopLayer,portLayer,borderLayer,structLayer,spotLayer,liveLayer,wpMarker,coordbox,LIVE=null,STOPWEEK=[],WEEKIDX={},MMSI_IDX={};
 /* w0..w1 = inclusive week window (indices into D.weeks); both -1 = whole period */
 var S={w0:-1,w1:-1,metric:'fish',boat:'all',kind:'all',nearshore:false,cell:null,trip:null,playing:null,pick:false};
 var LAST_AGG={};
@@ -146,6 +146,7 @@ function legendHtml(vmax,n){var steps=[0,.25,.5,.75,1];var f=S.metric==='fish'?f
  else if(map.getZoom()<10&&!isSingleBoat())html+='<div class="mobhide">Each cell ≈ 1.4 km across. Zoom in to see individual stops.</div>';
  else html+='<div class="mobhide">Dots are individual stops: white = drifting/anchored, blue = trolling. Bigger = longer.</div>';
  html+='<div class="mobhide"><span class="ln"></span>US / Mexico maritime boundary · AIS coverage ends well before it</div>';
+ if(map.hasLayer(liveLayer))html+=liveSummary();
  return html;}
 
 function drawStops(){stopLayer.clearLayers();
@@ -177,6 +178,7 @@ function dropWp(ll){
  openWp(ll);}
 function removeWp(){if(wpMarker){map.removeLayer(wpMarker);wpMarker=null;}}
 function wireCopy(e){var el=e.popup.getElement();if(!el)return;
+ var lb=el.querySelector('[data-live-boat]');if(lb){lb.onclick=function(){S.boat=lb.getAttribute('data-live-boat');S.cell=null;S.trip=null;map.closePopup();if(isMobile())openSheet(true);commit();};}
  el.querySelectorAll('.copybtn').forEach(function(b){b.onclick=function(){
   if(b.getAttribute('data-rm')){removeWp();return;}
   var txt=b.getAttribute('data-c');
@@ -211,7 +213,32 @@ function drawReference(){
   L.circleMarker([s.lat,s.lng],{radius:2.5,weight:1,opacity:.6,color:'#7dd3fc',fillColor:'#0e7490',fillOpacity:.4})
    .bindTooltip(s.name,Object.assign({},REFLBL,{className:'ref-lbl spot'})).bindPopup('<div class="ref"><b>'+esc(s.name)+'</b><br/><span class="mut">dive spot (ShouldIDive)</span></div>',{closeButton:false}).addTo(spotLayer);});}}
 function refPrefs(){try{return JSON.parse(localStorage.getItem('sd:fleet:layers')||'{}');}catch{return {};}}
-function saveRefPrefs(){try{localStorage.setItem('sd:fleet:layers',JSON.stringify({structure:map.hasLayer(structLayer),spots:map.hasLayer(spotLayer),landings:map.hasLayer(portLayer)}));}catch{}}
+function saveRefPrefs(){try{localStorage.setItem('sd:fleet:layers',JSON.stringify({structure:map.hasLayer(structLayer),spots:map.hasLayer(spotLayer),landings:map.hasLayer(portLayer),live:map.hasLayer(liveLayer)}));}catch{}}
+
+/* ---------- "Right now": the fleet's latest live AIS positions ---------- */
+var LIVE_URL='/api/fleet/now',LIVE_EVERY_MS=180000;
+function ageMin(iso){return Math.max(0,Math.round((Date.now()-Date.parse(iso))/60000));}
+function ageText(m){return m<1?'just now':m<60?m+' min ago':m<1440?Math.round(m/60)+' h ago':Math.round(m/1440)+' d ago';}
+function liveIcon(b,fresh){var rot=(b.heading!=null?b.heading:(b.cog!=null?b.cog:0));var moving=(b.sog||0)>=1;
+ var col=fresh?'#4ade80':'#86efac',op=fresh?1:.55;
+ var html=moving?'<div class="lv" style="transform:rotate('+rot+'deg);opacity:'+op+'"><svg width="18" height="18" viewBox="0 0 18 18"><path d="M9 1 L15 16 L9 12.5 L3 16 Z" fill="'+col+'" stroke="#052e16" stroke-width="1"/></svg></div>'
+  :'<div class="lv" style="opacity:'+op+'"><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="'+col+'" stroke="#052e16" stroke-width="1.5"/></svg></div>';
+ return L.divIcon({className:'',html:html,iconSize:[18,18],iconAnchor:[9,9]});}
+function drawLive(){if(!liveLayer)return;liveLayer.clearLayers();if(!LIVE||!LIVE.boats)return;
+ LIVE.boats.forEach(function(b){var bi=MMSI_IDX[String(b.mmsi)];if(bi==null)return;   // roster boats only
+  var boat=D.boats[bi],a=ageMin(b.t),fresh=a<=45,moving=(b.sog||0)>=1;
+  var m=L.marker([b.lat,b.lon],{icon:liveIcon(b,fresh),zIndexOffset:900,interactive:true});
+  var txt='<div class="ref"><b>'+esc(boat.name)+'</b> <span class="mut">· '+esc(short(boat.landing))+'</span><br/>'
+   +(moving?'under way '+(b.sog||0).toFixed(1)+' kt, heading '+Math.round(b.heading!=null?b.heading:b.cog)+'°':'stopped')+'<br/><span class="mut">'+ageText(a)+' · '+b.t.replace('T',' ').slice(0,16)+' UTC</span>'
+   +'<br/><button class="chip" data-live-boat="'+bi+'">This boat\'s trips</button></div>';
+  m.bindPopup(txt,{closeButton:false,maxWidth:240});
+  m.bindTooltip(esc(boat.name)+' · '+ageText(a),{className:'ref-lbl live',direction:'right',offset:[8,0],permanent:false,interactive:false});
+  m.addTo(liveLayer);});}
+function fetchLive(){fetch(LIVE_URL,{cache:'no-cache'}).then(function(r){return r.ok?r.json():null;}).then(function(j){
+  if(!j)return;LIVE=j;drawLive();var lg=document.getElementById('legend');if(lg)lg.innerHTML=legendHtml(1,Object.keys(LAST_AGG).length);placeReadout();}).catch(function(){});}
+function liveSummary(){if(!LIVE||!LIVE.boats)return '';var n=0,fresh=0;LIVE.boats.forEach(function(b){if(MMSI_IDX[String(b.mmsi)]!=null){n++;if(ageMin(b.t)<=45)fresh++;}});
+ if(!n)return '<div><span class="lvdot"></span>Right now: no live positions yet</div>';
+ return '<div><span class="lvdot"></span><b>Right now</b>: '+n+' boats heard, '+fresh+' in the last 45 min · freshest '+(LIVE.freshest?ageText(ageMin(LIVE.freshest)):'—')+'</div>';}
 
 /* ---------- panel / bottom sheet ---------- */
 function openSheet(open){var p=document.getElementById('panel');p.classList.toggle('min',!open);document.body.classList.toggle('sheet-open',open&&isMobile());var c=p.querySelector('.chev');if(c)c.innerHTML=open?'&#9660;':'&#9650;';}
@@ -242,6 +269,7 @@ function onPanelClick(e){var p=document.getElementById('panel');
 function howTo(){var seen=isMobile();try{seen=seen||localStorage.getItem('sd:fleet:seen')==='1';localStorage.setItem('sd:fleet:seen','1');}catch{seen=true;}
  return '<details class="how"'+(seen?'':' open')+'><summary>How to read this map</summary><ul>'
   +'<li>Each hexagon is about 1.4 km across. The brighter it is, the more time the fleet spent <b>stopped and fishing</b> there, from each boat\'s public AIS track.</li>'
+  +'<li><b>Green arrows and dots</b> are the fleet right now: where each boat was last heard, within about ten minutes. Tap one for speed, heading and age.</li>'
   +'<li>Pick a boat in the table below (or the Boat menu) to see only its stops and its trips. Tap a trip to isolate it on the map.</li>'
   +'<li>Choose a window of weeks with the two week menus; <b>‹ ›</b> slide it, <b>Play</b> sweeps it through the season, <b>All weeks</b> brings back the whole period.</li>'
   +'<li>Tap any hexagon for who fished it and when. Zoom in to see individual stops. Purple and teal markers are named structure (banks, seamounts, reefs); the layers button at bottom right toggles them and the dive spots.</li>'
@@ -331,12 +359,15 @@ function boot(d){D=d;
  L.marker(MX_BORDER[2],{interactive:false,icon:L.divIcon({className:'',html:'',iconSize:[0,0]})}).bindTooltip('US / Mexico maritime boundary',{permanent:true,direction:'right',offset:[8,0],className:'border-lbl'}).addTo(borderLayer);
  hexLayer=L.layerGroup().addTo(map);stopLayer=L.layerGroup().addTo(map);
  var prefs=refPrefs();
- structLayer=L.layerGroup();spotLayer=L.layerGroup();portLayer=L.layerGroup();
+ structLayer=L.layerGroup();spotLayer=L.layerGroup();portLayer=L.layerGroup();liveLayer=L.layerGroup();
+ if(prefs.live!==false)liveLayer.addTo(map);
  if(prefs.structure!==false)structLayer.addTo(map);
  if(prefs.spots===true)spotLayer.addTo(map);
  if(prefs.landings!==false)portLayer.addTo(map);
  drawReference();syncRefZoom();
- L.control.layers(null,{'Structure: banks, seamounts, reefs':structLayer,'Dive spots':spotLayer,'Landings':portLayer},{position:'bottomright',collapsed:true}).addTo(map);
+ L.control.layers(null,{'Right now: live positions':liveLayer,'Structure: banks, seamounts, reefs':structLayer,'Dive spots':spotLayer,'Landings':portLayer},{position:'bottomright',collapsed:true}).addTo(map);
+ fetchLive();setInterval(fetchLive,LIVE_EVERY_MS);
+ map.on('overlayadd overlayremove',function(){document.getElementById('legend').innerHTML=legendHtml(1,Object.keys(LAST_AGG).length);placeReadout();});
  map.on('overlayadd overlayremove',saveRefPrefs);
  Object.keys(D.landings).forEach(function(n){var p=D.landings[n];
   L.circleMarker([p[0],p[1]],{radius:3,weight:1,color:'#fbbf24',fillColor:'#b45309',fillOpacity:.8}).bindTooltip(n,{className:'lbl',permanent:map.getZoom()>=9,direction:'right'}).addTo(portLayer);});
