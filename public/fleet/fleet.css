@@ -81,8 +81,27 @@ html,body{margin:0;height:100%;background:#0b1220;color:#e2e8f0;font:14px/1.4 sy
 .leaflet-control-layers-toggle{background-color:#1e293b;filter:invert(.85)}
 body.sheet-open .leaflet-bottom.leaflet-right{display:none}
 .lv{width:18px;height:18px;display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 0 2px #000)}
+.lv.big{width:28px;height:28px}
+.lv.pulse::after{content:"";position:absolute;width:28px;height:28px;border-radius:50%;border:2px solid #4ade80;animation:lvpulse 2s ease-out infinite;opacity:0}
+@keyframes lvpulse{0%{transform:scale(.5);opacity:.9}100%{transform:scale(1.9);opacity:0}}
+.lvwrap{position:relative;display:flex;align-items:center;justify-content:center}
+.leaflet-tooltip.lv-lbl{background:rgba(5,46,22,.85);border:1px solid #4ade80;border-radius:4px;color:#dcfce7;font:600 11px/1.2 system-ui;padding:2px 5px;box-shadow:none;white-space:nowrap}
+.leaflet-tooltip.lv-lbl::before{display:none}
+.leaflet-tooltip.lv-lbl.dock{background:rgba(15,23,42,.8);border-color:#334155;color:#94a3b8;font-weight:500}
+.chip.live{border-color:#166534;color:#bbf7d0}
+.chip.live.on{background:#166534;color:#dcfce7;border-color:#4ade80}
+.lvstat{display:flex;gap:12px;flex-wrap:wrap;margin:6px 0 8px;font-size:12px}
+.lvstat b{font-size:16px;color:#4ade80;display:block}
+.lvrow td.st{width:14px;padding-right:0}
+.lvdot.dim{background:#64748b;box-shadow:none}
+.lvdot.sea{background:#fbbf24;box-shadow:0 0 4px #fbbf24}
 .lvdot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#4ade80;margin-right:5px;vertical-align:middle;box-shadow:0 0 4px #4ade80}
 .leaflet-tooltip.ref-lbl.live{display:block;color:#bbf7d0}
+.mebox{display:none;position:absolute;z-index:1001;left:10px;bottom:84px;max-width:300px;background:rgba(11,18,32,.96);border:1px solid #1d4ed8;color:#e2e8f0;padding:7px 10px;border-radius:8px;font-size:12px;line-height:1.4}
+.mebox b{color:#93c5fd}
+.mebox .mut{color:#94a3b8}
+.mebox .row2{display:flex;gap:6px;margin-top:6px}
+.me-dot{width:16px;height:16px;border-radius:50%;background:#3b82f6;border:3px solid #fff;box-shadow:0 0 0 2px #1e3a8a,0 0 10px #3b82f6}
 .panel a{color:#7dd3fc}
 .caveat{font-size:11px;color:#94a3b8;margin-top:8px;line-height:1.35}
 .toast{position:absolute;z-index:1300;left:50%;bottom:18px;transform:translateX(-50%);background:rgba(15,23,42,.97);border:1px solid #334155;color:#e2e8f0;padding:8px 14px;border-radius:8px;font-size:13px}
@@ -115,6 +134,8 @@ body.sheet-open .leaflet-bottom.leaflet-right{display:none}
  .legend .mobhide{display:none}
  .panel:not(.min)~.legend{display:none}
  .coordbox{display:none}
+ .mebox{left:8px;right:8px;max-width:none;bottom:calc(42% + 18px)}
+ .panel:not(.min)~.mebox{display:none !important}
  .leaflet-bottom.leaflet-right{bottom:58px}
  .leaflet-popup-content{margin:10px 12px}
  .copybtn{padding:7px 10px;font-size:12px}

@@ -19,7 +19,7 @@ var CONV_BOATS=3;          // "fleet piled in" = this many boats in one cell on 
 var MX_BORDER=[[32.5344,-117.1249],[32.58948,-117.46373],[32.62694,-117.82528],[31.13278,-118.60500],[30.54200,-121.86621]];
 var D,map,hexLayer,stopLayer,portLayer,borderLayer,structLayer,spotLayer,liveLayer,wpMarker,coordbox,LIVE=null,STOPWEEK=[],WEEKIDX={},MMSI_IDX={};
 /* w0..w1 = inclusive week window (indices into D.weeks); both -1 = whole period */
-var S={w0:-1,w1:-1,metric:'fish',boat:'all',kind:'all',nearshore:false,cell:null,trip:null,playing:null,pick:false};
+var S={w0:-1,w1:-1,metric:'fish',boat:'all',kind:'all',nearshore:false,cell:null,trip:null,playing:null,pick:false,view:''};
 var LAST_AGG={};
 
 function isMobile(){return window.innerWidth<=760;}
@@ -56,6 +56,7 @@ function stateToHash(){var p=[];
  if(S.nearshore)p.push('neardock=1');
  if(S.cell)p.push('cell='+S.cell);
  if(S.trip)p.push('trip='+D.boats[S.trip[0]].mmsi+'.'+S.trip[1]);
+ if(S.view==='live')p.push('view=live');
  return p.length?'#'+p.join('&'):'';}
 function readHash(){var h=location.hash.replace(/^#/,''),q={};
  h.split('&').forEach(function(kv){if(!kv)return;var i=kv.indexOf('=');q[decodeURIComponent(kv.slice(0,i))]=decodeURIComponent(kv.slice(i+1));});
@@ -68,6 +69,7 @@ function readHash(){var h=location.hash.replace(/^#/,''),q={};
  S.kind=(q.stops==='0'||q.stops==='1')?q.stops:'all';
  S.nearshore=q.neardock==='1';
  S.cell=(q.cell&&D.cells[q.cell])?q.cell:null;
+ S.view=q.view==='live'?'live':'';
  S.trip=null;
  if(q.trip){var t=q.trip.split('.');if(MMSI_IDX[t[0]]!=null&&isSingleBoat()&&+S.boat===MMSI_IDX[t[0]])S.trip=[MMSI_IDX[t[0]],+t[1]];}}
 function commit(){var h=stateToHash();if(h!==location.hash&&!(h===''&&location.hash==='')){history.pushState(null,'',location.pathname+location.search+h);}
@@ -125,7 +127,7 @@ function draw(){
   poly.on('contextmenu',function(e){dropWp(e.latlng);});
   poly.addTo(hexLayer);});
  drawStops();
- document.getElementById('legend').innerHTML=legendHtml(vmax,n);placeReadout();
+ document.getElementById('legend').innerHTML=legendHtml(vmax,n);placeReadout();renderMe();
  if(S.cell&&!A[S.cell])S.cell=null;
  renderPanel(A,n);}
 
@@ -219,33 +221,105 @@ function saveRefPrefs(){try{localStorage.setItem('sd:fleet:layers',JSON.stringif
 var LIVE_URL='/api/fleet/now',LIVE_EVERY_MS=180000;
 function ageMin(iso){return Math.max(0,Math.round((Date.now()-Date.parse(iso))/60000));}
 function ageText(m){return m<1?'just now':m<60?m+' min ago':m<1440?Math.round(m/60)+' h ago':Math.round(m/1440)+' d ago';}
-function liveIcon(b,fresh){var rot=(b.heading!=null?b.heading:(b.cog!=null?b.cog:0));var moving=(b.sog||0)>=1;
- var col=fresh?'#4ade80':'#86efac',op=fresh?1:.55;
- var html=moving?'<div class="lv" style="transform:rotate('+rot+'deg);opacity:'+op+'"><svg width="18" height="18" viewBox="0 0 18 18"><path d="M9 1 L15 16 L9 12.5 L3 16 Z" fill="'+col+'" stroke="#052e16" stroke-width="1"/></svg></div>'
-  :'<div class="lv" style="opacity:'+op+'"><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="'+col+'" stroke="#052e16" stroke-width="1.5"/></svg></div>';
- return L.divIcon({className:'',html:html,iconSize:[18,18],iconAnchor:[9,9]});}
+var CMP=["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+function compass(b){return CMP[Math.floor((b+11.25)/22.5)%16];}
+function liveStatus(b){var moving=(b.sog||0)>=1,a=ageMin(b.t);
+ var best=null;Object.keys(D.landings).forEach(function(n){var p=D.landings[n];var d=distNm([b.lat,b.lon],[p[0],p[1]]);if(!best||d<best.d)best={n:n,d:d,b:brg([p[0],p[1]],[b.lat,b.lon])};});
+ var state=moving?'underway':(best&&best.d<=1.4?'dock':'stopped');   // 1.4 nm ≈ the model's 2.5 km harbor ring
+ var where=best?(state==='dock'?'at '+short(best.n):best.d.toFixed(1)+' nm '+compass(best.b)+' of '+short(best.n)):'';
+ var hdg=b.heading!=null?b.heading:b.cog;
+ return {state:state,moving:moving,where:where,age:a,fresh:a<=45,hdg:hdg,txt:state==='underway'?(b.sog||0).toFixed(1)+' kt '+(hdg!=null?compass(hdg)+' ('+Math.round(hdg)+'°)':''):state==='dock'?'at the dock':'stopped at sea'};}
+function liveIcon(b,st){var rot=st.hdg!=null?st.hdg:0,col=st.fresh?'#4ade80':'#86efac',op=st.fresh?1:.6;
+ var html=st.moving
+  ?'<div class="lvwrap"><div class="lv big'+(st.fresh?' pulse':'')+'" style="opacity:'+op+'"><svg width="28" height="28" viewBox="0 0 28 28" style="transform:rotate('+rot+'deg)"><path d="M14 2 L23 25 L14 19.5 L5 25 Z" fill="'+col+'" stroke="#052e16" stroke-width="1.5"/></svg></div></div>'
+  :'<div class="lvwrap"><div class="lv" style="opacity:'+(st.state==='dock'?.5:op)+'"><svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="'+(st.state==='dock'?'#64748b':'#fbbf24')+'" stroke="#052e16" stroke-width="1.5"/></svg></div></div>';
+ return L.divIcon({className:'',html:html,iconSize:[28,28],iconAnchor:[14,14]});}
+function destPoint(lat,lon,brgDeg,nm){var R=3440.065,d=nm/R,b=toR(brgDeg),p1=toR(lat),l1=toR(lon);
+ var p2=Math.asin(Math.sin(p1)*Math.cos(d)+Math.cos(p1)*Math.sin(d)*Math.cos(b));
+ var l2=l1+Math.atan2(Math.sin(b)*Math.sin(d)*Math.cos(p1),Math.cos(d)-Math.sin(p1)*Math.sin(p2));
+ return [toD(p2),toD(l2)];}
 function drawLive(){if(!liveLayer)return;liveLayer.clearLayers();if(!LIVE||!LIVE.boats)return;
+ var z=map.getZoom();
  LIVE.boats.forEach(function(b){var bi=MMSI_IDX[String(b.mmsi)];if(bi==null)return;   // roster boats only
-  var boat=D.boats[bi],a=ageMin(b.t),fresh=a<=45,moving=(b.sog||0)>=1;
-  var m=L.marker([b.lat,b.lon],{icon:liveIcon(b,fresh),zIndexOffset:900,interactive:true});
-  var txt='<div class="ref"><b>'+esc(boat.name)+'</b> <span class="mut">· '+esc(short(boat.landing))+'</span><br/>'
-   +(moving?'under way '+(b.sog||0).toFixed(1)+' kt, heading '+Math.round(b.heading!=null?b.heading:b.cog)+'°':'stopped')+'<br/><span class="mut">'+ageText(a)+' · '+b.t.replace('T',' ').slice(0,16)+' UTC</span>'
+  var boat=D.boats[bi],st=liveStatus(b);
+  if(st.moving&&st.hdg!=null){var end=destPoint(b.lat,b.lon,st.hdg,(b.sog||0)*(20/60));   // where it will be in 20 min
+   L.polyline([[b.lat,b.lon],end],{color:'#4ade80',weight:2,opacity:st.fresh?.8:.4,dashArray:'4 4',interactive:false}).addTo(liveLayer);}
+  var m=L.marker([b.lat,b.lon],{icon:liveIcon(b,st),zIndexOffset:st.moving?950:900,interactive:true});
+  var txt='<div class="ref"><b>'+esc(boat.name)+'</b> <span class="mut">· '+esc(short(boat.landing))+'</span><br/>'+esc(st.txt)+(st.where?' · '+esc(st.where):'')
+   +'<br/><span class="mut">'+ageText(st.age)+' · '+b.t.replace('T',' ').slice(0,16)+' UTC</span>'
    +'<br/><button class="chip" data-live-boat="'+bi+'">This boat\'s trips</button></div>';
-  m.bindPopup(txt,{closeButton:false,maxWidth:240});
-  m.bindTooltip(esc(boat.name)+' · '+ageText(a),{className:'ref-lbl live',direction:'right',offset:[8,0],permanent:false,interactive:false});
+  m.bindPopup(txt,{closeButton:false,maxWidth:260});
+  var showLbl=st.moving||z>=9||!isMobile()&&z>=8;
+  m.bindTooltip(esc(boat.name)+(st.moving?' · '+(b.sog||0).toFixed(0)+' kt':''),{className:'lv-lbl'+(st.state==='dock'?' dock':''),direction:'right',offset:[12,0],permanent:showLbl,interactive:false});
   m.addTo(liveLayer);});}
 function fetchLive(){fetch(LIVE_URL,{cache:'no-cache'}).then(function(r){return r.ok?r.json():null;}).then(function(j){
-  if(!j)return;LIVE=j;drawLive();var lg=document.getElementById('legend');if(lg)lg.innerHTML=legendHtml(1,Object.keys(LAST_AGG).length);placeReadout();}).catch(function(){});}
-function liveSummary(){if(!LIVE||!LIVE.boats)return '';var n=0,fresh=0;LIVE.boats.forEach(function(b){if(MMSI_IDX[String(b.mmsi)]!=null){n++;if(ageMin(b.t)<=45)fresh++;}});
- if(!n)return '<div><span class="lvdot"></span>Right now: no live positions yet</div>';
- return '<div><span class="lvdot"></span><b>Right now</b>: '+n+' boats heard, '+fresh+' in the last 45 min · freshest '+(LIVE.freshest?ageText(ageMin(LIVE.freshest)):'—')+'</div>';}
+  if(!j)return;LIVE=j;drawLive();var lg=document.getElementById('legend');if(lg)lg.innerHTML=legendHtml(1,Object.keys(LAST_AGG).length);placeReadout();renderMe();if(S.view==='live')renderPanel(LAST_AGG,Object.keys(LAST_AGG).length);}).catch(function(){});}
+function liveCounts(){var c={under:0,dock:0,sea:0,n:0,fresh:0,list:[]};if(!LIVE||!LIVE.boats)return c;
+ LIVE.boats.forEach(function(b){var bi=MMSI_IDX[String(b.mmsi)];if(bi==null)return;var st=liveStatus(b);c.n++;if(st.fresh)c.fresh++;
+  if(st.state==='underway')c.under++;else if(st.state==='dock')c.dock++;else c.sea++;c.list.push({b:b,bi:bi,st:st});});
+ c.list.sort(function(x,y){var o={underway:0,stopped:1,dock:2};return (o[x.st.state]-o[y.st.state])||(x.st.age-y.st.age);});
+ return c;}
+function liveSummary(){var c=liveCounts();
+ if(!c.n)return '<div><span class="lvdot"></span>Live fleet: no positions yet</div>';
+ return '<div><span class="lvdot"></span><b>Live fleet</b>: '+c.under+' under way · '+c.sea+' stopped at sea · '+c.dock+' at the dock · freshest '+(LIVE.freshest?ageText(ageMin(LIVE.freshest)):'—')+'</div>';}
+function livePanel(){var c=liveCounts();
+ var html='<div class="lvstat"><span><b>'+c.under+'</b>under way</span><span><b>'+c.sea+'</b>stopped at sea</span><span><b>'+c.dock+'</b>at the dock</span><span><b>'+(LIVE&&LIVE.freshest?ageText(ageMin(LIVE.freshest)):'—')+'</b>freshest fix</span></div>';
+ if(!c.n)html+='<div class="empty">No live positions yet. The logger commits every 10 minutes; the first file appears shortly after a logging chunk starts.</div>';
+ html+='<table class="lvtab"><tr><th></th><th>Boat</th><th>Status</th><th>Where</th><th class="n">Age</th></tr>';
+ c.list.forEach(function(x){var st=x.st,boat=D.boats[x.bi];
+  html+='<tr class="row lvrow" data-act="flyto" data-b="'+x.bi+'"><td class="st"><span class="lvdot'+(st.state==='dock'?' dim':st.state==='stopped'?' sea':'')+'"></span></td><td>'+esc(boat.name)+'<br/><span class="mut">'+esc(short(boat.landing))+'</span></td><td>'+esc(st.txt)+'</td><td>'+esc(st.where)+'</td><td class="n">'+ageText(st.age).replace(' ago','')+'</td></tr>';});
+ html+='</table><div class="caveat">Positions come from the boats\' own AIS via the live feed, logged on the fleet\'s roster and refreshed here every 3 minutes (the feed itself is committed every 10). A boat silent for more than 36 h drops off. The dashed line ahead of a moving boat is where it will be in 20 minutes on its current course and speed.</div>';
+ return {nav:'<button class="chip" data-act="fleet">‹ Fleet</button>',title:'Live fleet · '+c.under+' under way',body:html};}
+
+/* ---------- "Me": the user's own live position ---------- */
+var ME={watch:null,marker:null,ring:null,ll:null,acc:null,follow:true,t:0};
+var toR=function(x){return x*Math.PI/180;},toD=function(x){return x*180/Math.PI;};
+function distNm(a,b){var R=3440.065,dp=toR(b[0]-a[0]),dl=toR(b[1]-a[1]);
+ var h=Math.sin(dp/2)*Math.sin(dp/2)+Math.cos(toR(a[0]))*Math.cos(toR(b[0]))*Math.sin(dl/2)*Math.sin(dl/2);
+ return 2*R*Math.asin(Math.min(1,Math.sqrt(h)));}
+function brg(a,b){var y=Math.sin(toR(b[1]-a[1]))*Math.cos(toR(b[0]));
+ var x=Math.cos(toR(a[0]))*Math.sin(toR(b[0]))-Math.sin(toR(a[0]))*Math.cos(toR(b[0]))*Math.cos(toR(b[1]-a[1]));
+ return (toD(Math.atan2(y,x))+360)%360;}
+function nearestCell(from){var best=null;Object.keys(LAST_AGG).forEach(function(h){var c=D.cells[h];if(!c)return;var v=metricOf(LAST_AGG[h],h);if(v<=0)return;
+ var d=distNm(from,c.c);if(!best||d<best.d)best={h:h,d:d,b:brg(from,c.c),v:v};});return best;}
+function hottestWithin(from,nm){var best=null;Object.keys(LAST_AGG).forEach(function(h){var c=D.cells[h];if(!c)return;var v=metricOf(LAST_AGG[h],h);if(v<=0)return;
+ var d=distNm(from,c.c);if(d<=nm&&(!best||v>best.v))best={h:h,d:d,b:brg(from,c.c),v:v};});return best;}
+function nearestBoat(from){if(!LIVE||!LIVE.boats)return null;var best=null;LIVE.boats.forEach(function(b){var bi=MMSI_IDX[String(b.mmsi)];if(bi==null)return;
+ var d=distNm(from,[b.lat,b.lon]);if(!best||d<best.d)best={name:D.boats[bi].name,d:d,b:brg(from,[b.lat,b.lon]),age:ageMin(b.t),sog:b.sog};});return best;}
+function meHtml(){if(!ME.ll)return '<b>Finding your position…</b><div class="mut">allow location access when the browser asks</div>';
+ var f=_fmt({lat:ME.ll[0],lng:ME.ll[1]}),nc=nearestCell(ME.ll),hot=hottestWithin(ME.ll,10),nb=nearestBoat(ME.ll);
+ var html='<b>You</b> · '+f.dd+' <span class="mut">±'+Math.round(ME.acc||0)+' m · '+ageText(Math.round((Date.now()-ME.t)/60000))+'</span><br/><span class="mut">'+f.dm+'</span>';
+ if(nc)html+='<br/>Nearest fishing cell: <b>'+nc.d.toFixed(1)+' nm</b> at '+Math.round(nc.b)+'°';
+ if(hot&&(!nc||hot.h!==nc.h))html+='<br/>Hottest within 10 nm: <b>'+hot.d.toFixed(1)+' nm</b> at '+Math.round(hot.b)+'° ('+(S.metric==='fish'?hrs(hot.v):hot.v)+')';
+ if(nb)html+='<br/>Nearest boat: <b>'+esc(nb.name)+'</b> '+nb.d.toFixed(1)+' nm at '+Math.round(nb.b)+'°'+((nb.sog||0)>=1?', under way':', stopped')+' <span class="mut">'+ageText(nb.age)+'</span>';
+ html+='<div class="row2"><button class="chip" id="mefollow">'+(ME.follow?'Following':'Follow me')+'</button><button class="chip" id="mecenter">Centre</button><button class="chip" id="meoff">Off</button></div>';
+ return html;}
+function renderMe(){var box=document.getElementById('mebox');if(!box)return;box.style.display=ME.watch!=null?'block':'none';if(ME.watch==null)return;box.innerHTML=meHtml();
+ var fb=document.getElementById('mefollow');if(fb)fb.onclick=function(){ME.follow=!ME.follow;renderMe();if(ME.follow&&ME.ll)map.panTo(ME.ll);};
+ var cb=document.getElementById('mecenter');if(cb)cb.onclick=function(){if(ME.ll)map.setView(ME.ll,Math.max(map.getZoom(),10));};
+ var ob=document.getElementById('meoff');if(ob)ob.onclick=toggleMe;
+ var lg=document.getElementById('legend');box.style.bottom=(lg.offsetHeight+18+(coordbox&&getComputedStyle(coordbox).display!=='none'?coordbox.offsetHeight+8:0))+'px';}
+function onMeFix(pos){ME.ll=[pos.coords.latitude,pos.coords.longitude];ME.acc=pos.coords.accuracy;ME.t=pos.timestamp||Date.now();
+ if(!ME.marker){ME.marker=L.marker(ME.ll,{icon:L.divIcon({className:'',html:'<div class="me-dot"></div>',iconSize:[16,16],iconAnchor:[8,8]}),zIndexOffset:1200,interactive:false}).addTo(map);
+  ME.ring=L.circle(ME.ll,{radius:ME.acc||0,color:'#3b82f6',weight:1,fillColor:'#3b82f6',fillOpacity:.12,interactive:false}).addTo(map);
+  map.setView(ME.ll,Math.max(map.getZoom(),10),{animate:false});}
+ else{ME.marker.setLatLng(ME.ll);ME.ring.setLatLng(ME.ll);ME.ring.setRadius(ME.acc||0);if(ME.follow)map.panTo(ME.ll,{animate:true});}
+ renderMe();}
+function onMeError(err){var box=document.getElementById('mebox');if(box){box.style.display='block';box.innerHTML='<b>Position unavailable</b><div class="mut">'+esc(err&&err.message?err.message:'location access was refused')+'</div><div class="row2"><button class="chip" id="meoff">Off</button></div>';var ob=document.getElementById('meoff');if(ob)ob.onclick=toggleMe;}}
+function toggleMe(){var btn=document.getElementById('me');
+ if(ME.watch!=null){navigator.geolocation.clearWatch(ME.watch);ME.watch=null;if(ME.marker){map.removeLayer(ME.marker);map.removeLayer(ME.ring);ME.marker=ME.ring=null;}ME.ll=null;btn.classList.remove('on');renderMe();return;}
+ if(!navigator.geolocation){toast('This browser has no location service');return;}
+ ME.follow=true;ME.watch=navigator.geolocation.watchPosition(onMeFix,onMeError,{enableHighAccuracy:true,maximumAge:5000,timeout:20000});btn.classList.add('on');renderMe();
+ if(isMobile())openSheet(false);}
 
 /* ---------- panel / bottom sheet ---------- */
 function openSheet(open){var p=document.getElementById('panel');p.classList.toggle('min',!open);document.body.classList.toggle('sheet-open',open&&isMobile());var c=p.querySelector('.chev');if(c)c.innerHTML=open?'&#9660;':'&#9650;';}
 function renderPanel(A,n){var p=document.getElementById('panel');
  if(!p._wired){p._wired=true;p.addEventListener('click',onPanelClick);}
  var r;
- if(S.cell&&A[S.cell])r=cellPanel(S.cell,A[S.cell]);
+ document.getElementById('livebtn').classList.toggle('on',S.view==='live');
+ if(S.view==='live')r=livePanel();
+ else if(S.cell&&A[S.cell])r=cellPanel(S.cell,A[S.cell]);
  else if(isSingleBoat())r=boatPanel(boatIdx(),n);
  else r=fleetPanel(n);
  /* One shape for every view: a head (back button + title, plus a chevron on
@@ -256,9 +330,13 @@ function renderPanel(A,n){var p=document.getElementById('panel');
 function onPanelClick(e){var p=document.getElementById('panel');
  var el=e.target.closest('[data-act]');
  if(el){var act=el.getAttribute('data-act');
-  if(act==='fleet'){S.boat='all';S.cell=null;S.trip=null;}
-  else if(act==='boat'){S.boat=el.getAttribute('data-b');S.cell=null;S.trip=null;}
+  if(act==='fleet'){S.boat='all';S.cell=null;S.trip=null;S.view='';}
+  else if(act==='flyto'){var fb=D.boats[+el.getAttribute('data-b')],hit=null;(LIVE&&LIVE.boats||[]).forEach(function(b){if(b.mmsi===fb.mmsi)hit=b;});
+   if(hit){if(!map.hasLayer(liveLayer))liveLayer.addTo(map);map.setView([hit.lat,hit.lon],Math.max(map.getZoom(),11),{animate:false});liveLayer.eachLayer(function(l){if(l.getLatLng&&l.getPopup&&l.getLatLng().lat===hit.lat&&l.getLatLng().lng===hit.lon)l.openPopup();});if(isMobile())openSheet(false);}
+   return;}
+  else if(act==='boat'){S.boat=el.getAttribute('data-b');S.cell=null;S.trip=null;S.view='';}
   else if(act==='uncell'){S.cell=null;}
+  else if(act==='live'){S.view='live';if(!map.hasLayer(liveLayer))liveLayer.addTo(map);}
   else if(act==='trip'){var tid=+el.getAttribute('data-t'),bi=boatIdx();S.trip=(S.trip&&S.trip[1]===tid)?null:[bi,tid];S._fitTrip=!!S.trip;}
   else if(act==='alltrips'){S.trip=null;}
   else if(act==='weeks'){S.w0=S.w1=-1;}
@@ -269,11 +347,11 @@ function onPanelClick(e){var p=document.getElementById('panel');
 function howTo(){var seen=isMobile();try{seen=seen||localStorage.getItem('sd:fleet:seen')==='1';localStorage.setItem('sd:fleet:seen','1');}catch{seen=true;}
  return '<details class="how"'+(seen?'':' open')+'><summary>How to read this map</summary><ul>'
   +'<li>Each hexagon is about 1.4 km across. The brighter it is, the more time the fleet spent <b>stopped and fishing</b> there, from each boat\'s public AIS track.</li>'
-  +'<li><b>Green arrows and dots</b> are the fleet right now: where each boat was last heard, within about ten minutes. Tap one for speed, heading and age.</li>'
+  +'<li><b>Green arrows</b> are boats under way right now, pointed on their heading with a dashed line to where they will be in 20 minutes; grey dots are at the dock, amber dots stopped at sea. <b>● Live fleet</b> lists them all. Tap one for speed, heading and age.</li>'
   +'<li>Pick a boat in the table below (or the Boat menu) to see only its stops and its trips. Tap a trip to isolate it on the map.</li>'
   +'<li>Choose a window of weeks with the two week menus; <b>‹ ›</b> slide it, <b>Play</b> sweeps it through the season, <b>All weeks</b> brings back the whole period.</li>'
   +'<li>Tap any hexagon for who fished it and when. Zoom in to see individual stops. Purple and teal markers are named structure (banks, seamounts, reefs); the layers button at bottom right toggles them and the dive spots.</li>'
-  +'<li><b>⌖ GPS</b> (or a right-click / long-press anywhere) drops a waypoint you can copy coordinates from.</li>'
+  +'<li><b>⌖ GPS</b> (or a right-click / long-press anywhere) drops a waypoint you can copy coordinates from. <b>● Me</b> shows your own live position with distance and bearing to the nearest fishing cell and boat.</li>'
   +'<li>The browser Back button undoes a selection.</li></ul></details>';}
 
 function fleetPanel(n){var m=D.meta,s=D.summary;
@@ -282,6 +360,7 @@ function fleetPanel(n){var m=D.meta,s=D.summary;
  var scope=S.boat==='all'?'The SoCal sportfishing fleet':S.boat.slice(2)+' boats';
  var nav=S.boat!=='all'?'<button class="chip" data-act="fleet">‹ Fleet</button>':'';
  var html='<div class="mut">'+m.n_boats+' boats · '+m.n_trips+' trips · '+m.n_stops+' fishing stops · '+fmtDate(m.start)+' – '+fmtDate(m.end)+' '+m.end.slice(0,4)+'</div>'
+  +(S.boat==='all'?'<div class="ans" style="border-left-color:#4ade80"><div class="q">Right now</div><div class="a">'+liveSummary().replace(/<\/?div>/g,'')+' <button class="chip live" data-act="live">Open the live fleet</button></div></div>':'')
   +howTo();
  if(!n)html+='<div class="empty">No stops match this selection. Try <button class="chip" data-act="weeks">all weeks</button> or another boat.</div>';
  if(S.boat==='all')html+='<h4>Three questions, whole fleet</h4>'
@@ -383,6 +462,10 @@ function boot(d){D=d;
  var closeFilters=function(){bar.classList.remove('open');fb.setAttribute('aria-expanded','false');fb.innerHTML='Filters &#9662;';};
  fb.onclick=function(){var o=bar.classList.toggle('open');fb.setAttribute('aria-expanded',o?'true':'false');fb.innerHTML=o?'Filters &#9652;':'Filters &#9662;';if(o&&isMobile())openSheet(false);};
  document.getElementById('gps').onclick=function(){togglePick();if(isMobile())closeFilters();};
+ document.getElementById('me').onclick=function(){toggleMe();if(isMobile())closeFilters();};
+ document.getElementById('livebtn').onclick=function(){S.view=S.view==='live'?'':'live';if(S.view==='live'&&!map.hasLayer(liveLayer))liveLayer.addTo(map);if(isMobile())openSheet(S.view==='live');commit();};
+ map.on('zoomend',drawLive);
+ map.on('dragstart',function(){if(ME.watch!=null&&ME.follow){ME.follow=false;renderMe();}});
  /* week window: two selects (first / last week) */
  var w0=document.getElementById('w0'),w1=document.getElementById('w1');
  [w0,w1].forEach(function(sel){var o=document.createElement('option');o.value='all';o.textContent='All';sel.appendChild(o);
