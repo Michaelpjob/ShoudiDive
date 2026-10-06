@@ -17,7 +17,7 @@ var CONV_BOATS=3;          // "fleet piled in" = this many boats in one cell on 
    treaty), then OP-1..OP-4 of the 1978 Treaty on Maritime Boundaries (UN
    DOALOS text). Degrees from the treaty's D-M-S. */
 var MX_BORDER=[[32.5344,-117.1249],[32.58948,-117.46373],[32.62694,-117.82528],[31.13278,-118.60500],[30.54200,-121.86621]];
-var D,map,hexLayer,stopLayer,portLayer,borderLayer,structLayer,spotLayer,liveLayer,wpMarker,coordbox,LIVE=null,STOPWEEK=[],WEEKIDX={},MMSI_IDX={};
+var D,map,hexLayer,stopLayer,portLayer,borderLayer,structLayer,spotLayer,liveLayer,trackLayer,wpMarker,coordbox,LIVE=null,TRACKS=null,STOPWEEK=[],WEEKIDX={},MMSI_IDX={};
 /* w0..w1 = inclusive week window (indices into D.weeks); both -1 = whole period */
 var S={w0:-1,w1:-1,metric:'fish',boat:'all',kind:'all',nearshore:false,cell:null,trip:null,playing:null,pick:false,view:''};
 var LAST_AGG={};
@@ -265,11 +265,36 @@ function liveSummary(){var c=liveCounts();
 function livePanel(){var c=liveCounts();
  var html='<div class="lvstat"><span><b>'+c.under+'</b>under way</span><span><b>'+c.sea+'</b>stopped at sea</span><span><b>'+c.dock+'</b>at the dock</span><span><b>'+(LIVE&&LIVE.freshest?ageText(ageMin(LIVE.freshest)):'—')+'</b>freshest fix</span></div>';
  if(!c.n)html+='<div class="empty">No live positions yet. The logger commits every 10 minutes; the first file appears shortly after a logging chunk starts.</div>';
- html+='<table class="lvtab"><tr><th></th><th>Boat</th><th>Status</th><th>Where</th><th class="n">Age</th></tr>';
- c.list.forEach(function(x){var st=x.st,boat=D.boats[x.bi];
-  html+='<tr class="row lvrow" data-act="flyto" data-b="'+x.bi+'"><td class="st"><span class="lvdot'+(st.state==='dock'?' dim':st.state==='stopped'?' sea':'')+'"></span></td><td>'+esc(boat.name)+'<br/><span class="mut">'+esc(short(boat.landing))+'</span></td><td>'+esc(st.txt)+'</td><td>'+esc(st.where)+'</td><td class="n">'+ageText(st.age).replace(' ago','')+'</td></tr>';});
- html+='</table><div class="caveat">Positions come from the boats\' own AIS via the live feed, logged on the fleet\'s roster and refreshed here every 3 minutes (the feed itself is committed every 10). A boat silent for more than 36 h drops off. The dashed line ahead of a moving boat is where it will be in 20 minutes on its current course and speed.</div>';
+ html+='<table class="lvtab"><tr><th></th><th>Boat</th><th>Status</th><th>Where</th><th>Trip</th><th class="n">Age</th></tr>';
+ c.list.forEach(function(x){var st=x.st,boat=D.boats[x.bi],tp=tripDep(boat.mmsi);
+  var trip=tp?'left '+fmtT(tp.dep)+'<br/><span class="mut">'+tp.dist.toFixed(0)+' nm run</span>':'<span class="mut">—</span>';
+  html+='<tr class="row lvrow" data-act="flyto" data-b="'+x.bi+'"><td class="st"><span class="lvdot'+(st.state==='dock'?' dim':st.state==='stopped'?' sea':'')+'"></span></td><td>'+esc(boat.name)+'<br/><span class="mut">'+esc(short(boat.landing))+'</span></td><td>'+esc(st.txt)+'</td><td>'+esc(st.where)+'</td><td>'+trip+'</td><td class="n">'+ageText(st.age).replace(' ago','')+'</td></tr>';});
+ html+='</table><div class="caveat"><b>Trip tracing.</b> The solid green line behind each boat is its path since it last left the dock (the model\'s 2.5 km harbor ring), with a tick every hour; the faint dotted trail is the rest of the last 24 hours. Hover a line or tick for the time. Positions come from the boats\' own AIS via the live feed, logged on the fleet\'s roster and refreshed here every 3 minutes (the feed itself is committed every 10). A boat silent for more than 36 h drops off. The dashed line ahead of a moving boat is where it will be in 20 minutes on its current course and speed.</div>';
  return {nav:'<button class="chip" data-act="fleet">‹ Fleet</button>',title:'Live fleet · '+c.under+' under way',body:html};}
+
+/* ---------- trip tracing: each boat's path since it last left the dock ---------- */
+var TRACKS_URL='/api/fleet/tracks',DOCK_NM=1.35;   // 2.5 km harbor ring, as in the model
+function atDock(lat,lon,sog){if((sog||0)>=1)return false;var ok=false;Object.keys(D.landings).some(function(n){var p=D.landings[n];if(distNm([lat,lon],[p[0],p[1]])<=DOCK_NM){ok=true;return true;}return false;});return ok;}
+function tripStart(pts){var i=pts.length-1,lastDock=-1;for(;i>=0;i--){if(atDock(pts[i][1],pts[i][2],pts[i][3])){lastDock=i;break;}}
+ return lastDock;}   // index of the last at-dock point; -1 = never at the dock in the window
+function fmtT(sec){var d=new Date(sec*1000);return d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});}
+function drawTracks(){if(!trackLayer)return;trackLayer.clearLayers();if(S.view!=='live'||!TRACKS||!TRACKS.boats)return;
+ TRACKS.boats.forEach(function(b){var bi=MMSI_IDX[String(b.mmsi)];if(bi==null||b.pts.length<2)return;
+  var boat=D.boats[bi],pts=b.pts,k=tripStart(pts);
+  var pre=pts.slice(0,Math.max(0,k+1)).map(function(p){return [p[1],p[2]];});
+  var trip=pts.slice(Math.max(0,k)).map(function(p){return [p[1],p[2]];});
+  var onTrip=k<pts.length-1&&trip.length>1;
+  if(pre.length>1)L.polyline(pre,{color:'#86efac',weight:1.5,opacity:.35,dashArray:'2 6',interactive:false}).addTo(trackLayer);
+  if(onTrip){var dep=pts[Math.max(0,k)][0];
+   L.polyline(trip,{color:'#4ade80',weight:2.5,opacity:.85,interactive:true}).bindTooltip(esc(boat.name)+' · left the dock '+fmtT(dep),{className:'trk-lbl',sticky:true}).addTo(trackLayer);
+   // hourly ticks along the trip so the path reads as a timeline
+   var next=dep+3600;for(var i=Math.max(0,k);i<pts.length;i++){if(pts[i][0]>=next){next+=3600;
+    L.marker([pts[i][1],pts[i][2]],{icon:L.divIcon({className:'',html:'<div class="trk-tick"></div>',iconSize:[7,7],iconAnchor:[3.5,3.5]}),interactive:true,zIndexOffset:800})
+     .bindTooltip(esc(boat.name)+' · '+fmtT(pts[i][0])+((pts[i][3]||0)>=1?' · '+pts[i][3].toFixed(1)+' kt':' · stopped'),{className:'trk-lbl',direction:'top'}).addTo(trackLayer);}}
+   b._dep=dep;}else b._dep=null;});}
+function fetchTracks(){fetch(TRACKS_URL,{cache:'no-cache'}).then(function(r){return r.ok?r.json():null;}).then(function(j){if(!j)return;TRACKS=j;drawTracks();if(S.view==='live')renderPanel(LAST_AGG,Object.keys(LAST_AGG).length);}).catch(function(){});}
+function tripDep(mmsi){if(!TRACKS||!TRACKS.boats)return null;var b=null;TRACKS.boats.forEach(function(x){if(x.mmsi===mmsi)b=x;});if(!b||b.pts.length<2)return null;
+ var k=tripStart(b.pts);if(k>=b.pts.length-1)return null;return {dep:b.pts[Math.max(0,k)][0],pts:b.pts.length-Math.max(0,k),dist:b.pts.slice(Math.max(0,k)).reduce(function(a,p,i,arr){return i?a+distNm([arr[i-1][1],arr[i-1][2]],[p[1],p[2]]):0;},0)};}
 
 /* ---------- "Me": the user's own live position ---------- */
 var ME={watch:null,marker:null,ring:null,ll:null,acc:null,follow:true,t:0};
@@ -318,6 +343,8 @@ function renderPanel(A,n){var p=document.getElementById('panel');
  if(!p._wired){p._wired=true;p.addEventListener('click',onPanelClick);}
  var r;
  document.getElementById('livebtn').classList.toggle('on',S.view==='live');
+ if(S.view==='live'&&!TRACKS)fetchTracks();
+ drawTracks();
  if(S.view==='live')r=livePanel();
  else if(S.cell&&A[S.cell])r=cellPanel(S.cell,A[S.cell]);
  else if(isSingleBoat())r=boatPanel(boatIdx(),n);
@@ -347,7 +374,7 @@ function onPanelClick(e){var p=document.getElementById('panel');
 function howTo(){var seen=isMobile();try{seen=seen||localStorage.getItem('sd:fleet:seen')==='1';localStorage.setItem('sd:fleet:seen','1');}catch{seen=true;}
  return '<details class="how"'+(seen?'':' open')+'><summary>How to read this map</summary><ul>'
   +'<li>Each hexagon is about 1.4 km across. The brighter it is, the more time the fleet spent <b>stopped and fishing</b> there, from each boat\'s public AIS track.</li>'
-  +'<li><b>Green arrows</b> are boats under way right now, pointed on their heading with a dashed line to where they will be in 20 minutes; grey dots are at the dock, amber dots stopped at sea. <b>● Live fleet</b> lists them all. Tap one for speed, heading and age.</li>'
+  +'<li><b>Green arrows</b> are boats under way right now, pointed on their heading with a dashed line to where they will be in 20 minutes; grey dots are at the dock, amber dots stopped at sea. <b>● Live fleet</b> lists them all and traces each boat\'s path since it left the dock. Tap one for speed, heading and age.</li>'
   +'<li>Pick a boat in the table below (or the Boat menu) to see only its stops and its trips. Tap a trip to isolate it on the map.</li>'
   +'<li>Choose a window of weeks with the two week menus; <b>‹ ›</b> slide it, <b>Play</b> sweeps it through the season, <b>All weeks</b> brings back the whole period.</li>'
   +'<li>Tap any hexagon for who fished it and when. Zoom in to see individual stops. Purple and teal markers are named structure (banks, seamounts, reefs); the layers button at bottom right toggles them and the dive spots.</li>'
@@ -438,7 +465,7 @@ function boot(d){D=d;
  L.marker(MX_BORDER[2],{interactive:false,icon:L.divIcon({className:'',html:'',iconSize:[0,0]})}).bindTooltip('US / Mexico maritime boundary',{permanent:true,direction:'right',offset:[8,0],className:'border-lbl'}).addTo(borderLayer);
  hexLayer=L.layerGroup().addTo(map);stopLayer=L.layerGroup().addTo(map);
  var prefs=refPrefs();
- structLayer=L.layerGroup();spotLayer=L.layerGroup();portLayer=L.layerGroup();liveLayer=L.layerGroup();
+ structLayer=L.layerGroup();spotLayer=L.layerGroup();portLayer=L.layerGroup();liveLayer=L.layerGroup();trackLayer=L.layerGroup().addTo(map);
  if(prefs.live!==false)liveLayer.addTo(map);
  if(prefs.structure!==false)structLayer.addTo(map);
  if(prefs.spots===true)spotLayer.addTo(map);
@@ -446,6 +473,7 @@ function boot(d){D=d;
  drawReference();syncRefZoom();
  L.control.layers(null,{'Right now: live positions':liveLayer,'Structure: banks, seamounts, reefs':structLayer,'Dive spots':spotLayer,'Landings':portLayer},{position:'bottomright',collapsed:true}).addTo(map);
  fetchLive();setInterval(fetchLive,LIVE_EVERY_MS);
+ setInterval(function(){if(S.view==='live')fetchTracks();},LIVE_EVERY_MS);
  map.on('overlayadd overlayremove',function(){document.getElementById('legend').innerHTML=legendHtml(1,Object.keys(LAST_AGG).length);placeReadout();});
  map.on('overlayadd overlayremove',saveRefPrefs);
  Object.keys(D.landings).forEach(function(n){var p=D.landings[n];
