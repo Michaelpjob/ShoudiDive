@@ -49,7 +49,7 @@ jobs:
             git worktree add "$FLEET_DATA_DIR/live-branch" FETCH_HEAD
             cp "$FLEET_DATA_DIR"/live-branch/live/*.jsonl "$FLEET_DATA_DIR/live/" 2>/dev/null || true
           fi
-          ls "$FLEET_DATA_DIR/live" | wc -l
+          echo "live day files: $(find "$FLEET_DATA_DIR/live" -name '*.jsonl' | wc -l)"
           python fleet-model/live_logger.py --roll-all
 
       - name: Dock counts for the last 14 days
