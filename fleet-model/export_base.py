@@ -19,6 +19,7 @@ import os
 import shutil
 
 import model
+import paths
 from config import DATA_DIR
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -35,6 +36,9 @@ def main():
     r["trips"].to_parquet(os.path.join(BASE, "trips.parquet"), index=False)
     r["stops"].to_parquet(os.path.join(BASE, "stops.parquet"), index=False)
     r["coverage"].to_parquet(os.path.join(BASE, "cov.parquet"), index=False)
+    names = {b["mmsi"]: b["name"] for b in r["roster"]["boats"]}
+    n = paths.write_trip_paths(r["pos"], r["trips"], os.path.join(HERE, "..", "public", "fleet", "trips"), names)
+    print(f"trip paths: {n} boat files -> public/fleet/trips/")
     counts = os.path.join(DATA_DIR, "counts.parquet")
     if os.path.exists(counts):
         shutil.copyfile(counts, os.path.join(BASE, "counts.parquet"))

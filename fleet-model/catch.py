@@ -127,8 +127,14 @@ def run(start, end, landings=None):
     if len(df):
         df["kept"] = df["kept"].map(lambda d: str(d))
         df["released"] = df["released"].map(lambda d: str(d))
+        # Merge into the existing file: a 14-day nightly scrape must never
+        # overwrite the season already collected.
+        if os.path.exists(OUT):
+            old = pd.read_parquet(OUT)
+            df = pd.concat([old, df], ignore_index=True).drop_duplicates(
+                ["landing", "date", "boat", "trip_type", "anglers"], keep="last").sort_values(["date", "landing", "boat"])
         df.to_parquet(OUT, index=False)
-    print(f"{len(df)} boat-day count rows -> {OUT}")
+    print(f"{len(df)} boat-day count rows (merged) -> {OUT}")
     return df
 
 
