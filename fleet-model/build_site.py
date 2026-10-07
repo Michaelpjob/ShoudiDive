@@ -16,6 +16,7 @@ import sys
 import pandas as pd
 
 import model
+import paths
 import zones
 from config import LANDINGS, H3_RES, HARBOR_KM, NEARSHORE_KM, DRIFT_MAX_KT, DRIFT_MIN_MIN, TROLL_KT, TROLL_MIN_MIN
 
@@ -226,6 +227,15 @@ def main():
         "stops": out_stops,
         "convergence": conv,
     }
+    # Per-boat trip paths: with a base, only live trips (ids >= next_archive_id)
+    # are rewritten and the archive trips already in each file are kept.
+    names = {b["mmsi"]: b["name"] for b in boats}
+    keep_below = None
+    if a.base:
+        with open(os.path.join(a.base, "meta.json"), encoding="utf-8") as f:
+            keep_below = int(json.load(f)["next_trip_id"])
+    n_paths = paths.write_trip_paths(r["pos"], r["trips"], os.path.join(target, "trips"), names, keep_below=keep_below)
+    print(f"trip paths: {n_paths} boat files")
     out = os.path.join(target, "data.json")
     with open(out, "w", encoding="utf-8") as f:
         json.dump(data, f, separators=(",", ":"), allow_nan=False)  # a NaN would break JSON.parse in the browser
