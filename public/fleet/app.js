@@ -17,9 +17,9 @@ var CONV_BOATS=3;          // "fleet piled in" = this many boats in one cell on 
    treaty), then OP-1..OP-4 of the 1978 Treaty on Maritime Boundaries (UN
    DOALOS text). Degrees from the treaty's D-M-S. */
 var MX_BORDER=[[32.5344,-117.1249],[32.58948,-117.46373],[32.62694,-117.82528],[31.13278,-118.60500],[30.54200,-121.86621]];
-var D,map,hexLayer,stopLayer,portLayer,borderLayer,structLayer,spotLayer,liveLayer,trackLayer,wpMarker,coordbox,LIVE=null,TRACKS=null,STOPWEEK=[],WEEKIDX={},MMSI_IDX={};
+var D,map,hexLayer,stopLayer,portLayer,borderLayer,structLayer,spotLayer,liveLayer,trackLayer,pathLayer,wpMarker,coordbox,LIVE=null,TRACKS=null,PATHS={},STOPWEEK=[],WEEKIDX={},MMSI_IDX={};
 /* w0..w1 = inclusive week window (indices into D.weeks); both -1 = whole period */
-var S={w0:-1,w1:-1,metric:'fish',boat:'all',kind:'all',nearshore:false,cell:null,trip:null,playing:null,pick:false,view:''};
+var S={w0:-1,w1:-1,metric:'fish',boat:'all',kind:'all',nearshore:false,cell:null,trip:null,playing:null,pick:false,view:'',shadows:true,mon:'all'};
 var LAST_AGG={};
 
 function isMobile(){return window.innerWidth<=760;}
@@ -126,7 +126,7 @@ function draw(){
   poly.on('click',function(e){if(S.pick){dropWp(e.latlng);return;}S.cell=(S.cell===h)?null:h;if(isMobile())openSheet(!!S.cell);commit();});
   poly.on('contextmenu',function(e){dropWp(e.latlng);});
   poly.addTo(hexLayer);});
- drawStops();
+ drawStops();drawPaths();
  document.getElementById('legend').innerHTML=legendHtml(vmax,n);placeReadout();renderMe();
  if(S.cell&&!A[S.cell])S.cell=null;
  renderPanel(A,n);}
@@ -272,13 +272,44 @@ function livePanel(){var c=liveCounts();
  html+='</table><div class="caveat"><b>Trip tracing.</b> The solid green line behind each boat is its path since it last left the dock (the model\'s 2.5 km harbor ring), with a tick every hour; the faint dotted trail is the rest of the last 24 hours. Hover a line or tick for the time. Positions come from the boats\' own AIS via the live feed, logged on the fleet\'s roster and refreshed here every 3 minutes (the feed itself is committed every 10). A boat silent for more than 36 h drops off. The dashed line ahead of a moving boat is where it will be in 20 minutes on its current course and speed.</div>';
  return {nav:'<button class="chip" data-act="fleet">‹ Fleet</button>',title:'Live fleet · '+c.under+' under way',body:html};}
 
+/* ---------- trip archive: every past trip's path per boat, shadows + one lit up ---------- */
+function pathsFor(bi){var m=D.boats[bi].mmsi;if(PATHS[m]!==undefined)return PATHS[m];PATHS[m]=null;
+ fetch('trips/'+m+'.json',{cache:'no-cache'}).then(function(r){return r.ok?r.json():{trips:[]};}).then(function(j){PATHS[m]=j;drawPaths();if(isSingleBoat()&&boatIdx()===bi)renderPanel(LAST_AGG,Object.keys(LAST_AGG).length);}).catch(function(){PATHS[m]={trips:[]};});
+ return null;}
+function tripInWindow(t){if(allWeeks())return true;var d=t.dep.slice(0,10),dt=new Date(d+'T12:00:00Z');var mon=new Date(dt);mon.setUTCDate(dt.getUTCDate()-((dt.getUTCDay()+6)%7));var w=WEEKIDX[mon.toISOString().slice(0,10)];return w!=null&&w>=S.w0&&w<=S.w1;}
+function tripMonth(t){return t.dep.slice(0,7);}
+function fmtTs(iso){var d=new Date(iso);return d.toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});}
+function drawPaths(){if(!pathLayer)return;pathLayer.clearLayers();if(!isSingleBoat())return;
+ var bi=boatIdx(),j=pathsFor(bi);if(!j||!j.trips)return;
+ var sel=S.trip?S.trip[1]:null;
+ j.trips.forEach(function(t){if(t.pts.length<2)return;var ll=t.pts.map(function(p){return [p[1],p[2]];});
+  var isSel=sel!=null&&t.id===sel;
+  if(!isSel){if(!S.shadows||!tripInWindow(t)||(S.mon!=='all'&&tripMonth(t)!==S.mon))return;
+   L.polyline(ll,{color:'#a78bfa',weight:2,opacity:.28,interactive:true}).bindTooltip(fmtTs(t.dep)+' · '+t.hours+' h · '+(t.max_nm||0)+' nm out',{className:'trk-lbl',sticky:true})
+    .on('click',function(){S.trip=[bi,t.id];S._fitTrip=true;commit();}).addTo(pathLayer);}});
+ if(sel!=null){var t=null;j.trips.forEach(function(x){if(x.id===sel)t=x;});if(!t||t.pts.length<2)return;
+  var ll=t.pts.map(function(p){return [p[1],p[2]];});
+  L.polyline(ll,{color:'#0b1220',weight:6,opacity:.6,interactive:false}).addTo(pathLayer);
+  L.polyline(ll,{color:'#fbbf24',weight:3,opacity:.95,interactive:true}).bindTooltip(fmtTs(t.dep)+' → '+fmtTs(t.ret),{className:'trk-lbl',sticky:true}).addTo(pathLayer);
+  var next=t.pts[0][0]+3600;t.pts.forEach(function(p){if(p[0]>=next){next+=3600;
+   L.marker([p[1],p[2]],{icon:L.divIcon({className:'',html:'<div class="trk-tick" style="border-color:#fbbf24"></div>',iconSize:[7,7],iconAnchor:[3.5,3.5]}),zIndexOffset:800})
+    .bindTooltip(fmtT(p[0])+((p[3]||0)>=1?' · '+p[3].toFixed(1)+' kt':' · stopped'),{className:'trk-lbl',direction:'top'}).addTo(pathLayer);}});
+  L.marker(ll[0],{icon:L.divIcon({className:'',html:'<div class="trip-dep"></div>',iconSize:[12,12],iconAnchor:[6,6]}),zIndexOffset:850}).bindTooltip('Left '+fmtTs(t.dep),{className:'trk-lbl',direction:'top'}).addTo(pathLayer);
+  if(!t.open)L.marker(ll[ll.length-1],{icon:L.divIcon({className:'',html:'<div class="trip-ret"></div>',iconSize:[12,12],iconAnchor:[6,6]}),zIndexOffset:850}).bindTooltip('Back '+fmtTs(t.ret),{className:'trk-lbl',direction:'top'}).addTo(pathLayer);
+  if(S._fitTrip){S._fitTrip=false;map.fitBounds(ll,{padding:[30,30],maxZoom:11,paddingTopLeft:[0,isMobile()?110:70],paddingBottomRight:[isMobile()?0:380,isMobile()?Math.round(window.innerHeight*0.5):0]});}}}
+function currentTripLine(bi){if(!trackLayer||!TRACKS||!TRACKS.boats)return;var m=D.boats[bi].mmsi,b=null;TRACKS.boats.forEach(function(x){if(x.mmsi===m)b=x;});if(!b||b.pts.length<2)return;
+ var k=tripStart(b.pts);if(k>=b.pts.length-1)return;var ll=b.pts.slice(Math.max(0,k)).map(function(p){return [p[1],p[2]];});
+ L.polyline(ll,{color:'#4ade80',weight:3,opacity:.9,interactive:true}).bindTooltip(D.boats[bi].name+(k<0?' · current trip, heard since ':' · current trip, left ')+fmtT(b.pts[Math.max(0,k)][0]),{className:'trk-lbl',sticky:true}).addTo(trackLayer);}
+
 /* ---------- trip tracing: each boat's path since it last left the dock ---------- */
 var TRACKS_URL='/api/fleet/tracks',DOCK_NM=1.35;   // 2.5 km harbor ring, as in the model
 function atDock(lat,lon,sog){if((sog||0)>=1)return false;var ok=false;Object.keys(D.landings).some(function(n){var p=D.landings[n];if(distNm([lat,lon],[p[0],p[1]])<=DOCK_NM){ok=true;return true;}return false;});return ok;}
 function tripStart(pts){var i=pts.length-1,lastDock=-1;for(;i>=0;i--){if(atDock(pts[i][1],pts[i][2],pts[i][3])){lastDock=i;break;}}
  return lastDock;}   // index of the last at-dock point; -1 = never at the dock in the window
 function fmtT(sec){var d=new Date(sec*1000);return d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});}
-function drawTracks(){if(!trackLayer)return;trackLayer.clearLayers();if(S.view!=='live'||!TRACKS||!TRACKS.boats)return;
+function drawTracks(){if(!trackLayer)return;trackLayer.clearLayers();
+ if(S.view!=='live'&&isSingleBoat()){currentTripLine(boatIdx());return;}
+ if(S.view!=='live'||!TRACKS||!TRACKS.boats)return;
  TRACKS.boats.forEach(function(b){var bi=MMSI_IDX[String(b.mmsi)];if(bi==null||b.pts.length<2)return;
   var boat=D.boats[bi],pts=b.pts,k=tripStart(pts);
   var pre=pts.slice(0,Math.max(0,k+1)).map(function(p){return [p[1],p[2]];});
@@ -343,7 +374,7 @@ function renderPanel(A,n){var p=document.getElementById('panel');
  if(!p._wired){p._wired=true;p.addEventListener('click',onPanelClick);}
  var r;
  document.getElementById('livebtn').classList.toggle('on',S.view==='live');
- if(S.view==='live'&&!TRACKS)fetchTracks();
+ if((S.view==='live'||isSingleBoat())&&!TRACKS)fetchTracks();
  drawTracks();
  if(S.view==='live')r=livePanel();
  else if(S.cell&&A[S.cell])r=cellPanel(S.cell,A[S.cell]);
@@ -352,7 +383,9 @@ function renderPanel(A,n){var p=document.getElementById('panel');
  /* One shape for every view: a head (back button + title, plus a chevron on
     phones where the head is the sheet's handle) and a body the phone sheet
     hides when collapsed. */
- p.innerHTML='<div class="sheet-head">'+(r.nav?'<div class="navrow">'+r.nav+'</div>':'')+'<h3>'+r.title+'</h3><span class="chev mob">'+(p.classList.contains('min')?'&#9650;':'&#9660;')+'</span></div><div class="sheet-body">'+r.body+'</div>';}
+ p.innerHTML='<div class="sheet-head">'+(r.nav?'<div class="navrow">'+r.nav+'</div>':'')+'<h3>'+r.title+'</h3><span class="chev mob">'+(p.classList.contains('min')?'&#9650;':'&#9660;')+'</span></div><div class="sheet-body">'+r.body+'</div>';
+ var sh=document.getElementById('shadows');if(sh)sh.onchange=function(){S.shadows=sh.checked;drawPaths();};
+ var tm=document.getElementById('tripmon');if(tm)tm.onchange=function(){S.mon=tm.value;drawPaths();renderPanel(LAST_AGG,Object.keys(LAST_AGG).length);};}
 
 function onPanelClick(e){var p=document.getElementById('panel');
  var el=e.target.closest('[data-act]');
@@ -361,7 +394,7 @@ function onPanelClick(e){var p=document.getElementById('panel');
   else if(act==='flyto'){var fb=D.boats[+el.getAttribute('data-b')],hit=null;(LIVE&&LIVE.boats||[]).forEach(function(b){if(b.mmsi===fb.mmsi)hit=b;});
    if(hit){if(!map.hasLayer(liveLayer))liveLayer.addTo(map);map.setView([hit.lat,hit.lon],Math.max(map.getZoom(),11),{animate:false});liveLayer.eachLayer(function(l){if(l.getLatLng&&l.getPopup&&l.getLatLng().lat===hit.lat&&l.getLatLng().lng===hit.lon)l.openPopup();});if(isMobile())openSheet(false);}
    return;}
-  else if(act==='boat'){S.boat=el.getAttribute('data-b');S.cell=null;S.trip=null;S.view='';}
+  else if(act==='boat'){S.boat=el.getAttribute('data-b');S.cell=null;S.trip=null;S.view='';S.mon='all';}
   else if(act==='uncell'){S.cell=null;}
   else if(act==='live'){S.view='live';if(!map.hasLayer(liveLayer))liveLayer.addTo(map);}
   else if(act==='trip'){var tid=+el.getAttribute('data-t'),bi=boatIdx();S.trip=(S.trip&&S.trip[1]===tid)?null:[bi,tid];S._fitTrip=!!S.trip;}
@@ -375,7 +408,7 @@ function howTo(){var seen=isMobile();try{seen=seen||localStorage.getItem('sd:fle
  return '<details class="how"'+(seen?'':' open')+'><summary>How to read this map</summary><ul>'
   +'<li>Each hexagon is about 1.4 km across. The brighter it is, the more time the fleet spent <b>stopped and fishing</b> there, from each boat\'s public AIS track.</li>'
   +'<li><b>Green arrows</b> are boats under way right now, pointed on their heading with a dashed line to where they will be in 20 minutes; grey dots are at the dock, amber dots stopped at sea. <b>● Live fleet</b> lists them all and traces each boat\'s path since it left the dock. Tap one for speed, heading and age.</li>'
-  +'<li>Pick a boat in the table below (or the Boat menu) to see only its stops and its trips. Tap a trip to isolate it on the map.</li>'
+  +'<li>Pick a boat in the table below (or the Boat menu) to see its stops, every past trip as a faint purple shadow, and its current trip in green. Tap a trip (or a shadow) to light that day\'s whole path up.</li>'
   +'<li>Choose a window of weeks with the two week menus; <b>‹ ›</b> slide it, <b>Play</b> sweeps it through the season, <b>All weeks</b> brings back the whole period.</li>'
   +'<li>Tap any hexagon for who fished it and when. Zoom in to see individual stops. Purple and teal markers are named structure (banks, seamounts, reefs); the layers button at bottom right toggles them and the dive spots.</li>'
   +'<li><b>⌖ GPS</b> (or a right-click / long-press anywhere) drops a waypoint you can copy coordinates from. <b>● Me</b> shows your own live position with distance and bearing to the nearest fishing cell and boat.</li>'
@@ -406,6 +439,11 @@ function boatPanel(i,n){var b=D.boats[i];
  if(S.trip){var tt=trips.filter(function(t){return t[13]===S.trip[1];})[0];
   html+='<div class="banner"><span>Showing only the trip that left <b>'+(tt?fmtDate(tt[1]):'')+'</b></span><button class="chip" data-act="alltrips">Show all trips</button></div>';}
  if(!n)html+='<div class="empty">No stops for this boat in this selection. Try <button class="chip" data-act="weeks">all weeks</button>.</div>';
+ var pj=pathsFor(i),months=[];if(pj&&pj.trips){var seen={};pj.trips.forEach(function(t){var mo=tripMonth(t);if(!seen[mo]){seen[mo]=1;months.push(mo);}});}
+ html+='<div class="tripbar"><span class="sh"></span><span class="mut">past trips</span> <span class="sel-line"></span><span class="mut">selected</span> <span style="display:inline-block;width:18px;border-top:3px solid #4ade80;vertical-align:middle;margin-right:4px"></span><span class="mut">current</span>'
+  +'<label><input type="checkbox" id="shadows"'+(S.shadows?' checked':'')+'/> show past trips</label>'
+  +'<label>Month <select id="tripmon"><option value="all">all</option>'+months.map(function(mo){var d=new Date(mo+'-15T12:00:00Z');return '<option value="'+mo+'"'+(S.mon===mo?' selected':'')+'>'+d.toLocaleDateString('en-US',{month:'short',year:'2-digit',timeZone:'UTC'})+'</option>';}).join('')+'</select></label>'
+  +(pj===null?'<span class="mut">loading paths…</span>':'')+'</div>';
  html+='<div class="stat"><span>Trips seen</span><b>'+b.trips+'</b></div>'
   +'<div class="stat"><span>Time stopped and fishing</span><b>'+hrs(b.fish_min)+'</b></div>'
   +'<div class="stat"><span>Farthest from the dock</span><b>'+(b.max_km?nm(b.max_km):'—')+'</b></div>'
@@ -414,9 +452,9 @@ function boatPanel(i,n){var b=D.boats[i];
   +'<div class="stat"><span>Home zone: top-cell share · cells for half</span><b>'+pct(b.top_share)+' · '+(b.cells_for_half||'—')+'</b></div>'
   +'<div class="stat"><span>Fishing days with '+CONV_BOATS+'+ fleet boats in the same cell</span><b>'+pct(b.convergence_share)+'</b></div>'
   +'<h4>Trips <span class="mut">· tap one to see just its stops</span></h4><table class="trips"><tr><th>Left</th><th class="n">Hours</th><th class="n">Max nm</th><th class="n">Stops</th><th class="n">Fishing</th><th class="n">Dock count</th></tr>';
- trips.forEach(function(t){var sel=S.trip&&S.trip[1]===t[13];
+ trips.forEach(function(t){var sel=S.trip&&S.trip[1]===t[13];if(S.mon!=='all'&&t[1].slice(0,7)!==S.mon)return;
   html+='<tr class="row'+(sel?' sel':'')+'" data-act="trip" data-t="'+t[13]+'"><td>'+fmtDate(t[1])+'</td><td class="n">'+t[2]+'</td><td class="n">'+Math.round(t[3]/1.852)+'</td><td class="n">'+t[5]+'</td><td class="n">'+hrs(t[6])+'</td><td class="n">'+(t[10]!=null?t[10]+' fish / '+t[9]+' anglers':'<span class="mut">—</span>')+'</td></tr>';});
- html+='</table><div class="caveat">A trip with 0 stops and a big "Max nm" went out of AIS range: the boat was seen leaving and coming back, not fishing. A dock count is the landing\'s posted total for that boat on the day it returned; multi-day trips get one count for all their stops.</div>';
+ html+='</table><div class="caveat">Tap a trip (or one of the faint purple shadows on the map) to light its whole path up with hourly ticks, the yellow dot where it left the dock and the pink square where it came back. A trip with 0 stops and a big "Max nm" went out of AIS range: the boat was seen leaving and coming back, not fishing. A dock count is the landing\'s posted total for that boat on the day it returned; multi-day trips get one count for all their stops.</div>';
  return {nav:'<button class="chip" data-act="fleet">‹ All boats</button>',title:esc(b.name)+' <span class="mut">· '+esc(short(b.landing))+'</span>',body:html};}
 
 function cellPanel(h,c){var ctr=D.cells[h].c;
@@ -465,7 +503,7 @@ function boot(d){D=d;
  L.marker(MX_BORDER[2],{interactive:false,icon:L.divIcon({className:'',html:'',iconSize:[0,0]})}).bindTooltip('US / Mexico maritime boundary',{permanent:true,direction:'right',offset:[8,0],className:'border-lbl'}).addTo(borderLayer);
  hexLayer=L.layerGroup().addTo(map);stopLayer=L.layerGroup().addTo(map);
  var prefs=refPrefs();
- structLayer=L.layerGroup();spotLayer=L.layerGroup();portLayer=L.layerGroup();liveLayer=L.layerGroup();trackLayer=L.layerGroup().addTo(map);
+ structLayer=L.layerGroup();spotLayer=L.layerGroup();portLayer=L.layerGroup();liveLayer=L.layerGroup();pathLayer=L.layerGroup().addTo(map);trackLayer=L.layerGroup().addTo(map);
  if(prefs.live!==false)liveLayer.addTo(map);
  if(prefs.structure!==false)structLayer.addTo(map);
  if(prefs.spots===true)spotLayer.addTo(map);
@@ -514,7 +552,7 @@ function boot(d){D=d;
   Object.keys(ports[p]).sort().forEach(function(l){var o2=document.createElement('option');o2.value='L:'+l;o2.textContent='  '+short(l)+' (landing)';og.appendChild(o2);
    D.boats.forEach(function(b,i){if(b.landing===l&&b.trips>0){var o3=document.createElement('option');o3.value=String(i);o3.textContent='    '+b.name;og.appendChild(o3);}});});
   sel.appendChild(og);});
- sel.onchange=function(e){S.boat=e.target.value;S.cell=null;S.trip=null;if(isMobile()){closeFilters();openSheet(isSingleBoat());}commit();};
+ sel.onchange=function(e){S.boat=e.target.value;S.cell=null;S.trip=null;S.mon='all';if(isMobile()){closeFilters();openSheet(isSingleBoat());}commit();};
  window.addEventListener('popstate',function(){stopPlay();readHash();syncControls();draw();});
  readHash();
  openSheet(!isMobile()||!!(S.cell||isSingleBoat()));
