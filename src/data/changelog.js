@@ -15,6 +15,28 @@
 
 export const CHANGELOG = [
   {
+    id: "2026-10-07-2",
+    date: "October 7, 2026",
+    title: "Offshore banks and reefs are now where they really are",
+    items: [
+      {
+        type: "fixed",
+        text:
+          "We checked every named bank, reef and numbered spot on the map " +
+          "against seafloor depth data, the U.S. Coast Pilot, and the federal " +
+          "place-names database. Many offshore pins were in the wrong place: " +
+          "Potato Bank sat in deep water between San Nicolas and Catalina " +
+          "instead of west of San Nicolas, the Footprint sat north of Anacapa " +
+          "instead of inside its own marine reserve, and the numbered San Diego " +
+          "spots (the 43, 209, 277, 302 and others) were in the wrong places " +
+          "entirely. They now sit on the right water in Fleet Tracks and the " +
+          "paddy finder too, and spots named for a chart depth show that depth " +
+          "in fathoms. A few labels we could not confirm from any source were " +
+          "removed rather than guessed.",
+      },
+    ],
+  },
+  {
     id: "2026-10-05",
     date: "October 5, 2026",
     title: "Fleet Tracks: where the sportfishing fleet actually stops",
