@@ -30,8 +30,8 @@ export const CHANGELOG = [
           "instead of inside its own marine reserve, and the numbered San Diego " +
           "spots (the 43, 209, 277, 302 and others) were in the wrong places " +
           "entirely. They now sit on the right water in Fleet Tracks and the " +
-          "paddy finder too, and spots named for a chart depth show that depth " +
-          "in fathoms. A few labels we could not confirm from any source were " +
+          "paddy finder too, and spots named for a chart depth (the 302 is a " +
+          "302-fathom sounding) now show that depth. A few labels we could not confirm from any source were " +
           "removed rather than guessed.",
       },
     ],
