@@ -3,7 +3,8 @@
 People don't run to a disc — they run to an island edge or a named bank.
 We snap the headline waypoint to the nearest of these and phrase guidance as
 a line to work. (name, lng, lat, type). Type "island" -> "the SW edge of X";
-"bank" -> "work X". Bank coordinates are APPROXIMATE — refine before prod.
+"bank" -> "work X". Bank positions are chart-sourced and bathymetry-checked
+(see the comment on the bank list).
 """
 from __future__ import annotations
 
@@ -20,18 +21,23 @@ OFFSHORE_FEATURES = [
     ("San Miguel Island", -120.37, 34.05, "island"),
     ("Anacapa Island", -119.40, 34.00, "island"),
     ("the Coronado Islands", -117.25, 32.42, "island"),
-    # Offshore banks / spots (approximate)
-    ("Cortes Bank", -119.18, 32.44, "bank"),
-    ("Tanner Bank", -119.13, 32.69, "bank"),
-    ("the 9-Mile Bank", -117.42, 32.62, "bank"),
-    ("the 43-Fathom Spot", -117.47, 32.55, "bank"),
-    # San Pedro Channel 14-Mile Bank (~14 nm off Newport, between the coast and
-    # Catalina's east end). Was mis-placed off San Diego (-117.67, 32.77), where
-    # there is no such bank — the famous "14" is this one, by Catalina.
-    ("the 14-Mile Bank", -118.03, 33.41, "bank"),
-    ("the 182 Spot", -117.43, 32.43, "bank"),
-    ("the 302 Spot", -117.55, 32.60, "bank"),
-    ("the 277", -117.47, 32.43, "bank"),
+    # Offshore banks / spots. Positions from the BD Outdoors SoCal offshore
+    # chart (as transcribed in pelagic-lab's gazetteer) and the NOAA Coast
+    # Pilot, each checked against GMRT bathymetry: banks sit on their tops,
+    # and numbered spots sit where the depth matches their name in FATHOMS
+    # (the 277 is a 277-fathom sounding, ~507 m). The previous numbered-spot
+    # positions all sat in 1,000-1,300 m of water (2026-10-07 audit).
+    # tests/reefLocations.test.js keeps these in step with the main map.
+    ("Cortes Bank", -119.1256, 32.4461, "bank"),        # Bishop Rock, CP7
+    ("Tanner Bank", -119.1333, 32.70, "bank"),
+    ("the 9-Mile Bank", -117.4333, 32.6333, "bank"),
+    ("the 43-Fathom Spot", -117.9736, 32.6555, "bank"),
+    # San Pedro Channel 14-Mile Bank (~14 mi SSW of Newport Harbor, toward
+    # Catalina's east end). There is no 14-Mile Bank off San Diego.
+    ("the 14-Mile Bank", -117.9972, 33.40, "bank"),
+    ("the 182 Spot", -117.7139, 32.6972, "bank"),
+    ("the 302 Spot", -117.5833, 32.4472, "bank"),
+    ("the 277", -118.0889, 33.20, "bank"),
 ]
 
 
