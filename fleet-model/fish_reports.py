@@ -194,7 +194,13 @@ def report_text(html):
     return re.sub(r"\s+", " ", text)[:8000]
 
 
+SENT = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9])")
+
+
 def extract(text):
+    """Species mentioned, spots named, and the (species, spot) pairs that share
+    a sentence. Landing posts often cover several boats in one report, so a
+    species is tied to a spot only when the same sentence names both."""
     sp = {}
     for k, rx in MENTION_RE.items():
         if rx.search(text):
@@ -202,7 +208,18 @@ def extract(text):
             sp[k] = n
     low = text.lower()
     spots = [{"name": name, "ll": ll, "approx": approx} for name, rx, ll, approx in GAZ if rx.search(low)]
-    return sp, spots
+    pairs = set()
+    if sp and spots:
+        for sentence in SENT.split(text):
+            sl = sentence.lower()
+            here = [name for name, rx, ll, approx in GAZ if ll and rx.search(sl)]
+            if not here:
+                continue
+            for k, rx in MENTION_RE.items():
+                if k in sp and rx.search(sentence):
+                    for name in here:
+                        pairs.add((k, name))
+    return sp, spots, sorted(pairs)
 
 
 def _write(rows, since, today):
@@ -240,9 +257,10 @@ def crawl(since, max_pages=900, workers=4, log=print):
         name = f"r{rid.group(1)}.html" if rid else re.sub(r"\W+", "_", c["href"])[-80:] + ".html"
         html = f.get(HOST + c["href"] if c["href"].startswith("/") else c["href"], name)
         text = report_text(html)
-        sp, spots = extract(text)
+        sp, spots, pairs = extract(text)
         return {"date": c["date"].isoformat(), "landing": c["landing"], "author": c["author"],
-                "title": c["title"], "url": HOST + c["href"], "species": sp, "spots": spots, "snippet": text[:400]}
+                "title": c["title"], "url": HOST + c["href"], "species": sp, "spots": spots,
+                "pairs": pairs, "snippet": text[:400]}
 
     rows = []
     with cf.ThreadPoolExecutor(max_workers=workers) as ex:

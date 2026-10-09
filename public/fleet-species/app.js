@@ -52,6 +52,9 @@ function draw(){aggregate();hexLayer.clearLayers();spotLayer.clearLayers();
    poly.bindTooltip(cellTip(h,c),{className:'cell-tip',sticky:true,direction:'top'});
    poly.on('click',function(){S.cell=(S.cell===h)?null:h;S.spot=null;S.trip=null;commit();});
    poly.addTo(hexLayer);});}
+ if(showAis){exitsSel().forEach(function(x){var b=x.brg,ic=L.divIcon({className:'',html:'<div class="ex" style="transform:rotate('+Math.round(b)+'deg)"></div>',iconSize:[12,12],iconAnchor:[6,6]});
+   L.marker(x.far,{icon:ic,zIndexOffset:600}).bindTooltip(esc(x.b)+' · '+fmtDate(x.d)+' · '+x.sp[S.sp]+' '+esc(CATS[S.sp].label.toLowerCase())+'<br/><span class="mut">farthest point AIS saw, '+x.nm+' nm out, heading '+compass(b)+'; no stop seen</span>',{className:'cell-tip',direction:'top'})
+    .on('click',function(){S.trip=[x.m,x.id];S.cell=null;S.spot=null;S.exitSel=x;drawTrip();renderPanel();}).addTo(spotLayer);});}
  if(showRep){var sp=AGG.spots,smax=1;Object.keys(sp).forEach(function(n){if(S.metric==='rate'?false:sp[n].pos>smax)smax=sp[n].pos;});
   Object.keys(sp).forEach(function(n){var x=sp[n];if(!x.ll)return;var v=S.metric==='rate'?x.pos/x.tot:x.pos/smax;
    var r=x.pos>0?6+14*Math.sqrt(S.metric==='rate'?v:v):3.5;
@@ -65,14 +68,20 @@ function draw(){aggregate();hexLayer.clearLayers();spotLayer.clearLayers();
 function nearTxt(h){var c=D.cells[h];if(!c)return '';return c.near?'near '+esc(c.near[0])+(c.near[1]>=1?' ('+c.near[1].toFixed(0)+' nm)':''):c.c[0].toFixed(2)+', '+c.c[1].toFixed(2);}
 function cellTip(h,c){return '<b>'+nearTxt(h)+'</b><br/>'+c.pos+' of '+c.tot+' counted trips that stopped here caught '+esc(CATS[S.sp].label.toLowerCase())
  +(c.pos?'<br/>~'+n0(c.fish)+' fish attributed (by stop time)':'')+'<br/><span class="mut">'+selLabel()+' · click for the trips</span>';}
-function spotTip(n,x){return '<b>'+esc(n)+'</b>'+(x.approx?' <span class="mut">(approx.)</span>':'')+'<br/>'+x.pos+' of '+x.tot+' reports naming it mention '+esc(CATS[S.sp].label.toLowerCase())+'<br/><span class="mut">'+selLabel()+' · click for the reports</span>';}
+function spotTip(n,x){return '<b>'+esc(n)+'</b>'+(x.approx?' <span class="mut">(approx.)</span>':'')+'<br/>'+x.pos+' of '+x.tot+' reports naming it tie '+esc(CATS[S.sp].label.toLowerCase())+' to it'+'<br/><span class="mut">'+selLabel()+' · click for the reports</span>';}
 function legendHtml(vmax,a,r){var h='<div><b style="color:#e2e8f0">'+esc(CATS[S.sp].label)+'</b> · '+selLabel()+'</div>';
  if(a){var vs=S.metric==='rate'?[.25,.5,.75,1].map(function(f){return f*vmax;}):[1,Math.round(vmax*.25),Math.round(vmax*.5),Math.round(vmax)].filter(function(v,i,arr){return v>=1&&arr.indexOf(v)===i;});
   h+='<div style="margin-top:4px">Hexagons (AIS stops): '+(S.metric==='rate'?'share of counted trips stopping there that caught it':'trips that caught it and stopped there')+'</div><div>'
   +vs.map(function(v){var t=S.metric==='rate'?v/vmax:Math.sqrt(v/vmax);return '<span class="sw" style="background:'+color(.18+.82*t)+'"></span>'+(S.metric==='rate'?pct(v):v)+'&nbsp;';}).join('')+'</div>'
   +(S.metric==='rate'?'<div>Faded = fewer than 3 counted trips</div>':'');}
- if(r)h+='<div class="rep" style="margin-top:4px"><span class="dot"></span>Report spots: bigger = more reports naming the species there; dashed = approximate position</div>';
+ if(a&&exitsSel().length)h+='<div style="margin-top:4px"><span class="exl"></span>Caught it, left AIS range here (no stop seen), pointing away from the landing</div>';
+ if(r)h+='<div class="rep" style="margin-top:4px"><span class="dot"></span>Report spots: bigger = more reports tying the species to it; dashed = approximate position</div>';
  return h;}
+
+var CMP=["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+function compass(b){return CMP[Math.floor((b+11.25)/22.5)%16];}
+function bearing(a,b){var r=Math.PI/180,y=Math.sin((b[1]-a[1])*r)*Math.cos(b[0]*r),x=Math.cos(a[0]*r)*Math.sin(b[0]*r)-Math.sin(a[0]*r)*Math.cos(b[0]*r)*Math.cos((b[1]-a[1])*r);return (Math.atan2(y,x)/r+360)%360;}
+function exitsSel(){var ll=D.meta.landing_ll||{};return (D.exits||[]).filter(function(x){return x.sp[S.sp]&&monthOn(x.d.slice(0,7));}).map(function(x){var o=ll[x.l]||[32.72,-117.23];x.brg=bearing(o,x.far);return x;});}
 
 /* ---------- panel ---------- */
 function calendarSvg(){var cal=D.calendar[S.sp],W=356,H=86,P={l:24,r:4,t:6,b:16},n=cal.length;
@@ -99,27 +108,31 @@ function wireCalendar(){var tip=document.getElementById('tip');
 function selCounts(){var pos=0,fish=0,tot=0;D.weeks.forEach(function(w,i){if(!monthOn(w))return;pos+=D.calendar[S.sp][i][0];fish+=D.calendar[S.sp][i][1];tot+=D.week_total[i];});
  var loc=0,unl=0;D.trips.forEach(function(t){if(t.sp[S.sp]&&monthOn(t.d.slice(0,7)))loc++;});
  var u=D.unlocated[S.sp]||{};Object.keys(u).forEach(function(mo){if(monthOn(mo))unl+=u[mo];});
- var rep=0;D.reports.forEach(function(r){if(r.sp[S.sp]!=null&&monthOn(r.d.slice(0,7)))rep++;});
+ var rep=0;D.reports.forEach(function(r){if(r.at&&r.at[S.sp]&&monthOn(r.d.slice(0,7)))rep++;});
  return {pos:pos,fish:fish,tot:tot,loc:loc,unl:unl,rep:rep};}
 
 function topCells(){var c=AGG.cells;return Object.keys(c).filter(function(h){return c[h].pos>0&&(S.metric!=='rate'||c[h].tot>=3);})
  .sort(function(a,b){return S.metric==='rate'?(c[b].pos/c[b].tot-c[a].pos/c[a].tot)||(c[b].pos-c[a].pos):(c[b].pos-c[a].pos)||(c[b].fish-c[a].fish);}).slice(0,8);}
 function topSpots(){var s=AGG.spots;return Object.keys(s).filter(function(n){return s[n].pos>0;}).sort(function(a,b){return s[b].pos-s[a].pos;}).slice(0,8);}
 
+function exitPanel(x){return '<div class="navrow"><button class="chip" data-back="1">‹ '+esc(CATS[S.sp].label)+'</button></div><h3>'+esc(x.b)+' · '+fmtDate(x.d)+'</h3>'
+ +'<div class="mut">'+esc(x.l)+' · '+esc(x.tt)+' · '+x.h+' h</div><div class="stats"><div class="stat"><b>'+x.sp[S.sp]+'</b><span>'+esc(CATS[S.sp].label.toLowerCase())+' on the dock count ('+x.a+' anglers)</span></div><div class="stat"><b>'+x.nm+' nm</b><span>farthest AIS saw, heading '+compass(x.brg)+'</span></div></div>'
+ +'<div class="caveat">The green line is everything AIS heard of this trip ('+Math.round(x.cov*100)+'% of its hours). The fish came from beyond what AIS can see.</div>';}
 function renderPanel(){var p=document.getElementById('panel');var html;
- if(S.cell&&AGG.cells[S.cell])html=cellPanel(S.cell);else if(S.spot&&AGG.spots[S.spot])html=spotPanel(S.spot);else html=overview();
+ if(S.exitSel&&S.trip&&S.trip[1]===S.exitSel.id)html=exitPanel(S.exitSel);
+ else if(S.cell&&AGG.cells[S.cell])html=cellPanel(S.cell);else if(S.spot&&AGG.spots[S.spot])html=spotPanel(S.spot);else html=overview();
  p.innerHTML=html;wireCalendar();
- p.querySelectorAll('[data-cell]').forEach(function(el){el.onclick=function(){S.cell=el.getAttribute('data-cell');S.spot=null;S.trip=null;commit();var c=D.cells[S.cell];if(c)map.panTo(c.c);};});
- p.querySelectorAll('[data-spot]').forEach(function(el){el.onclick=function(){S.spot=el.getAttribute('data-spot');S.cell=null;S.trip=null;commit();var s=D.rspots[S.spot];if(s)map.panTo(s.ll);};});
+ p.querySelectorAll('[data-cell]').forEach(function(el){el.onclick=function(){S.cell=el.getAttribute('data-cell');S.spot=null;S.trip=null;commit();var c=D.cells[S.cell];if(c)pan(c.c);};});
+ p.querySelectorAll('[data-spot]').forEach(function(el){el.onclick=function(){S.spot=el.getAttribute('data-spot');S.cell=null;S.trip=null;commit();var s=D.rspots[S.spot];if(s)pan(s.ll);};});
  p.querySelectorAll('[data-trip]').forEach(function(el){el.onclick=function(){var k=el.getAttribute('data-trip').split('.');S.trip=[+k[0],+k[1]];drawTrip();renderPanel();};});
- p.querySelectorAll('[data-back]').forEach(function(el){el.onclick=function(){S.cell=null;S.spot=null;S.trip=null;pathLayer.clearLayers();commit();};});}
+ p.querySelectorAll('[data-back]').forEach(function(el){el.onclick=function(){S.cell=null;S.spot=null;S.trip=null;S.exitSel=null;pathLayer.clearLayers();commit();};});}
 
 function overview(){var k=CATS[S.sp],c=selCounts();
  var h='<h3>'+esc(k.label)+'</h3><div class="mut">'+esc(selLabel())+' · dock counts '+fmtDate(D.meta.counts_window[0])+' – '+fmtDate(D.meta.counts_window[1])+'</div>'
   +'<div class="stats"><div class="stat"><b>'+n0(c.pos)+'</b><span>posted trips that caught it (all boats)</span></div>'
   +'<div class="stat"><b>'+n0(c.fish)+'</b><span>fish on those counts</span></div>'
   +'<div class="stat"><b>'+n0(c.loc)+'</b><span>of them placed by AIS stops'+(c.unl?' · '+c.unl+' tracked but not seen stopping':'')+'</span></div>'
-  +'<div class="stat"><b>'+n0(c.rep)+'</b><span>landing reports mention it</span></div></div>'
+  +'<div class="stat"><b>'+n0(c.rep)+'</b><span>landing reports tie it to a named spot</span></div></div>'
   +'<h4>When: posted trips that caught it, by week</h4>'+calendarSvg()
   +'<div class="mut" style="font-size:11px">Amber = the months selected. Every boat that posts a count, on AIS or not.</div>';
  var tc=topCells(),ts=topSpots();
@@ -127,11 +140,16 @@ function overview(){var k=CATS[S.sp],c=selCounts();
  if(!tc.length)h+='<div class="empty">No AIS-placed trips for this selection.'+(c.pos?' The posted trips fall where AIS has no tracks (see below).':'')+'</div>';
  else{h+='<table><tr><th>Area</th><th class="n">Caught it</th><th class="n">Of trips</th><th class="n">Fish</th></tr>';
   tc.forEach(function(x){var a=AGG.cells[x];h+='<tr class="row" data-cell="'+x+'"><td>'+nearTxt(x)+'</td><td class="n">'+a.pos+'</td><td class="n">'+a.tot+'</td><td class="n">~'+n0(a.fish)+'</td></tr>';});h+='</table>';}
- h+='<h4>Spots the landing reports name</h4>';
+ var ex=exitsSel();
+ if(ex.length){var sec={};ex.forEach(function(x){var c=compass(x.brg);(sec[c]=sec[c]||[]).push(x.nm);});
+  h+='<h4>Seen heading out of AIS range</h4><div class="mut" style="font-size:11px;margin-bottom:4px">Trips that caught it but went past the shore receivers before AIS saw a stop: the direction from their landing to the farthest point seen (green arrows on the map).</div><table><tr><th>Heading</th><th class="n">Trips</th><th class="n">Median nm seen</th></tr>';
+  Object.keys(sec).sort(function(a,b){return sec[b].length-sec[a].length;}).slice(0,6).forEach(function(k){var v=sec[k].slice().sort(function(a,b){return a-b;});h+='<tr><td>'+k+'</td><td class="n">'+v.length+'</td><td class="n">'+v[Math.floor(v.length/2)]+'</td></tr>';});
+  h+='</table>';}
+ h+='<h4>Spots the landing reports name <span class="mut">· reports '+(D.meta.reports_window?fmtDate(D.meta.reports_window[0])+' – '+fmtDate(D.meta.reports_window[1]):'')+'</span></h4>';
  if(!ts.length)h+='<div class="empty">No report names a charted spot with this species for this selection.</div>';
  else{h+='<table><tr><th>Spot</th><th class="n">Reports</th><th class="n">Of reports there</th></tr>';
   ts.forEach(function(n){var a=AGG.spots[n];h+='<tr class="row" data-spot="'+esc(n)+'"><td>'+esc(n)+(a.approx?' <span class="mut">≈</span>':'')+'</td><td class="n">'+a.pos+'</td><td class="n">'+a.tot+'</td></tr>';});h+='</table>';}
- h+='<div class="caveat"><b>How to read this.</b> Hexagons come from AIS: a boat\'s dock count joined to its tracked trip (same port, boat, return date and a trip length that fits the posted trip type), with the catch spread over the offshore stops AIS saw. AIS here is shore receivers only and the public archive ends '+fmtDate(D.meta.ais_window[1])+', so trips past ~50 nm, in Mexican waters, or after that date are not placed by it. Purple circles come from the landings\' written reports: a report that names both the species and a charted spot. A report naming several spots counts at each. Neither layer is a fish density; they show where the fleet went on the days it caught the species. Dorado and mahi-mahi are the same fish.</div>';
+ h+='<div class="caveat"><b>How to read this.</b> Hexagons come from AIS: a boat\'s dock count joined to its tracked trip (same port, boat, return date and a trip length that fits the posted trip type), with the catch spread over the offshore stops AIS saw. AIS here is shore receivers only and the public archive ends '+fmtDate(D.meta.ais_window[1])+', so trips past ~50 nm, in Mexican waters, or after that date are not placed by it. Green arrows are trips that caught it but left AIS range before a stop was seen: the farthest point AIS saw, pointing away from the landing. Purple circles come from the landings\' written reports, counted only when one sentence names both the species and a charted spot (daily posts often cover several boats). Reports rarely name offshore spots: almost every named place is the Coronado Islands. Neither layer is a fish density; they show where the fleet went on the days it caught the species. Dorado and mahi-mahi are the same fish.</div>';
  return h;}
 
 function cellPanel(hx){var a=AGG.cells[hx],c=D.cells[hx];
@@ -145,13 +163,15 @@ function cellPanel(hx){var a=AGG.cells[hx],c=D.cells[hx];
  return h+'</table><div class="caveat">The count is the landing\'s posted total for the trip; a trip that stopped in several cells is listed in each.</div>';}
 
 function spotPanel(n){var a=AGG.spots[n];
- var reps=D.reports.filter(function(r){return r.sp[S.sp]!=null&&monthOn(r.d.slice(0,7))&&r.s.indexOf(n)>=0;}).sort(function(x,y){return x.d<y.d?1:-1;});
+ var reps=D.reports.filter(function(r){return r.at&&r.at[S.sp]&&r.at[S.sp].indexOf(n)>=0&&monthOn(r.d.slice(0,7));}).sort(function(x,y){return x.d<y.d?1:-1;});
  var h='<div class="navrow"><button class="chip" data-back="1">‹ '+esc(CATS[S.sp].label)+'</button></div><h3>'+esc(n)+'</h3>'
   +'<div class="mut">'+(a.approx?'approximate position · ':'chart position · ')+esc(selLabel())+'</div>'
-  +'<div class="stats"><div class="stat"><b>'+a.pos+'</b><span>reports naming it mention the species</span></div><div class="stat"><b>'+a.tot+'</b><span>reports name this spot</span></div></div>'
+  +'<div class="stats"><div class="stat"><b>'+a.pos+'</b><span>reports name the species and this spot in one sentence</span></div><div class="stat"><b>'+a.tot+'</b><span>reports name this spot</span></div></div>'
   +'<h4>The reports</h4><table><tr><th>Date</th><th>Report</th></tr>';
  reps.forEach(function(r){h+='<tr><td>'+fmtDate(r.d)+'</td><td><a href="'+esc(r.u)+'" target="_blank" rel="noopener">'+esc(r.t)+'</a><br/><span class="mut">'+esc(r.a)+(r.l&&r.l!==r.a?' · '+esc(r.l):'')+(r.sp[S.sp]?' · '+r.sp[S.sp]+' quoted':'')+(r.s.length>1?' · also names '+esc(r.s.filter(function(x){return x!==n;}).join(', ')):'')+'</span></td></tr>';});
  return h+'</table>';}
+
+function pan(ll){var sz=map.getSize();if(sz.x>0&&sz.y>0)map.panTo(ll,{animate:false});}
 
 /* ---------- one trip's path, from Fleet Tracks' per-boat trip files ---------- */
 function drawTrip(){pathLayer.clearLayers();if(!S.trip)return;var m=S.trip[0],id=S.trip[1];
@@ -160,7 +180,7 @@ function drawTrip(){pathLayer.clearLayers();if(!S.trip)return;var m=S.trip[0],id
   L.polyline(ll,{color:'#0b1220',weight:6,opacity:.6,interactive:false}).addTo(pathLayer);
   L.polyline(ll,{color:'#4ade80',weight:3,opacity:.95,interactive:false}).addTo(pathLayer);
   L.circleMarker(ll[0],{radius:5,color:'#0b1220',weight:2,fillColor:'#4ade80',fillOpacity:1}).addTo(pathLayer);
-  map.fitBounds(ll,{padding:[30,30],maxZoom:10,paddingBottomRight:[window.innerWidth>760?400:0,window.innerWidth>760?0:Math.round(window.innerHeight*.48)]});};
+  var sz=map.getSize();if(sz.x>0&&sz.y>0)map.fitBounds(ll,{animate:false,padding:[30,30],maxZoom:10,paddingBottomRight:[window.innerWidth>760?400:0,window.innerWidth>760?0:Math.round(window.innerHeight*.48)]});};
  if(PATHS[m])return go(PATHS[m]);
  fetch('/fleet/trips/'+m+'.json',{cache:'no-cache'}).then(function(r){return r.ok?r.json():null;}).then(function(j){PATHS[m]=j;go(j);}).catch(function(){});}
 
