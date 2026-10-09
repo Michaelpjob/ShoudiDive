@@ -45,8 +45,18 @@ tr.sel td{background:#1e293b}
 .leaflet-tooltip.cell-tip::before{display:none}
 .leaflet-tooltip.spot-lbl{background:none;border:0;box-shadow:none;color:#ddd6fe;font:600 11px system-ui;padding:0 3px;text-shadow:0 0 3px #000,0 0 2px #000}
 .leaflet-tooltip.spot-lbl::before{display:none}
-.ex{width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:12px solid #4ade80;filter:drop-shadow(0 0 2px #000)}
+.ex{width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:10px solid #4ade80;opacity:.7;filter:drop-shadow(0 0 2px #000)}
 .legend .exl{display:inline-block;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:10px solid #4ade80;margin-right:5px;vertical-align:middle}
+.land{border:2px solid #2dd4bf;background:rgba(45,212,191,.18);border-radius:3px;box-shadow:0 0 0 1px #0b1220}
+.land.sel{border-color:#fff;background:rgba(45,212,191,.35)}
+.leaflet-tooltip.land-lbl{background:transparent;border:0;box-shadow:none;color:#5eead4;font-size:11px;font-weight:600;padding:0;text-shadow:0 0 3px #0b1220,0 0 3px #0b1220}
+.leaflet-tooltip.land-lbl:before{display:none}
+.legend .lg-short{display:none}
+.legend .lsq{display:inline-block;width:10px;height:10px;border:2px solid #2dd4bf;border-radius:2px;margin-right:5px;vertical-align:middle}
+th.sortable{cursor:pointer;user-select:none}
+th.sortable:hover{color:var(--ink)}
+th.sortable.on{color:var(--accent)}
+.sorttab td:first-child{max-width:150px}
 .panel a{color:#7dd3fc}
 .empty{padding:10px;background:#0f172a;border-radius:6px;color:var(--mut);margin:6px 0}
 @media (max-width:760px){
@@ -62,4 +72,6 @@ tr.sel td{background:#1e293b}
  .panel{left:0;right:0;width:auto;top:auto;bottom:0;max-height:46%;border-radius:12px 12px 0 0}
  .legend{bottom:calc(46% + 8px);left:8px;right:8px;max-width:none;padding:4px 8px}
  .legend .rep{display:none}
+ .legend .lg-long{display:none}
+ .legend .lg-short{display:block;margin-top:2px}
 }

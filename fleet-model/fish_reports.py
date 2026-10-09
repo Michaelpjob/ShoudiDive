@@ -217,8 +217,9 @@ def extract(text):
                 continue
             for k, rx in MENTION_RE.items():
                 if k in sp and rx.search(sentence):
+                    n = sum(int(m.group(1)) for m in COUNT_RE[k].finditer(sentence) if int(m.group(1)) < 2000)
                     for name in here:
-                        pairs.add((k, name))
+                        pairs.add((k, name, n))
     return sp, spots, sorted(pairs)
 
 
