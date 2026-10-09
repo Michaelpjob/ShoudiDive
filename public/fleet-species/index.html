@@ -1,9 +1,9 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <meta name="robots" content="noindex"/>
-<title>Species Hotspots — ShouldIDive (dev)</title>
-<link rel="stylesheet" href="leaflet.css?v=7"/>
-<link rel="stylesheet" href="species.css?v=7"/>
+<title>Species Hotspots · ShouldIDive (dev)</title>
+<link rel="stylesheet" href="leaflet.css?v=12"/>
+<link rel="stylesheet" href="species.css?v=12"/>
 </head><body>
 <div id="map"></div>
 <div class="bar" id="bar">
@@ -15,15 +15,15 @@
   <span class="ctl"><span class="lab">Months</span><span class="chips small" id="months"></span></span>
   <span class="ctl"><span class="lab">Season</span><span class="chips small" id="seasons"></span></span>
   <span class="ctl"><label for="year">Year</label><select id="year"></select></span>
-  <span class="ctl"><label for="src">Where from</label><select id="src">
-   <option value="both">AIS stops + report spots</option><option value="ais">AIS stops only</option><option value="rep">Report spots only</option></select></span>
+  <span class="ctl"><label for="src">Show</label><select id="src">
+   <option value="all">All evidence</option><option value="ais">AIS stops only</option><option value="rep">Report spots only</option><option value="land">Where landed only</option></select></span>
   <span class="ctl"><label for="metric">Shade by</label><select id="metric">
-   <option value="count">Trips / reports with the species</option><option value="rate">Share that caught it there</option></select></span>
+   <option value="fish">Fish caught</option><option value="trips">Trips that caught it</option><option value="rate">Share of trips that caught it</option></select></span>
  </div>
 </div>
 <div class="panel" id="panel">Loading&hellip;</div>
 <div class="legend" id="legend"></div>
 <div class="tip" id="tip"></div>
-<script src="leaflet.js?v=7"></script>
-<script src="app.js?v=7"></script>
+<script src="leaflet.js?v=12"></script>
+<script src="app.js?v=12"></script>
 </body></html>

@@ -83,6 +83,16 @@ def expected_hours(tt):
     return None
 
 
+def tt_bucket(tt):
+    t = (tt or "").lower()
+    for pat, lab in [(r"1/2 day|4 hour|6 hour", "1/2 day"), (r"3/4 day", "3/4 day"), (r"full day|12 hour", "full day"),
+                     (r"overnight", "overnight"), (r"1\.5 day|1\.75 day", "1.5 day"), (r"\b2 day", "2 day"),
+                     (r"2\.5 day", "2.5 day"), (r"\b[3-9](\.5)? day", "3+ day")]:
+        if re.search(pat, t):
+            return lab
+    return "other"
+
+
 def port_of(landing):
     v = LANDINGS.get(landing)
     return v[2] if v else None
@@ -124,11 +134,22 @@ def main():
     weeks = sorted(counts["week"].unique())
     wi = {w: i for i, w in enumerate(weeks)}
     tot_w = counts.groupby("week").size().reindex(weeks, fill_value=0).tolist()
-    cal = {k: [[0, 0] for _ in weeks] for k, *_ in CATS}
-    for w, cs in zip(counts["week"], counts["cats"]):
-        for k, n in cs.items():
+    cal = {k: [[0, 0] for _ in weeks] for k in [c[0] for c in CATS] + ["all"]}
+    landed = {k: {} for k in [c[0] for c in CATS] + ["all"]}   # species -> landing -> month -> [trips, fish]
+    ttypes = {k: {} for k in [c[0] for c in CATS] + ["all"]}   # species -> month -> bucket -> trips
+    for w, cs, lnd, date, tt in zip(counts["week"], counts["cats"], counts["landing"], counts["date"], counts["trip_type"]):
+        if not cs:
+            continue
+        mo = date[:7]
+        b = tt_bucket(tt)
+        for k, n in list(cs.items()) + [("all", sum(cs.values()))]:
             cal[k][wi[w]][0] += 1
             cal[k][wi[w]][1] += n
+            v = landed[k].setdefault(lnd, {}).setdefault(mo, [0, 0])
+            v[0] += 1
+            v[1] += n
+            t = ttypes[k].setdefault(mo, {})
+            t[b] = t.get(b, 0) + 1
 
     # ---- AIS trips + boat names/ports from the roster ----------------------
     base = os.path.join(HERE, "data", "base")
@@ -185,17 +206,18 @@ def main():
     stops_by_trip = {k: g for k, g in off.groupby(["mmsi", "trip_id"])}
     tmeta = trips.set_index(["mmsi", "trip_id"])
 
-    grid = {k: {} for k, *_ in CATS}   # cat -> cell -> month -> [pos_trips, fish, minutes]
+    grid = {k: {} for k in [c[0] for c in CATS] + ["all"]}   # cat -> cell -> month -> [pos_trips, fish, minutes]
     effort = {}                        # cell -> month -> [counted_trips, minutes]
-    unloc = {k: {} for k, *_ in CATS}  # cat -> month -> n matched-but-unlocated
+    unloc = {k: {} for k in [c[0] for c in CATS] + ["all"]}  # cat -> month -> n matched-but-unlocated
     trip_recs, exits = [], []
     for (m, tid), ci in match.items():
         c = counts.iloc[ci]
         t = tmeta.loc[(m, tid)]
         month = t.dep_local.strftime("%Y-%m")
         g = stops_by_trip.get((m, tid))
+        cats_all = dict(c.cats, **({"all": sum(c.cats.values())} if c.cats else {}))
         if g is None or g["minutes"].sum() <= 0:
-            for k in c.cats:
+            for k in cats_all:
                 unloc[k][month] = unloc[k].get(month, 0) + 1
             if c.cats and pd.notna(t.far_lat):
                 exits.append({"m": int(m), "id": int(tid), "b": names[m]["name"], "l": c.landing,
@@ -210,7 +232,7 @@ def main():
             e = effort.setdefault(cell, {}).setdefault(month, [0, 0])
             e[0] += 1
             e[1] += round(float(mn))
-        for k, n in c.cats.items():
+        for k, n in cats_all.items():
             for cell, mn in mins.items():
                 v = grid[k].setdefault(cell, {}).setdefault(month, [0, 0, 0])
                 v[0] += 1
@@ -253,38 +275,55 @@ def main():
         for r in reps:
             for k in r["species"]:
                 rmentions[k] += 1
+            if r["species"]:
+                rmentions["all"] = rmentions.get("all", 0) + 1
             located = {x["name"]: x for x in r["spots"] if x.get("ll")}
             if not located:
                 continue
             mo = r["date"][:7]
             pairs = [tuple(p) for p in r.get("pairs", [])]      # (species, spot) in one sentence
             for name, x in located.items():
-                e = rspots.setdefault(name, {"ll": [round(x["ll"][0], 4), round(x["ll"][1], 4)], "approx": bool(x["approx"]), "tot": {}, "sp": {}})
+                e = rspots.setdefault(name, {"ll": [round(x["ll"][0], 4), round(x["ll"][1], 4)], "approx": bool(x["approx"]), "tot": {}, "sp": {}, "fish": {}})
                 e["tot"][mo] = e["tot"].get(mo, 0) + 1
-            for k, name in pairs:
-                if name in located:
-                    d = rspots[name]["sp"].setdefault(k, {})
+            pairs = [p if len(p) == 3 else (p[0], p[1], 0) for p in pairs]
+            seen_all = set()
+            for k, name, n in pairs:
+                if name not in located:
+                    continue
+                for key in (k, "all"):
+                    if key == "all" and name in seen_all:
+                        dd = rspots[name]["fish"].setdefault("all", {})
+                        dd[mo] = dd.get(mo, 0) + n
+                        continue
+                    d = rspots[name]["sp"].setdefault(key, {})
                     d[mo] = d.get(mo, 0) + 1
+                    dd = rspots[name]["fish"].setdefault(key, {})
+                    dd[mo] = dd.get(mo, 0) + n
+                seen_all.add(name)
             if pairs:
                 sp_here = {}
-                for k, name in pairs:
+                for k, name, n in pairs:
                     sp_here.setdefault(k, []).append(name)
+                fish_here = {}
+                for k, name, n in pairs:
+                    fish_here[k] = max(fish_here.get(k, 0), n)
+                sp_here["all"] = sorted({nm for v in sp_here.values() for nm in v})
+                fish_here["all"] = sum(fish_here.values())
                 rlist.append({"d": r["date"], "a": r["author"], "l": r["landing"], "t": (r["title"] or "")[:100],
-                              "u": r["url"], "sp": {k: r["species"].get(k, 0) for k in sp_here},
-                              "at": sp_here, "s": sorted(located)})
+                              "u": r["url"], "sp": fish_here, "at": sp_here, "s": sorted(located)})
         rwin = [min(r["date"] for r in reps), max(r["date"] for r in reps)] if reps else None
         print(f"reports: {n_reports} SoCal reports {rwin}, {len(rlist)} tie a target species to a charted spot in one sentence, {len(rspots)} spots")
 
     months = sorted({mo for k in grid for c in grid[k] for mo in grid[k][c]} | {mo for c in effort for mo in effort[c]}
                     | {mo for e in rspots.values() for mo in e["tot"]})
     summary = {}
-    for k, label, _, _ in CATS:
-        pos_rows = sum(1 for cs in counts["cats"] if k in cs)
-        fish = sum(cs.get(k, 0) for cs in counts["cats"])
-        located = sum(1 for r in trip_recs if k in r["sp"])
+    for k, label in [(c[0], c[1]) for c in CATS] + [("all", "All target species")]:
+        pos_rows = sum(1 for cs in counts["cats"] if (cs if k == "all" else k in cs))
+        fish = sum((sum(cs.values()) if k == "all" else cs.get(k, 0)) for cs in counts["cats"])
+        located = sum(1 for r in trip_recs if (r["sp"] if k == "all" else k in r["sp"]))
         summary[k] = {"posted_trips": pos_rows, "fish": fish, "located_trips": located,
                       "unlocated_trips": sum(unloc[k].values()), "report_mentions": rmentions[k],
-                      "report_located": sum(1 for r in rlist if k in r["sp"])}
+                      "report_located": sum(1 for r in rlist if k in r["at"])}
         print(f"  {label:<20} posted trips {pos_rows:>5}  fish {fish:>6}  located {located:>4}  unlocated {summary[k]['unlocated_trips']:>4}")
 
     os.makedirs(OUT_DIR, exist_ok=True)
@@ -294,12 +333,14 @@ def main():
                  "ais_window": [trips.dep_local.min().strftime("%Y-%m-%d"), trips.dep_local.max().strftime("%Y-%m-%d")],
                  "n_counts": int(len(counts)), "n_trips": int(len(trips)), "n_matched": len(match), "n_reports": n_reports, "reports_window": rwin,
                  "landings": sorted(counts["landing"].unique().tolist()),
-                 "landing_ll": {k: [v[0], v[1]] for k, v in LANDINGS.items()}},
+                 "landing_ll": {k: [v[0], v[1]] for k, v in LANDINGS.items()},
+                 "landing_port": {k: v[2] for k, v in LANDINGS.items()}},
         "cats": [{"key": k, "label": l, "names": n, "color": col} for k, l, n, col in CATS],
         "summary": summary,
         "weeks": weeks, "week_total": tot_w, "calendar": cal,
         "months": months, "cells": cells, "grid": grid, "effort": effort, "unlocated": unloc,
         "trips": trip_recs, "exits": exits, "rspots": rspots, "reports": rlist,
+        "landed": landed, "ttypes": ttypes,
     }
     out = os.path.join(OUT_DIR, "data.json")
     with open(out, "w", encoding="utf-8") as f:
