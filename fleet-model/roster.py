@@ -263,6 +263,12 @@ def build(start, end):
     def rec(x):
         r, w, o = x["r"], x["webrow"] or {}, x["o"]
         berth_landing = r.landing if (isinstance(r.landing, str) and r.landing in LANDINGS and int(r.nights) >= 2) else None
+        web_landing = w.get("_landing") if w.get("_landing") in LANDINGS else None
+        # The three Point Loma landings share one basin (docks ~200 m apart), so
+        # the nearest-dock berth cannot tell them apart: when the berth and the
+        # fleet list agree on the PORT, the fleet list names the landing.
+        if berth_landing and web_landing and LANDINGS[berth_landing][2] == LANDINGS[web_landing][2]:
+            berth_landing = web_landing
         landing = o.get("landing") or berth_landing or w.get("_landing") or (r.landing if isinstance(r.landing, str) else None)
         port = LANDINGS.get(landing, (0, 0, None))[2] or w.get("_port")
         typ = r.vessel_type
