@@ -22,7 +22,10 @@
       name="description"
       content="Free map of California and Baja ocean conditions, updated daily: sea temperature, swell, wind, currents, tides, kelp, temperature breaks, and modeled dive visibility."
     />
-    <link rel="canonical" href="https://shouldidive.com/" />
+    <!-- Canonical is a crawler hint, not a fetched resource, so SRI does not
+         apply. It must stay absolute: a relative "/" on www.shouldidive.com
+         would resolve to www and defeat the duplicate-host consolidation. -->
+    <link rel="canonical" href="https://shouldidive.com/" /><!-- nosemgrep: html.security.audit.missing-integrity.missing-integrity -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="ShouldIDive" />
     <meta property="og:title" content="ShouldIDive: live ocean conditions for California and Baja" />
