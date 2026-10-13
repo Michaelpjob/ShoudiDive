@@ -1,24 +1,18 @@
-# Validation watchdog — 2026-10-13T06:27Z
+# Validation watchdog — 2026-10-13T18:17Z
 
-**3 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
+**2 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
-### 🔴 1. Only 25 observations in the last 24h (floor: 50)
+### 🔴 1. Only 22 observations in the last 24h (floor: 50)
 
 Multiple scrapers may be silently broken.
 
 **Suggested action:** Open the latest hourly ingest workflow run; look for `FAILED` lines per scraper.
 
-### ⚠️ 2. 1 non-critical external feed(s) are red
+### 🔴 2. Published-data freshness gate found 3 issue(s)
 
-Red feeds: cpc_precip_psl. Fallbacks may keep the model running, but redundancy is degraded.
-
-**Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
-
-### 🔴 3. Published-data freshness gate found 3 issue(s)
-
-Freshness/completeness failures: kd490:layer_date_stale, precip:layer_date_stale, swell5d:summary_day_sparse.
+Freshness/completeness failures: kd490:layer_date_stale, swell5d:summary_day_sparse, sst:sst_source_query_failed.
 
 **Suggested action:** Open `pipeline/validation/data/freshness_health.json`; fix the failing fetcher or rerun the matching workflow before trusting the deploy.
 
@@ -26,16 +20,16 @@ Freshness/completeness failures: kd490:layer_date_stale, precip:layer_date_stale
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_nearshore` | 4 | 10.64 | +3.95 | 25% | -0.61 |
-| `central_nearshore` | 1 | 2.84 | +2.84 | 100% | — |
+| `bight_nearshore` | 4 | 8.90 | +1.63 | 25% | 0.27 |
+| `central_nearshore` | 1 | 2.80 | +2.80 | 100% | — |
 
 ## Per-source bias (informational)
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `cencoos` | 1 | +2.84 ft |
-| `dive-shop-diveviz` | 1 | -12.20 ft |
-| `dive-shop-justgetwet` | 3 | +9.34 ft |
+| `cencoos` | 1 | +2.80 ft |
+| `dive-shop-diveviz` | 1 | -11.79 ft |
+| `dive-shop-justgetwet` | 3 | +6.10 ft |
 
 ## How to act on this issue
 
