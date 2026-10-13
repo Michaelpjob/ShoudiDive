@@ -150,3 +150,17 @@ test("the runtime CA title matches the static title Google sees first", () => {
 test("the app honors ?spot= deep links from the spot pages", () => {
   assert.match(read("src/components/MapShell.jsx"), /useState\(initialSpotId\)/);
 });
+
+test("spot cards skip forecast slots that are already past at build time", async () => {
+  const { loadRegion } = await import("../scripts/seo/sample.mjs");
+  const { computeSpotConditions } = await import("../scripts/seo/spotPage.mjs");
+  const R = loadRegion(resolve(repoRoot, "public/data"), "ca");
+  const first = R.wind?.days?.[0]?.date;
+  if (!first || !R.wind.days[1]) return; // nothing to roll over to
+  // 23:30 Pacific on the first forecast day: every bucket that day is past.
+  const lateNight = new Date(`${first}T23:30:00-07:00`);
+  const spot = { id: "lajolla", appName: "La Jolla", name: "La Jolla", region: "ca", lng: -117.28, lat: 32.85, tz: "America/Los_Angeles" };
+  const c = computeSpotConditions(spot, R, lateNight);
+  assert.ok(c.forecast.length > 0);
+  assert.ok(c.forecast[0].date > first, `expected the outlook to start after ${first}, got ${c.forecast[0].date}`);
+});

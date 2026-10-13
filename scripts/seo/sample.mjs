@@ -234,6 +234,7 @@ export function loadRegion(dataDir, region) {
       tz: swell.tz, cycle: swell.gfswave_cycle || null,
       days: swell.days.map((d) => ({
         day: d.day, date: d.date, weekday: d.weekday,
+        endHour: Object.fromEntries((d.buckets || []).map((b) => [b.bucket, Math.max(...(b.hours || [24]))])),
         buckets: Object.fromEntries((d.buckets || []).map((b) => {
           const img = r.png(b.wave_url);
           const grid = img && waveGrid(img, L.swell5d.height_range_m, L.swell5d.period_range_s);
@@ -248,6 +249,7 @@ export function loadRegion(dataDir, region) {
       tz: wind.tz, source: L.wind?.source || null,
       days: wind.days.map((d) => ({
         day: d.day, date: d.date, weekday: d.weekday,
+        endHour: Object.fromEntries((d.buckets || []).map((b) => [b.bucket, Math.max(...(b.hours || [24]))])),
         buckets: Object.fromEntries((d.buckets || []).map((b) => {
           const img = r.png(b.uv_url);
           const grid = img && uvGrid(img, L.wind5d.uv_range);

@@ -30,10 +30,13 @@ const SWELL_PREF = ["morning", "midday", "predawn", "afternoon", "evening"];
 const AM = ["morning", "midday", "predawn"];
 const PM = ["afternoon", "evening"];
 
-function pick(buckets, order, lng, lat) {
+// The summaries carry buckets for hours that may already be past when the
+// page is built (a 9 pm build still has today's afternoon). `skip` drops
+// any bucket whose last hour is behind the clock in the summary's zone.
+function pick(buckets, order, lng, lat, skip = () => false) {
   for (const b of order) {
     const fn = buckets?.[b];
-    if (!fn) continue;
+    if (!fn || skip(b)) continue;
     const v = fn(lng, lat);
     if (v && (Number.isFinite(v.hs) || Number.isFinite(v.kt))) return { bucket: b, ...v };
   }
@@ -52,12 +55,27 @@ export function computeSpotConditions(spot, R, now = new Date()) {
   if (R.chl) out.chl = R.chl.at(lng, lat);
   if (R.viz) { out.vizFt = R.viz.at(lng, lat); out.vizValidAt = R.viz.validAt; }
 
+  const clock = (tz) => {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz || "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23",
+    }).formatToParts(now).map((p) => [p.type, p.value]));
+    return { date: `${parts.year}-${parts.month}-${parts.day}`, hour: Number(parts.hour) };
+  };
+  const skipper = (d, tz) => {
+    const c = clock(tz);
+    if (d.date < c.date) return () => true;
+    if (d.date > c.date) return () => false;
+    return (b) => (d.endHour?.[b] ?? 24) < c.hour;
+  };
   const days = new Map();
-  for (const d of R.swell?.days || []) days.set(d.date, { date: d.date, swell: pick(d.buckets, SWELL_PREF, lng, lat) });
+  for (const d of R.swell?.days || []) {
+    days.set(d.date, { date: d.date, swell: pick(d.buckets, SWELL_PREF, lng, lat, skipper(d, R.swell.tz)) });
+  }
   for (const d of R.wind?.days || []) {
     const row = days.get(d.date) || { date: d.date };
-    row.windAm = pick(d.buckets, AM, lng, lat);
-    row.windPm = pick(d.buckets, PM, lng, lat);
+    const skip = skipper(d, R.wind.tz);
+    row.windAm = pick(d.buckets, AM, lng, lat, skip);
+    row.windPm = pick(d.buckets, PM, lng, lat, skip);
     days.set(d.date, row);
   }
   out.forecast = [...days.values()]
@@ -231,7 +249,7 @@ function forecastTable(c, tz) {
 <td class="num">${esc(windTxt(r.windAm) || "no data")}</td>
 <td class="num">${esc(windTxt(r.windPm) || "no data")}</td></tr>`).join("\n");
   return `<h2>Swell and wind outlook</h2>
-<p>Waves are the morning forecast where the model has one: height, period, and the direction they come from. Morning wind covers roughly 6 to 10 am and afternoon wind 2 to 7 pm, local time, with the direction it blows from. Days past the wind model's horizon show no data.</p>
+<p>Waves use the morning forecast, or the next time slot still ahead today: height, period, and the direction they come from. Morning wind covers roughly 6 to 10 am and afternoon wind 2 to 7 pm, local time, with the direction it blows from. Days past the wind model's horizon show no data.</p>
 <div class="tablewrap"><table><thead><tr><th>Day</th><th>Waves</th><th>Wind AM</th><th>Wind PM</th></tr></thead>
 <tbody>${rows}</tbody></table></div>`;
 }
