@@ -3,10 +3,14 @@
 sportfishingreport.com publishes each landing's counts by day at
   /landings/<slug>.php?month=M&year=YYYY&day=D
 as one table: Boat | Trip Type | Anglers | Fish Count ("83 Bluefin Tuna, 50
-Calico Bass, 165 Calico Bass Released"). Its robots.txt allows crawling; we
-fetch one page per landing-day, one request per second, and cache the raw
-HTML under $FLEET_DATA_DIR/counts/ so re-runs never re-fetch. Counts are
-facts (what the dock posted), stored with the source URL per row.
+Calico Bass, 165 Calico Bass Released"). We fetch one page per landing-day,
+one request per second, and cache the raw HTML under $FLEET_DATA_DIR/counts/
+so re-runs never re-fetch. Counts are stored with the source URL per row.
+
+PAUSED: Sportfishing Report's terms (updated 2026-09-01) bar automated access
+and republishing counts without a written license. The workflows skip this
+script unless the repo variable SFR_COUNTS_ENABLED is 'true' (unset = off);
+do not run it by hand while the pause stands. See fleet-model/README.md.
 
     python catch.py --start 2025-06-01 --end 2025-10-31  -> counts.parquet
 """

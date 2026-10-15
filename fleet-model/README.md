@@ -9,7 +9,7 @@ builds `public/fleet/data.json`.
 ```
 fetch_ais.py   NOAA OCM daily AIS (csv.zst, national)  ->  $FLEET_DATA_DIR/socal/<date>.parquet
 roster.py      berth discovery + landing fleet lists    ->  data/roster.json   (committed)
-catch.py       landing dock counts, one page per day    ->  $FLEET_DATA_DIR/counts.parquet
+catch.py       landing dock counts, one page per day    ->  $FLEET_DATA_DIR/counts.parquet  (PAUSED, see Data)
 model.py       positions -> trips -> stops -> H3 zones -> the three answers
 build_site.py  model.run() + counts join                ->  public/fleet/data.json
 ```
@@ -20,7 +20,7 @@ checkout; the raw AIS is tens of GB and never enters git.
 ```bash
 python fleet-model/fetch_ais.py --start 2025-06-01 --end 2025-10-31 --workers 4
 python fleet-model/roster.py            # needs $FLEET_DATA_DIR/roster_web.json (fleet lists)
-python fleet-model/catch.py --start 2025-06-01 --end 2025-10-31
+# python fleet-model/catch.py ...   paused, see "Dock counts" below
 python fleet-model/build_site.py public/fleet
 ```
 
@@ -36,10 +36,16 @@ python fleet-model/build_site.py public/fleet
 * **Fleet lists**: `roster_web.json` scraped from the landings' own fleet pages
   and sportfishingreport.com per-boat pages (name, landing, length, capacity,
   trip types, MMSI when a public AIS directory had it).
-* **Dock counts**: sportfishingreport.com `/landings/<slug>.php?month=&year=&day=`
-  (one table per landing-day: boat, trip type, anglers, species counts). Its
-  robots.txt allows crawling; we fetch at one request per second and cache
-  every page. Facts, credited in the UI.
+* **Dock counts (paused)**: sportfishingreport.com `/landings/<slug>.php?month=&year=&day=`
+  (one table per landing-day: boat, trip type, anglers, species counts),
+  fetched by `catch.py` at one request per second with every page cached.
+  Sportfishing Report's terms (updated 2026-09-01) bar automated access and
+  republishing current or historical counts without a written license, so
+  the workflows only run `catch.py` when the repo variable
+  `SFR_COUNTS_ENABLED` is `true`; it is unset (off) by default. Until then
+  `build_site.py` joins only the frozen counts in `data/base/counts.parquet`
+  (posted counts through 2026-10-05) and later trips carry no dock count.
+  Do not run `catch.py` by hand while the pause stands.
 
 ## Method
 
