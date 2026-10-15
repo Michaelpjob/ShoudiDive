@@ -14,7 +14,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import evidence, explain, fish, nws_text, physics, render, season, sites, sources, story, trends, views, visibility, zones
+from . import evidence, explain, fish, nws_text, physics, render, season, season_curves, sites, sources, story, trends, views, visibility, zones
 from . import thresholds as T
 from . import verdicts as V
 
@@ -26,7 +26,7 @@ SOURCE_KIND = {
     "alerts": "alerts", "cwf_sgx": "cwf", "cwf_lox": "cwf", "off_nhc": "off", "srf_sgx": "srf",
     "rain": "rain", "manifest": "manifest", "observations": "observations", "enso": "enso",
     "tides": "tides", "viz_column": "viz_column", "glider": "glider", "fleet_now": "fleet_now",
-    "glider_series": "glider_series", "enso_weekly": "enso_weekly",
+    "glider_series": "glider_series", "enso_weekly": "enso_weekly", "season_curves": "season_curves",
 }
 POST_SOURCES = {
     "dive-shop-justgetwet": "Just Get Wet (La Jolla dive shop)",
@@ -38,7 +38,7 @@ POST_SOURCES = {
 }
 NOT_COVERED = [
     "Fish counts. No licensed source yet, so the fishing view shows where the water matches each species, not how many fish are there.",
-    "Bait. No public feed measures it; where the fleet stops is the closest proxy.",
+    "Bait. No barge publishes a feed; the bait table shows what people on the water send in, and where the fleet stops is the other proxy.",
     "Current at dive depth. HF radar measures the surface only and is blank within about 1.5 miles of shore.",
     "Beach water-quality notices. San Diego County's beach status site has no public data feed; connecting it needs a feed from the county.",
     "The thermocline at the kelp. The observed profile comes from a glider offshore; the SCCOOS Del Mar kelp mooring did not answer when this was built.",
@@ -83,7 +83,27 @@ def gather(now: datetime) -> dict[str, dict]:
         S[f"hist_{bid}"] = trends.buoy_history(bid, name, now=now)
     S["glider_series"] = trends.glider_series(now=now)
     S["enso_weekly"] = trends.enso_weekly(now=now)
+    S["season_curves"] = season_source(today, now, S)
     return S
+
+
+def season_source(today: date, now: datetime, S: dict) -> dict:
+    """Weekly buoy water temperature this year, last year and the ten years
+    before; past years come from the cached season.json after the first run."""
+    label = "NDBC buoy history: this year, last year and the 10 years before"
+    url = "https://www.ndbc.noaa.gov/historical_data.shtml"
+
+    def run():
+        try:
+            cache = json.loads((sources.DATA / "reports" / "season.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            cache = None
+        recent = {bid: ((S.get(f"hist_{bid}") or {}).get("data") or {}).get("days", []) for bid, _ in trends.TREND_BUOYS}
+        data = season_curves.buoy_season(today, cache, recent, now=now)
+        if not any(w["this"] is not None for b in data["buoys"] for w in b["weeks"]):
+            raise RuntimeError("no weekly means this year")
+        return sources.source("season_curves", label, url, ok=True, time=now, data=data, now=now)
+    return sources._guard("season_curves", label, url, run)
 
 
 def _usable(s: dict | None) -> dict | None:
@@ -448,6 +468,19 @@ def assemble(S: dict[str, dict], now: datetime) -> dict:
                         [today + timedelta(days=k) for k in range(3)])
     buoy_hist = {bid: _usable(S.get(f"hist_{bid}")) for bid, _ in trends.TREND_BUOYS}
     vis = trends.vis_series(today=today)
+    climo, climo_meta = season_curves.load_climo(man) if man else (None, None)
+    season_curves.zone_vs_normal(cards, climo, climo_meta)
+    sea = _usable(S.get("season_curves"))
+    fs = season_curves.fleet_season(fleet, today)
+    for c in cards:
+        c.setdefault("fleet", {})["season"] = season_curves.recent_vs_last_year(fs, c["id"], today)
+    facts["season_curves"] = {
+        "year": today.year, "last_year": today.year - 1, "range_label": (sea or {}).get("range_label"),
+        "buoys": [{"id": b["id"], "name": b["name"], "weeks": b["weeks"]} for b in (sea or {}).get("buoys", [])],
+        "fleet": {k: fs.get(k) for k in ("weeks", "groups", "zones", "gaps", "boats")} if fs else None,
+    }
+    if sea:
+        facts["season_cache"] = sea
     facts["zones"] = cards
     facts["zone_groups"] = [{"key": k, "label": label} for k, label in zones.GROUPS]
     facts["trends"] = {
@@ -510,6 +543,9 @@ def assemble(S: dict[str, dict], now: datetime) -> dict:
 def write(facts: dict, out_dir: Path) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     snap = facts.pop("archive_snapshot", None)
+    sea = facts.pop("season_cache", None)
+    if sea is not None:
+        (out_dir / "season.json").write_text(json.dumps(sea, separators=(",", ":")), encoding="utf-8")
     if snap is not None:
         arch = trends.update_archive(out_dir / "trends.json", facts["date"], snap)
         (out_dir / "trends.json").write_text(json.dumps(arch, separators=(",", ":")), encoding="utf-8")

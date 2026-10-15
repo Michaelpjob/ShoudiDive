@@ -455,3 +455,58 @@ def test_vis_not_adjusted_without_enough_pairs(monkeypatch, tmp_path):
     cal = visibility.calibration(date(2026, 10, 15), [], [])
     assert not cal["applied"]
     assert visibility.stated({"p50": 20.0, "p10": 16.0, "p90": 25.0}, cal)["adjusted"] is False
+
+
+# --- Season against last year --------------------------------------------------
+
+from reports import season_curves  # noqa: E402
+
+STDMET_HIST = """#YY  MM DD hh mm WDIR WSPD GST  WVHT   DPD   APD MWD   PRES  ATMP  WTMP  DEWP  VIS  TIDE
+#yr  mo dy hr mn degT m/s  m/s     m   sec   sec degT   hPa  degC  degC  degC   mi    ft
+2025 10 06 00 00 999 99.0 99.0  1.20 12.50  7.10 270 9999.0 999.0  20.0 999.0 99.0 99.00
+2025 10 06 12 00 999 99.0 99.0  1.30 12.50  7.10 270 9999.0 999.0  21.0 999.0 99.0 99.00
+2025 10 07 00 00 999 99.0 99.0  1.20 12.50  7.10 270 9999.0 999.0 999.0 999.0 99.0 99.00
+2025 10 07 12 00 999 99.0 99.0  1.20 12.50  7.10 270 9999.0 999.0  MM   999.0 99.0 99.00
+"""
+
+
+def test_stdmet_daily_means_skip_missing_codes():
+    d = season_curves.parse_stdmet(STDMET_HIST)
+    assert d == {"2025-10-06": 20.5}
+
+
+def test_weekly_needs_enough_days_and_keeps_the_iso_year():
+    daily = {f"2025-10-{k:02d}": 20.0 for k in range(6, 13)}       # ISO week 41, Mon-Sun
+    daily.update({"2025-10-13": 21.0, "2025-10-14": 21.0})          # week 42, two days only
+    w = season_curves.weekly(daily, 2025)
+    assert w == {41: 68.0}
+    assert season_curves.weekly(daily, 2026) == {}
+    assert season_curves.week_monday(2026, 41) == "2026-10-05"
+
+
+def test_buoy_season_reuses_cached_past_years(monkeypatch):
+    calls = []
+    monkeypatch.setattr(season_curves, "_year_daily", lambda st, y: calls.append(("y", st, y)) or {})
+    monkeypatch.setattr(season_curves, "_this_year_daily", lambda st, y, t: calls.append(("t", st, y)) or {})
+    now = datetime(2026, 10, 15, 18, tzinfo=timezone.utc)
+    past = {"last": {"41": 68.0}, "range": {"41": [63.0, 70.0, 10]}}
+    cache = {"buoys": [{"id": st, "year": 2026, "range_years": [2015, 2024], "past": past,
+                        "this_fetched": "2026-10-14T18:00Z", "this_daily": {"2026-10-05": 21.0}} for st, _ in season_curves.TREND_BUOYS]}
+    recent = {"46232": [{"date": f"2026-10-{k:02d}", "temp_f": 70.0} for k in range(6, 12)]}
+    out = season_curves.buoy_season(date(2026, 10, 15), cache, recent, now=now)
+    assert calls == []  # nothing refetched: past is cached, this year is under 3 days old
+    b = next(x for x in out["buoys"] if x["id"] == "46232")
+    wk41 = next(w for w in b["weeks"] if w["w"] == "2026-10-05")
+    assert wk41["last"] == 68.0 and wk41["lo"] == 63.0 and wk41["hi"] == 70.0 and wk41["this"] is not None
+    assert out["range_label"] == "2015-2024"
+
+
+def test_fleet_season_gaps_are_not_zeros():
+    stops = [[0, "2025-10-06", 32.66, -117.72, 120, 0, "h", "t1", 0],
+             [0, "2025-10-07", 32.66, -117.72, 60, 0, "h", "t2", 0],
+             [0, "2025-10-08", 32.74, -117.28, 30, 0, "h", "t3", 1],     # nearshore band: not counted
+             [0, "2026-10-05", 32.66, -117.72, 90, 0, "h", "t4", 0]]      # one day heard: week not covered
+    fs = season_curves.fleet_season({"stops": stops, "boats": [{}]}, date(2026, 10, 15))
+    z = next(r for r in fs["zones"] if r["name"].startswith("9 Mile"))
+    assert z["last"][40] == 3.0 and z["this"][40] is None
+    assert season_curves.recent_vs_last_year(fs, z["id"], date(2026, 10, 15)) is None
