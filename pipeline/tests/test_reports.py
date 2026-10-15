@@ -309,3 +309,75 @@ def test_end_to_end_2026_10_15():
 
 def test_every_threshold_level_has_a_label():
     assert set(T.LABELS) == {"within", "marginal", "outside", "unknown"}
+
+
+# --- Phase 1b: evidence, views, fishing --------------------------------------
+
+from reports import evidence, fish, views  # noqa: E402
+
+
+def test_srf_afternoon_merged_period_covers_today_and_friday():
+    z = nws_text.split_zones(_read("srf_sgx_2026-10-15_pm.txt"))
+    periods = nws_text.parse_srf_zone(z["CAZ043"])["periods"]
+    assert periods[0]["name"] == "THIS AFTERNOON THROUGH FRIDAY"
+    assert nws_text.pick_day_period(periods, 0, 3) is periods[0]
+    assert nws_text.pick_day_period(periods, 1, 4) is periods[0]
+    assert nws_text.pick_day_period(periods, 2, 5)["name"] == "SATURDAY"
+
+
+def test_afternoon_cwf_falls_back_to_tonight_for_today_only():
+    pl = [{"name": "TONIGHT"}, {"name": "FRI"}, {"name": "FRI NIGHT"}]
+    assert nws_text.pick_day_period(pl, 0, 3) == {"name": "TONIGHT", "fallback": True}
+    assert nws_text.pick_day_period(pl, 1, 4)["name"] == "FRI"
+
+
+def test_dap_ascii_parser_reads_scalars_and_arrays():
+    text = ("Dataset {\n Float32 metaShoreNormal;\n} x;\n---------------------------------------------\n"
+            "metaShoreNormal, 294.54\nmetaWaterDepth, 10.0\nwaveTime[3]\n1791763200, 1791774000, 1791784800\n\n"
+            "waveHs[3]\n1.38624, 1.271684, -999.99\n")
+    d = evidence.parse_dap_ascii(text)
+    assert d["metaShoreNormal"] == [294.54] and d["waveTime"][2] == 1791784800 and d["waveHs"][2] == -999.99
+
+
+def test_mop_window_uses_rayleigh_set_height():
+    mop = {"series": [{"t": "2026-10-15T15:00Z", "hs_m": 0.8, "tp_s": 14.3, "dp_deg": 253.0},
+                      {"t": "2026-10-15T18:00Z", "hs_m": 1.0, "tp_s": 15.4, "dp_deg": 254.0}]}
+    w = evidence.mop_window(mop, datetime(2026, 10, 15, 12, tzinfo=timezone.utc), datetime(2026, 10, 16, 2, tzinfo=timezone.utc))
+    assert w["hs_ft"] == 3.3 and w["sets_ft"] == round(3.28084 * 1.27, 1) and len(w["steps"]) == 2
+
+
+def test_glider_thermocline_finds_the_sharpest_drop():
+    prof = [(d, 22.5) for d in range(0, 30)] + [(d, 22.5 - 0.3 * (d - 30)) for d in range(30, 60)] + [(d, 13.5) for d in range(60, 120)]
+    th = sources.thermocline_from_profile(prof)
+    assert 28 <= th["thermocline_m"] <= 60 and abs(th["surface_c"] - 22.5) < 0.01
+    assert th["t_9m_c"] == 22.5
+
+
+def test_hunting_vis_thresholds():
+    post = {"source": "Shop", "site": "La Jolla", "date_label": "Oct 14", "vis": "0-10 ft"}
+    assert views.hunting_vis([post])["level"] == "marginal"
+    assert views.hunting_vis([{**post, "vis": "15-25 ft"}])["level"] == "within"
+    assert views.hunting_vis([{**post, "vis": "0-2 ft"}])["level"] == "outside"
+    assert views.hunting_vis([])["level"] == "unknown"
+
+
+def test_fleet_now_drops_stale_positions_and_docked_boats():
+    now = datetime(2026, 10, 15, 20, 0, tzinfo=timezone.utc)
+    data = {"boats": [
+        {"name": "FRESH", "lat": 32.40, "lon": -117.30, "sog": 0.5, "t": "2026-10-15T19:30:00Z"},
+        {"name": "OLD", "lat": 32.40, "lon": -117.30, "sog": 0.5, "t": "2026-10-14T19:30:00Z"},
+        {"name": "DOCKED", "lat": 32.7243, "lon": -117.2268, "sog": 0, "t": "2026-10-15T19:55:00Z"}]}
+    out = fish.fleet_now(data, {"H&M Landing": [32.7243, -117.2268, "San Diego"]}, now)
+    assert [b["name"] for b in out["at_sea"]] == ["Fresh"]
+    assert out["at_sea"][0]["spot"] == "Coronado Islands"
+
+
+def test_break_step_on_a_synthetic_front():
+    import numpy as np
+    a = np.full((60, 60), 20.0, dtype="float32")
+    a[:, 30:] = 21.0  # a 1 degC step, warm to the east
+    g = fish.Grid(a, [-118.0, 32.0, -117.4, 32.6])
+    sm, mag, gx, gy = fish.sst_gradient(g)
+    lat, lng = g.latlng(30, 28)
+    b = fish.nearest_break(g, sm, mag, gx, gy, lat, lng)
+    assert b is not None and b["warm_side"] == "E" and b["step_f"] > 1.0
