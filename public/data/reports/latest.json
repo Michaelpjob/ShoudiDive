@@ -1,0 +1,1906 @@
+{
+ "schema": "shoudidive.report/v1",
+ "date": "2026-10-15",
+ "date_label": "Thursday, October 15, 2026",
+ "generated_utc": "2026-10-15T17:37Z",
+ "generated_local": "10:37 AM PDT",
+ "days": [
+  {
+   "key": "today",
+   "date": "2026-10-15",
+   "label": "Today"
+  },
+  {
+   "key": "tomorrow",
+   "date": "2026-10-16",
+   "label": "Friday"
+  }
+ ],
+ "can_i_go": {
+  "shore": [
+   {
+    "id": "la-jolla-cove",
+    "name": "La Jolla Cove",
+    "short": "La Jolla Cove",
+    "note": "North-facing; Point La Jolla blocks most south swell.",
+    "faces_deg": 330,
+    "depth_m": 10,
+    "days": {
+     "today": {
+      "level": "marginal",
+      "exposure": "lee",
+      "swell_from_deg": 200,
+      "factors": [
+       {
+        "key": "headlines",
+        "label": "NWS beach headlines",
+        "level": "marginal",
+        "value": "Beach Hazards Statement",
+        "rule": "Any High Surf Advisory or Warning is outside; a Beach Hazards or Rip Current Statement is outside at a site facing the swell, marginal in its lee.",
+        "source": "alerts",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "rip",
+        "label": "Rip current risk",
+        "level": "marginal",
+        "value": "High (county forecast); lowered one level because the entry is in the swell's lee",
+        "rule": "Low is within, moderate marginal, high outside (NWS Surf Zone Forecast).",
+        "source": "srf_sgx",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "surf",
+        "label": "Surf at the entry",
+        "level": "within",
+        "value": "county sets to 6 ft from 200°; the entry in the swell's lee, so about 2 ft here",
+        "rule": "County sets scaled by how the entry faces the swell (1.0 facing, 0.6 at an angle, 0.35 in the lee); under 2.5 ft within, under 4.5 ft marginal, otherwise outside; long-period swell (13 s+) raises it one level where the entry faces the swell.",
+        "source": "srf_sgx",
+        "tag": "Modeled",
+        "required": true
+       },
+       {
+        "key": "onshore_wind",
+        "label": "Wind into the entry",
+        "level": "within",
+        "value": "N/NW up to 10 kt (onshore here)",
+        "rule": "Wind from within 60° of the entry's facing: 15 kt marginal, 20 kt outside.",
+        "source": "cwf_sgx",
+        "tag": "Rule",
+        "required": false
+       },
+       {
+        "key": "thunder",
+        "label": "Thunderstorms",
+        "level": "within",
+        "value": "None expected",
+        "rule": "Any thunder is outside.",
+        "source": "srf_sgx",
+        "tag": "Rule",
+        "required": false
+       },
+       {
+        "key": "rain",
+        "label": "Rain in the last 72 hours",
+        "level": "within",
+        "value": "0.00 in at the gauge",
+        "rule": "San Diego County: avoid ocean contact for 72 hours after rain (0.2 in or more).",
+        "source": "rain",
+        "tag": "Observed",
+        "required": false
+       }
+      ],
+      "label": "Marginal",
+      "why": "NWS beach headlines: Beach Hazards Statement. Rip current risk: High (county forecast); lowered one level because the entry is in the swell's lee."
+     },
+     "tomorrow": {
+      "level": "within",
+      "exposure": "lee",
+      "swell_from_deg": 200,
+      "factors": [
+       {
+        "key": "headlines",
+        "label": "NWS beach headlines",
+        "level": "within",
+        "value": "none in effect",
+        "rule": "Any High Surf Advisory or Warning is outside; a Beach Hazards or Rip Current Statement is outside at a site facing the swell, marginal in its lee.",
+        "source": "alerts",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "rip",
+        "label": "Rip current risk",
+        "level": "within",
+        "value": "Moderate (county forecast); lowered one level because the entry is in the swell's lee",
+        "rule": "Low is within, moderate marginal, high outside (NWS Surf Zone Forecast).",
+        "source": "srf_sgx",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "surf",
+        "label": "Surf at the entry",
+        "level": "within",
+        "value": "county sets to 5 ft from 200°; the entry in the swell's lee, so about 2 ft here",
+        "rule": "County sets scaled by how the entry faces the swell (1.0 facing, 0.6 at an angle, 0.35 in the lee); under 2.5 ft within, under 4.5 ft marginal, otherwise outside; long-period swell (13 s+) raises it one level where the entry faces the swell.",
+        "source": "srf_sgx",
+        "tag": "Modeled",
+        "required": true
+       },
+       {
+        "key": "onshore_wind",
+        "label": "Wind into the entry",
+        "level": "within",
+        "value": "NE up to 15 kt (not onshore here)",
+        "rule": "Wind from within 60° of the entry's facing: 15 kt marginal, 20 kt outside.",
+        "source": "cwf_sgx",
+        "tag": "Rule",
+        "required": false
+       },
+       {
+        "key": "thunder",
+        "label": "Thunderstorms",
+        "level": "within",
+        "value": "None expected",
+        "rule": "Any thunder is outside.",
+        "source": "srf_sgx",
+        "tag": "Rule",
+        "required": false
+       },
+       {
+        "key": "rain",
+        "label": "Rain in the last 72 hours",
+        "level": "within",
+        "value": "0.00 in at the gauge",
+        "rule": "San Diego County: avoid ocean contact for 72 hours after rain (0.2 in or more).",
+        "source": "rain",
+        "tag": "Observed",
+        "required": false
+       }
+      ],
+      "label": "Within our thresholds",
+      "why": "Every factor we rate is within our thresholds."
+     }
+    }
+   },
+   {
+    "id": "la-jolla-shores",
+    "name": "La Jolla Shores (Vallecitos, Marine Room)",
+    "short": "La Jolla Shores",
+    "note": "West-facing beach entry; south swell wraps in obliquely.",
+    "faces_deg": 275,
+    "depth_m": 12,
+    "days": {
+     "today": {
+      "level": "outside",
+      "exposure": "oblique",
+      "swell_from_deg": 200,
+      "factors": [
+       {
+        "key": "headlines",
+        "label": "NWS beach headlines",
+        "level": "outside",
+        "value": "Beach Hazards Statement",
+        "rule": "Any High Surf Advisory or Warning is outside; a Beach Hazards or Rip Current Statement is outside at a site facing the swell, marginal in its lee.",
+        "source": "alerts",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "rip",
+        "label": "Rip current risk",
+        "level": "outside",
+        "value": "High (county forecast)",
+        "rule": "Low is within, moderate marginal, high outside (NWS Surf Zone Forecast).",
+        "source": "srf_sgx",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "surf",
+        "label": "Surf at the entry",
+        "level": "marginal",
+        "value": "county sets to 6 ft from 200°; the entry takes the swell at an angle, so about 4 ft here",
+        "rule": "County sets scaled by how the entry faces the swell (1.0 facing, 0.6 at an angle, 0.35 in the lee); under 2.5 ft within, under 4.5 ft marginal, otherwise outside; long-period swell (13 s+) raises it one level where the entry faces the swell.",
+        "source": "srf_sgx",
+        "tag": "Modeled",
+        "required": true
+       },
+       {
+        "key": "onshore_wind",
+        "label": "Wind into the entry",
+        "level": "within",
+        "value": "N/NW up to 10 kt (onshore here)",
+        "rule": "Wind from within 60° of the entry's facing: 15 kt marginal, 20 kt outside.",
+        "source": "cwf_sgx",
+        "tag": "Rule",
+        "required": false
+       },
+       {
+        "key": "thunder",
+        "label": "Thunderstorms",
+        "level": "within",
+        "value": "None expected",
+        "rule": "Any thunder is outside.",
+        "source": "srf_sgx",
+        "tag": "Rule",
+        "required": false
+       },
+       {
+        "key": "rain",
+        "label": "Rain in the last 72 hours",
+        "level": "within",
+        "value": "0.00 in at the gauge",
+        "rule": "San Diego County: avoid ocean contact for 72 hours after rain (0.2 in or more).",
+        "source": "rain",
+        "tag": "Observed",
+        "required": false
+       }
+      ],
+      "label": "Outside our thresholds",
+      "why": "NWS beach headlines: Beach Hazards Statement. Rip current risk: High (county forecast). Surf at the entry: county sets to 6 ft from 200°; the entry takes the swell at an angle, so about 4 ft here."
+     },
+     "tomorrow": {
+      "level": "marginal",
+      "exposure": "oblique",
+      "swell_from_deg": 200,
+      "factors": [
+       {
+        "key": "headlines",
+        "label": "NWS beach headlines",
+        "level": "within",
+        "value": "none in effect",
+        "rule": "Any High Surf Advisory or Warning is outside; a Beach Hazards or Rip Current Statement is outside at a site facing the swell, marginal in its lee.",
+        "source": "alerts",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "rip",
+        "label": "Rip current risk",
+        "level": "marginal",
+        "value": "Moderate (county forecast)",
+        "rule": "Low is within, moderate marginal, high outside (NWS Surf Zone Forecast).",
+        "source": "srf_sgx",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "surf",
+        "label": "Surf at the entry",
+        "level": "marginal",
+        "value": "county sets to 5 ft from 200°; the entry takes the swell at an angle, so about 3 ft here",
+        "rule": "County sets scaled by how the entry faces the swell (1.0 facing, 0.6 at an angle, 0.35 in the lee); under 2.5 ft within, under 4.5 ft marginal, otherwise outside; long-period swell (13 s+) raises it one level where the entry faces the swell.",
+        "source": "srf_sgx",
+        "tag": "Modeled",
+        "required": true
+       },
+       {
+        "key": "onshore_wind",
+        "label": "Wind into the entry",
+        "level": "within",
+        "value": "NE up to 15 kt (not onshore here)",
+        "rule": "Wind from within 60° of the entry's facing: 15 kt marginal, 20 kt outside.",
+        "source": "cwf_sgx",
+        "tag": "Rule",
+        "required": false
+       },
+       {
+        "key": "thunder",
+        "label": "Thunderstorms",
+        "level": "within",
+        "value": "None expected",
+        "rule": "Any thunder is outside.",
+        "source": "srf_sgx",
+        "tag": "Rule",
+        "required": false
+       },
+       {
+        "key": "rain",
+        "label": "Rain in the last 72 hours",
+        "level": "within",
+        "value": "0.00 in at the gauge",
+        "rule": "San Diego County: avoid ocean contact for 72 hours after rain (0.2 in or more).",
+        "source": "rain",
+        "tag": "Observed",
+        "required": false
+       }
+      ],
+      "label": "Marginal",
+      "why": "Rip current risk: Moderate (county forecast). Surf at the entry: county sets to 5 ft from 200°; the entry takes the swell at an angle, so about 3 ft here."
+     }
+    }
+   },
+   {
+    "id": "point-loma-shore",
+    "name": "Point Loma and Sunset Cliffs (shore entries)",
+    "short": "Point Loma and Sunset Cliffs",
+    "note": "Rocky west/southwest-facing entries, open to south and west swell.",
+    "faces_deg": 250,
+    "depth_m": 10,
+    "days": {
+     "today": {
+      "level": "outside",
+      "exposure": "into",
+      "swell_from_deg": 200,
+      "factors": [
+       {
+        "key": "headlines",
+        "label": "NWS beach headlines",
+        "level": "outside",
+        "value": "Beach Hazards Statement",
+        "rule": "Any High Surf Advisory or Warning is outside; a Beach Hazards or Rip Current Statement is outside at a site facing the swell, marginal in its lee.",
+        "source": "alerts",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "surf",
+        "label": "Surf at the entry",
+        "level": "outside",
+        "value": "county sets to 6 ft from 200°; the entry faces the swell, so about 6 ft here; raised one level for 15-second swell",
+        "rule": "County sets scaled by how the entry faces the swell (1.0 facing, 0.6 at an angle, 0.35 in the lee); under 2.5 ft within, under 4.5 ft marginal, otherwise outside; long-period swell (13 s+) raises it one level where the entry faces the swell.",
+        "source": "srf_sgx",
+        "tag": "Modeled",
+        "required": true
+       },
+       {
+        "key": "onshore_wind",
+        "label": "Wind into the entry",
+        "level": "within",
+        "value": "N/NW up to 10 kt (not onshore here)",
+        "rule": "Wind from within 60° of the entry's facing: 15 kt marginal, 20 kt outside.",
+        "source": "cwf_sgx",
+        "tag": "Rule",
+        "required": false
+       },
+       {
+        "key": "thunder",
+        "label": "Thunderstorms",
+        "level": "within",
+        "value": "None expected",
+        "rule": "Any thunder is outside.",
+        "source": "srf_sgx",
+        "tag": "Rule",
+        "required": false
+       },
+       {
+        "key": "rain",
+        "label": "Rain in the last 72 hours",
+        "level": "within",
+        "value": "0.00 in at the gauge",
+        "rule": "San Diego County: avoid ocean contact for 72 hours after rain (0.2 in or more).",
+        "source": "rain",
+        "tag": "Observed",
+        "required": false
+       }
+      ],
+      "label": "Outside our thresholds",
+      "why": "NWS beach headlines: Beach Hazards Statement. Surf at the entry: county sets to 6 ft from 200°; the entry faces the swell, so about 6 ft here; raised one level for 15-second swell."
+     },
+     "tomorrow": {
+      "level": "outside",
+      "exposure": "into",
+      "swell_from_deg": 200,
+      "factors": [
+       {
+        "key": "headlines",
+        "label": "NWS beach headlines",
+        "level": "within",
+        "value": "none in effect",
+        "rule": "Any High Surf Advisory or Warning is outside; a Beach Hazards or Rip Current Statement is outside at a site facing the swell, marginal in its lee.",
+        "source": "alerts",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "surf",
+        "label": "Surf at the entry",
+        "level": "outside",
+        "value": "county sets to 5 ft from 200°; the entry faces the swell, so about 5 ft here; raised one level for 15-second swell",
+        "rule": "County sets scaled by how the entry faces the swell (1.0 facing, 0.6 at an angle, 0.35 in the lee); under 2.5 ft within, under 4.5 ft marginal, otherwise outside; long-period swell (13 s+) raises it one level where the entry faces the swell.",
+        "source": "srf_sgx",
+        "tag": "Modeled",
+        "required": true
+       },
+       {
+        "key": "onshore_wind",
+        "label": "Wind into the entry",
+        "level": "within",
+        "value": "NE up to 15 kt (not onshore here)",
+        "rule": "Wind from within 60° of the entry's facing: 15 kt marginal, 20 kt outside.",
+        "source": "cwf_sgx",
+        "tag": "Rule",
+        "required": false
+       },
+       {
+        "key": "thunder",
+        "label": "Thunderstorms",
+        "level": "within",
+        "value": "None expected",
+        "rule": "Any thunder is outside.",
+        "source": "srf_sgx",
+        "tag": "Rule",
+        "required": false
+       },
+       {
+        "key": "rain",
+        "label": "Rain in the last 72 hours",
+        "level": "within",
+        "value": "0.00 in at the gauge",
+        "rule": "San Diego County: avoid ocean contact for 72 hours after rain (0.2 in or more).",
+        "source": "rain",
+        "tag": "Observed",
+        "required": false
+       }
+      ],
+      "label": "Outside our thresholds",
+      "why": "Surf at the entry: county sets to 5 ft from 200°; the entry faces the swell, so about 5 ft here; raised one level for 15-second swell."
+     }
+    }
+   },
+   {
+    "id": "laguna",
+    "name": "Laguna Beach (Shaws Cove, Crescent Bay)",
+    "short": "Laguna Beach",
+    "note": "Southwest-facing coves, open to south swell. Nearest live buoy is San Pedro South, about 25 nm away.",
+    "faces_deg": 235,
+    "depth_m": 10,
+    "days": {
+     "today": {
+      "level": "outside",
+      "exposure": "into",
+      "swell_from_deg": 190,
+      "factors": [
+       {
+        "key": "headlines",
+        "label": "NWS beach headlines",
+        "level": "outside",
+        "value": "Beach Hazards Statement",
+        "rule": "Any High Surf Advisory or Warning is outside; a Beach Hazards or Rip Current Statement is outside at a site facing the swell, marginal in its lee.",
+        "source": "alerts",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "rip",
+        "label": "Rip current risk",
+        "level": "outside",
+        "value": "High (county forecast)",
+        "rule": "Low is within, moderate marginal, high outside (NWS Surf Zone Forecast).",
+        "source": "srf_sgx",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "surf",
+        "label": "Surf at the entry",
+        "level": "outside",
+        "value": "county sets to 6 ft from 190°; the entry faces the swell, so about 6 ft here; raised one level for 15-second swell",
+        "rule": "County sets scaled by how the entry faces the swell (1.0 facing, 0.6 at an angle, 0.35 in the lee); under 2.5 ft within, under 4.5 ft marginal, otherwise outside; long-period swell (13 s+) raises it one level where the entry faces the swell.",
+        "source": "srf_sgx",
+        "tag": "Modeled",
+        "required": true
+       },
+       {
+        "key": "onshore_wind",
+        "label": "Wind into the entry",
+        "level": "within",
+        "value": "NE/NW/N up to 20 kt (not onshore here)",
+        "rule": "Wind from within 60° of the entry's facing: 15 kt marginal, 20 kt outside.",
+        "source": "cwf_lox",
+        "tag": "Rule",
+        "required": false
+       },
+       {
+        "key": "thunder",
+        "label": "Thunderstorms",
+        "level": "within",
+        "value": "None expected",
+        "rule": "Any thunder is outside.",
+        "source": "srf_sgx",
+        "tag": "Rule",
+        "required": false
+       },
+       {
+        "key": "rain",
+        "label": "Rain in the last 72 hours",
+        "level": "within",
+        "value": "0.00 in at the gauge",
+        "rule": "San Diego County: avoid ocean contact for 72 hours after rain (0.2 in or more).",
+        "source": "rain",
+        "tag": "Observed",
+        "required": false
+       }
+      ],
+      "label": "Outside our thresholds",
+      "why": "NWS beach headlines: Beach Hazards Statement. Rip current risk: High (county forecast). Surf at the entry: county sets to 6 ft from 190°; the entry faces the swell, so about 6 ft here; raised one level for 15-second swell."
+     },
+     "tomorrow": {
+      "level": "outside",
+      "exposure": "into",
+      "swell_from_deg": 180,
+      "factors": [
+       {
+        "key": "headlines",
+        "label": "NWS beach headlines",
+        "level": "within",
+        "value": "none in effect",
+        "rule": "Any High Surf Advisory or Warning is outside; a Beach Hazards or Rip Current Statement is outside at a site facing the swell, marginal in its lee.",
+        "source": "alerts",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "rip",
+        "label": "Rip current risk",
+        "level": "marginal",
+        "value": "Moderate (county forecast)",
+        "rule": "Low is within, moderate marginal, high outside (NWS Surf Zone Forecast).",
+        "source": "srf_sgx",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "surf",
+        "label": "Surf at the entry",
+        "level": "outside",
+        "value": "county sets to 5 ft from 180°; the entry faces the swell, so about 5 ft here; raised one level for 15-second swell",
+        "rule": "County sets scaled by how the entry faces the swell (1.0 facing, 0.6 at an angle, 0.35 in the lee); under 2.5 ft within, under 4.5 ft marginal, otherwise outside; long-period swell (13 s+) raises it one level where the entry faces the swell.",
+        "source": "srf_sgx",
+        "tag": "Modeled",
+        "required": true
+       },
+       {
+        "key": "onshore_wind",
+        "label": "Wind into the entry",
+        "level": "within",
+        "value": "NE/E up to 30 kt (not onshore here)",
+        "rule": "Wind from within 60° of the entry's facing: 15 kt marginal, 20 kt outside.",
+        "source": "cwf_lox",
+        "tag": "Rule",
+        "required": false
+       },
+       {
+        "key": "thunder",
+        "label": "Thunderstorms",
+        "level": "within",
+        "value": "None expected",
+        "rule": "Any thunder is outside.",
+        "source": "srf_sgx",
+        "tag": "Rule",
+        "required": false
+       },
+       {
+        "key": "rain",
+        "label": "Rain in the last 72 hours",
+        "level": "within",
+        "value": "0.00 in at the gauge",
+        "rule": "San Diego County: avoid ocean contact for 72 hours after rain (0.2 in or more).",
+        "source": "rain",
+        "tag": "Observed",
+        "required": false
+       }
+      ],
+      "label": "Outside our thresholds",
+      "why": "Surf at the entry: county sets to 5 ft from 180°; the entry faces the swell, so about 5 ft here; raised one level for 15-second swell. Rip current risk: Moderate (county forecast)."
+     }
+    }
+   }
+  ],
+  "boat": [
+   {
+    "id": "inshore-sd",
+    "name": "San Diego inshore (Point Loma and La Jolla kelp)",
+    "short": "San Diego inshore",
+    "zone": "PZZ740",
+    "note": null,
+    "route_zones": [],
+    "days": {
+     "today": {
+      "level": "within",
+      "factors": [
+       {
+        "key": "headlines",
+        "label": "NWS marine headlines",
+        "level": "within",
+        "value": "none in effect",
+        "rule": "Any advisory or warning in a zone crossed is outside; a gale or storm watch is outside for crossings, marginal otherwise.",
+        "source": "alerts",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "wind",
+        "label": "Wind",
+        "level": "within",
+        "value": "N/NW up to 10 kt",
+        "rule": "Sustained 15 kt or less within, up to 20 kt marginal; gusts 30 kt+ outside.",
+        "source": "cwf_sgx",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "seas",
+        "label": "Seas",
+        "level": "within",
+        "value": "3 to 4 ft",
+        "rule": "Combined seas 5 ft or less within, up to 7 ft marginal.",
+        "source": "cwf_sgx",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "steepness",
+        "label": "Wave steepness",
+        "level": "within",
+        "value": "NW 2 ft at 4 s, W 1 ft at 13 s, S 3 ft at 15 s",
+        "rule": "NWS San Diego steepness rule: seas of 6-10 ft with height (ft) at or above period (s), or 11 ft+, is outside; any train with period under twice its height is marginal (short, steep chop).",
+        "source": "cwf_sgx",
+        "tag": "Rule",
+        "required": true
+       }
+      ],
+      "zones": [
+       "PZZ740"
+      ],
+      "label": "Within our thresholds",
+      "why": "Every factor we rate is within our thresholds."
+     },
+     "tomorrow": {
+      "level": "marginal",
+      "factors": [
+       {
+        "key": "headlines",
+        "label": "NWS marine headlines",
+        "level": "within",
+        "value": "none in effect",
+        "rule": "Any advisory or warning in a zone crossed is outside; a gale or storm watch is outside for crossings, marginal otherwise.",
+        "source": "alerts",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "wind",
+        "label": "Wind",
+        "level": "within",
+        "value": "NE up to 15 kt, gusts 20 kt",
+        "rule": "Sustained 15 kt or less within, up to 20 kt marginal; gusts 30 kt+ outside.",
+        "source": "cwf_sgx",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "seas",
+        "label": "Seas",
+        "level": "within",
+        "value": "3 to 5 ft",
+        "rule": "Combined seas 5 ft or less within, up to 7 ft marginal.",
+        "source": "cwf_sgx",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "steepness",
+        "label": "Wave steepness",
+        "level": "marginal",
+        "value": "NE 3 ft at 4 s, NW 1 ft at 13 s, S 3 ft at 15 s (steepest: 3 ft at 4 s)",
+        "rule": "NWS San Diego steepness rule: seas of 6-10 ft with height (ft) at or above period (s), or 11 ft+, is outside; any train with period under twice its height is marginal (short, steep chop).",
+        "source": "cwf_sgx",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "santa_ana",
+        "label": "Offshore (Santa Ana-pattern) wind",
+        "level": "marginal",
+        "value": "NE wind, 15 kt gusting 20",
+        "rule": "East or northeast wind gusting 20 kt+ (or sustained 20 kt+): marginal inshore, outside beyond.",
+        "source": "cwf_sgx",
+        "tag": "Rule",
+        "required": false
+       }
+      ],
+      "zones": [
+       "PZZ740"
+      ],
+      "label": "Marginal",
+      "why": "Wave steepness: NE 3 ft at 4 s, NW 1 ft at 13 s, S 3 ft at 15 s (steepest: 3 ft at 4 s). Offshore (Santa Ana-pattern) wind: NE wind, 15 kt gusting 20."
+     }
+    }
+   },
+   {
+    "id": "coronados",
+    "name": "Coronado Islands (Mexican waters)",
+    "short": "the Coronados",
+    "zone": "PMZ009",
+    "note": "Forecast is NHC zone PMZ009 (border to 30N within 60 nm). Passport, Mexican fishing licenses and CBP arrival reporting apply.",
+    "route_zones": [
+     "PZZ740"
+    ],
+    "days": {
+     "today": {
+      "level": "marginal",
+      "factors": [
+       {
+        "key": "headlines",
+        "label": "NWS marine headlines",
+        "level": "within",
+        "value": "none in effect",
+        "rule": "Any advisory or warning in a zone crossed is outside; a gale or storm watch is outside for crossings, marginal otherwise.",
+        "source": "alerts",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "wind",
+        "label": "Wind",
+        "level": "within",
+        "value": "NW up to 15 kt",
+        "rule": "Sustained 15 kt or less within, up to 20 kt marginal; gusts 25 kt+ outside.",
+        "source": "off_nhc",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "seas",
+        "label": "Seas",
+        "level": "marginal",
+        "value": "3 to 5 ft",
+        "rule": "Combined seas 4 ft or less within, up to 7 ft marginal.",
+        "source": "off_nhc",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "steepness",
+        "label": "Wave steepness",
+        "level": "within",
+        "value": "5 ft at 14 s",
+        "rule": "NWS San Diego steepness rule: seas of 6-10 ft with height (ft) at or above period (s), or 11 ft+, is outside; any train with period under twice its height is marginal (short, steep chop).",
+        "source": "off_nhc",
+        "tag": "Rule",
+        "required": true
+       }
+      ],
+      "zones": [
+       "PMZ009",
+       "PZZ740"
+      ],
+      "label": "Marginal",
+      "why": "Seas: 3 to 5 ft."
+     },
+     "tomorrow": {
+      "level": "outside",
+      "factors": [
+       {
+        "key": "headlines",
+        "label": "NWS marine headlines",
+        "level": "within",
+        "value": "none in effect",
+        "rule": "Any advisory or warning in a zone crossed is outside; a gale or storm watch is outside for crossings, marginal otherwise.",
+        "source": "alerts",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "wind",
+        "label": "Wind",
+        "level": "within",
+        "value": "N/NE/E up to 15 kt",
+        "rule": "Sustained 15 kt or less within, up to 20 kt marginal; gusts 25 kt+ outside.",
+        "source": "off_nhc",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "seas",
+        "label": "Seas",
+        "level": "marginal",
+        "value": "3 to 5 ft",
+        "rule": "Combined seas 4 ft or less within, up to 7 ft marginal.",
+        "source": "off_nhc",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "steepness",
+        "label": "Wave steepness",
+        "level": "marginal",
+        "value": "NE 3 ft at 4 s, NW 1 ft at 13 s, S 3 ft at 15 s (steepest: 3 ft at 4 s) (San Diego inshore waters, on the way)",
+        "rule": "NWS San Diego steepness rule: seas of 6-10 ft with height (ft) at or above period (s), or 11 ft+, is outside; any train with period under twice its height is marginal (short, steep chop).",
+        "source": "cwf_sgx",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "santa_ana",
+        "label": "Offshore (Santa Ana-pattern) wind",
+        "level": "outside",
+        "value": "NE wind, 15 kt gusting 20 (San Diego inshore waters, on the way)",
+        "rule": "East or northeast wind gusting 20 kt+ (or sustained 20 kt+): marginal inshore, outside beyond.",
+        "source": "cwf_sgx",
+        "tag": "Rule",
+        "required": false
+       }
+      ],
+      "zones": [
+       "PMZ009",
+       "PZZ740"
+      ],
+      "label": "Outside our thresholds",
+      "why": "Offshore (Santa Ana-pattern) wind: NE wind, 15 kt gusting 20 (San Diego inshore waters, on the way). Seas: 3 to 5 ft. Wave steepness: NE 3 ft at 4 s, NW 1 ft at 13 s, S 3 ft at 15 s (steepest: 3 ft at 4 s) (San Diego inshore waters, on the way)."
+     }
+    }
+   },
+   {
+    "id": "banks",
+    "name": "Offshore banks 10-60 nm (9 Mile, the 43, 302, 371, 425)",
+    "short": "the offshore banks",
+    "zone": "PZZ745",
+    "note": null,
+    "route_zones": [
+     "PZZ740"
+    ],
+    "days": {
+     "today": {
+      "level": "within",
+      "factors": [
+       {
+        "key": "headlines",
+        "label": "NWS marine headlines",
+        "level": "within",
+        "value": "none in effect",
+        "rule": "Any advisory or warning in a zone crossed is outside; a gale or storm watch is outside for crossings, marginal otherwise.",
+        "source": "alerts",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "wind",
+        "label": "Wind",
+        "level": "within",
+        "value": "NW up to 15 kt",
+        "rule": "Sustained 15 kt or less within, up to 20 kt marginal; gusts 25 kt+ outside.",
+        "source": "cwf_sgx",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "seas",
+        "label": "Seas",
+        "level": "within",
+        "value": "3 to 4 ft",
+        "rule": "Combined seas 4 ft or less within, up to 7 ft marginal.",
+        "source": "cwf_sgx",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "steepness",
+        "label": "Wave steepness",
+        "level": "within",
+        "value": "NW 2 ft at 4 s, W 1 ft at 13 s, S 3 ft at 15 s",
+        "rule": "NWS San Diego steepness rule: seas of 6-10 ft with height (ft) at or above period (s), or 11 ft+, is outside; any train with period under twice its height is marginal (short, steep chop).",
+        "source": "cwf_sgx",
+        "tag": "Rule",
+        "required": true
+       }
+      ],
+      "zones": [
+       "PZZ745",
+       "PZZ740"
+      ],
+      "label": "Within our thresholds",
+      "why": "Every factor we rate is within our thresholds."
+     },
+     "tomorrow": {
+      "level": "outside",
+      "factors": [
+       {
+        "key": "headlines",
+        "label": "NWS marine headlines",
+        "level": "within",
+        "value": "none in effect",
+        "rule": "Any advisory or warning in a zone crossed is outside; a gale or storm watch is outside for crossings, marginal otherwise.",
+        "source": "alerts",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "wind",
+        "label": "Wind",
+        "level": "within",
+        "value": "NE up to 15 kt, gusts 20 kt",
+        "rule": "Sustained 15 kt or less within, up to 20 kt marginal; gusts 25 kt+ outside.",
+        "source": "cwf_sgx",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "seas",
+        "label": "Seas",
+        "level": "marginal",
+        "value": "3 to 5 ft (San Diego inshore waters, on the way)",
+        "rule": "Combined seas 4 ft or less within, up to 7 ft marginal.",
+        "source": "cwf_sgx",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "steepness",
+        "label": "Wave steepness",
+        "level": "marginal",
+        "value": "N 3 ft at 4 s, W 1 ft at 13 s, S 3 ft at 15 s (steepest: 3 ft at 4 s)",
+        "rule": "NWS San Diego steepness rule: seas of 6-10 ft with height (ft) at or above period (s), or 11 ft+, is outside; any train with period under twice its height is marginal (short, steep chop).",
+        "source": "cwf_sgx",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "santa_ana",
+        "label": "Offshore (Santa Ana-pattern) wind",
+        "level": "outside",
+        "value": "NE wind, 15 kt gusting 20",
+        "rule": "East or northeast wind gusting 20 kt+ (or sustained 20 kt+): marginal inshore, outside beyond.",
+        "source": "cwf_sgx",
+        "tag": "Rule",
+        "required": false
+       }
+      ],
+      "zones": [
+       "PZZ745",
+       "PZZ740"
+      ],
+      "label": "Outside our thresholds",
+      "why": "Offshore (Santa Ana-pattern) wind: NE wind, 15 kt gusting 20. Seas: 3 to 5 ft (San Diego inshore waters, on the way). Wave steepness: N 3 ft at 4 s, W 1 ft at 13 s, S 3 ft at 15 s (steepest: 3 ft at 4 s)."
+     }
+    }
+   },
+   {
+    "id": "catalina",
+    "name": "Catalina and the San Pedro Channel",
+    "short": "Catalina and the San Pedro Channel",
+    "zone": "PZZ655",
+    "note": null,
+    "route_zones": [],
+    "days": {
+     "today": {
+      "level": "outside",
+      "factors": [
+       {
+        "key": "headlines",
+        "label": "NWS marine headlines",
+        "level": "outside",
+        "value": "Small Craft Advisory",
+        "rule": "Any advisory or warning in a zone crossed is outside; a gale or storm watch is outside for crossings, marginal otherwise.",
+        "source": "alerts",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "wind",
+        "label": "Wind",
+        "level": "outside",
+        "value": "NE/NW/N up to 20 kt, gusts 25 kt",
+        "rule": "Sustained 15 kt or less within, up to 20 kt marginal; gusts 25 kt+ outside.",
+        "source": "cwf_lox",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "seas",
+        "label": "Seas",
+        "level": "within",
+        "value": "3 to 4 ft",
+        "rule": "Combined seas 4 ft or less within, up to 7 ft marginal.",
+        "source": "cwf_lox",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "steepness",
+        "label": "Wave steepness",
+        "level": "within",
+        "value": "N 3 ft at 6 s, S 2 ft at 15 s",
+        "rule": "NWS San Diego steepness rule: seas of 6-10 ft with height (ft) at or above period (s), or 11 ft+, is outside; any train with period under twice its height is marginal (short, steep chop).",
+        "source": "cwf_lox",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "santa_ana",
+        "label": "Offshore (Santa Ana-pattern) wind",
+        "level": "outside",
+        "value": "NE wind, 20 kt gusting 25",
+        "rule": "East or northeast wind gusting 20 kt+ (or sustained 20 kt+): marginal inshore, outside beyond.",
+        "source": "cwf_lox",
+        "tag": "Rule",
+        "required": false
+       }
+      ],
+      "zones": [
+       "PZZ655"
+      ],
+      "label": "Outside our thresholds",
+      "why": "NWS marine headlines: Small Craft Advisory. Wind: NE/NW/N up to 20 kt, gusts 25 kt. Offshore (Santa Ana-pattern) wind: NE wind, 20 kt gusting 25."
+     },
+     "tomorrow": {
+      "level": "outside",
+      "factors": [
+       {
+        "key": "headlines",
+        "label": "NWS marine headlines",
+        "level": "outside",
+        "value": "Gale Watch",
+        "rule": "Any advisory or warning in a zone crossed is outside; a gale or storm watch is outside for crossings, marginal otherwise.",
+        "source": "alerts",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "wind",
+        "label": "Wind",
+        "level": "outside",
+        "value": "NE/E up to 30 kt, gusts 35 kt",
+        "rule": "Sustained 15 kt or less within, up to 20 kt marginal; gusts 25 kt+ outside.",
+        "source": "cwf_lox",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "seas",
+        "label": "Seas",
+        "level": "marginal",
+        "value": "3 to 5 ft",
+        "rule": "Combined seas 4 ft or less within, up to 7 ft marginal.",
+        "source": "cwf_lox",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "steepness",
+        "label": "Wave steepness",
+        "level": "marginal",
+        "value": "NE 4 ft at 5 s, S 2 ft at 15 s (steepest: 4 ft at 5 s)",
+        "rule": "NWS San Diego steepness rule: seas of 6-10 ft with height (ft) at or above period (s), or 11 ft+, is outside; any train with period under twice its height is marginal (short, steep chop).",
+        "source": "cwf_lox",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "santa_ana",
+        "label": "Offshore (Santa Ana-pattern) wind",
+        "level": "outside",
+        "value": "E/NE wind, 30 kt gusting 35",
+        "rule": "East or northeast wind gusting 20 kt+ (or sustained 20 kt+): marginal inshore, outside beyond.",
+        "source": "cwf_lox",
+        "tag": "Rule",
+        "required": false
+       }
+      ],
+      "zones": [
+       "PZZ655"
+      ],
+      "label": "Outside our thresholds",
+      "why": "NWS marine headlines: Gale Watch. Wind: NE/E up to 30 kt, gusts 35 kt. Offshore (Santa Ana-pattern) wind: E/NE wind, 30 kt gusting 35."
+     }
+    }
+   },
+   {
+    "id": "outer",
+    "name": "Outer waters: San Clemente and San Nicolas Islands",
+    "short": "the outer islands",
+    "zone": "PZZ676",
+    "note": "Check the Navy's San Clemente Island range (SHOBA) closures before going.",
+    "route_zones": [
+     "PZZ745"
+    ],
+    "days": {
+     "today": {
+      "level": "marginal",
+      "factors": [
+       {
+        "key": "headlines",
+        "label": "NWS marine headlines",
+        "level": "within",
+        "value": "none in effect",
+        "rule": "Any advisory or warning in a zone crossed is outside; a gale or storm watch is outside for crossings, marginal otherwise.",
+        "source": "alerts",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "wind",
+        "label": "Wind",
+        "level": "within",
+        "value": "NW up to 15 kt, gusts 20 kt",
+        "rule": "Sustained 15 kt or less within, up to 20 kt marginal; gusts 25 kt+ outside.",
+        "source": "cwf_lox",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "seas",
+        "label": "Seas",
+        "level": "marginal",
+        "value": "5 to 7 ft",
+        "rule": "Combined seas 4 ft or less within, up to 7 ft marginal.",
+        "source": "cwf_lox",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "steepness",
+        "label": "Wave steepness",
+        "level": "marginal",
+        "value": "N 4 ft at 7 s, NW 3 ft at 13 s, S 3 ft at 15 s (steepest: 4 ft at 7 s)",
+        "rule": "NWS San Diego steepness rule: seas of 6-10 ft with height (ft) at or above period (s), or 11 ft+, is outside; any train with period under twice its height is marginal (short, steep chop).",
+        "source": "cwf_lox",
+        "tag": "Rule",
+        "required": true
+       }
+      ],
+      "zones": [
+       "PZZ676",
+       "PZZ745"
+      ],
+      "label": "Marginal",
+      "why": "Seas: 5 to 7 ft. Wave steepness: N 4 ft at 7 s, NW 3 ft at 13 s, S 3 ft at 15 s (steepest: 4 ft at 7 s)."
+     },
+     "tomorrow": {
+      "level": "outside",
+      "factors": [
+       {
+        "key": "headlines",
+        "label": "NWS marine headlines",
+        "level": "outside",
+        "value": "Small Craft Advisory",
+        "rule": "Any advisory or warning in a zone crossed is outside; a gale or storm watch is outside for crossings, marginal otherwise.",
+        "source": "alerts",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "wind",
+        "label": "Wind",
+        "level": "outside",
+        "value": "NE up to 30 kt",
+        "rule": "Sustained 15 kt or less within, up to 20 kt marginal; gusts 25 kt+ outside.",
+        "source": "cwf_lox",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "seas",
+        "label": "Seas",
+        "level": "marginal",
+        "value": "4 to 6 ft",
+        "rule": "Combined seas 4 ft or less within, up to 7 ft marginal.",
+        "source": "cwf_lox",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "steepness",
+        "label": "Wave steepness",
+        "level": "marginal",
+        "value": "NE 5 ft at 6 s, NW 2 ft at 12 s, S 3 ft at 15 s (steepest: 5 ft at 6 s)",
+        "rule": "NWS San Diego steepness rule: seas of 6-10 ft with height (ft) at or above period (s), or 11 ft+, is outside; any train with period under twice its height is marginal (short, steep chop).",
+        "source": "cwf_lox",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "santa_ana",
+        "label": "Offshore (Santa Ana-pattern) wind",
+        "level": "outside",
+        "value": "NE wind, 30 kt",
+        "rule": "East or northeast wind gusting 20 kt+ (or sustained 20 kt+): marginal inshore, outside beyond.",
+        "source": "cwf_lox",
+        "tag": "Rule",
+        "required": false
+       }
+      ],
+      "zones": [
+       "PZZ676",
+       "PZZ745"
+      ],
+      "label": "Outside our thresholds",
+      "why": "NWS marine headlines: Small Craft Advisory. Wind: NE up to 30 kt. Offshore (Santa Ana-pattern) wind: NE wind, 30 kt."
+     }
+    }
+   }
+  ],
+  "boat_dive": {
+   "name": "Boat dive, San Diego inshore",
+   "days": {
+    "today": {
+     "level": "within",
+     "label": "Within our thresholds",
+     "why": "Surface conditions follow San Diego inshore. Every factor we rate is within our thresholds."
+    },
+    "tomorrow": {
+     "level": "marginal",
+     "label": "Marginal",
+     "why": "Surface conditions follow San Diego inshore. Wave steepness: NE 3 ft at 4 s, NW 1 ft at 13 s, S 3 ft at 15 s (steepest: 3 ft at 4 s). Offshore (Santa Ana-pattern) wind: NE wind, 15 kt gusting 20."
+    }
+   },
+   "current": "Current is not measured at dive depth by any public feed. Within our thresholds up to 0.5 kt; 0.5-1 kt needs descent and trail lines; over 1 kt only with training; 2 kt is beyond anyone's ability to hold position (DAN). 1 kt is about 1.7 ft per second."
+  },
+  "freedive": "Solo freediving is outside our thresholds in any conditions: one up, one down. Never hyperventilate. Size exposure protection for the bottom temperature, not the surface.",
+  "headlines": [
+   {
+    "event": "Small Craft Advisory",
+    "area": "Outer waters from Santa Cruz Island to San Clemente Island to 60 NM offshore including San Nicolas and Santa Barbara Islands",
+    "zones": [
+     "PZZ676"
+    ],
+    "from": "2:00 AM Oct 16",
+    "until": "5:00 PM Oct 16",
+    "headline": "Small Craft Advisory issued October 15 at 7:05AM PDT until October 16 at 5:00PM PDT by NWS Los Angeles/Oxnard CA"
+   },
+   {
+    "event": "Gale Watch",
+    "area": "East Santa Barbara Channel from Pt. Conception to Pt. Mugu CA including Santa Cruz Island; Inner waters from Point Mugu to San Mateo Pt. CA including Santa Catalina and Anacapa Islands",
+    "zones": [
+     "PZZ650",
+     "PZZ655"
+    ],
+    "from": "3:00 AM Oct 16",
+    "until": "5:00 PM Oct 16",
+    "headline": "Gale Watch issued October 15 at 7:05AM PDT until October 16 at 5:00PM PDT by NWS Los Angeles/Oxnard CA"
+   },
+   {
+    "event": "Small Craft Advisory",
+    "area": "East Santa Barbara Channel from Pt. Conception to Pt. Mugu CA including Santa Cruz Island; Inner waters from Point Mugu to San Mateo Pt. CA including Santa Catalina and Anacapa Islands",
+    "zones": [
+     "PZZ650",
+     "PZZ655"
+    ],
+    "from": "9:00 AM Oct 15",
+    "until": "3:00 AM Oct 16",
+    "headline": "Small Craft Advisory issued October 15 at 7:05AM PDT until October 16 at 3:00AM PDT by NWS Los Angeles/Oxnard CA"
+   },
+   {
+    "event": "Heat Advisory",
+    "area": "San Diego County Coastal Areas; Orange County Coastal",
+    "zones": [
+     "CAZ043",
+     "CAZ552"
+    ],
+    "from": "10:00 AM Oct 15",
+    "until": "8:00 PM Oct 17",
+    "headline": "Heat Advisory issued October 15 at 5:33AM PDT until October 17 at 8:00PM PDT by NWS San Diego CA"
+   },
+   {
+    "event": "Beach Hazards Statement",
+    "area": "San Diego County Coastal Areas; Orange County Coastal",
+    "zones": [
+     "CAZ043",
+     "CAZ552"
+    ],
+    "from": "1:38 AM Oct 15",
+    "until": "2:00 PM Oct 15",
+    "headline": "Beach Hazards Statement issued October 15 at 1:38AM PDT until October 15 at 2:00PM PDT by NWS San Diego CA"
+   }
+  ],
+  "levels": {
+   "within": "Within our thresholds",
+   "marginal": "Marginal",
+   "outside": "Outside our thresholds",
+   "unknown": "Not enough data"
+  }
+ },
+ "water": {
+  "buoys": [
+   {
+    "id": "46254",
+    "name": "Scripps Nearshore (La Jolla)",
+    "status": "ok",
+    "observed": "9:56 AM",
+    "age_h": 0.7,
+    "nearshore": true,
+    "wave_ft": 2.0,
+    "temp_f": 71.1,
+    "swell": {
+     "ft": 1.0,
+     "s": 15.4,
+     "dir": "W"
+    },
+    "wind_waves": {
+     "ft": 1.6,
+     "s": 7.7,
+     "dir": "W"
+    }
+   },
+   {
+    "id": "46232",
+    "name": "Point Loma South",
+    "status": "ok",
+    "observed": "10:26 AM",
+    "age_h": 0.2,
+    "nearshore": true,
+    "wave_ft": 3.9,
+    "temp_f": 72.5,
+    "swell": {
+     "ft": 3.0,
+     "s": 15.4,
+     "dir": "SSW"
+    },
+    "wind_waves": {
+     "ft": 2.3,
+     "s": 3.7,
+     "dir": "NW"
+    }
+   },
+   {
+    "id": "46258",
+    "name": "Mission Bay West",
+    "status": "ok",
+    "observed": "9:56 AM",
+    "age_h": 0.7,
+    "nearshore": true,
+    "wave_ft": 3.6,
+    "temp_f": 72.5,
+    "swell": {
+     "ft": 3.3,
+     "s": 14.3,
+     "dir": "SSW"
+    },
+    "wind_waves": {
+     "ft": 2.0,
+     "s": 3.9,
+     "dir": "NW"
+    }
+   },
+   {
+    "id": "46225",
+    "name": "Torrey Pines Outer",
+    "status": "ok",
+    "observed": "9:56 AM",
+    "age_h": 0.7,
+    "nearshore": true,
+    "wave_ft": 3.3,
+    "temp_f": 73.2,
+    "swell": {
+     "ft": 2.6,
+     "s": 14.3,
+     "dir": "SSW"
+    },
+    "wind_waves": {
+     "ft": 2.0,
+     "s": 8.3,
+     "dir": "W"
+    }
+   },
+   {
+    "id": "46253",
+    "name": "San Pedro South",
+    "status": "ok",
+    "observed": "9:56 AM",
+    "age_h": 0.7,
+    "nearshore": true,
+    "wave_ft": 3.0,
+    "temp_f": 72.9,
+    "swell": {
+     "ft": 2.3,
+     "s": 15.4,
+     "dir": "SSW"
+    },
+    "wind_waves": {
+     "ft": 2.0,
+     "s": 4.8,
+     "dir": "WNW"
+    }
+   },
+   {
+    "id": "46086",
+    "name": "San Clemente Basin",
+    "status": "ok",
+    "observed": "10:00 AM",
+    "age_h": 0.6,
+    "nearshore": false,
+    "wave_ft": 4.3,
+    "temp_f": 70.5,
+    "swell": {
+     "ft": 3.6,
+     "s": 14.8,
+     "dir": "SSW"
+    },
+    "wind_waves": {
+     "ft": 1.6,
+     "s": 4.5,
+     "dir": "WNW"
+    },
+    "wind": {
+     "kt": 10,
+     "gust_kt": 12,
+     "from_deg": 340.0
+    }
+   },
+   {
+    "id": "46047",
+    "name": "Tanner Bank",
+    "status": "ok",
+    "observed": "10:00 AM",
+    "age_h": 0.6,
+    "nearshore": false,
+    "wave_ft": 5.2,
+    "temp_f": 67.8,
+    "wind": {
+     "kt": 8,
+     "gust_kt": 10,
+     "from_deg": 330.0
+    }
+   }
+  ],
+  "piers": [
+   {
+    "name": "Scripps Pier, La Jolla",
+    "temp_f": 70.3,
+    "observed": "10:30 AM"
+   },
+   {
+    "name": "San Diego Bay (Broadway Pier)",
+    "temp_f": 74.7,
+    "observed": "10:30 AM"
+   }
+  ],
+  "surf": {
+   "today": {
+    "rip_risk": "High",
+    "surf_text": "3 to 5 feet, sets to 6 feet",
+    "sets_ft": 6,
+    "swell_from_deg": 200,
+    "thunder": "None expected",
+    "water_temp_lo_f": 69,
+    "water_temp_hi_f": 72
+   },
+   "tomorrow": {
+    "rip_risk": "Moderate",
+    "surf_text": "2 to 4 feet, sets to 5 feet",
+    "sets_ft": 5,
+    "swell_from_deg": 200,
+    "thunder": "None expected",
+    "water_temp_lo_f": null,
+    "water_temp_hi_f": null
+   },
+   "county": "San Diego County",
+   "headlines": [
+    "BEACH HAZARDS STATEMENT THROUGH 2 PM THIS AFTERNOON",
+    "HIGH RIP CURRENT RISK"
+   ]
+  },
+  "marine_text": [
+   {
+    "zone": "PZZ740",
+    "name": "San Diego coastal waters, to 10 nm",
+    "status": "ok",
+    "issued": "201 AM PDT Thu Oct 15 2026",
+    "url": "https://api.weather.gov/products/97a5b10a-3529-431f-878f-3293b5d2b555",
+    "headlines": [],
+    "today": "Wind N 10 kt...becoming NW this afternoon. Seas 3 to 4 ft. Wave Detail: NW 2 ft at 4 seconds, W 1 foot at 13 seconds and S 3 ft at 15 seconds.",
+    "tomorrow": "Wind NE 10 to 15 kt with gusts to 20 kt. Seas 3 to 5 ft. Wave Detail: NE 3 ft at 4 seconds, NW 1 foot at 13 seconds and S 3 ft at 15 seconds."
+   },
+   {
+    "zone": "PZZ745",
+    "name": "San Diego waters 10-60 nm, incl. San Clemente Island",
+    "status": "ok",
+    "issued": "201 AM PDT Thu Oct 15 2026",
+    "url": "https://api.weather.gov/products/97a5b10a-3529-431f-878f-3293b5d2b555",
+    "headlines": [],
+    "today": "Wind NW 10 to 15 kt. Seas 3 to 4 ft. Wave Detail: NW 2 ft at 4 seconds, W 1 foot at 13 seconds and S 3 ft at 15 seconds.",
+    "tomorrow": "Wind NE 10 to 15 kt with gusts to 20 kt. Seas 3 to 4 ft. Wave Detail: N 3 ft at 4 seconds, W 1 foot at 13 seconds and S 3 ft at 15 seconds."
+   },
+   {
+    "zone": "PMZ009",
+    "name": "Mexico: border to 30N within 60 nm (Coronados)",
+    "status": "ok",
+    "issued": "919 AM PDT Thu Oct 15 2026",
+    "url": "https://www.nhc.noaa.gov/text/MIAOFFPZ7.shtml",
+    "headlines": [],
+    "today": "NW winds 10 to 15 kt. Seas 3 to 5 ft. Period 14 seconds.",
+    "tomorrow": "N of 31N, N to NE winds 10 to 15 kt. S of 31N, NE to E winds 10 kt in the morning, becoming variable winds less than 5 kt. Seas 3 to 5 ft. Period 14 seconds."
+   },
+   {
+    "zone": "PZZ655",
+    "name": "Inner waters incl. Catalina",
+    "status": "ok",
+    "issued": "704 AM PDT Thu Oct 15 2026",
+    "url": "https://api.weather.gov/products/e3649789-58bd-4b0d-87ef-d605c7505f8f",
+    "headlines": [
+     "SMALL CRAFT ADVISORY IN EFFECT THROUGH LATE TONIGHT",
+     "GALE WATCH IN EFFECT FROM LATE TONIGHT THROUGH FRIDAY AFTERNOON"
+    ],
+    "today": "From Point Mugu to Santa Monica and the San Pedro Channel, NE wind 10 to 15 kt, becoming 15 to 20 kt with gusts to 25 kt. Otherwise, NW to N wind 10 to 15 kt. Seas 3 to 4 ft. Wave Detail: N 3 ft at 6 seconds and S 2 ft at 15 seconds.",
+    "tomorrow": "From Point Mugu to Santa Monica, NE wind 20 to 30 kt with gusts to 35 kt becoming 15 to 20 kt with gusts to 25 kt in the afternoon. Otherwise, NE wind 10 to 15 kt with gusts to 20 kt. 5 to 20 kt becoming E in the afternoon. Seas 3 to 5 ft. Wave Detail: NE 4 ft at 5 seconds and S 2 ft at 15 seconds."
+   },
+   {
+    "zone": "PZZ676",
+    "name": "Outer waters, Santa Cruz Island to San Clemente Island",
+    "status": "ok",
+    "issued": "704 AM PDT Thu Oct 15 2026",
+    "url": "https://api.weather.gov/products/e3649789-58bd-4b0d-87ef-d605c7505f8f",
+    "headlines": [
+     "SMALL CRAFT ADVISORY IN EFFECT FROM LATE TONIGHT THROUGH FRIDAY AFTERNOON"
+    ],
+    "today": "NW wind 10 to 15 kt with gusts to 20 kt. Seas 5 to 7 ft. Wave Detail: N 4 ft at 7 seconds, NW 3 ft at 13 seconds and S 3 ft at 15 seconds.",
+    "tomorrow": "NE wind 20 to 30 kt. Seas 4 to 6 ft. Wave Detail: NE 5 ft at 6 seconds, NW 2 ft at 12 seconds and S 3 ft at 15 seconds."
+   }
+  ],
+  "sst_field": {
+   "date": "2026-10-12",
+   "date_label": "Oct 12",
+   "age_days": 3,
+   "source": "MUR L4 SST (1 km)"
+  },
+  "chl": {
+   "date": "2026-10-13",
+   "date_label": "Oct 13",
+   "coverage_pct": 60
+  },
+  "thermocline": {
+   "spots": [
+    {
+     "name": "La Jolla",
+     "cliff_ft": 33,
+     "no_cliff": false,
+     "bottom_ft": 165
+    },
+    {
+     "name": "Point Loma",
+     "cliff_ft": 35,
+     "no_cliff": false,
+     "bottom_ft": 320
+    },
+    {
+     "name": "Coronados",
+     "cliff_ft": 39,
+     "no_cliff": false,
+     "bottom_ft": 1938
+    }
+   ],
+   "tag": "Modeled",
+   "method": "ShoudiDive water-column heuristic (seasonal mixed layer shoaled by upwelling); not yet checked against an observed profile."
+  },
+  "tide": {
+   "station": "La Jolla",
+   "events": [
+    {
+     "time": "1:21 AM",
+     "type": "High",
+     "ft": 3.1
+    },
+    {
+     "time": "4:40 AM",
+     "type": "Low",
+     "ft": 2.8
+    },
+    {
+     "time": "11:29 AM",
+     "type": "High",
+     "ft": 5.1
+    },
+    {
+     "time": "7:37 PM",
+     "type": "Low",
+     "ft": 0.8
+    }
+   ]
+  },
+  "sun": {
+   "rise": "6:52 AM",
+   "set": "6:15 PM"
+  },
+  "moon": {
+   "phase": "Waxing crescent",
+   "illuminated_pct": 20
+  },
+  "enso": {
+   "status": "El Niño Advisory",
+   "nino34_c": 2.1,
+   "synopsis": "El Niño continues to strengthen, with a strong-to-very strong El Niño likely through January-March 2027 (remaining greater than an 83% chance).",
+   "issued": "2026-10-08"
+  }
+ },
+ "divers": {
+  "posts": [
+   {
+    "source": "Just Get Wet (La Jolla dive shop)",
+    "site": "La Jolla",
+    "date": "2026-10-14",
+    "date_label": "Oct 14",
+    "days_ago": 1,
+    "vis": "0-10 ft",
+    "url": "https://justgetwet.com/blogs/dive-reports-and-conditions/october-14th",
+    "excerpt": "Vis: 0-10 ft Swell: 2-5+ ft Surface Temp: 70-71 °F High Tide 5.4 ft ~ 10:58 am Low Tide 0.5 ft ~ 6:35 pm The ocean still has some size out there, wave-wise. Visibility is trying to clear up, 0-10ft, but you will find it patchy in most areas with murky conditions in the shallows."
+   }
+  ],
+  "stale_sources": [
+   "South Coast Divers (Laguna)"
+  ],
+  "surge": {
+   "sites": [
+    {
+     "site": "La Jolla Cove",
+     "depth_ft": 33,
+     "buoy": "46254",
+     "u_m_s": 0.24,
+     "u_ft_s": 0.8,
+     "level": "strong"
+    },
+    {
+     "site": "La Jolla Canyon wall",
+     "depth_ft": 66,
+     "buoy": "46254",
+     "u_m_s": 0.13,
+     "u_ft_s": 0.4,
+     "level": "moderate"
+    },
+    {
+     "site": "Point Loma kelp",
+     "depth_ft": 49,
+     "buoy": "46232",
+     "u_m_s": 0.33,
+     "u_ft_s": 1.1,
+     "level": "strong"
+    },
+    {
+     "site": "Wreck Alley",
+     "depth_ft": 66,
+     "buoy": "46258",
+     "u_m_s": 0.3,
+     "u_ft_s": 1.0,
+     "level": "strong"
+    },
+    {
+     "site": "Laguna Beach coves",
+     "depth_ft": 33,
+     "buoy": "46253",
+     "u_m_s": 0.35,
+     "u_ft_s": 1.2,
+     "level": "strong"
+    }
+   ],
+   "tag": "Modeled",
+   "method": "Linear wave theory on the nearest buoy's swell and wind waves; peak near-bottom water speed. Fine sand starts moving at about 0.15 m/s (0.5 ft/s)."
+  },
+  "rain": {
+   "inches": 0,
+   "gauge": "San Diego airport (KSAN)",
+   "advisory": false
+  },
+  "water_quality": {
+   "status": "not_connected",
+   "url": "https://www.sdbeachinfo.com",
+   "text": "County beach water-quality notices are not connected yet. Check the county site before entering, especially near river and lagoon mouths and from Imperial Beach to the border."
+  },
+  "season": [
+   {
+    "key": "lobster",
+    "label": "Spiny lobster",
+    "open": true,
+    "text": "Open Oct 2, 2026 (6 p.m.) to Mar 17, 2027. 7 per person, 3 1/4 in carapace, divers by hand only, report card required.",
+    "source": "https://wildlife.ca.gov/Conservation/Marine/Invertebrates/Lobster",
+    "verified_on": "2026-10-15"
+   },
+   {
+    "key": "groundfish",
+    "label": "Rockfish and lingcod (Southern Management Area)",
+    "open": null,
+    "text": "Boat-based anglers: nearshore rockfish, cabezon and greenlings closed; shelf rockfish and lingcod seaward of 50 fathoms only. Divers and shore anglers are exempt from these season and depth limits.",
+    "source": "https://wildlife.ca.gov/Fishing/Ocean/Regulations/Groundfish-Summary",
+    "verified_on": "2026-10-15"
+   }
+  ],
+  "freedive": "Solo freediving is outside our thresholds in any conditions: one up, one down. Never hyperventilate. Size exposure protection for the bottom temperature, not the surface."
+ },
+ "not_covered": [
+  "Fish: where they are and what the fleet is catching. That section comes in the next phase.",
+  "Bait. No public feed measures it.",
+  "Current at dive depth. HF radar measures the surface only and is blank within about 1.5 miles of shore.",
+  "Beach water-quality notices. The county feed is not connected yet.",
+  "An observed thermocline profile. The SCCOOS Del Mar mooring is not connected yet; the depth shown is our heuristic.",
+  "Temperature breaks and color edges. They join the report in the next phase."
+ ],
+ "sources": [
+  {
+   "id": "alerts",
+   "label": "NWS active alerts",
+   "url": "https://api.weather.gov/alerts/active?zone=CAZ043,CAZ552,PZZ655,PZZ676,PZZ740,PZZ745",
+   "time_utc": "2026-10-15T17:37Z",
+   "age_h": 0.0,
+   "error": null,
+   "status": "ok"
+  },
+  {
+   "id": "cwf_sgx",
+   "label": "NWS Coastal Waters Forecast (SGX)",
+   "url": "https://api.weather.gov/products/97a5b10a-3529-431f-878f-3293b5d2b555",
+   "time_utc": "2026-10-15T09:01Z",
+   "age_h": 8.6,
+   "error": null,
+   "status": "ok"
+  },
+  {
+   "id": "cwf_lox",
+   "label": "NWS Coastal Waters Forecast (LOX)",
+   "url": "https://api.weather.gov/products/e3649789-58bd-4b0d-87ef-d605c7505f8f",
+   "time_utc": "2026-10-15T14:04Z",
+   "age_h": 3.6,
+   "error": null,
+   "status": "ok"
+  },
+  {
+   "id": "srf_sgx",
+   "label": "NWS Surf Zone Forecast (SGX)",
+   "url": "https://api.weather.gov/products/9e5a2077-20d3-4045-be96-77b7b29a34c4",
+   "time_utc": "2026-10-15T08:40Z",
+   "age_h": 9.0,
+   "error": null,
+   "status": "ok"
+  },
+  {
+   "id": "off_nhc",
+   "label": "NHC Offshore Waters Forecast (Mexico, OFFPZ7)",
+   "url": "https://www.nhc.noaa.gov/text/MIAOFFPZ7.shtml",
+   "time_utc": "2026-10-15T16:19Z",
+   "age_h": 1.3,
+   "error": null,
+   "status": "ok"
+  },
+  {
+   "id": "buoy_46254",
+   "label": "Buoy 46254 Scripps Nearshore (La Jolla)",
+   "url": "https://www.ndbc.noaa.gov/station_page.php?station=46254",
+   "time_utc": "2026-10-15T16:56Z",
+   "age_h": 0.7,
+   "error": null,
+   "status": "ok"
+  },
+  {
+   "id": "buoy_46232",
+   "label": "Buoy 46232 Point Loma South",
+   "url": "https://www.ndbc.noaa.gov/station_page.php?station=46232",
+   "time_utc": "2026-10-15T17:26Z",
+   "age_h": 0.2,
+   "error": null,
+   "status": "ok"
+  },
+  {
+   "id": "buoy_46258",
+   "label": "Buoy 46258 Mission Bay West",
+   "url": "https://www.ndbc.noaa.gov/station_page.php?station=46258",
+   "time_utc": "2026-10-15T16:56Z",
+   "age_h": 0.7,
+   "error": null,
+   "status": "ok"
+  },
+  {
+   "id": "buoy_46225",
+   "label": "Buoy 46225 Torrey Pines Outer",
+   "url": "https://www.ndbc.noaa.gov/station_page.php?station=46225",
+   "time_utc": "2026-10-15T16:56Z",
+   "age_h": 0.7,
+   "error": null,
+   "status": "ok"
+  },
+  {
+   "id": "buoy_46253",
+   "label": "Buoy 46253 San Pedro South",
+   "url": "https://www.ndbc.noaa.gov/station_page.php?station=46253",
+   "time_utc": "2026-10-15T16:56Z",
+   "age_h": 0.7,
+   "error": null,
+   "status": "ok"
+  },
+  {
+   "id": "buoy_46086",
+   "label": "Buoy 46086 San Clemente Basin",
+   "url": "https://www.ndbc.noaa.gov/station_page.php?station=46086",
+   "time_utc": "2026-10-15T17:00Z",
+   "age_h": 0.6,
+   "error": null,
+   "status": "ok"
+  },
+  {
+   "id": "buoy_46047",
+   "label": "Buoy 46047 Tanner Bank",
+   "url": "https://www.ndbc.noaa.gov/station_page.php?station=46047",
+   "time_utc": "2026-10-15T17:00Z",
+   "age_h": 0.6,
+   "error": null,
+   "status": "ok"
+  },
+  {
+   "id": "coops_9410230",
+   "label": "NOAA CO-OPS Scripps Pier, La Jolla",
+   "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=9410230",
+   "time_utc": "2026-10-15T17:30Z",
+   "age_h": 0.1,
+   "error": null,
+   "status": "ok"
+  },
+  {
+   "id": "coops_9410170",
+   "label": "NOAA CO-OPS San Diego Bay (Broadway Pier)",
+   "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=9410170",
+   "time_utc": "2026-10-15T17:30Z",
+   "age_h": 0.1,
+   "error": null,
+   "status": "ok"
+  },
+  {
+   "id": "rain",
+   "label": "Rain gauge, San Diego airport (KSAN) (IEM daily climate)",
+   "url": "https://mesonet.agron.iastate.edu/sites/site.php?station=SAN&network=CA_ASOS",
+   "time_utc": "2026-10-15T17:37Z",
+   "age_h": 0.0,
+   "error": null,
+   "status": "ok"
+  },
+  {
+   "id": "enso",
+   "label": "NOAA CPC ENSO diagnostic discussion",
+   "url": "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso_advisory/ensodisc.shtml",
+   "time_utc": "2026-10-08T00:00Z",
+   "age_h": 185.6,
+   "error": null,
+   "status": "ok"
+  },
+  {
+   "id": "manifest",
+   "label": "ShoudiDive layer manifest",
+   "url": "/data/manifest.json",
+   "time_utc": "2026-10-15T06:20Z",
+   "age_h": 11.3,
+   "error": null,
+   "status": "ok"
+  },
+  {
+   "id": "tides",
+   "label": "NOAA CO-OPS tide predictions (ShoudiDive tides.json)",
+   "url": "/data/tides.json",
+   "time_utc": "2026-10-15T06:20Z",
+   "age_h": 11.3,
+   "error": null,
+   "status": "ok"
+  },
+  {
+   "id": "viz_column",
+   "label": "ShoudiDive water-column heuristic",
+   "url": "/data/viz_column_spots.json",
+   "time_utc": "2026-10-15T06:21Z",
+   "age_h": 11.3,
+   "error": null,
+   "status": "ok"
+  },
+  {
+   "id": "observations",
+   "label": "Dive-shop condition posts (ShoudiDive ground-truth ingest)",
+   "url": "/pipeline/validation/data/observations.jsonl",
+   "time_utc": "2026-10-15T00:59Z",
+   "age_h": 16.6,
+   "error": null,
+   "status": "ok"
+  }
+ ],
+ "method": {
+  "doc": "Thresholds and evidence: ShoudiDive reports research, 2026-10-15.",
+  "tags": {
+   "Rule": "an official product or regulation",
+   "Observed": "a measurement (buoy, gauge, satellite)",
+   "Reported": "a dive shop or angler post",
+   "Modeled": "our calculation, with its method stated"
+  }
+ },
+ "bottom_line": [
+  "Shore diving today: outside our thresholds at La Jolla Shores, Point Loma and Sunset Cliffs, and Laguna Beach; marginal at La Jolla Cove. The San Diego County surf forecast is 3 to 5 feet, sets to 6 feet from 200°, with a high rip current risk.",
+  "By boat today: outside our thresholds for Catalina and the San Pedro Channel; marginal for the Coronados and the outer islands; within our thresholds for San Diego inshore and the offshore banks. Friday gets worse for San Diego inshore, the Coronados, the offshore banks and the outer islands (steep short-period chop, Santa Ana-pattern offshore wind and NWS advisories).",
+  "Nearshore buoys read 71-73°F as of 10:26 AM; the latest satellite temperature map is from Oct 12."
+ ]
+}
