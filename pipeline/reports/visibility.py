@@ -49,6 +49,25 @@ def area_of(lat: float, lng: float) -> dict:
     return min(AREAS, key=lambda a: _nm((lat, lng), (a["ref"]["lat"], a["ref"]["lng"])))
 
 
+def cal_at(lat: float, lng: float, areas: dict) -> dict:
+    """The calibration for a place: the nearest area's, with its scale blended
+    across the applied areas by inverse squared distance, so the correction
+    changes smoothly between La Jolla and Laguna instead of drawing a seam."""
+    near = areas.get(area_of(lat, lng)["id"]) or {}
+    live = [(a, areas[a["id"]]) for a in AREAS if (areas.get(a["id"]) or {}).get("applied")]
+    if not near.get("applied") or len(live) < 2:
+        return near
+    wsum = ssum = 0.0
+    for a, c in live:
+        d = _nm((lat, lng), (a["ref"]["lat"], a["ref"]["lng"]))
+        if d < 0.5:
+            return c
+        w = 1 / d ** 2
+        wsum += w
+        ssum += w * c["scale"]
+    return {**near, "scale": round(ssum / wsum, 3)}
+
+
 def _nm(a, b) -> float:
     la1, lo1, la2, lo2 = map(math.radians, (a[0], a[1], b[0], b[1]))
     h = math.sin((la2 - la1) / 2) ** 2 + math.cos(la1) * math.cos(la2) * math.sin((lo2 - lo1) / 2) ** 2
