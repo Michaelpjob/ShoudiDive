@@ -231,19 +231,48 @@ _DAY_FULL = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY",
 _TODAY_NAMES = ("TODAY", "REST OF TODAY", "THIS AFTERNOON", "THIS MORNING")
 
 
+def _name_offset(name: str, today_wd: int) -> int | None:
+    name = name.strip()
+    if name in _TODAY_NAMES:
+        return 0
+    for table in (_DAY_ABBR, _DAY_FULL):
+        if name in table:
+            return (table.index(name) - today_wd) % 7
+    return None
+
+
+def period_days(name: str, today_wd: int) -> set[int]:
+    """Day offsets a period covers. 'THIS AFTERNOON THROUGH FRIDAY' on a
+    Thursday covers {0, 1}; night-only periods cover none."""
+    name = name.upper().strip()
+    if " THROUGH " in name:
+        a, b = name.split(" THROUGH ", 1)
+        da, db = _name_offset(a, today_wd), _name_offset(b.replace(" NIGHT", ""), today_wd)
+        if da is not None and db is not None and db >= da:
+            return set(range(da, db + 1))
+        return set()
+    if "NIGHT" in name or name in ("TONIGHT", "OVERNIGHT", "THIS EVENING"):
+        return set()
+    off = _name_offset(name, today_wd)
+    return {off} if off is not None else set()
+
+
 def pick_day_period(period_list: list[dict], day_offset: int, weekday: int) -> dict | None:
-    """The daytime period for today (offset 0) or a later day.
+    """The daytime period covering today (offset 0) or a later day.
 
     `weekday` is the target day's Monday=0 index. Today's period may be named
     TODAY / REST OF TODAY / THIS AFTERNOON; later days use the weekday name
-    (FRI in CWF/OFF, FRIDAY in SRF). Night periods are never picked.
+    (FRI in CWF/OFF, FRIDAY in SRF); the SRF sometimes merges days ("THIS
+    AFTERNOON THROUGH FRIDAY"). Night periods are never picked.
     """
+    today_wd = (weekday - day_offset) % 7
     for p in period_list:
-        name = p["name"].upper()
-        if "NIGHT" in name or name in ("TONIGHT", "OVERNIGHT", "THIS EVENING"):
-            continue
-        if day_offset == 0 and name in _TODAY_NAMES:
+        if day_offset in period_days(p["name"], today_wd):
             return p
-        if day_offset > 0 and name in (_DAY_ABBR[weekday], _DAY_FULL[weekday]):
-            return p
+    if day_offset == 0:
+        # Afternoon issuances can start at TONIGHT: the rest of today is
+        # then forecast by the night period, and we say so.
+        for p in period_list:
+            if p["name"].upper().strip() in ("TONIGHT", "THIS EVENING", "OVERNIGHT"):
+                return {**p, "fallback": True}
     return None

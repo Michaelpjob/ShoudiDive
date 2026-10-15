@@ -48,10 +48,26 @@
     },
     {
       "name": "reports.site_exposure",
-      "where": "pipeline/reports/sites.py (faces_deg per shore site) + thresholds.EXPOSURE_INTO_DEG/EXPOSURE_OBLIQUE_DEG",
+      "where": "pipeline/reports/sites.py (faces_deg = CDIP MOP shore normals) + thresholds.EXPOSURE_INTO_DEG/EXPOSURE_OBLIQUE_DEG/MOP_LEE_RATIO/MOP_INTO_RATIO",
       "status": "provisional",
       "affects": "which shore entries count as facing the swell, at an angle, or in its lee, and so the surf-at-entry estimate",
-      "note": "Entry orientations read off the chart, not measured; exposure classes are 60/100 degree cutoffs. The surf-at-entry figure is the county surf forecast scaled 1.0 / 0.6 / 0.35 by exposure: a deliberate stand-in until CDIP MOP nearshore points per site replace it.",
+      "note": "Entry orientations are the CDIP MOP points' published shore normals (D0482, D0500, D0324, OC283). Exposure classes use 60/100 degree cutoffs, overridden by MOP itself when the modeled set height at the entry is under 40% (sheltered) or 75%+ (exposed) of the county surf forecast. The ratios and cutoffs are hand-set. Surf at the entry is MOP Hs x 1.27 (Rayleigh mean of the highest tenth), falling back to county sets scaled 1.0/0.6/0.35 by exposure when MOP is missing.",
+      "fit_against": null
+    },
+    {
+      "name": "reports.hunting_vis",
+      "where": "pipeline/reports/views.py (hunting_vis: 15 ft pelagic, 10 ft reef)",
+      "status": "provisional",
+      "affects": "the spearfishing view's hunting-visibility rating",
+      "note": "10 ft is Reef Check California's minimum for fish counts; 15 ft for pelagics is an inference from how close yellowtail let a diver approach (8-12 ft, spearfishing lore). Not fit to any outcome data.",
+      "fit_against": null
+    },
+    {
+      "name": "reports.fishing_profiles",
+      "where": "pipeline/reports/fish.py (PELAGICS bite/tolerated bands and season weights; break min step 0.5F, search radius 18 km, MUR gradient seed 0.06 C/km; ambient cue rule 60%)",
+      "status": "provisional",
+      "affects": "the fishing view's species picture and named-spot table",
+      "note": "Bands and seasons from the 2026-10-15 research pass (Runcie 2019, Block 1997, Squire 1982, Marin-Enriquez 2018, CPFV records); the same evidence base as Pelagic Lab's profiles. To earn fit: hindcast each day's profile status against the next days' fleet stops and, once licensed, dock counts.",
       "fit_against": null
     }
   ]

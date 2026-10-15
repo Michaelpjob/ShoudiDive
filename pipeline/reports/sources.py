@@ -106,6 +106,8 @@ def normalize_alerts(geojson: dict) -> list[dict]:
             "ends": p.get("ends") or p.get("expires"),
             "zones": (p.get("geocode") or {}).get("UGC", []),
             "area": p.get("areaDesc"),
+            "description": (p.get("description") or "")[:900] or None,
+            "instruction": (p.get("instruction") or "")[:500] or None,
         })
     return out
 
@@ -269,6 +271,92 @@ def enso(now: datetime | None = None) -> dict:
                             "synopsis": syn.group(1).strip() if syn else None,
                             "nino34_c": float(n34.group(1)) if n34 else None}, now=now)
     return _guard("enso", label, url, run)
+
+
+# --- Observed thermocline: Spray gliders (IOOS Glider DAC, near real time) ----
+
+GLIDER_ERDDAP = "https://gliders.ioos.us/erddap/tabledap"
+SAN_DIEGO = (32.72, -117.23)
+
+
+def _km(a: tuple[float, float], b: tuple[float, float]) -> float:
+    import math
+    dy = (a[0] - b[0]) * 111.0
+    dx = (a[1] - b[1]) * 111.0 * math.cos(math.radians((a[0] + b[0]) / 2))
+    return math.hypot(dx, dy)
+
+
+def thermocline_from_profile(rows: list[tuple[float, float]]) -> dict | None:
+    """(depth_m, temp_c) samples from one profile -> surface temp, the depth of
+    the sharpest drop in the top 100 m, and temperatures at diver depths."""
+    pts = sorted((d, t) for d, t in rows if d is not None and t is not None and 0 <= d <= 150)
+    if len(pts) < 10 or pts[0][0] > 5:
+        return None
+    # 2 m bins, then the steepest drop between neighbouring bins.
+    bins: dict[int, list[float]] = {}
+    for d, t in pts:
+        bins.setdefault(int(d // 2), []).append(t)
+    prof = sorted((k * 2 + 1, sum(v) / len(v)) for k, v in bins.items())
+
+    def at(depth_m: float) -> float | None:
+        for (d0, t0), (d1, t1) in zip(prof, prof[1:]):
+            if d0 <= depth_m <= d1:
+                return t0 + (t1 - t0) * (depth_m - d0) / (d1 - d0)
+        return None
+    grads = [((d0 + d1) / 2, (t0 - t1) / (d1 - d0)) for (d0, t0), (d1, t1) in zip(prof, prof[1:]) if d1 <= 100]
+    if not grads:
+        return None
+    zc, g = max(grads, key=lambda x: x[1])
+    surface = sum(t for d, t in prof[:2]) / min(2, len(prof))
+    return {"surface_c": round(surface, 2), "thermocline_m": round(zc, 1), "max_drop_c_per_m": round(g, 3),
+            "t_9m_c": at(9.1), "t_18m_c": at(18.3), "t_30m_c": at(30.5), "max_depth_m": round(prof[-1][0])}
+
+
+def glider_thermocline(now: datetime | None = None, max_km: float = 160) -> dict:
+    label = "Spray glider temperature profile (Scripps CUGN via IOOS Glider DAC)"
+    url = GLIDER_ERDDAP + "/allDatasets.csv"
+
+    def run():
+        now_ = now or utcnow()
+        since = (now_ - timedelta(hours=36)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        listing = _get(f"{url}?datasetID,maxTime,minLatitude,maxLatitude,minLongitude,maxLongitude&maxTime%3E={since}").text
+        cands = []
+        for line in listing.splitlines()[2:]:
+            parts = line.split(",")
+            try:
+                la0, la1, lo0, lo1 = map(float, parts[2:6])
+            except ValueError:
+                continue
+            if la1 > 31.5 and la0 < 34.5 and lo0 < -116.8 and lo1 > -121.5:
+                cands.append(parts[0])
+        best = None
+        for ds in cands:
+            pos = _get(f"{GLIDER_ERDDAP}/{ds}.csv?profile_id,time,latitude,longitude&time%3E={since}&distinct()").text
+            rows = [r.split(",") for r in pos.splitlines()[2:] if r.count(",") == 3]
+            if not rows:
+                continue
+            pid, t, la, lo = rows[-1]
+            d = _km((float(la), float(lo)), SAN_DIEGO)
+            if d <= max_km and (best is None or d < best[0]):
+                best = (d, ds, pid, t, float(la), float(lo))
+        if best is None:
+            raise RuntimeError("no glider profile within range in the last 36 h")
+        d, ds, pid, t, la, lo = best
+        prof = _get(f"{GLIDER_ERDDAP}/{ds}.csv?depth,temperature&profile_id={pid}").text
+        samples = []
+        for r in prof.splitlines()[2:]:
+            try:
+                dep, tmp = r.split(",")
+                samples.append((float(dep), float(tmp)))
+            except ValueError:
+                continue
+        th = thermocline_from_profile(samples)
+        if th is None:
+            raise RuntimeError("profile too shallow or sparse")
+        return source("glider", label, f"https://gliders.ioos.us/erddap/tabledap/{ds}.html", ok=True,
+                      time=parse_iso(t), now=now,
+                      data={**th, "glider": ds.split("-")[0], "lat": la, "lng": lo, "km_from_san_diego": round(d)})
+    return _guard("glider", label, url, run)
 
 
 # --- Local files (our own published layers) ----------------------------------

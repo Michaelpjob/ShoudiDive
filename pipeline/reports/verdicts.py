@@ -39,6 +39,20 @@ def exposure(faces_deg: float, swell_from_deg: float | None) -> str | None:
 EXPOSURE_WORDS = {"into": "faces the swell", "oblique": "takes the swell at an angle", "lee": "in the swell's lee"}
 
 
+def exposure_from_mop(direction_class: str | None, mop_sets_ft: float | None, county_sets_ft: float | None) -> str | None:
+    """MOP models the waves that actually reach the entry, so when it shows the
+    site getting under 40% of the county's set height we call it sheltered,
+    and at 75% or more we call it exposed, whatever the chart orientation says."""
+    if mop_sets_ft is None or not county_sets_ft:
+        return direction_class
+    ratio = mop_sets_ft / county_sets_ft
+    if ratio < T.MOP_LEE_RATIO:
+        return "lee"
+    if ratio >= T.MOP_INTO_RATIO:
+        return "into"
+    return direction_class
+
+
 def overlaps(alert: dict, start: datetime, end: datetime) -> bool:
     from .sources import parse_iso
     on = parse_iso(alert.get("onset"))
@@ -58,13 +72,14 @@ def _alerts_for(alerts: list[dict], zones: list[str], start: datetime, end: date
 
 def shore_day(site: dict, *, srf_period: dict | None, alerts: list[dict] | None,
               marine_period: dict | None, rain: dict | None, window: tuple[datetime, datetime],
-              src: dict[str, str]) -> dict:
+              src: dict[str, str], mop: dict | None = None) -> dict:
     factors = []
     swell_from = srf_period.get("swell_from_deg") if srf_period else None
     if swell_from is None and marine_period and marine_period.get("trains"):
         big = max(marine_period["trains"], key=lambda t: t["ft"])
         swell_from = nws_text.COMPASS_DEG.get(big["dir"])
-    exp = exposure(site["faces_deg"], swell_from)
+    county_sets = srf_period.get("sets_ft") if srf_period else None
+    exp = exposure_from_mop(exposure(site["faces_deg"], swell_from), mop.get("sets_ft") if mop else None, county_sets)
 
     # 1. NWS beach headlines
     if alerts is None:
@@ -101,9 +116,18 @@ def shore_day(site: dict, *, srf_period: dict | None, alerts: list[dict] | None,
             factors.append(factor("rip", "Rip current risk", lv, note,
                                   "Low is within, moderate marginal, high outside (NWS Surf Zone Forecast).", src.get("srf")))
 
-    # 3. Surf at the site
-    sets = srf_period.get("sets_ft") if srf_period else None
-    if sets is None or exp is None:
+    # 3. Surf at the site: the CDIP MOP model at the entry when we have it
+    sets = county_sets
+    if mop:
+        s_ft = mop["sets_ft"]
+        lv = "within" if s_ft < T.SURF_FT[0] else "marginal" if s_ft < T.SURF_FT[1] else "outside"
+        factors.append(factor("surf", "Surf at the entry", lv,
+                              f"CDIP MOP at this entry's 10 m line: {mop['hs_ft']} ft at {mop['tp_s']} s from "
+                              f"{mop['dp_deg']}°, so sets about {s_ft} ft",
+                              "Set height (1.27 x the modeled significant height, the mean of the highest tenth of waves): "
+                              "under 2.5 ft within, under 4.5 ft marginal, otherwise outside.",
+                              src.get("mop"), "Modeled"))
+    elif sets is None or exp is None:
         factors.append(factor("surf", "Surf at the entry", "unknown", "no surf height or swell direction",
                               "Estimated sets under 2.5 ft within, under 4.5 ft marginal, otherwise outside.", src.get("srf"), "Modeled"))
     else:

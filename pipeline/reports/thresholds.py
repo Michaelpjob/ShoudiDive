@@ -72,6 +72,8 @@ SURF_FT = (2.5, 4.5)  # < 2.5 within, < 4.5 marginal, else outside
 EXPOSURE_SCALE = {"into": 1.0, "oblique": 0.6, "lee": 0.35}
 EXPOSURE_INTO_DEG = 60
 EXPOSURE_OBLIQUE_DEG = 100
+MOP_LEE_RATIO = 0.4        # MOP sets under 40% of the county's: the entry is sheltered
+MOP_INTO_RATIO = 0.75      # 75%+ of the county's: the entry takes the swell head-on
 LONG_PERIOD_S = 13          # at a site facing the swell, long-period swell raises the surf rating one level
 ONSHORE_WIND_KT = (15, 20)  # wind blowing into the entry: marginal at 15, outside at 20
 ONSHORE_WITHIN_DEG = 60
@@ -88,7 +90,8 @@ FREEDIVE_TEXT = ("Solo freediving is outside our thresholds in any conditions: o
 # Inputs older than this are treated as missing.
 MAX_AGE_H = {
     "alerts": 3, "cwf": 18, "off": 18, "srf": 30, "buoy": 6, "coops": 6, "rain": 48,
-    "manifest": 48, "observations": 120, "enso": 24 * 45, "tides": 48, "viz_column": 48,
+    "manifest": 48, "observations": 120, "enso": 24 * 45, "tides": 48, "viz_column": 48, "mop": 36,
+    "glider": 36, "fleet_now": 6,
 }
 
 BANNED_WORDS = ("safe", "unsafe", "all clear", "guaranteed", "go/no-go")

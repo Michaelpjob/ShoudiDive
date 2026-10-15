@@ -14,7 +14,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import nws_text, physics, render, season, sites, sources
+from . import evidence, explain, fish, nws_text, physics, render, season, sites, sources, views
 from . import thresholds as T
 from . import verdicts as V
 
@@ -25,7 +25,7 @@ POST_MAX_DAYS = 3  # dive-shop posts older than this are history, not conditions
 SOURCE_KIND = {
     "alerts": "alerts", "cwf_sgx": "cwf", "cwf_lox": "cwf", "off_nhc": "off", "srf_sgx": "srf",
     "rain": "rain", "manifest": "manifest", "observations": "observations", "enso": "enso",
-    "tides": "tides", "viz_column": "viz_column",
+    "tides": "tides", "viz_column": "viz_column", "glider": "glider", "fleet_now": "fleet_now",
 }
 POST_SOURCES = {
     "dive-shop-justgetwet": "Just Get Wet (La Jolla dive shop)",
@@ -36,12 +36,12 @@ POST_SOURCES = {
     "reddit-ca-divers": "Reddit (California divers)",
 }
 NOT_COVERED = [
-    "Fish: where they are and what the fleet is catching. That section comes in the next phase.",
-    "Bait. No public feed measures it.",
+    "Fish counts. No licensed source yet, so the fishing view shows where the water matches each species, not how many fish are there.",
+    "Bait. No public feed measures it; where the fleet stops is the closest proxy.",
     "Current at dive depth. HF radar measures the surface only and is blank within about 1.5 miles of shore.",
-    "Beach water-quality notices. The county feed is not connected yet.",
-    "An observed thermocline profile. The SCCOOS Del Mar mooring is not connected yet; the depth shown is our heuristic.",
-    "Temperature breaks and color edges. They join the report in the next phase.",
+    "Beach water-quality notices. San Diego County's beach status site has no public data feed; connecting it needs a feed from the county.",
+    "The thermocline at the kelp. The observed profile comes from a glider offshore; the SCCOOS Del Mar kelp mooring did not answer when this was built.",
+    "Boats without AIS (most under 65 ft), and Mexican waters beyond shore-receiver range.",
 ]
 
 
@@ -74,6 +74,10 @@ def gather(now: datetime) -> dict[str, dict]:
     S["tides"] = sources.tides(now=now)
     S["viz_column"] = sources.viz_column(now=now)
     S["observations"] = sources.dive_observations(now=now)
+    for mop_id in sites.MOP_POINTS:
+        S[f"mop_{mop_id}"] = evidence.mop_site(mop_id, now=now)
+    S["glider"] = sources.glider_thermocline(now=now)
+    S["fleet_now"] = fish.fleet_now_fetch(now=now)
     return S
 
 
@@ -86,6 +90,20 @@ def _usable(s: dict | None) -> dict | None:
     if limit is not None and s.get("age_h") is not None and s["age_h"] > limit:
         return None
     return s.get("data")
+
+
+def _frame_sources(manifest: dict | None, now: datetime) -> list[dict]:
+    """Our own hourly forecast frames, listed with their generation time."""
+    if not manifest:
+        return []
+    out = []
+    for key, label in (("wind5d", "ShoudiDive hourly wind frames (HRRR/GFS/ECMWF blend)"),
+                       ("swell5d", "ShoudiDive hourly wave frames (NOAA WaveWatch III)")):
+        t = sources.parse_iso((manifest.get("layers", {}).get(key) or {}).get("generated_at"))
+        out.append({"id": "model_frames" if key == "wind5d" else "model_frames_waves", "label": label, "url": "/",
+                    "time_utc": sources.iso(t), "age_h": round((now - t).total_seconds() / 3600, 1) if t else None,
+                    "error": None, "status": "ok" if t else "missing"})
+    return out
 
 
 def _status(s: dict) -> str:
@@ -126,60 +144,6 @@ def assemble(S: dict[str, dict], now: datetime) -> dict:
         z = zone_map.get(zone)
         return nws_text.pick_day_period(z["periods"], i, days[i].weekday()) if z else None
 
-    # --- Can I go: shore ---------------------------------------------------
-    shore = []
-    for site in sites.SHORE_SITES:
-        entry = {k: site[k] for k in ("id", "name", "short", "note", "faces_deg", "depth_m")}
-        entry["days"] = {}
-        for i, key in enumerate(day_keys):
-            srcmap = {"alerts": "alerts", "srf": "srf_sgx", "rain": "rain",
-                      "marine": (marine.get(site["marine_zone"]) or {}).get("source")}
-            d = V.shore_day(site, srf_period=period(surf, site["surf_zone"], i), alerts=alerts_data,
-                            marine_period=period(marine, site["marine_zone"], i), rain=rain,
-                            window=windows[i], src=srcmap)
-            d["label"] = T.LABELS[d["level"]]
-            d["why"] = render.why(d)
-            entry["days"][key] = d
-        shore.append(entry)
-
-    # --- Can I go: boat ----------------------------------------------------
-    boat = []
-    for rng in sites.BOAT_RANGES:
-        entry = {k: rng.get(k) for k in ("id", "name", "short", "zone", "note")}
-        entry["route_zones"] = rng.get("route_zones", [])
-        entry["days"] = {}
-        for i, key in enumerate(day_keys):
-            per_zone = []
-            for zcode in [rng["zone"], *rng.get("route_zones", [])]:
-                zone = marine.get(zcode)
-                srcmap = {"alerts": "alerts", "marine": (zone or {}).get("source")}
-                zr = rng if zcode == rng["zone"] else {**rng, "alert_zones": [zcode],
-                                                       "office": "SGX" if zcode.startswith("PZZ7") else "LOX"}
-                per_zone.append((zcode, V.boat_day(zr, period=period(marine, zcode, i),
-                                                   block_headlines=(zone or {}).get("headlines"), alerts=alerts_data,
-                                                   window=windows[i], src=srcmap)))
-            d = V.merge_route(per_zone)
-            d["label"] = T.LABELS[d["level"]]
-            d["why"] = render.why(d)
-            entry["days"][key] = d
-        boat.append(entry)
-
-    inshore = next(b for b in boat if b["id"] == "inshore-sd")
-    boat_dive = {
-        "name": "Boat dive, San Diego inshore",
-        "days": {k: {"level": inshore["days"][k]["level"], "label": inshore["days"][k]["label"],
-                     "why": "Surface conditions follow San Diego inshore. " + inshore["days"][k]["why"]} for k in day_keys},
-        "current": T.CURRENT_TEXT,
-    }
-
-    headlines = []
-    for a in alerts_data or []:
-        headlines.append({"event": a["event"], "area": a.get("area"), "zones": a.get("zones"),
-                          "from": clock(sources.parse_iso(a["onset"])) + " " + day_label(sources.parse_iso(a["onset"]).astimezone(TZ)) if a.get("onset") else None,
-                          "until": clock(sources.parse_iso(a["ends"])) + " " + day_label(sources.parse_iso(a["ends"]).astimezone(TZ)) if a.get("ends") else None,
-                          "headline": a.get("headline")})
-
-    # --- The water -----------------------------------------------------------
     buoys = []
     for b in sites.BUOYS:
         s = S.get(f"buoy_{b['id']}")
@@ -201,6 +165,88 @@ def assemble(S: dict[str, dict], now: datetime) -> dict:
                            "from_deg": rec.get("wdir")}
         buoys.append(row)
 
+
+    raw_blocks = {}
+    for sid in ("cwf_sgx", "cwf_lox", "off_nhc"):
+        data = _usable(S.get(sid))
+        if data:
+            raw_blocks[sid] = nws_text.split_zones(data["text"])
+    synopsis = {sid: explain.synopsis_text(raw_blocks.get(sid, {}).get(z)) for sid, z in sites.SYNOPSIS_ZONES.items()}
+    man_for_frames = _usable(S.get("manifest"))
+
+    # --- Can I go: shore ---------------------------------------------------
+    shore = []
+    for site in sites.SHORE_SITES:
+        entry = {k: site[k] for k in ("id", "name", "short", "note", "faces_deg", "depth_m")}
+        entry["days"] = {}
+        for i, key in enumerate(day_keys):
+            srcmap = {"alerts": "alerts", "srf": "srf_sgx", "rain": "rain", "mop": f"mop_{site['mop']}",
+                      "marine": (marine.get(site["marine_zone"]) or {}).get("source")}
+            mop_data = _usable(S.get(f"mop_{site['mop']}"))
+            mop_win = evidence.mop_window(mop_data, *windows[i]) if mop_data else None
+            srf_p = period(surf, site["surf_zone"], i)
+            d = V.shore_day(site, srf_period=srf_p, alerts=alerts_data,  # noqa: E501
+                            marine_period=period(marine, site["marine_zone"], i), rain=rain,
+                            window=windows[i], src=srcmap, mop=mop_win)
+            d["label"] = T.LABELS[d["level"]]
+            d["why"] = render.why(d)
+            d["period"] = (srf_p or {}).get("name")
+            d["period_fallback"] = bool((srf_p or {}).get("fallback"))
+            d["evidence"] = explain.shore_blocks(site, d, mop_win=mop_win, srf_period=srf_p, buoy_rows=buoys,
+                                                 alerts=alerts_data, window=windows[i], overlaps=V.overlaps, tz=TZ)
+            entry["days"][key] = d
+        shore.append(entry)
+
+    # --- Can I go: boat ----------------------------------------------------
+    boat = []
+    for rng in sites.BOAT_RANGES:
+        entry = {k: rng.get(k) for k in ("id", "name", "short", "zone", "note")}
+        entry["route_zones"] = rng.get("route_zones", [])
+        entry["days"] = {}
+        for i, key in enumerate(day_keys):
+            per_zone = []
+            for zcode in [rng["zone"], *rng.get("route_zones", [])]:
+                zone = marine.get(zcode)
+                srcmap = {"alerts": "alerts", "marine": (zone or {}).get("source")}
+                zr = rng if zcode == rng["zone"] else {**rng, "alert_zones": [zcode],
+                                                       "office": "SGX" if zcode.startswith("PZZ7") else "LOX"}
+                per_zone.append((zcode, V.boat_day(zr, period=period(marine, zcode, i),
+                                                   block_headlines=(zone or {}).get("headlines"), alerts=alerts_data,
+                                                   window=windows[i], src=srcmap)))
+            d = V.merge_route(per_zone)
+            own_p = period(marine, rng["zone"], i)
+            d["period"] = (own_p or {}).get("name")
+            d["period_fallback"] = bool((own_p or {}).get("fallback"))
+            d["label"] = T.LABELS[d["level"]]
+            d["why"] = render.why(d)
+            rows = evidence.hourly_point(*rng["point"], days[i], range(5, 20), man_for_frames) if man_for_frames else []
+            office_sid = (marine.get(rng["zone"]) or {}).get("source")
+            if office_sid == "off_nhc":  # NHC's synopsis covers all of Mexico; the run is San Diego's
+                office_sid = "cwf_sgx"
+            d["evidence"] = explain.boat_blocks(rng, d, rows=rows, period=period(marine, rng["zone"], i),
+                                                synopsis=synopsis.get(office_sid), buoy_rows=buoys, alerts=alerts_data,
+                                                window=windows[i], overlaps=V.overlaps, synopsis_source=office_sid)
+            entry["days"][key] = d
+        boat.append(entry)
+
+    inshore = next(b for b in boat if b["id"] == "inshore-sd")
+    boat_dive = {
+        "name": "Boat dive, San Diego inshore",
+        "days": {k: {"level": inshore["days"][k]["level"], "label": inshore["days"][k]["label"],
+                     "why": "Surface conditions follow San Diego inshore. " + inshore["days"][k]["why"],
+                     "evidence": inshore["days"][k].get("evidence", [])} for k in day_keys},
+        "current": T.CURRENT_TEXT,
+    }
+
+    headlines = []
+    for a in alerts_data or []:
+        headlines.append({"event": a["event"], "area": a.get("area"), "zones": a.get("zones"),
+                          "from": clock(sources.parse_iso(a["onset"])) + " " + day_label(sources.parse_iso(a["onset"]).astimezone(TZ)) if a.get("onset") else None,
+                          "until": clock(sources.parse_iso(a["ends"])) + " " + day_label(sources.parse_iso(a["ends"]).astimezone(TZ)) if a.get("ends") else None,
+                          "headline": a.get("headline"), "description": a.get("description"),
+                          "instruction": a.get("instruction")})
+
+    # --- The water -----------------------------------------------------------
     piers = []
     for c in sites.COOPS_TEMP:
         s = S.get(f"coops_{c['id']}")
@@ -337,14 +383,66 @@ def assemble(S: dict[str, dict], now: datetime) -> dict:
         "divers": divers,
         "not_covered": NOT_COVERED,
         "sources": [{k: s.get(k) for k in ("id", "label", "url", "time_utc", "age_h", "error")} | {"status": _status(s)}
-                    for s in S.values()],
+                    for s in S.values()] + _frame_sources(man_for_frames, now),
         "method": {"doc": "Thresholds and evidence: ShoudiDive reports research, 2026-10-15.",
                    "tags": {"Rule": "an official product or regulation", "Observed": "a measurement (buoy, gauge, satellite)",
                             "Reported": "a dive shop or angler post", "Modeled": "our calculation, with its method stated"}},
     }
+    # --- Observed thermocline (nearest Spray glider) ---------------------------
+    glider = _usable(S.get("glider"))
+    thermo_ft = None
+    if glider:
+        def gf(c):
+            return round(c * 9 / 5 + 32, 1) if c is not None else None
+        g_time = sources.parse_iso(S["glider"]["time_utc"])
+        thermo_ft = round(glider["thermocline_m"] * 3.28084)
+        water["thermocline"]["observed"] = {
+            "glider": glider["glider"], "lat": glider["lat"], "lng": glider["lng"],
+            "nm_from_sd": round(glider["km_from_san_diego"] / 1.852),
+            "time": f"{clock(g_time)} {day_label(g_time.astimezone(TZ))}", "surface_f": gf(glider["surface_c"]),
+            "thermocline_ft": thermo_ft, "t30_f": gf(glider["t_9m_c"]), "t60_f": gf(glider["t_18m_c"]),
+            "t100_f": gf(glider["t_30m_c"]),
+            "drop_f_per_10ft": round(glider["max_drop_c_per_m"] * 9 / 5 * 3.048, 1),
+            "url": S["glider"].get("url"), "tag": "Observed",
+            "note": "A glider profile offshore, not at the kelp: internal tides move the thermocline 15-65 ft within hours at San Diego kelp moorings."}
+
+    # --- Fishing ---------------------------------------------------------------
+    near = [b["temp_f"] for b in buoys if b.get("status") == "ok" and b.get("nearshore") and b.get("temp_f") is not None]
+    surface_f = sum(near) / len(near) if near else None
+    man = _usable(S.get("manifest")) or {}
+    paddies = fish.load_json(sources.DATA.parent / "paddies" / "data.json")
+    fleet = fish.load_json(sources.DATA.parent / "fleet" / "data.json")
+    sst_g = fish.load_grid("sst", man) if man else None
+    chl_g = fish.load_grid("chl", man) if man else None
+    spot_rows = fish.spot_conditions(sst_g, chl_g, paddies, fish.paddy_offset(paddies, today))
+    facts["fishing"] = {
+        "spots": spot_rows,
+        "species": fish.species_picture(today.month, spot_rows) if sst_g else [],
+        "fleet_recent": fish.fleet_recent(fleet, today),
+        "fleet_now": fish.fleet_now(_usable(S.get("fleet_now")), (fleet or {}).get("landings"), now),
+        "inshore": fish.inshore_calendar(today, surface_f, thermo_ft),
+        "sst_field": sst_field, "chl": chl,
+        "method": ("Profiles say where the water matches what each species needs, not how many fish are there. "
+                   "Water temperature is the satellite map's; breaks are the strongest gradient within 10 nm of a spot, "
+                   "read as the temperature change across 4.3 nm. A cue met at most in-range spots that day is "
+                   "'everywhere' and singles nothing out."),
+        "counts_note": ("No dock counts: the network that publishes SoCal landing counts now forbids automated "
+                        "collection and republishing without a license."),
+    }
+
+    # --- Divers and spearfishers -------------------------------------------------
+    facts["divers"]["suit"] = views.suit_guide(surface_f, water["thermocline"].get("observed"))
+    facts["divers"]["best_bet"] = views.best_bet(shore, "today")
+    facts["divers"]["hunting_vis"] = views.hunting_vis(facts["divers"]["posts"])
     facts["bottom_line"] = render.bottom_line(facts)
+    facts["views"] = views.view_lines(facts)
 
     generated = list(facts["bottom_line"]) + NOT_COVERED + [T.CURRENT_TEXT, T.FREEDIVE_TEXT]
+    for lines in facts["views"].values():
+        generated += lines
+    generated += [facts["divers"]["suit"]["text"], facts["divers"]["hunting_vis"]["text"]]
+    if facts["divers"]["best_bet"]:
+        generated.append(facts["divers"]["best_bet"]["text"])
     for group in (shore, boat):
         for e in group:
             for d in e["days"].values():
@@ -365,11 +463,38 @@ def write(facts: dict, out_dir: Path) -> Path:
     return day_file
 
 
+def due(out_dir: Path, now: datetime, min_interval_min: int, active_hours: tuple[int, int]) -> tuple[bool, str]:
+    """Rebuild only inside the active local hours, and only when the last
+    build is older than the interval or from an earlier day."""
+    local = now.astimezone(TZ)
+    if not active_hours[0] <= local.hour < active_hours[1]:
+        return False, f"outside active hours ({local:%H:%M} local)"
+    try:
+        last = json.loads((out_dir / "latest.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return True, "no previous report"
+    if last.get("date") != local.date().isoformat():
+        return True, "first build of the day"
+    age_min = (now - sources.parse_iso(last.get("generated_utc"))).total_seconds() / 60
+    if age_min >= min_interval_min:
+        return True, f"last build {age_min:.0f} min ago"
+    return False, f"last build only {age_min:.0f} min ago"
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--out", default=str(sources.ROOT / "public" / "data" / "reports"))
+    ap.add_argument("--min-interval-min", type=int, default=0,
+                    help="skip when the last build is newer than this (0 = always build)")
+    ap.add_argument("--active-hours", default="0-24", help="local hours to build in, e.g. 4-21")
     args = ap.parse_args(argv)
     now = sources.utcnow()
+    if args.min_interval_min:
+        h0, h1 = (int(x) for x in args.active_hours.split("-"))
+        ok, reason = due(Path(args.out), now, args.min_interval_min, (h0, h1))
+        print(("building: " if ok else "skipping: ") + reason)
+        if not ok:
+            return 0
     S = gather(now)
     facts = assemble(S, now)
     path = write(facts, Path(args.out))

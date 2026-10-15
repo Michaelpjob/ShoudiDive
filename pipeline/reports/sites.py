@@ -4,60 +4,62 @@ A boat range is rated on its own forecast zone plus every zone the run from
 San Diego crosses (`route_zones`), factor by factor, keeping the worst.
 
 `faces_deg` is the direction the entry looks out to sea (a north-facing cove
-faces 0). A swell coming FROM within 60 degrees of that direction hits the
-entry head-on; 60-100 is oblique; beyond 100 the site is in the swell's lee.
-These are approximate orientations from the chart, registered as provisional
-in pipeline/validation/knobs_registry.json (reports.site_exposure).
+faces 0), taken from the CDIP MOP point's published shore normal at the 10 m
+depth line (`mop`). A swell coming FROM within 60 degrees of that direction
+hits the entry head-on; 60-100 is oblique; beyond 100 the site is in the
+swell's lee. MOP's modeled wave height at the entry can override that class
+(see verdicts.exposure_from_mop). Cutoffs are provisional
+(knobs_registry.json: reports.site_exposure).
 """
 from __future__ import annotations
 
 SHORE_SITES = [
     {
-        "id": "la-jolla-cove", "name": "La Jolla Cove", "short": "La Jolla Cove", "faces_deg": 330,
+        "id": "la-jolla-cove", "name": "La Jolla Cove", "short": "La Jolla Cove", "faces_deg": 18, "mop": "D0482",
         "surf_zone": "CAZ043", "land_zone": "CAZ043", "marine_zone": "PZZ740",
         "buoy": "46254", "depth_m": 10, "beach_entry": True,
-        "note": "North-facing; Point La Jolla blocks most south swell.",
+        "note": "North-facing cove; Point La Jolla blocks most south swell.",
     },
     {
-        "id": "la-jolla-shores", "name": "La Jolla Shores (Vallecitos, Marine Room)", "short": "La Jolla Shores", "faces_deg": 275,
+        "id": "la-jolla-shores", "name": "La Jolla Shores (Vallecitos, Marine Room)", "short": "La Jolla Shores", "faces_deg": 299, "mop": "D0500",
         "surf_zone": "CAZ043", "land_zone": "CAZ043", "marine_zone": "PZZ740",
         "buoy": "46254", "depth_m": 12, "beach_entry": True,
-        "note": "West-facing beach entry; south swell wraps in obliquely.",
+        "note": "West-northwest-facing beach entry, partly sheltered from south swell.",
     },
     {
-        "id": "point-loma-shore", "name": "Point Loma and Sunset Cliffs (shore entries)", "short": "Point Loma and Sunset Cliffs", "faces_deg": 250,
+        "id": "point-loma-shore", "name": "Point Loma and Sunset Cliffs (shore entries)", "short": "Point Loma and Sunset Cliffs", "faces_deg": 295, "mop": "D0324",
         "surf_zone": "CAZ043", "land_zone": "CAZ043", "marine_zone": "PZZ740",
         "buoy": "46232", "depth_m": 10, "beach_entry": False,
-        "note": "Rocky west/southwest-facing entries, open to south and west swell.",
+        "note": "Rocky west-facing entries, open to west swell and to south swell wrapping around the point.",
     },
     {
-        "id": "laguna", "name": "Laguna Beach (Shaws Cove, Crescent Bay)", "short": "Laguna Beach", "faces_deg": 235,
+        "id": "laguna", "name": "Laguna Beach (Shaws Cove, Crescent Bay)", "short": "Laguna Beach", "faces_deg": 203, "mop": "OC283",
         "surf_zone": "CAZ552", "land_zone": "CAZ552", "marine_zone": "PZZ655",
         "buoy": "46253", "depth_m": 10, "beach_entry": True,
-        "note": "Southwest-facing coves, open to south swell. Nearest live buoy is San Pedro South, about 25 nm away.",
+        "note": "South-southwest-facing coves, open to south swell. Nearest live buoy is San Pedro South, about 25 nm away.",
     },
 ]
 
 BOAT_RANGES = [
     {
-        "id": "inshore-sd", "name": "San Diego inshore (Point Loma and La Jolla kelp)", "short": "San Diego inshore",
+        "id": "inshore-sd", "point": (32.70, -117.32), "buoys": ["46232"], "name": "San Diego inshore (Point Loma and La Jolla kelp)", "short": "San Diego inshore",
         "office": "SGX", "zone": "PZZ740", "alert_zones": ["PZZ740"], "crossing": False, "kind": "inshore",
     },
     {
-        "id": "coronados", "name": "Coronado Islands (Mexican waters)", "short": "the Coronados",
+        "id": "coronados", "point": (32.42, -117.27), "buoys": ["46232"], "name": "Coronado Islands (Mexican waters)", "short": "the Coronados",
         "office": "NHC", "zone": "PMZ009", "route_zones": ["PZZ740"], "alert_zones": ["PZZ740"], "crossing": False, "kind": "coronados",
         "note": "Forecast is NHC zone PMZ009 (border to 30N within 60 nm). Passport, Mexican fishing licenses and CBP arrival reporting apply.",
     },
     {
-        "id": "banks", "name": "Offshore banks 10-60 nm (9 Mile, the 43, 302, 371, 425)", "short": "the offshore banks",
+        "id": "banks", "point": (32.65, -117.60), "buoys": ["46086", "46258"], "name": "Offshore banks 10-60 nm (9 Mile, the 43, 302, 371, 425)", "short": "the offshore banks",
         "office": "SGX", "zone": "PZZ745", "route_zones": ["PZZ740"], "alert_zones": ["PZZ745", "PZZ740"], "crossing": False, "kind": "offshore",
     },
     {
-        "id": "catalina", "name": "Catalina and the San Pedro Channel", "short": "Catalina and the San Pedro Channel",
+        "id": "catalina", "point": (33.55, -118.25), "buoys": ["46253"], "name": "Catalina and the San Pedro Channel", "short": "Catalina and the San Pedro Channel",
         "office": "LOX", "zone": "PZZ655", "alert_zones": ["PZZ655"], "crossing": True, "kind": "offshore",
     },
     {
-        "id": "outer", "name": "Outer waters: San Clemente and San Nicolas Islands", "short": "the outer islands",
+        "id": "outer", "point": (32.90, -118.70), "buoys": ["46086", "46047"], "name": "Outer waters: San Clemente and San Nicolas Islands", "short": "the outer islands",
         "office": "LOX", "zone": "PZZ676", "route_zones": ["PZZ745"], "alert_zones": ["PZZ676", "PZZ745"], "crossing": True, "kind": "offshore",
         "note": "Check the Navy's San Clemente Island range (SHOBA) closures before going.",
     },
@@ -83,6 +85,10 @@ SURGE_SITES = [
     {"name": "Wreck Alley", "buoy": "46258", "depth_m": 20},
     {"name": "Laguna Beach coves", "buoy": "46253", "depth_m": 10},
 ]
+
+# Synopsis blocks in each text product (the forecaster's reason for the zone forecasts).
+SYNOPSIS_ZONES = {"cwf_sgx": "PZZ700", "cwf_lox": "PZZ600", "off_nhc": "PMZ001"}
+MOP_POINTS = [s["mop"] for s in SHORE_SITES]
 
 TIDE_STATION = "la-jolla"
 COOPS_TEMP = [
