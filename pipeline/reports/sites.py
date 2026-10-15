@@ -15,25 +15,25 @@ from __future__ import annotations
 
 SHORE_SITES = [
     {
-        "id": "la-jolla-cove", "name": "La Jolla Cove", "short": "La Jolla Cove", "faces_deg": 18, "mop": "D0482",
+        "id": "la-jolla-cove", "lat": 32.8505, "lng": -117.2726, "name": "La Jolla Cove", "short": "La Jolla Cove", "faces_deg": 18, "mop": "D0482",
         "surf_zone": "CAZ043", "land_zone": "CAZ043", "marine_zone": "PZZ740",
         "buoy": "46254", "depth_m": 10, "beach_entry": True,
         "note": "North-facing cove; Point La Jolla blocks most south swell.",
     },
     {
-        "id": "la-jolla-shores", "name": "La Jolla Shores (Vallecitos, Marine Room)", "short": "La Jolla Shores", "faces_deg": 299, "mop": "D0500",
+        "id": "la-jolla-shores", "lat": 32.8575, "lng": -117.2570, "name": "La Jolla Shores (Vallecitos, Marine Room)", "short": "La Jolla Shores", "faces_deg": 299, "mop": "D0500",
         "surf_zone": "CAZ043", "land_zone": "CAZ043", "marine_zone": "PZZ740",
         "buoy": "46254", "depth_m": 12, "beach_entry": True,
         "note": "West-northwest-facing beach entry, partly sheltered from south swell.",
     },
     {
-        "id": "point-loma-shore", "name": "Point Loma and Sunset Cliffs (shore entries)", "short": "Point Loma and Sunset Cliffs", "faces_deg": 295, "mop": "D0324",
+        "id": "point-loma-shore", "lat": 32.7250, "lng": -117.2560, "name": "Point Loma and Sunset Cliffs (shore entries)", "short": "Point Loma and Sunset Cliffs", "faces_deg": 295, "mop": "D0324",
         "surf_zone": "CAZ043", "land_zone": "CAZ043", "marine_zone": "PZZ740",
         "buoy": "46232", "depth_m": 10, "beach_entry": False,
         "note": "Rocky west-facing entries, open to west swell and to south swell wrapping around the point.",
     },
     {
-        "id": "laguna", "name": "Laguna Beach (Shaws Cove, Crescent Bay)", "short": "Laguna Beach", "faces_deg": 203, "mop": "OC283",
+        "id": "laguna", "lat": 33.5445, "lng": -117.7993, "name": "Laguna Beach (Shaws Cove, Crescent Bay)", "short": "Laguna Beach", "faces_deg": 203, "mop": "OC283",
         "surf_zone": "CAZ552", "land_zone": "CAZ552", "marine_zone": "PZZ655",
         "buoy": "46253", "depth_m": 10, "beach_entry": True,
         "note": "South-southwest-facing coves, open to south swell. Nearest live buoy is San Pedro South, about 25 nm away.",

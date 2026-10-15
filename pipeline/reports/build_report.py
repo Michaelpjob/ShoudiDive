@@ -14,7 +14,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import evidence, explain, fish, nws_text, physics, render, season, sites, sources, story, trends, views, zones
+from . import evidence, explain, fish, nws_text, physics, render, season, sites, sources, story, trends, views, visibility, zones
 from . import thresholds as T
 from . import verdicts as V
 
@@ -457,15 +457,38 @@ def assemble(S: dict[str, dict], now: datetime) -> dict:
         "vis": vis,
         "enso": _usable(S.get("enso_weekly")) or [],
     }
+    # Predicted visibility, less the model's measured recent bias
+    vis_grids = visibility.load_grids(man) if man else None
+    try:
+        arch_days = json.loads((sources.DATA / "reports" / "trends.json").read_text(encoding="utf-8")).get("days", [])
+    except (OSError, ValueError):
+        arch_days = []
+    cal = visibility.calibration(today, arch_days, vis.get("dive-shop-justgetwet", []))
+    site_vis = {}
+    if vis_grids:
+        for site in sites.SHORE_SITES:
+            site_vis[site["id"]] = visibility.stated(visibility.sample(vis_grids, site["lat"], site["lng"]), cal)
+        for c in cards:
+            if c["group"] == "inshore" or c["name"] == "Coronado Islands":
+                m, _ = zones.zone_mean(vis_grids["p50"], tuple(c["center"]), c["radius_nm"])
+                c["vis_pred"] = visibility.stated({"p50": m} if m is not None else None, cal)
+    ref = visibility.sample(vis_grids, visibility.REF_POINT["lat"], visibility.REF_POINT["lng"]) if vis_grids else None
+    facts["visibility"] = {"calibration": cal, "sites": site_vis, "valid_at": (vis_grids or {}).get("valid_at"),
+                           "url": ((man.get("layers") or {}).get("viz") or {}).get("windows", {}).get("now", {}).get("url"),
+                           "range_ft": ((man.get("layers") or {}).get("viz") or {}).get("range_ft")}
     facts["weather"] = story.weather(synopsis, headlines, cards, buoys)
     facts["dive_sites"] = story.dive_sites(S, sites.SHORE_SITES, TZ, today, vis, buoy_hist,
                                            facts["divers"]["surge"]["sites"])
+    for ds, site in zip(facts["dive_sites"], sites.SHORE_SITES):
+        ds["vis_pred"] = site_vis.get(site["id"])
     facts["bait"] = {"text": "No public feed reports bait. The barges post their own updates.",
                      "links": [{"name": "Everingham Bros bait report (San Diego Bay, Mission Bay, Dana Point)",
                                 "url": "https://baitbarge.com/bait-report"}]}
     facts["map"] = zones.map_layers(paddies, fish.paddy_offset(paddies, today), fleet, today, man)
     facts["highlights"] = story.highlights(facts)
     facts["archive_snapshot"] = zones.snapshot(cards)
+    if ref:
+        facts["archive_snapshot"]["vis_pred"] = {visibility.REF_POINT["id"]: ref}
 
     generated = list(facts["bottom_line"]) + NOT_COVERED + [T.CURRENT_TEXT, T.FREEDIVE_TEXT]
     for lines in facts["views"].values():

@@ -202,11 +202,45 @@
 
   function mapSection() {
     return '<section><h2 id="map-h">Where things are</h2><div id="map" class="map" role="region" aria-label="Map of water temperature, zones, breaks, paddies and fleet"></div>' +
-      '<div class="maplegend"><span class="mut small">' + SST_SHOW_F[0] + '°F</span><span class="ramp" aria-hidden="true"></span><span class="mut small">' + SST_SHOW_F[1] + "°F</span></div>" +
+      (view === "fishing" ? '<div class="maplegend"><span class="mut small">' + SST_SHOW_F[0] + '°F</span><span class="ramp" aria-hidden="true"></span><span class="mut small">' + SST_SHOW_F[1] + "°F</span></div>"
+        : '<div class="maplegend"><span class="mut small">Predicted visibility ' + VIS_SHOW_FT[0] + ' ft</span><span class="ramp vis" aria-hidden="true"></span><span class="mut small">' + VIS_SHOW_FT[1] + "+ ft</span></div>") +
       '<div class="maplegend"><span class="mut small">Fleet stops:</span>' + ["today", "1 day", "2 days", "3 days"].map(function (t, i) {
         return '<span class="key"><i style="background:' + AGE_COLORS[i] + '"></i>' + t + "</span>";
       }).join("") + '<span class="key"><i style="background:#fbbf24"></i>boat now</span><span class="key"><i class="ring"></i>break</span><span class="key"><i style="background:#22c55e"></i>paddies</span></div>' +
-      '<p class="note">Water temperature: ' + esc(sstAsOf()) + " satellite map; blank is cloud or no data.</p></section>";
+      '<p class="note">' + (view === "fishing" ? "Water temperature: " + esc(sstAsOf()) + " satellite map; blank is cloud or no data."
+        : "Predicted visibility: our model scaled to where recent La Jolla shop reports landed; island and offshore numbers extend that La Jolla fit. Water temperature is in the layer menu.") + "</p></section>";
+  }
+
+  // Predicted visibility overlay: one blue hue, pale for murky, deep for clear
+  // (dataviz sequential blue, 100 -> 700), after the model's recent bias.
+  var VIS_RAMP = [[205, 226, 251], [158, 197, 244], [109, 167, 236], [57, 135, 229], [37, 106, 191], [24, 79, 149], [13, 54, 107]];
+  var VIS_SHOW_FT = [0, 35];
+  function visColor(ft) {
+    var t = Math.max(0, Math.min(1, (ft - VIS_SHOW_FT[0]) / (VIS_SHOW_FT[1] - VIS_SHOW_FT[0]))) * (VIS_RAMP.length - 1);
+    var i = Math.min(Math.floor(t), VIS_RAMP.length - 2), k = t - i, a = VIS_RAMP[i], b = VIS_RAMP[i + 1];
+    return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+  }
+  function drawVis(V, bb, layer) {
+    var scale = (V.calibration && V.calibration.applied) ? V.calibration.scale : 1;
+    var rng = V.range_ft || [0, 80];
+    var img = new Image();
+    img.onload = function () {
+      var cv = document.createElement("canvas");
+      cv.width = img.width; cv.height = img.height;
+      var ctx = cv.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      var px = ctx.getImageData(0, 0, cv.width, cv.height), d = px.data;
+      for (var i = 0; i < d.length; i += 4) {
+        var v = d[i];
+        if (!v) { d[i + 3] = 0; continue; }
+        var ft = Math.max(0, (rng[0] + (v - 1) / 254 * (rng[1] - rng[0])) * scale);
+        var c = visColor(ft);
+        d[i] = c[0]; d[i + 1] = c[1]; d[i + 2] = c[2]; d[i + 3] = 210;
+      }
+      ctx.putImageData(px, 0, 0);
+      L.imageOverlay(cv.toDataURL(), [[bb[1], bb[0]], [bb[3], bb[2]]], { className: "pix", interactive: false }).addTo(layer);
+    };
+    img.src = V.url;
   }
 
   function sstAsOf() {
@@ -261,7 +295,11 @@
     var M = facts.map || {};
     var sstLayer = L.layerGroup().addTo(map), landLayer = L.layerGroup().addTo(map), padLayer = L.layerGroup().addTo(map),
       zoneLayer = L.layerGroup().addTo(map), fleetLayer = L.layerGroup().addTo(map), liveLayer = L.layerGroup().addTo(map), spotLayer = L.layerGroup();
+    var V = facts.visibility || {};
+    var visLayer = L.layerGroup();
     if (M.sst_url && M.bbox && M.sst_range_c) drawSst(M, sstLayer);
+    if (V.url && M.bbox) drawVis(V, M.bbox, visLayer);
+    if (view !== "fishing") { map.removeLayer(sstLayer); visLayer.addTo(map); }
     fetch("/data/land.geojson").then(function (r) { return r.ok ? r.json() : null; }).then(function (g) {
       if (g) L.geoJSON(g, { style: { color: "#475569", weight: 0.6, fillColor: "#1f2937", fillOpacity: 1 }, interactive: false }).addTo(landLayer);
     }).catch(function () { /* map still useful without land */ });
@@ -294,7 +332,7 @@
       L.circleMarker([s.lat, s.lng], { radius: 2.5, color: "#e2e8f0", weight: 1, fillOpacity: 1 })
         .bindTooltip(esc(s.name) + (s.sst_f != null ? " · " + esc(s.sst_f) + "°F" : ""), { direction: "right" }).addTo(spotLayer);
     });
-    L.control.layers(null, { "Water temperature": sstLayer, "Zones and breaks": zoneLayer, "Paddies": padLayer,
+    L.control.layers(null, { "Water temperature": sstLayer, "Predicted visibility": visLayer, "Zones and breaks": zoneLayer, "Paddies": padLayer,
       "Fleet stops, 3 days": fleetLayer, "Boats now": liveLayer, "Named spots": spotLayer }, { position: "topright", collapsed: true }).addTo(map);
   }
 
@@ -339,6 +377,8 @@
       "<dt>Break</dt><dd>" + (b ? esc([b.step_f + "°F over", b.over_nm, "nm, warm side", b.warm_side].join(" ")) : '<span class="mut">no break in the zone</span>') + "</dd>" +
       "<dt>Color</dt><dd>" + (z.chl != null ? esc([z.chl, "mg/m³ (" + colorWord(z.chl) + ")"].join(" ")) : '<span class="mut">cloud, no reading</span>') + "</dd>" +
       "<dt>Paddies</dt><dd>" + (p ? esc(p.word) + '<span class="mut"> · drift model</span>' : '<span class="mut">none in the model</span>') + "</dd>" +
+      (z.vis_pred ? "<dt>Visibility</dt><dd>" + esc(["about", z.vis_pred.ft, "ft", z.vis_pred.lo_ft != null ? "(" + [z.vis_pred.lo_ft, z.vis_pred.hi_ft].join("-") + ")" : ""].join(" ")) +
+        '<span class="mut"> · predicted</span></dd>' : "") +
       "<dt>Fleet (AIS)</dt><dd>" + esc([f.last3_hours || 0, "h last 3 days,", f.prior7_hours || 0, "h the 7 before"].join(" ")) +
       (series.some(function (s) { return s.hours > 0; }) ? bars(series.map(function (s) { return s.hours; }), C.s2, 112, 22, "Fleet hours stopped per day, last 14 days") : "") +
       '<div class="mut small">Same weeks last year: ' + esc(f.last_year_hours || 0) + " h" + (f.boats_last3 && f.boats_last3.length ? " · recent: " + esc(f.boats_last3.join(", ")) : "") + "</div></dd>" +
@@ -397,14 +437,19 @@
       var vis = s.vis || [];
       var lastVis = vis.length ? vis[vis.length - 1] : null;
       var temps = (s.temp_series || []).map(function (t) { return t.temp_f; });
+      var vp = s.vis_pred;
       return '<article class="zone"><header><h3>' + esc(s.name) + '</h3></header><div class="mut small spots">' + esc(s.note) + "</div>" +
+        (vp ? '<div class="row"><div class="metric"><span class="k">Visibility, predicted</span><span class="v">' + esc(vp.ft) + " ft</span>" +
+          (vp.lo_ft != null ? '<span class="d">' + esc([vp.lo_ft, "to", vp.hi_ft, "ft likely"].join(" ")) + "</span>" : "") + "</div>" +
+          (lastVis ? '<div class="metric right"><span class="k">Last shop post</span><span class="v2">' + esc([lastVis.lo_ft === lastVis.hi_ft ? lastVis.lo_ft : [lastVis.lo_ft, lastVis.hi_ft].join("-"), "ft"].join(" ")) +
+            '</span><span class="d">' + esc(md(lastVis.date)) + "</span></div>" : "") + "</div>" : "") +
         '<div class="row"><div class="metric"><span class="k">Water, buoy ' + esc(s.buoy) + '</span><span class="v">' + (temps.length ? esc(temps[temps.length - 1]) + "°F" : "n/a") + "</span>" +
         (temps.length > 7 ? '<span class="d">' + esc(signed(temps[temps.length - 1] - temps[temps.length - 8], "°F")) + " in 7 days</span>" : "") + "</div>" + spark(temps, C.s1) + "</div>" +
         '<dl class="facts"><dt>Sets at the entry</dt><dd>' + (s.surf || []).map(function (d) {
           return esc([d.label, d.sets_ft < 1 ? "under 1" : d.sets_ft.toFixed(0), "ft at", d.tp_s, "s"].join(" "));
         }).join(" · ") + '<div class="mut small">CDIP nearshore wave model at the 10 m line</div></dd>' +
-        "<dt>Visibility</dt><dd>" + (lastVis ? esc([lastVis.lo_ft === lastVis.hi_ft ? lastVis.lo_ft : lastVis.lo_ft + "-" + lastVis.hi_ft, "ft on", md(lastVis.date)].join(" ")) +
-          '<div class="mut small">' + esc(s.vis_source) + " posts</div>" : '<span class="mut">no shop posts for this site</span>') + "</dd>" +
+        (vp ? "" : "<dt>Visibility</dt><dd>" + (lastVis ? esc([lastVis.lo_ft === lastVis.hi_ft ? lastVis.lo_ft : lastVis.lo_ft + "-" + lastVis.hi_ft, "ft on", md(lastVis.date)].join(" ")) +
+          '<div class="mut small">' + esc(s.vis_source) + " posts</div>" : '<span class="mut">no shop posts for this site</span>') + "</dd>") +
         (s.surge ? "<dt>Surge at " + esc(s.surge.depth_ft) + " ft</dt><dd>" + esc([s.surge.u_ft_s, "ft/s bottom water speed", "(" + String(s.surge.level) + ")"].join(" ")) + "</dd>" : "") +
         "</dl></article>";
     }).join("") + "</div></section>";
@@ -435,6 +480,12 @@
     var out = '<section><h2 id="trends">Trends</h2><div class="charts">';
     out += lineChart({ title: "Water temperature at the buoys", sub: "daily mean, °F", unit: "°F", decimals: 0,
       series: bseries(view === "fishing" ? ["46254", "46232", "46086", "46047"] : ["46254", "46232", "46253"], "temp_f") });
+    var cal = (facts.visibility || {}).calibration || {};
+    if (view !== "fishing" && cal.pairs && cal.pairs.length > 5) {
+      out += lineChart({ title: "Predicted vs posted visibility, La Jolla", sub: [cal.n, "shop reports; prediction scaled by", cal.scale].join(" "), unit: " ft",
+        series: [{ name: "Shop post (range)", short: "Posted", color: C.s1, range: true, points: cal.pairs.map(function (p) { return { d: p.date, lo: p.obs_lo, hi: p.obs_hi }; }) },
+                 { name: "Predicted", short: "Predicted", color: C.s2, points: cal.pairs.map(function (p) { return { d: p.date, v: p.pred_ft }; }) }] });
+    }
     var vis = (t.vis || {})["dive-shop-justgetwet"];
     if (view !== "fishing" && vis && vis.length > 2) {
       out += lineChart({ title: "Visibility posted by Just Get Wet (La Jolla)", sub: "low to high of each post, ft", unit: " ft",

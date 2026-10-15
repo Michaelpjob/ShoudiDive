@@ -426,3 +426,32 @@ def test_highlights_say_what_moved_without_verdicts():
     for lines in hl.values():
         render.check_text(lines)
         assert not any("within our thresholds" in x or "outside our thresholds" in x for x in lines)
+
+
+# --- Predicted visibility -------------------------------------------------------
+
+from reports import visibility  # noqa: E402
+
+
+def test_vis_calibration_from_seed_removes_the_high_bias():
+    cal = visibility.calibration(date(2026, 10, 15), [], [])
+    assert cal["applied"] and cal["n"] >= visibility.MIN_PAIRS
+    assert 8 <= cal["bias_ft"] <= 11  # the measured Aug-Oct offset
+    assert 0.4 <= cal["scale"] <= 0.6 and cal["band_lo_x"] < 1 < cal["band_hi_x"]
+    out = visibility.stated({"p50": 20.0, "p10": 16.0, "p90": 25.0}, cal)
+    assert out["adjusted"] and out["ft"] == round(20.0 * cal["scale"]) and out["lo_ft"] <= out["ft"] <= out["hi_ft"]
+    assert visibility.stated({"p50": 6.0}, cal)["ft"] >= 2  # proportional: murky cells never read zero
+
+
+def test_vis_archive_pairs_join_on_date():
+    days = [{"date": "2026-10-20", "vis_pred": {"la-jolla-ref": {"p50": 18.0}}}]
+    posts = [{"date": "2026-10-20", "lo_ft": 5.0, "hi_ft": 10.0}]
+    pr = visibility.archive_pairs(days, posts)
+    assert pr and pr[0]["p50"] == 18.0 and pr[0]["obs_hi"] == 10.0
+
+
+def test_vis_not_adjusted_without_enough_pairs(monkeypatch, tmp_path):
+    monkeypatch.setattr(visibility, "SEED", tmp_path / "none.json")
+    cal = visibility.calibration(date(2026, 10, 15), [], [])
+    assert not cal["applied"]
+    assert visibility.stated({"p50": 20.0, "p10": 16.0, "p90": 25.0}, cal)["adjusted"] is False
