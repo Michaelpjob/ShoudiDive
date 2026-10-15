@@ -21,6 +21,7 @@ webcam-only shops adding text reports, defunct shops re-opening).
 | **DiveViz** (2 blogs) | LA-OC + SD | aggregator, daily | https://diveviz.com/blogs/{daily-dive-report,la-and-oc-dive-conditions} | 0.85 | Prose, LLM-extracted. The `san-diego-dive-conditions` blog (line 152 of source manifest) is dormant since 2019 — content moved to `daily-dive-report`. |
 | **Beach Cities Scuba** | Laguna | dive shop, daily | https://beachcitiescuba.com/pages/current-conditions | 0.85 | Single-spot-per-page (Shaw's Cove default) with labelled fields. Added 2026-05-09. |
 | **South Coast Divers** | Laguna | dive shop, daily | https://southcoastdivers.com/blog | 0.80 | Daily prose blog (Rich Parker / Louis Umphenour). LLM-extracted. Custom timestamped-filename URL pattern. Added 2026-05-09. Complements Beach Cities Scuba — covers Bluebird Canyon + Woods Cove + N/S Laguna live-cam inferences. |
+| **Pacific Wilderness** | San Pedro: Palos Verdes, Point Fermin, Long Beach oil rigs, Catalina | dive shop, weekly | https://pacificwilderness.com/?page_id=676 (Facebook feed) and https://pacificwilderness.com/ (Instagram feed) | 0.80 | Added 2026-10-15. Weekly conditions posts as the shop's WordPress renders them (Smash Balloon plugins); the scraper never requests Meta. Regex, one row per named site with its own coordinates, dated to the dive day the post names. See the 2026-10-15 re-audit below. |
 | **BdOutdoors** (4 RSS feeds) | CA-wide | forum, daily | https://www.bdoutdoors.com/forums/forum/.../index.rss | 0.85 | Spear / fishing forum. Pre-filters for viz keywords before LLM call. |
 | **Reddit r/scuba + r/spearfishing** | CA-wide | forum, irregular | https://www.reddit.com/r/{scuba,spearfishing}/.rss | 0.80 | LLM-extracted. Geo subs (r/sandiego etc) excluded — noise too high. |
 | **CDIP buoys** (6) | CA coast | buoy, live | https://cdip.ucsd.edu/data_access/justdar.cdip | 0.95 | Hs + SST. **No secchi.** Useful for SST validation only. |
@@ -39,7 +40,6 @@ NDBCScraper.
 |--------|-----|--------------|
 | Aquarius Dive Shop (Monterey) | https://aquariusdivers.com/conditions | "Wave Models" + "Forecasts" + "Web Cams" sections only — links out to NOAA/CDIP/NDBC. **Same buoy data we already pull.** |
 | Diver Dan's | https://www.diverdans.com/local-diving/monterey-conditions/ | Pure navigation hub — links to NDBC, CDIP, Windy, webcams. No own data. |
-| Pacific Wilderness | https://pacificwilderness.com/?page_id=676 | Aggregator: webcams + Magic Seaweed + LA County beach advisories. |
 | Heff.net | https://www.heff.net/scuba/features/cdc.shtml | Links + a phone number for SD Lifeguards. No web data. |
 | L.A. Scuba Diving | https://lascubadiving.com/workshop/divereport.html | Links to wave models + webcams hosted elsewhere. |
 | South Coast Divers /conds.shtml | http://www.southcoastdivers.com/conds.shtml | Different URL than `/blog` — this one is the aggregator page. **The /blog URL is what we scrape.** |
@@ -174,7 +174,14 @@ scraper same-day if it's regex-extractable, next-day if LLM.
 Only two public sources outside La Jolla post numeric visibility on a schedule:
 
 - **South Coast Divers** (Laguna, weekdays). The reader was broken by a key mismatch (it read `viz_ft`/`excerpt`; the shared LLM prompt returns `observed_secchi_ft`/`raw_excerpt`), so 176 rows since May carried no number, and it stamped Pacific filename times as UTC. Now read deterministically from the plain-text post (`extract_viz`, conditions paragraph only), LLM as fallback. The archive index reaches back to 2013. Most values are webcam estimates.
-- **Pacific Wilderness** (San Pedro: Palos Verdes, Point Fermin, the oil rigs, Catalina front side; weekly). The posts live in Facebook and Instagram embeds on `pacificwilderness.com/?page_id=676`, which this file earlier rejected as a link page. Not wired: the embed keeps relative dates only and Meta's terms were not reviewed.
+- **Pacific Wilderness** (San Pedro: Palos Verdes, Point Fermin, the oil rigs, Catalina front side; weekly). The posts live in Facebook and Instagram feeds on `pacificwilderness.com`, which this file earlier rejected as a link page. Wired 2026-10-15 (`pacificwilderness.py`) after a terms review:
+  - The feeds are not Meta iframes. The Smash Balloon WordPress plugins (Custom Facebook Feed, Instagram Feed) fetch the shop's own posts with the shop's own connection and write them into the shop's HTML on the shop's server. The scraper reads two pacificwilderness.com pages per run and never requests facebook.com, instagram.com, the Graph API or Meta's CDN.
+  - Meta's clauses on automated collection attach to Meta's products: Facebook's terms ("You may not access or collect data from our Products using automated means"), the Automated Data Collection Terms ("data collected from Meta Company Products"). The Platform Terms bind the developer who connects to Meta, here the shop, and the shop chose to publish these posts on its public site. Posters keep ownership of what they post; Meta's license is non-exclusive. So the text is the shop's.
+  - The shop's site links no terms of use or privacy page (about 60 pages checked from the menu), and `/robots.txt` redirects to the homepage, so there are no crawl rules. The page's robots meta is `max-image-preview:large` only.
+  - Cadence: two requests every 6 hours (the ingest cron), 30 s apart, with the project User-Agent. The scraper keeps a site, a number and one sentence per reading, with a link to the post.
+  - If the shop objects, drop it from SCRAPERS; a courtesy note offering the link-back is in the email template above.
+  - Dating: the Instagram feed carries exact timestamps; the Facebook feed shows only "6 days ago", so a Facebook post is read while its age is in hours (the cron runs every 6 hours) and left alone after. Readings with no stated dive day ("Oil Rigs: 60+ ft visibility" in a "Recent Reports" list) carry `day_stated: false`.
+  - Yield: posts since Aug 2026 give 13 site readings (7 with a stated day). In the report's 60-day window that is 9, short of the 15 a per-area fit needs, so no Palos Verdes area yet; numbers in `knobs_registry.json` (`reports.vis_bias_correction`).
 
 Changes to earlier entries:
 

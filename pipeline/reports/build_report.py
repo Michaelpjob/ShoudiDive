@@ -31,6 +31,7 @@ SOURCE_KIND = {
 POST_SOURCES = {
     "dive-shop-justgetwet": "Just Get Wet (La Jolla dive shop)",
     "dive-shop-southcoastdivers": "South Coast Divers (Laguna)",
+    "dive-shop-pacificwilderness": "Pacific Wilderness (San Pedro dive shop)",
     "dive-shop-diveviz": "DiveViz",
     "dive-shop-beachcitiescuba": "Beach Cities Scuba",
     "forum-bdoutdoors": "BD Outdoors forum",

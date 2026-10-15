@@ -479,10 +479,14 @@ def summarize_posts(rows: list[dict], cutoff: datetime, now: datetime) -> dict:
         ts = first_seen.get(key) or parse_iso(r["timestamp_utc"])
         exc = (r.get("raw_excerpt") or "").strip()
         vis = re.search(r"Vis(?:ibility)?:?\s*([0-9]+\s*(?:-|to|–)\s*[0-9]+\+?\s*(?:ft|feet|')|[0-9]+\+?\s*(?:ft|feet|'))", exc, re.I)
+        vis_text = vis.group(1).replace("–", "-") if vis else None
+        lo, hi = r.get("observed_lo_ft"), r.get("observed_hi_ft")
+        if lo is not None and hi is not None:
+            vis_text = f"{lo:.0f} ft" if lo == hi else f"{lo:.0f}-{hi:.0f} ft"
         posts.append({
             "source": src, "site": r.get("spot_name"), "url": r.get("source_url"),
             "post_date": post_date(r.get("source_url"), ts).isoformat(),
-            "vis_text": vis.group(1).replace("–", "-") if vis else None,
+            "vis_text": vis_text,
             "vis_ft": r.get("observed_secchi_ft"),
             "excerpt": exc[:280], "stale_source": src in stale,
         })
