@@ -134,6 +134,8 @@ def synopsis_text(block: str | None) -> str | None:
     if i >= 0:
         text = text[i:]
         j = text.find("...")
-        if 0 <= j < 80:
+        if 0 <= j < 240:  # "Synopsis for <long area name>...at 18Z or 11 AM PDT, ..."
             text = text[j + 3:]
+            if text[:3].lower() == "at ":
+                text = "At " + text[3:]
     return text.strip() or None

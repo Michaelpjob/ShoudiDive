@@ -308,7 +308,10 @@ def thermocline_from_profile(rows: list[tuple[float, float]]) -> dict | None:
         return None
     zc, g = max(grads, key=lambda x: x[1])
     surface = sum(t for d, t in prof[:2]) / min(2, len(prof))
+    # Mixed layer: first depth where the water is 1.1 degC (2 degF) colder than the surface.
+    mld = next((d for d, t in prof if t <= surface - 1.1), None)
     return {"surface_c": round(surface, 2), "thermocline_m": round(zc, 1), "max_drop_c_per_m": round(g, 3),
+            "mixed_layer_m": round(mld, 1) if mld is not None else None,
             "t_9m_c": at(9.1), "t_18m_c": at(18.3), "t_30m_c": at(30.5), "max_depth_m": round(prof[-1][0])}
 
 

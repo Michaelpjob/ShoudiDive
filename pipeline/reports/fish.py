@@ -338,6 +338,7 @@ def fleet_now(now_json: dict | None, landings: dict | None, now: datetime | None
         if near_dock:
             continue
         at_sea.append({"name": b.get("name") or "unnamed", "sog": sog, "stopped": sog is not None and sog < 2,
+                       "lat": round(lat, 3), "lng": round(lng, 3),
                        "spot": nearest_spot(lat, lng, 15), "nm_from_sd": round(_bearing(*SAN_DIEGO, lat, lng)[0] / 1.852),
                        "t": b.get("t")})
     return {"at_sea": sorted(at_sea, key=lambda r: (not r["stopped"], r["nm_from_sd"]))[:12], "fresh": now_json.get("freshest"),

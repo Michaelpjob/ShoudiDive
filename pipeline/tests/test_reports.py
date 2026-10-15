@@ -381,3 +381,48 @@ def test_break_step_on_a_synthetic_front():
     lat, lng = g.latlng(30, 28)
     b = fish.nearest_break(g, sm, mag, gx, gy, lat, lng)
     assert b is not None and b["warm_side"] == "E" and b["step_f"] > 1.0
+
+
+# --- Ocean Report: zones and trends ------------------------------------------
+
+from reports import story, trends, zones  # noqa: E402
+
+
+def test_ndbc_history_daily_means():
+    rows = trends.parse_ndbc_history(
+        "#YY  MM DD hh mm WDIR WSPD GST  WVHT   DPD   APD MWD   PRES  ATMP  WTMP\n"
+        "2026 10 15 16 50 340  5.0  6.0   1.0    14   6.8 234 1016.0  21.0  21.0\n"
+        "2026 10 15 16 20 340  7.0  8.0   2.0    MM   6.8 234 1016.0  21.0  22.0\n"
+        "2026 10 14 16 20 340  3.0  4.0    MM    MM   6.8 234 1016.0  21.0  20.0\n")
+    assert [r["date"] for r in rows] == ["2026-10-14", "2026-10-15"]
+    d15 = rows[1]
+    assert d15["temp_f"] == round(21.5 * 9 / 5 + 32, 1) and d15["wave_max_ft"] == round(2.0 * 3.28084, 1)
+    assert d15["wind_max_kt"] == round(7.0 * 1.94384)
+
+
+def test_zone_lookup_and_gps_format():
+    assert zones.ZONES[zones.zone_of(32.40, -117.26)][0] == "Coronado Islands"
+    assert zones.zone_of(30.0, -125.0) is None
+    assert zones.ddm(32.5333, -117.35) == "32 32 x 117 21"
+
+
+def test_archive_replaces_today_and_keeps_order(tmp_path):
+    p = tmp_path / "trends.json"
+    a = trends.update_archive(p, "2026-10-15", {"zones": {"x": 1}})
+    p.write_text(json.dumps(a))
+    a = trends.update_archive(p, "2026-10-14", {"zones": {"x": 0}})
+    p.write_text(json.dumps(a))
+    a = trends.update_archive(p, "2026-10-15", {"zones": {"x": 2}})
+    assert [d["date"] for d in a["days"]] == ["2026-10-14", "2026-10-15"] and a["days"][1]["zones"]["x"] == 2
+
+
+def test_highlights_say_what_moved_without_verdicts():
+    card = lambda name, t0, t1: {"name": name, "short": name, "group": "offshore", "temp_f": t1, "temp_change_f": round(t1 - t0, 1),
+                                 "temp_series": [{"date": "2026-10-07", "temp_f": t0}, {"date": "2026-10-13", "temp_f": t1}],
+                                 "fleet": {"last3_hours": 0, "last_year_hours": 12.0}}
+    facts = {"zones": [card("A", 74.0, 72.0), card("B", 73.0, 71.5)], "trends": {}, "weather": {}, "dive_sites": [], "fishing": {}}
+    hl = story.highlights(facts)
+    assert hl["fishing"][0].startswith("Water cooled in every zone since Oct 7")
+    for lines in hl.values():
+        render.check_text(lines)
+        assert not any("within our thresholds" in x or "outside our thresholds" in x for x in lines)
