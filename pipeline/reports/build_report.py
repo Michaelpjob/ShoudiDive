@@ -481,7 +481,7 @@ def assemble(S: dict[str, dict], now: datetime) -> dict:
                                            facts["divers"]["surge"]["sites"])
     for ds, site in zip(facts["dive_sites"], sites.SHORE_SITES):
         ds["vis_pred"] = site_vis.get(site["id"])
-    facts["bait"] = {"text": "No public feed reports bait. The barges post their own updates.",
+    facts["bait"] = {"text": "The barges also post their own updates:",
                      "links": [{"name": "Everingham Bros bait report (San Diego Bay, Mission Bay, Dana Point)",
                                 "url": "https://baitbarge.com/bait-report"}]}
     facts["map"] = zones.map_layers(paddies, fish.paddy_offset(paddies, today), fleet, today, man)

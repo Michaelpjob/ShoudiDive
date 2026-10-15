@@ -33,7 +33,7 @@ h3{font-size:13px;margin:18px 0 6px;color:var(--mut);text-transform:uppercase;le
 .map{height:440px;border:1px solid var(--line);border-radius:6px;background:#0b1220}
 .leaflet-container{background:#0b1220;font:12px system-ui,sans-serif}
 .pix{image-rendering:pixelated}
-.leaflet-control-layers-toggle{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23334155' stroke-width='2' stroke-linejoin='round'%3E%3Cpath d='M12 3 2 8l10 5 10-5-10-5Z'/%3E%3Cpath d='m2 13 10 5 10-5'/%3E%3C/svg%3E");background-size:22px 22px}
+.leaflet-control-layers-toggle,.leaflet-retina .leaflet-control-layers-toggle{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23334155' stroke-width='2' stroke-linejoin='round'%3E%3Cpath d='M12 3 2 8l10 5 10-5-10-5Z'/%3E%3Cpath d='m2 13 10 5 10-5'/%3E%3C/svg%3E");background-size:22px 22px}
 .maplegend{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:6px 0 0}
 .maplegend .ramp{flex:1 1 200px;max-width:320px;height:10px;border-radius:5px;background:linear-gradient(90deg,rgb(12,38,130),rgb(40,130,210) 25%,rgb(120,220,220) 50%,rgb(240,220,110) 70%,rgb(230,110,60) 85%,rgb(170,20,35))}
 .maplegend .ramp.vis{background:linear-gradient(90deg,rgb(205,226,251),rgb(109,167,236) 33%,rgb(37,106,191) 66%,rgb(13,54,107))}
@@ -103,18 +103,18 @@ ul.cols{columns:2 320px}
 /* Field reports */
 [hidden]{display:none!important}
 .send-hdr{font-size:13px;font-weight:600;text-decoration:none;color:#0b1220;background:var(--link);border-radius:4px;padding:3px 9px;margin-right:6px}
-.key i.dia{width:8px;height:8px;border-radius:0;transform:rotate(45deg);background:#fff;border:1px solid #0b1220}
+.key i.dia{width:8px;height:8px;border-radius:0;transform:rotate(45deg);background:#e879f9;border:1px solid #0b1220}
 .obs-pin{background:transparent;border:0}
-.obs-pin i{display:block;width:9px;height:9px;margin:1px;transform:rotate(45deg);background:#fff;border:1.5px solid #0b1220}
+.obs-pin i{display:block;width:9px;height:9px;margin:1px;transform:rotate(45deg);background:#e879f9;border:1.5px solid #0b1220}
 ul.obs li{margin:8px 0}
 .quote{color:#cbd5e1;font-style:italic;margin-top:2px}
-details.send{margin:8px 0 12px;padding:8px 12px}
+details.send{margin:8px 0 12px;padding:8px 12px;scroll-margin-top:96px}
 details.send[open] summary{margin-bottom:8px}
 details.send summary{font-size:14px;color:var(--fg)}
 fieldset.types{display:flex;flex-wrap:wrap;gap:6px 16px;border:0;padding:0;margin:0 0 10px}
 fieldset.types legend{padding:0;margin-bottom:4px}
 fieldset.types label{font-size:14px;cursor:pointer}
-.fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px 14px}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px 12px}
 .fgrid label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--mut)}
 .fgrid label.wide{grid-column:1/-1}
 .fgrid input,.fgrid select,.fgrid textarea{background:#111827;color:var(--fg);border:1px solid var(--line2);border-radius:4px;padding:6px 8px;font:14px system-ui,sans-serif;width:100%;box-sizing:border-box}

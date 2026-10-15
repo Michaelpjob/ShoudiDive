@@ -206,7 +206,7 @@
   var OBS_COLORS = ["blue", "blue-green", "green", "off-color", "red tide"];
   var OBS_TYPES = [["catch", "Catch"], ["sighting", "Sighting"], ["bait", "Bait at the barge"], ["dive", "Dive"]];
   var OBS_DAYS = 7;
-  // Report pins: white diamonds, fading with age (today, 1-2 days, 3-6 days).
+  // Report pins: fuchsia diamonds (a hue nothing else on the map uses), fading with age (today, 1-2 days, 3-6 days).
   var OBS_AGE_OPACITY = [1, 0.75, 0.45];
   var OBS = [], pickMode = false, pickMarker = null;
 
@@ -685,6 +685,18 @@
       '"Water fits" lists species whose usual range includes the zone\'s water this month. ' + esc((facts.fishing || {}).counts_note || "") + "</p></section>";
   }
 
+  // A dive report belongs to the nearest dive site within 3 nm, so neighbouring
+  // sites (Cove and Shores) don't both claim it.
+  function nearestSite(o) {
+    var best = null;
+    (facts.dive_sites || []).forEach(function (s) {
+      if (s.lat == null) return;
+      var d = nm([o.lat, o.lng], [s.lat, s.lng]);
+      if (d <= 3 && (!best || d < best.d)) best = { d: d, s: s };
+    });
+    return best ? best.s : null;
+  }
+
   function diveSites() {
     var sites = facts.dive_sites || [];
     if (!sites.length) return "";
@@ -693,7 +705,7 @@
       var lastVis = vis.length ? vis[vis.length - 1] : null;
       var temps = (s.temp_series || []).map(function (t) { return t.temp_f; });
       var vp = s.vis_pred;
-      var divers = s.lat != null ? obsRecent(["dive"]).filter(function (o) { return nm([o.lat, o.lng], [s.lat, s.lng]) <= 3; }) : [];
+      var divers = obsRecent(["dive"]).filter(function (o) { return nearestSite(o) === s; });
       return '<article class="zone"><header><h3>' + esc(s.name) + '</h3></header><div class="mut small spots">' + esc(s.note) + "</div>" +
         (divers.length ? '<div class="row"><div class="metric"><span class="k">Divers reported</span><span class="v2">' + esc(visRange(divers[0]) + " ft") + "</span>" +
           '<span class="d">' + esc([md(divers[0].date), divers.length > 1 ? "· " + divers.length + " reports this week" : ""].join(" ")) + "</span></div></div>" : "") +
