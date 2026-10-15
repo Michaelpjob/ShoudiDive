@@ -154,6 +154,19 @@ def glider_series(now: datetime | None = None, days: int = 10, max_km: float = 1
 _RANGE = re.compile(r"Vis(?:ibility)?:?\s*(\d+)\s*(?:-|to|–)?\s*(\d+)?\+?\s*(?:ft|feet|')", re.I)
 
 
+def _prose_range(sentence: str) -> tuple[float, float] | None:
+    from validation.ingest.southcoastdivers import _BOUND_AFTER, _LEAD_NOT_NOW, _NOT_NOW, _NUM_THEN_VIZ, _VIZ_THEN_NUM
+    found = sorted(list(_VIZ_THEN_NUM.finditer(sentence)) + list(_NUM_THEN_VIZ.finditer(sentence)), key=lambda m: m.start("lo"))
+    for m in found:
+        if (_NOT_NOW.search(m.group("gap")) or _BOUND_AFTER.search(sentence[m.end():m.end() + 14])
+                or _LEAD_NOT_NOW.search(sentence[max(0, m.start() - 30):m.start()])):
+            continue
+        lo = float(m.group("lo"))
+        hi = float(m.group("hi")) if m.group("hi") else lo
+        return (min(lo, hi), max(lo, hi))
+    return None
+
+
 def vis_series(days: int = 45, today: date | None = None) -> dict:
     """One point per (shop, site, post date): low and high of the posted range."""
     today = today or sources.utcnow().date()
@@ -178,15 +191,23 @@ def vis_series(days: int = 45, today: date | None = None) -> dict:
             first_seen[url] = ts
         rows.append(o)
     for o in rows:
-        m = _RANGE.search(o.get("raw_excerpt") or "")
         url = o.get("source_url") or ""
-        if not m or url not in first_seen:
+        if url not in first_seen:
+            continue
+        m = _RANGE.search(o.get("raw_excerpt") or "")
+        if m:
+            lo = float(m.group(1))
+            hi = float(m.group(2)) if m.group(2) else lo
+        elif o.get("extraction_method") == "regex" and o.get("raw_excerpt") and o.get("observed_secchi_ft") is not None:
+            # Prose posts (South Coast Divers): the range the scraper read from
+            # the same sentence, else the stated midpoint.
+            r = _prose_range(o["raw_excerpt"])
+            lo, hi = r if r else (o["observed_secchi_ft"], o["observed_secchi_ft"])
+        else:
             continue
         d = sources.post_date(url, first_seen[url])
         if d < cutoff:
             continue
-        lo = float(m.group(1))
-        hi = float(m.group(2)) if m.group(2) else lo
         key = (o["source"], o.get("spot_name"), d.isoformat())
         seen[key] = {"source": o["source"], "site": o.get("spot_name"), "date": d.isoformat(), "lo_ft": lo, "hi_ft": hi}
     # One series per shop: its posts cover its home waters under several site

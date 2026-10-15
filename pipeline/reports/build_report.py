@@ -84,6 +84,7 @@ def gather(now: datetime) -> dict[str, dict]:
     S["glider_series"] = trends.glider_series(now=now)
     S["enso_weekly"] = trends.enso_weekly(now=now)
     S["season_curves"] = season_source(today, now, S)
+    S["field_reports"] = sources.field_reports(now=now)
     return S
 
 
@@ -496,17 +497,25 @@ def assemble(S: dict[str, dict], now: datetime) -> dict:
         arch_days = json.loads((sources.DATA / "reports" / "trends.json").read_text(encoding="utf-8")).get("days", [])
     except (OSError, ValueError):
         arch_days = []
-    cal = visibility.calibration(today, arch_days, vis.get("dive-shop-justgetwet", []))
+    field = visibility.field_posts(_usable(S.get("field_reports")) or [])
+    cals = visibility.calibrations(today, arch_days, {a["id"]: vis.get(a["source"], []) for a in visibility.AREAS}, field)
+    cal = cals["areas"]["la-jolla"]
     site_vis = {}
     if vis_grids:
         for site in sites.SHORE_SITES:
-            site_vis[site["id"]] = visibility.stated(visibility.sample(vis_grids, site["lat"], site["lng"]), cal)
+            area = visibility.area_of(site["lat"], site["lng"])
+            site_vis[site["id"]] = visibility.stated(visibility.sample(vis_grids, site["lat"], site["lng"]), cals["areas"][area["id"]])
+            if site_vis[site["id"]]:
+                site_vis[site["id"]]["area"] = area["id"]
         for c in cards:
             if c["group"] == "inshore" or c["name"] == "Coronado Islands":
                 m, _ = zones.zone_mean(vis_grids["p50"], tuple(c["center"]), c["radius_nm"])
-                c["vis_pred"] = visibility.stated({"p50": m} if m is not None else None, cal)
-    ref = visibility.sample(vis_grids, visibility.REF_POINT["lat"], visibility.REF_POINT["lng"]) if vis_grids else None
-    facts["visibility"] = {"calibration": cal, "sites": site_vis, "valid_at": (vis_grids or {}).get("valid_at"),
+                area = visibility.area_of(*c["center"])
+                c["vis_pred"] = visibility.stated({"p50": m} if m is not None else None, cals["areas"][area["id"]])
+    refs = {a["ref"]["id"]: visibility.sample(vis_grids, a["ref"]["lat"], a["ref"]["lng"]) for a in visibility.AREAS} if vis_grids else {}
+    refs = {k: v for k, v in refs.items() if v}
+    facts["visibility"] = {"calibration": cal, "areas": cals["areas"], "field_reports_used": sum(len(v) for v in field.values()),
+                           "sites": site_vis, "valid_at": (vis_grids or {}).get("valid_at"),
                            "url": ((man.get("layers") or {}).get("viz") or {}).get("windows", {}).get("now", {}).get("url"),
                            "range_ft": ((man.get("layers") or {}).get("viz") or {}).get("range_ft")}
     facts["weather"] = story.weather(synopsis, headlines, cards, buoys)
@@ -520,8 +529,8 @@ def assemble(S: dict[str, dict], now: datetime) -> dict:
     facts["map"] = zones.map_layers(paddies, fish.paddy_offset(paddies, today), fleet, today, man)
     facts["highlights"] = story.highlights(facts)
     facts["archive_snapshot"] = zones.snapshot(cards)
-    if ref:
-        facts["archive_snapshot"]["vis_pred"] = {visibility.REF_POINT["id"]: ref}
+    if refs:
+        facts["archive_snapshot"]["vis_pred"] = refs
 
     generated = list(facts["bottom_line"]) + NOT_COVERED + [T.CURRENT_TEXT, T.FREEDIVE_TEXT]
     for lines in facts["views"].values():

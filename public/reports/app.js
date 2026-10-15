@@ -460,7 +460,7 @@
       }).join("") + '<span class="key"><i style="background:#fbbf24"></i>boat now</span><span class="key"><i class="ring"></i>break</span><span class="key"><i style="background:#22c55e"></i>paddies</span>' +
       '<span class="key"><i class="dia"></i>field report</span></div>' +
       '<p class="note">' + (view === "fishing" ? "Water temperature: " + esc(sstAsOf()) + " satellite map; blank is cloud or no data."
-        : "Predicted visibility: our model scaled to where recent La Jolla shop reports landed; island and offshore numbers extend that La Jolla fit. Water temperature is in the layer menu.") + "</p></section>";
+        : "Predicted visibility: our model scaled to where recent shop reports landed, La Jolla and Laguna each on their own record; everywhere else takes the nearer of the two, an extrapolation. Water temperature is in the layer menu.") + "</p></section>";
   }
 
   // Predicted visibility overlay: one blue hue, pale for murky, deep for clear
@@ -472,8 +472,20 @@
     var i = Math.min(Math.floor(t), VIS_RAMP.length - 2), k = t - i, a = VIS_RAMP[i], b = VIS_RAMP[i + 1];
     return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
   }
+  // Each pixel takes the scale of the nearest area's fit (La Jolla, Laguna),
+  // the same rule the pipeline uses for sites and zones.
+  function visScaleAt(V, lat, lng) {
+    var areas = V.areas || {}, best = null;
+    Object.keys(areas).forEach(function (k) {
+      var a = areas[k];
+      if (!a.ref || !a.applied) return;
+      var dy = lat - a.ref[0], dx = (lng - a.ref[1]) * Math.cos(lat * Math.PI / 180), dd = dx * dx + dy * dy;
+      if (!best || dd < best.dd) best = { dd: dd, s: a.scale };
+    });
+    if (best) return best.s;
+    return (V.calibration && V.calibration.applied) ? V.calibration.scale : 1;
+  }
   function drawVis(V, bb, layer) {
-    var scale = (V.calibration && V.calibration.applied) ? V.calibration.scale : 1;
     var rng = V.range_ft || [0, 80];
     var img = new Image();
     img.onload = function () {
@@ -481,10 +493,12 @@
       cv.width = img.width; cv.height = img.height;
       var ctx = cv.getContext("2d");
       ctx.drawImage(img, 0, 0);
-      var px = ctx.getImageData(0, 0, cv.width, cv.height), d = px.data;
+      var px = ctx.getImageData(0, 0, cv.width, cv.height), d = px.data, w = cv.width, h = cv.height;
       for (var i = 0; i < d.length; i += 4) {
         var v = d[i];
         if (!v) { d[i + 3] = 0; continue; }
+        var pi = i / 4, x = pi % w, y = Math.floor(pi / w);
+        var scale = visScaleAt(V, bb[3] - (y + 0.5) / h * (bb[3] - bb[1]), bb[0] + (x + 0.5) / w * (bb[2] - bb[0]));
         var ft = Math.max(0, (rng[0] + (v - 1) / 254 * (rng[1] - rng[0])) * scale);
         var c = visColor(ft);
         d[i] = c[0]; d[i + 1] = c[1]; d[i + 2] = c[2]; d[i + 3] = 210;
@@ -639,7 +653,7 @@
       (z.notice ? '<div class="notice small">' + (z.notice.url ? link(z.notice.url, z.notice.text) : esc(z.notice.text)) + "</div>" : "") +
       '<div class="row"><div class="metric"><span class="k">Water</span><span class="v">' + (z.temp_f != null ? esc(z.temp_f) + "°F" : "n/a") + "</span>" +
       (z.temp_change_f != null ? '<span class="d">' + esc(signed(z.temp_change_f, "°F")) + " in " + esc(z.temp_days) + " days</span>" : "") +
-      (z.vs_normal_f != null ? '<span class="d">' + esc(signed(z.vs_normal_f, "°F")) + " against the " + esc(z.normal_label) + "</span>" : "") + "</div>" + spark(temps, C.s1) + "</div>" +
+      (z.vs_normal_f != null ? '<span class="d">' + esc(signed(z.vs_normal_f, "°F")) + " against the " + esc(String(z.normal_label || "").split(",")[0]) + "</span>" : "") + "</div>" + spark(temps, C.s1) + "</div>" +
       '<dl class="facts">' +
       "<dt>Break</dt><dd>" + (b ? esc([b.step_f + "°F over", b.over_nm, "nm, warm side", b.warm_side].join(" ")) : '<span class="mut">no break in the zone</span>') + "</dd>" +
       "<dt>Color</dt><dd>" + (z.chl != null ? esc([z.chl, "mg/m³ (" + colorWord(z.chl) + ")"].join(" ")) : '<span class="mut">cloud, no reading</span>') + "</dd>" +
@@ -778,11 +792,18 @@
     var out = '<section><h2 id="trends">Trends</h2><div class="charts">';
     out += lineChart({ title: "Water temperature at the buoys", sub: "daily mean, °F", unit: "°F", decimals: 0,
       series: bseries(view === "fishing" ? ["46254", "46232", "46086", "46047"] : ["46254", "46232", "46253"], "temp_f") });
-    var cal = (facts.visibility || {}).calibration || {};
-    if (view !== "fishing" && cal.pairs && cal.pairs.length > 5) {
-      out += lineChart({ title: "Predicted vs posted visibility, La Jolla", sub: [cal.n, "shop reports; prediction scaled by", cal.scale].join(" "), unit: " ft",
-        series: [{ name: "Shop post (range)", short: "Posted", color: C.s1, range: true, points: cal.pairs.map(function (p) { return { d: p.date, lo: p.obs_lo, hi: p.obs_hi }; }) },
-                 { name: "Predicted", short: "Predicted", color: C.s2, points: cal.pairs.map(function (p) { return { d: p.date, v: p.pred_ft }; }) }] });
+    var VA = (facts.visibility || {}).areas || { "la-jolla": (facts.visibility || {}).calibration || {} };
+    if (view !== "fishing") {
+      Object.keys(VA).forEach(function (k) {
+        var cal = VA[k];
+        if (!cal.pairs || cal.pairs.length <= 5 || !cal.applied) return;
+        var own = cal.pooled ? [cal.own_n, "reports here, too few for their own fit; scaled by the all-area", cal.scale]
+          : [cal.pairs.length, "reports; prediction scaled by", cal.scale];
+        var base = cal.mae_persist_ft != null ? ["; off by", cal.mae_after_ft, "ft on average, against", cal.mae_persist_ft, "ft for repeating the previous post"] : [];
+        out += lineChart({ title: "Predicted vs posted visibility, " + (cal.label || k), sub: own.concat(base).join(" "), unit: " ft",
+          series: [{ name: "Post (range)", short: "Posted", color: C.s1, range: true, points: cal.pairs.map(function (p) { return { d: p.date, lo: p.obs_lo, hi: p.obs_hi }; }) },
+                   { name: "Predicted", short: "Predicted", color: C.s2, points: cal.pairs.map(function (p) { return { d: p.date, v: p.pred_ft }; }) }] });
+      });
     }
     var vis = (t.vis || {})["dive-shop-justgetwet"];
     if (view !== "fishing" && vis && vis.length > 2) {

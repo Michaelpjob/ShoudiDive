@@ -510,3 +510,62 @@ def test_fleet_season_gaps_are_not_zeros():
     z = next(r for r in fs["zones"] if r["name"].startswith("9 Mile"))
     assert z["last"][40] == 3.0 and z["this"][40] is None
     assert season_curves.recent_vs_last_year(fs, z["id"], date(2026, 10, 15)) is None
+
+
+# --- South Coast Divers prose and per-area visibility ------------------------------
+
+from validation.ingest import southcoastdivers as scd  # noqa: E402
+
+SCD_POST = ("Good morning Divers!!! 10/15/2026, Thursday\n\nCurrent diving conditions in Laguna Beach. This morning the "
+            "live cams show a decrease in the surf. IMHO, surf is still running 1-4 feet and the viz still looks low at "
+            "around 5-7\nfeet. But there are signs it is getting better.\n\nWe need to wait a day to see if the viz gets "
+            "back to 10-15 feet. Rich Parker")
+
+
+def test_scd_reads_the_conditions_paragraph_not_the_plans():
+    v = scd.extract_viz(SCD_POST)
+    assert (v["lo_ft"], v["hi_ft"]) == (5.0, 7.0) and "5-7" in v["sentence"]
+
+
+def test_scd_skips_surf_bounds_weekend_and_second_hand():
+    def one(sentence):
+        return scd.extract_viz("Good morning Divers!!! 10/06/2026, Tuesday\n\nCurrent diving conditions in Laguna Beach. " + sentence)
+    v = one("I have to make a good 'Guess-timate' of 2-4+ feet of surf and viz is about 10 feet today.")
+    assert (v["lo_ft"], v["hi_ft"]) == (10.0, 10.0)
+    assert one("Surf is running 2-5 feet and the viz is less than 10 feet, it changes quickly.") is None
+    assert one("Viz is of course at 5 feet & less throughout the area, so stay dry.") is None
+    assert one("Over the w/e, surf was 1-3 feet and the viz was 15-20 feet at most of the coves.") is None
+    assert one("I read Luis' dive report from his free dive at Crescent Bay, 20+ feet of viz and 1-3 on surf.") is None
+    assert one("When surf is low like this, usually the viz is 15+ feet, but not today at all.") is None
+    v = one("But the good news is the viz is good 10-15+ feet, could even be better today.")
+    assert (v["lo_ft"], v["hi_ft"]) == (10.0, 15.0)
+
+
+def test_scd_post_time_is_pacific():
+    assert scd.post_time_utc("20261015101156-RichP.txt").isoformat() == "2026-10-15T17:11:56+00:00"
+
+
+def test_vis_areas_fit_separately_and_short_areas_pool(monkeypatch, tmp_path):
+    seed = tmp_path / "seed.json"
+    pairs = [{"date": f"2026-10-{d:02d}", "source": "dive-shop-justgetwet", "spot": "La Jolla", "obs_lo": 10.0, "obs_hi": 10.0, "p50": 20.0}
+             for d in range(1, 16)]
+    pairs += [{"date": f"2026-10-{d:02d}", "source": "dive-shop-southcoastdivers", "spot": "Laguna", "obs_lo": 5.0, "obs_hi": 5.0, "p50": 25.0}
+              for d in range(1, 6)]
+    seed.write_text(json.dumps({"pairs": pairs}), encoding="utf-8")
+    monkeypatch.setattr(visibility, "SEED", seed)
+    c = visibility.calibrations(date(2026, 10, 15), [], {})
+    lj, lag = c["areas"]["la-jolla"], c["areas"]["laguna"]
+    assert lj["applied"] and not lj["pooled"] and lj["scale"] == 0.5 and lj["mae_persist_ft"] == 0.0
+    assert lag["pooled"] and lag["own_n"] == 5 and lag["scale"] == c["pooled"]["scale"] < 0.5
+    assert visibility.area_of(33.54, -117.80)["id"] == "laguna" and visibility.area_of(32.72, -117.25)["id"] == "la-jolla"
+
+
+def test_vis_field_reports_join_the_nearest_area():
+    reps = [{"id": "abcdef12-x", "type": "dive", "date": "2026-10-14", "lat": 32.86, "lng": -117.26, "vis_lo_ft": 12, "vis_hi_ft": 18},
+            {"id": "x", "type": "dive", "date": "2026-10-14", "lat": 32.40, "lng": -117.26, "vis_lo_ft": 40, "vis_hi_ft": 50},
+            {"id": "y", "type": "catch", "date": "2026-10-14", "lat": 32.86, "lng": -117.26}]
+    f = visibility.field_posts(reps)
+    assert list(f) == ["la-jolla"] and f["la-jolla"][0]["source"] == "field-report" and f["la-jolla"][0]["hi_ft"] == 18.0
+    days = [{"date": "2026-10-14", "vis_pred": {"la-jolla-ref": {"p50": 30.0}}}]
+    pr = visibility.archive_pairs(days, f["la-jolla"], visibility.AREAS[0])
+    assert pr and pr[0]["source"] == "field-report" and pr[0]["p50"] == 30.0
