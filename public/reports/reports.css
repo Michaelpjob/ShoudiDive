@@ -100,4 +100,28 @@ ul.plain{margin:6px 0;padding-left:18px}
 ul.plain li{margin:4px 0}
 ul.cols{columns:2 320px}
 .status-ok{color:#86efac}.status-stale{color:#fcd34d}.status-missing{color:#fca5a5}
+/* Field reports */
+[hidden]{display:none!important}
+.send-hdr{font-size:13px;font-weight:600;text-decoration:none;color:#0b1220;background:var(--link);border-radius:4px;padding:3px 9px;margin-right:6px}
+.key i.dia{width:8px;height:8px;border-radius:0;transform:rotate(45deg);background:#fff;border:1px solid #0b1220}
+.obs-pin{background:transparent;border:0}
+.obs-pin i{display:block;width:9px;height:9px;margin:1px;transform:rotate(45deg);background:#fff;border:1.5px solid #0b1220}
+ul.obs li{margin:8px 0}
+.quote{color:#cbd5e1;font-style:italic;margin-top:2px}
+details.send{margin:8px 0 12px;padding:8px 12px}
+details.send[open] summary{margin-bottom:8px}
+details.send summary{font-size:14px;color:var(--fg)}
+fieldset.types{display:flex;flex-wrap:wrap;gap:6px 16px;border:0;padding:0;margin:0 0 10px}
+fieldset.types legend{padding:0;margin-bottom:4px}
+fieldset.types label{font-size:14px;cursor:pointer}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px 14px}
+.fgrid label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--mut)}
+.fgrid label.wide{grid-column:1/-1}
+.fgrid input,.fgrid select,.fgrid textarea{background:#111827;color:var(--fg);border:1px solid var(--line2);border-radius:4px;padding:6px 8px;font:14px system-ui,sans-serif;width:100%;box-sizing:border-box}
+.fgrid input:focus,.fgrid select:focus,.fgrid textarea:focus{outline:2px solid var(--link);outline-offset:0}
+.fgrid .btns{display:flex;gap:6px;margin-top:2px}
+.fgrid .btns .mini-btn{margin-left:0;font-size:12px;padding:3px 8px}
+.send-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:12px 0 4px}
+.send-btn{font:600 14px system-ui,sans-serif;background:var(--link);color:#0b1220;border:0;border-radius:5px;padding:7px 16px;cursor:pointer}
+.send-btn:disabled{opacity:.5;cursor:default}
 @media (max-width:560px){h1{font-size:21px}main{padding:8px 16px 40px}.map{height:360px}.zones{grid-template-columns:1fr}.charts{grid-template-columns:1fr}.jump{top:41px}}

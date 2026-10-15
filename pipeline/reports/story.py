@@ -68,6 +68,7 @@ def dive_sites(S: dict, shore_sites: list[dict], tz, today: date, vis: dict, buo
         sg = next((x for x in surge if x["site"].split(" ")[0] == site["short"].split(" ")[0]), None)
         out.append({
             "name": site["name"], "short": site["short"], "note": site["note"], "buoy": site["buoy"],
+            "lat": site["lat"], "lng": site["lng"],
             "surf": _daily_mop(mop.get("series", []), tz, days),
             "vis": vis.get(vis_key, [])[-14:] if vis_key else [],
             "vis_source": SHOP_NAMES.get(vis_key, vis_key) if vis_key else None,

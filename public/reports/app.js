@@ -194,9 +194,234 @@
     resizeTimer = setTimeout(bindCharts, 200);
   });
 
+  // --- Field reports (approved, from /api/reports/feed) --------------------------
+  // Lists mirror functions/api/reports/_lib.js; the server rejects anything else.
+  var OBS_SPECIES = ["yellowfin", "bluefin", "skipjack", "dorado", "yellowtail", "wahoo", "striped marlin", "white seabass",
+    "calico bass", "sand bass", "halibut", "sheephead", "bonito", "barracuda", "rockfish", "lingcod", "lobster", "mako", "other"];
+  var OBS_SIGHTINGS = ["kelp paddy", "birds working", "foamers or breezers", "porpoise", "whales", "bait ball",
+    "marlin (tailer or sleeper)", "color or temperature break", "current line", "red tide"];
+  var OBS_BAITS = ["sardine", "anchovy", "mackerel", "squid", "mixed", "none"];
+  var OBS_BARGES = ["San Diego Bay", "Mission Bay", "Oceanside", "Dana Point", "Newport Beach", "San Pedro / LA Harbor",
+    "Redondo / King Harbor", "Marina del Rey", "Ensenada"];
+  var OBS_COLORS = ["blue", "blue-green", "green", "off-color", "red tide"];
+  var OBS_TYPES = [["catch", "Catch"], ["sighting", "Sighting"], ["bait", "Bait at the barge"], ["dive", "Dive"]];
+  var OBS_DAYS = 7;
+  // Report pins: white diamonds, fading with age (today, 1-2 days, 3-6 days).
+  var OBS_AGE_OPACITY = [1, 0.75, 0.45];
+  var OBS = [], pickMode = false, pickMarker = null;
+
+  function nm(a, b) {
+    var R = 3440.065, toR = Math.PI / 180;
+    var dLat = (b[0] - a[0]) * toR, dLng = (b[1] - a[1]) * toR;
+    var h = Math.pow(Math.sin(dLat / 2), 2) + Math.cos(a[0] * toR) * Math.cos(b[0] * toR) * Math.pow(Math.sin(dLng / 2), 2);
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+  }
+  // Same rule as pipeline/reports/zones.py zone_of: inside a circle, relatively nearest center.
+  function zoneOf(lat, lng) {
+    var best = null;
+    (facts.zones || []).forEach(function (z) {
+      var d = nm([lat, lng], z.center), k = d / z.radius_nm;
+      if (d <= z.radius_nm && (!best || k < best.k)) best = { k: k, z: z };
+    });
+    return best ? best.z : null;
+  }
+  function ddmPart(v) {
+    v = Math.abs(v);
+    var d = Math.floor(v), m = Math.round((v - d) * 60);
+    if (m === 60) { d += 1; m = 0; }
+    return d + " " + (m < 10 ? "0" : "") + m;
+  }
+  function ddm(lat, lng) { return ddmPart(lat) + " x " + ddmPart(lng); }
+  function obsAge(o) { return Math.round((dayNum(facts.date) - dayNum(o.date))); }
+  function obsRecent(types) {
+    return OBS.filter(function (o) {
+      var a = obsAge(o);
+      return a >= 0 && a < OBS_DAYS && (!types || types.indexOf(o.type) >= 0);
+    }).sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
+  }
+  function visRange(o) { return o.vis_lo_ft === o.vis_hi_ft ? String(o.vis_lo_ft) : [o.vis_lo_ft, o.vis_hi_ft].join("-"); }
+  function obsWhat(o) {
+    if (o.type === "catch") return (o.species || []).join(", ") + (o.bait && o.bait !== "none" ? " on " + o.bait : "");
+    if (o.type === "sighting") return o.sighting + ((o.species || []).length ? " (" + o.species.join(", ") + ")" : "");
+    if (o.type === "bait") return [o.bait, o.bait_size || "", "at", o.barge].join(" ").replace(/\s+/g, " ");
+    if (o.type === "dive") return [visRange(o), "ft visibility", o.depth_ft ? "at " + o.depth_ft + " ft" : "", o.surge ? "(" + o.surge + " surge)" : ""].join(" ").replace(/\s+/g, " ").trim();
+    return "";
+  }
+  function obsExtras(o) {
+    return [o.water_temp_f != null ? o.water_temp_f + "°F" : "", o.color ? o.color + " water" : ""].filter(Boolean).join(", ");
+  }
+  function obsItem(o) {
+    var g = ddm(o.lat, o.lng);
+    return "<li><b>" + esc(obsWhat(o)) + "</b>" + (o.confidence === "confirmed" ? tagHtml("confirmed") : "") +
+      '<div class="mut small">' + esc([md(o.date), obsExtras(o)].filter(Boolean).join(" · ")) +
+      (o.type !== "bait" ? ' · <span class="gps">' + esc(g) + '</span><button type="button" class="mini-btn" data-copy="' + esc(g) +
+        '">Copy</button><button type="button" class="mini-btn" data-lat="' + esc(o.lat) + '" data-lng="' + esc(o.lng) + '" data-tip="' + esc(obsWhat(o) + " · " + g) + '">Map</button>' : "") +
+      "</div>" + (o.notes ? '<div class="small quote">' + esc(o.notes) + "</div>" : "") + "</li>";
+  }
+  function sendLink(text) { return '<a href="#send" class="send-open">' + esc(text) + "</a>"; }
+
+  function obsHighlight() {
+    var types = view === "fishing" ? ["catch", "sighting"] : view === "diving" ? ["dive"] : ["dive", "catch", "sighting"];
+    var recent = obsRecent(types).filter(function (o) { return obsAge(o) <= 2; });
+    if (!recent.length) return "";
+    var top = recent.slice(0, 2).map(function (o) {
+      var z = zoneOf(o.lat, o.lng);
+      return obsWhat(o) + (z ? " at " + (z.short || z.name) : "") + " (" + md(o.date) + ")";
+    });
+    return "From the water, last 3 days: " + recent.length + " report" + (recent.length > 1 ? "s" : "") + ". Latest: " + top.join("; ") + ".";
+  }
+
+  function waterSection() {
+    var types = view === "diving" ? ["dive", "sighting"] : ["catch", "sighting", "dive"];
+    var recent = obsRecent(types);
+    var groups = [], seen = {};
+    recent.forEach(function (o) {
+      var z = zoneOf(o.lat, o.lng), key = z ? z.id : "_other";
+      if (!seen[key]) { seen[key] = { label: z ? z.name : "Other waters", order: z ? (facts.zones || []).indexOf(z) : 999, rows: [] }; groups.push(seen[key]); }
+      seen[key].rows.push(o);
+    });
+    groups.sort(function (a, b) { return a.order - b.order; });
+    var list = groups.length ? groups.map(function (g) {
+      return "<h3>" + esc(g.label) + '</h3><ul class="plain obs">' + g.rows.map(obsItem).join("") + "</ul>";
+    }).join("") : '<p class="small mut">No reports from the water in the last ' + OBS_DAYS + " days. " + sendLink("Send the first one") + ".</p>";
+    return '<section><h2 id="water">From the water</h2>' + reportForm() + list +
+      '<p class="note">Sent in by people on the water and approved by a moderator before they show. Positions are rounded to about a mile. "Confirmed" means two different people reported the same thing nearby within a few days, or the reporter has a track record.</p></section>';
+  }
+
+  function reportForm() {
+    var def = view === "fishing" ? "catch" : "dive";
+    function opts(list, blank) { return (blank ? '<option value="">' + esc(blank) + "</option>" : "") + list.map(function (v) { return '<option value="' + esc(v) + '">' + esc(v) + "</option>"; }).join(""); }
+    var saved = {};
+    try { saved = JSON.parse(localStorage.getItem("sd:obs:who") || "{}") || {}; } catch (e) { /* storage blocked */ }
+    var today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+    return '<details class="raw send" id="send"><summary><b>Send a report</b>: what you caught, saw or dove</summary>' +
+      '<form id="obs-form" novalidate><fieldset class="types"><legend class="mut small">What kind</legend>' + OBS_TYPES.map(function (t) {
+        return '<label><input type="radio" name="type" value="' + t[0] + '"' + (t[0] === def ? " checked" : "") + "> " + esc(t[1]) + "</label>";
+      }).join("") + "</fieldset>" +
+      '<div class="fgrid">' +
+      '<label>Date <input type="date" name="date" value="' + esc(today) + '" max="' + esc(today) + '" required></label>' +
+      '<label data-for="catch sighting dive" class="wide">Where (GPS) <input type="text" name="gps" inputmode="decimal" autocomplete="off" placeholder="32 52 x 117 17, or 32.87, -117.28">' +
+      '<span class="btns"><button type="button" class="mini-btn" id="obs-pick">Pick on the map</button><button type="button" class="mini-btn" id="obs-here">Where I am</button></span></label>' +
+      '<label data-for="catch">Species <select name="species">' + opts(OBS_SPECIES, "Pick one") + "</select></label>" +
+      '<label data-for="catch">Also caught <select name="species2">' + opts(OBS_SPECIES, "(none)") + "</select></label>" +
+      '<label data-for="catch">Bait used <select name="bait_used">' + opts(OBS_BAITS, "(not sure)") + "</select></label>" +
+      '<label data-for="sighting">What you saw <select name="sighting">' + opts(OBS_SIGHTINGS, "Pick one") + "</select></label>" +
+      '<label data-for="sighting">Fish with it <select name="species_seen">' + opts(OBS_SPECIES, "(none)") + "</select></label>" +
+      '<label data-for="bait">Barge <select name="barge">' + opts(OBS_BARGES, "Pick one") + "</select></label>" +
+      '<label data-for="bait">Bait <select name="bait">' + opts(OBS_BAITS, "Pick one") + "</select></label>" +
+      '<label data-for="bait">Size or quality <input type="text" name="bait_size" maxlength="20" placeholder="small, frisky"></label>' +
+      '<label data-for="dive">Visibility, low (ft) <input type="number" name="vis_lo_ft" min="0" max="150" inputmode="numeric"></label>' +
+      '<label data-for="dive">Visibility, high (ft) <input type="number" name="vis_hi_ft" min="0" max="150" inputmode="numeric"></label>' +
+      '<label data-for="dive">Depth (ft) <input type="number" name="depth_ft" min="0" max="200" inputmode="numeric"></label>' +
+      '<label data-for="dive">Surge <select name="surge">' + opts(["none", "light", "moderate", "heavy"], "(skip)") + "</select></label>" +
+      '<label>Water temp (°F) <input type="number" name="water_temp_f" min="40" max="90" step="0.5" inputmode="decimal"></label>' +
+      '<label>Water color <select name="color">' + opts(OBS_COLORS, "(skip)") + "</select></label>" +
+      '<label class="wide">Notes <textarea name="notes" maxlength="280" rows="2" placeholder="Depth, what they bit, how long the stop held"></textarea></label>' +
+      '<label>Email <input type="email" name="email" required autocomplete="email" value="' + esc(saved.email || "") + '"><span class="mut small">Only the moderator sees it.</span></label>' +
+      '<label>Name (optional) <input type="text" name="name" maxlength="60" autocomplete="name" value="' + esc(saved.name || "") + '"></label>' +
+      '</div><div class="send-row"><button type="submit" class="send-btn">Send for review</button><span id="obs-status" class="small" role="status" aria-live="polite"></span></div>' +
+      "</form></details>";
+  }
+
+  function parseGps(s) {
+    var n = (String(s || "").match(/-?\d+(?:\.\d+)?/g) || []).map(Number);
+    var lat, lng;
+    if (n.length === 2) { lat = n[0]; lng = n[1]; }
+    else if (n.length === 4) { lat = Math.abs(n[0]) + n[1] / 60; lng = Math.abs(n[2]) + n[3] / 60; }
+    else if (n.length === 6) { lat = Math.abs(n[0]) + n[1] / 60 + n[2] / 3600; lng = Math.abs(n[3]) + n[4] / 60 + n[5] / 3600; }
+    else return null;
+    if (lng > 0) lng = -lng;
+    if (!(lat >= 30.5 && lat <= 34.8 && lng >= -121.5 && lng <= -116.8)) return null;
+    return [lat, lng];
+  }
+  function deviceId() {
+    try {
+      var id = localStorage.getItem("sd:obs:dev");
+      if (!id) {
+        var b = new Uint8Array(12); crypto.getRandomValues(b);
+        id = Array.prototype.map.call(b, function (x) { return (x < 16 ? "0" : "") + x.toString(16); }).join("");
+        localStorage.setItem("sd:obs:dev", id);
+      }
+      return id;
+    } catch (e) { return "anon"; }
+  }
+  function setPick(lat, lng) {
+    var form = document.getElementById("obs-form");
+    if (!form) return;
+    form.elements.gps.value = lat.toFixed(3) + ", " + lng.toFixed(3);
+    if (map) {
+      if (pickMarker) pickMarker.remove();
+      pickMarker = L.circleMarker([lat, lng], { radius: 8, color: "#ffffff", weight: 2, fill: false }).addTo(map);
+    }
+  }
+
+  function bindForm() {
+    var form = document.getElementById("obs-form");
+    if (!form) return;
+    var status = document.getElementById("obs-status");
+    function show() {
+      var t = form.querySelector("input[name=type]:checked").value;
+      Array.prototype.forEach.call(form.querySelectorAll("[data-for]"), function (el) {
+        el.hidden = el.getAttribute("data-for").split(" ").indexOf(t) < 0;
+      });
+    }
+    Array.prototype.forEach.call(form.querySelectorAll("input[name=type]"), function (r) { r.addEventListener("change", show); });
+    show();
+    document.getElementById("obs-pick").addEventListener("click", function () {
+      if (!map) return;
+      pickMode = true;
+      status.textContent = "Tap the spot on the map.";
+      document.getElementById("map").scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    var here = document.getElementById("obs-here");
+    if (!navigator.geolocation) here.hidden = true;
+    here.addEventListener("click", function () {
+      status.textContent = "Finding you...";
+      navigator.geolocation.getCurrentPosition(function (pos) {
+        setPick(pos.coords.latitude, pos.coords.longitude);
+        status.textContent = "";
+      }, function () { status.textContent = "Location isn't available; type the GPS or pick on the map."; }, { timeout: 10000 });
+    });
+    form.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var f = form.elements, t = form.querySelector("input[name=type]:checked").value;
+      var body = { type: t, date: f.date.value, water_temp_f: f.water_temp_f.value, color: f.color.value, notes: f.notes.value,
+        email: f.email.value.trim(), name: f.name.value.trim(), deviceId: deviceId() };
+      if (t !== "bait") {
+        var ll = parseGps(f.gps.value);
+        if (!ll) { status.textContent = "Add a GPS position in Southern California waters (or pick it on the map)."; return; }
+        body.lat = ll[0]; body.lng = ll[1];
+      }
+      if (t === "catch") { body.species = [f.species.value, f.species2.value].filter(Boolean); body.bait = f.bait_used.value; }
+      if (t === "sighting") { body.sighting = f.sighting.value; body.species = f.species_seen.value ? [f.species_seen.value] : []; }
+      if (t === "bait") { body.barge = f.barge.value; body.bait = f.bait.value; body.bait_size = f.bait_size.value; }
+      if (t === "dive") { body.vis_lo_ft = f.vis_lo_ft.value; body.vis_hi_ft = f.vis_hi_ft.value; body.depth_ft = f.depth_ft.value; body.surge = f.surge.value; }
+      try { localStorage.setItem("sd:obs:who", JSON.stringify({ email: body.email, name: body.name })); } catch (e) { /* storage blocked */ }
+      var btn = form.querySelector("button[type=submit]");
+      btn.disabled = true;
+      status.textContent = "Sending...";
+      fetch("/api/reports/submit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+        .then(function (r) { return r.json().catch(function () { return { ok: false, error: "HTTP " + r.status }; }); })
+        .then(function (j) {
+          btn.disabled = false;
+          if (!j.ok) { status.textContent = "Not sent: " + (j.error || "try again"); return; }
+          status.textContent = "Thanks. It shows here once a moderator approves it.";
+          ["gps", "notes", "vis_lo_ft", "vis_hi_ft", "depth_ft", "water_temp_f", "bait_size"].forEach(function (k) { if (f[k]) f[k].value = ""; });
+          if (pickMarker) { pickMarker.remove(); pickMarker = null; }
+        })
+        .catch(function () { btn.disabled = false; status.textContent = "Not sent: the network dropped. Try again."; });
+    });
+  }
+  function openSend() {
+    var d = document.getElementById("send");
+    if (d) { d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" }); }
+  }
+
   // --- Sections -------------------------------------------------------------------
   function highlights() {
-    var lines = (facts.highlights && facts.highlights[view]) || [];
+    var lines = ((facts.highlights && facts.highlights[view]) || []).slice();
+    var o = obsHighlight();
+    if (o) lines.push(o);
     return '<section class="hl"><ul>' + lines.map(function (l) { return "<li>" + esc(l) + "</li>"; }).join("") + "</ul></section>";
   }
 
@@ -206,7 +431,8 @@
         : '<div class="maplegend"><span class="mut small">Predicted visibility ' + VIS_SHOW_FT[0] + ' ft</span><span class="ramp vis" aria-hidden="true"></span><span class="mut small">' + VIS_SHOW_FT[1] + "+ ft</span></div>") +
       '<div class="maplegend"><span class="mut small">Fleet stops:</span>' + ["today", "1 day", "2 days", "3 days"].map(function (t, i) {
         return '<span class="key"><i style="background:' + AGE_COLORS[i] + '"></i>' + t + "</span>";
-      }).join("") + '<span class="key"><i style="background:#fbbf24"></i>boat now</span><span class="key"><i class="ring"></i>break</span><span class="key"><i style="background:#22c55e"></i>paddies</span></div>' +
+      }).join("") + '<span class="key"><i style="background:#fbbf24"></i>boat now</span><span class="key"><i class="ring"></i>break</span><span class="key"><i style="background:#22c55e"></i>paddies</span>' +
+      '<span class="key"><i class="dia"></i>field report</span></div>' +
       '<p class="note">' + (view === "fishing" ? "Water temperature: " + esc(sstAsOf()) + " satellite map; blank is cloud or no data."
         : "Predicted visibility: our model scaled to where recent La Jolla shop reports landed; island and offshore numbers extend that La Jolla fit. Water temperature is in the layer menu.") + "</p></section>";
   }
@@ -332,8 +558,22 @@
       L.circleMarker([s.lat, s.lng], { radius: 2.5, color: "#e2e8f0", weight: 1, fillOpacity: 1 })
         .bindTooltip(esc(s.name) + (s.sst_f != null ? " · " + esc(s.sst_f) + "°F" : ""), { direction: "right" }).addTo(spotLayer);
     });
+    var obsLayer = L.layerGroup().addTo(map);
+    obsRecent().forEach(function (o) {
+      var a = obsAge(o), op = OBS_AGE_OPACITY[a === 0 ? 0 : a <= 2 ? 1 : 2];
+      L.marker([o.lat, o.lng], { icon: L.divIcon({ className: "obs-pin", html: '<i style="opacity:' + op + '"></i>', iconSize: [12, 12] }), keyboard: false })
+        .bindTooltip(esc(obsWhat(o)) + ", " + esc(md(o.date)) + (o.confidence === "confirmed" ? " · confirmed" : ""), { direction: "top" }).addTo(obsLayer);
+    });
+    map.on("click", function (ev) {
+      if (!pickMode) return;
+      pickMode = false;
+      setPick(ev.latlng.lat, ev.latlng.lng);
+      var st = document.getElementById("obs-status");
+      if (st) st.textContent = "Position set from the map.";
+      openSend();
+    });
     L.control.layers(null, { "Water temperature": sstLayer, "Predicted visibility": visLayer, "Zones and breaks": zoneLayer, "Paddies": padLayer,
-      "Fleet stops, 3 days": fleetLayer, "Boats now": liveLayer, "Named spots": spotLayer }, { position: "topright", collapsed: true }).addTo(map);
+      "Fleet stops, 3 days": fleetLayer, "Boats now": liveLayer, "Field reports, 7 days": obsLayer, "Named spots": spotLayer }, { position: "topright", collapsed: true }).addTo(map);
   }
 
   function weather() {
@@ -377,6 +617,7 @@
       "<dt>Break</dt><dd>" + (b ? esc([b.step_f + "°F over", b.over_nm, "nm, warm side", b.warm_side].join(" ")) : '<span class="mut">no break in the zone</span>') + "</dd>" +
       "<dt>Color</dt><dd>" + (z.chl != null ? esc([z.chl, "mg/m³ (" + colorWord(z.chl) + ")"].join(" ")) : '<span class="mut">cloud, no reading</span>') + "</dd>" +
       "<dt>Paddies</dt><dd>" + (p ? esc(p.word) + '<span class="mut"> · drift model</span>' : '<span class="mut">none in the model</span>') + "</dd>" +
+      "<dt>Reports</dt><dd>" + zoneObs(z) + "</dd>" +
       (z.vis_pred ? "<dt>Visibility</dt><dd>" + esc(["about", z.vis_pred.ft, "ft", z.vis_pred.lo_ft != null ? "(" + [z.vis_pred.lo_ft, z.vis_pred.hi_ft].join("-") + ")" : ""].join(" ")) +
         '<span class="mut"> · predicted</span></dd>' : "") +
       "<dt>Fleet (AIS)</dt><dd>" + esc([f.last3_hours || 0, "h last 3 days,", f.prior7_hours || 0, "h the 7 before"].join(" ")) +
@@ -393,9 +634,23 @@
       "</dl></article>";
   }
 
+  function zoneObs(z) {
+    var rows = obsRecent(["catch", "sighting", "dive"]).filter(function (o) { var w = zoneOf(o.lat, o.lng); return w && w.id === z.id; });
+    if (!rows.length) return '<span class="mut">none in ' + OBS_DAYS + " days</span>";
+    var counts = {};
+    rows.forEach(function (o) {
+      var keys = o.type === "catch" ? o.species || [] : o.type === "sighting" ? [o.sighting] : [visRange(o) + " ft vis"];
+      keys.forEach(function (k) { counts[k] = (counts[k] || 0) + 1; });
+    });
+    var top = Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; }).slice(0, 3)
+      .map(function (k) { return counts[k] > 1 ? k + " (" + counts[k] + ")" : k; });
+    return '<a href="#water">' + esc([rows.length, rows.length > 1 ? "reports" : "report"].join(" ")) + "</a>" + esc(": " + top.join(", ")) +
+      '<div class="mut small">latest ' + esc(md(rows[0].date)) + "</div>";
+  }
+
   function jumpNav() {
     var zs = facts.zones || [];
-    return '<nav class="jump" aria-label="Jump to a zone">' + (facts.zone_groups || []).map(function (g) {
+    return '<nav class="jump" aria-label="Jump to a zone"><a href="#water">Reports</a>' + (facts.zone_groups || []).map(function (g) {
       return zs.filter(function (z) { return z.group === g.key; }).map(function (z) {
         return '<a href="#z-' + esc(z.id) + '">' + esc(z.short || z.name) + "</a>";
       }).join("");
@@ -438,7 +693,10 @@
       var lastVis = vis.length ? vis[vis.length - 1] : null;
       var temps = (s.temp_series || []).map(function (t) { return t.temp_f; });
       var vp = s.vis_pred;
+      var divers = s.lat != null ? obsRecent(["dive"]).filter(function (o) { return nm([o.lat, o.lng], [s.lat, s.lng]) <= 3; }) : [];
       return '<article class="zone"><header><h3>' + esc(s.name) + '</h3></header><div class="mut small spots">' + esc(s.note) + "</div>" +
+        (divers.length ? '<div class="row"><div class="metric"><span class="k">Divers reported</span><span class="v2">' + esc(visRange(divers[0]) + " ft") + "</span>" +
+          '<span class="d">' + esc([md(divers[0].date), divers.length > 1 ? "· " + divers.length + " reports this week" : ""].join(" ")) + "</span></div></div>" : "") +
         (vp ? '<div class="row"><div class="metric"><span class="k">Visibility, predicted</span><span class="v">' + esc(vp.ft) + " ft</span>" +
           (vp.lo_ft != null ? '<span class="d">' + esc([vp.lo_ft, "to", vp.hi_ft, "ft likely"].join(" ")) + "</span>" : "") + "</div>" +
           (lastVis ? '<div class="metric right"><span class="k">Last shop post</span><span class="v2">' + esc([lastVis.lo_ft === lastVis.hi_ft ? lastVis.lo_ft : [lastVis.lo_ft, lastVis.hi_ft].join("-"), "ft"].join(" ")) +
@@ -451,6 +709,7 @@
         (vp ? "" : "<dt>Visibility</dt><dd>" + (lastVis ? esc([lastVis.lo_ft === lastVis.hi_ft ? lastVis.lo_ft : lastVis.lo_ft + "-" + lastVis.hi_ft, "ft on", md(lastVis.date)].join(" ")) +
           '<div class="mut small">' + esc(s.vis_source) + " posts</div>" : '<span class="mut">no shop posts for this site</span>') + "</dd>") +
         (s.surge ? "<dt>Surge at " + esc(s.surge.depth_ft) + " ft</dt><dd>" + esc([s.surge.u_ft_s, "ft/s bottom water speed", "(" + String(s.surge.level) + ")"].join(" ")) + "</dd>" : "") +
+        (divers.length ? "" : '<dt>Divers</dt><dd><span class="mut">no reports this week</span> · ' + sendLink("send one") + "</dd>") +
         "</dl></article>";
     }).join("") + "</div></section>";
   }
@@ -516,8 +775,17 @@
 
   function bait() {
     var b = facts.bait;
-    if (!b) return "";
-    return '<section><h2 id="bait">Bait</h2><p class="small">' + esc(b.text) + " " + b.links.map(function (l) { return link(l.url, l.name); }).join("; ") + ".</p></section>";
+    var rows = obsRecent(["bait"]), latest = {}, n = {};
+    rows.forEach(function (o) { n[o.barge] = (n[o.barge] || 0) + 1; if (!latest[o.barge]) latest[o.barge] = o; });
+    var barges = OBS_BARGES.filter(function (k) { return latest[k]; });
+    var table = barges.length ? '<div class="scroll"><table><thead><tr><th>Barge</th><th>Bait</th><th>Size</th><th>As of</th><th class="n">Reports</th></tr></thead><tbody>' +
+      barges.map(function (k) {
+        var o = latest[k];
+        return "<tr><td>" + esc(k) + "</td><td>" + esc(o.bait) + (o.confidence === "confirmed" ? tagHtml("confirmed") : "") + "</td><td>" + esc(o.bait_size || "") +
+          "</td><td>" + esc(md(o.date)) + '</td><td class="n">' + esc(n[k]) + "</td></tr>";
+      }).join("") + "</tbody></table></div>"
+      : '<p class="small mut">No bait reports in the last ' + OBS_DAYS + " days. " + sendLink("Report what the barge had") + ".</p>";
+    return '<section><h2 id="bait">Bait</h2>' + table + (b ? '<p class="small">' + esc(b.text) + " " + b.links.map(function (l) { return link(l.url, l.name); }).join("; ") + ".</p>" : "") + "</section>";
   }
 
   function spotsTable() {
@@ -554,9 +822,9 @@
   }
 
   function body() {
-    if (view === "diving") return mapSection() + diveSites() + trendsSection() + weather() + basics() + sourcesBlock();
-    if (view === "spearfishing") return diveSites() + around(true) + trendsSection() + mapSection() + weather() + basics() + sourcesBlock();
-    return jumpNav() + mapSection() + weather() + zonesSection(["offshore", "mexico", "inshore"]) + fleetSection() + trendsSection() + bait() + around(false) + spotsTable() + sourcesBlock();
+    if (view === "diving") return mapSection() + diveSites() + waterSection() + trendsSection() + weather() + basics() + sourcesBlock();
+    if (view === "spearfishing") return diveSites() + waterSection() + around(true) + trendsSection() + mapSection() + weather() + basics() + sourcesBlock();
+    return jumpNav() + mapSection() + weather() + zonesSection(["offshore", "mexico", "inshore"]) + waterSection() + fleetSection() + trendsSection() + bait() + around(false) + spotsTable() + sourcesBlock();
   }
 
   function render() {
@@ -576,6 +844,10 @@
     bindCharts();
     initMap();
     bindGps();
+    bindForm();
+    Array.prototype.forEach.call(main.querySelectorAll("a.send-open"), function (a) {
+      a.addEventListener("click", function (ev) { ev.preventDefault(); openSend(); });
+    });
   }
 
   function load(date) {
@@ -604,8 +876,19 @@
         u.searchParams.set("date", picker.value);
         location.href = u.toString();
       });
-      return load(want);
+      var feed = fetch("/api/reports/feed").then(function (r) { return r.ok ? r.json() : { reports: [] }; })
+        .catch(function () { return { reports: [] }; });
+      return Promise.all([load(want), feed]);
     })
-    .then(function (f) { if (!f.zones) throw new Error("older report format"); facts = f; render(); })
+    .then(function (res) {
+      var f = res[0];
+      if (!f.zones) throw new Error("older report format");
+      facts = f;
+      OBS = (res[1].reports || []).filter(function (o) { return o.lat != null && o.lng != null && o.date; });
+      render();
+      if (location.hash === "#send") openSend();
+    })
     .catch(unavailable);
+  var hdrSend = document.getElementById("send-link");
+  if (hdrSend) hdrSend.addEventListener("click", function (ev) { ev.preventDefault(); openSend(); });
 })();

@@ -35,3 +35,20 @@ test("data strings are escaped before they reach innerHTML", () => {
 test("the page is not indexed while it is a preview", () => {
   assert.match(html, /<meta name="robots" content="noindex"\/>/);
 });
+
+test("the report form offers exactly what the field-report API accepts", async () => {
+  const lib = await import("../functions/api/reports/_lib.js");
+  const grab = (name) => {
+    const start = app.indexOf("var " + name + " = [");
+    assert.ok(start >= 0, name);
+    const open = app.indexOf("[", start);
+    return JSON.parse(app.slice(open, app.indexOf("];", open) + 1));
+  };
+  assert.deepEqual(grab("OBS_SPECIES"), lib.SPECIES);
+  assert.deepEqual(grab("OBS_SIGHTINGS"), lib.SIGHTINGS);
+  assert.deepEqual(grab("OBS_BAITS"), lib.BAITS);
+  assert.deepEqual(grab("OBS_BARGES"), Object.keys(lib.BARGES));
+  assert.deepEqual(grab("OBS_COLORS"), lib.COLORS);
+  assert.match(app, /"\/api\/reports\/submit"/);
+  assert.match(app, /"\/api\/reports\/feed"/);
+});
