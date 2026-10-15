@@ -172,9 +172,12 @@ async function emailKey(email) {
 
 export async function recordEmail(env, email, name, type, ts) {
   const key = await emailKey(email);
-  let rec = {};
-  try { const raw = await env.REPORTS_KV.get(key); if (raw) rec = JSON.parse(raw); } catch { /* new */ }
-  Object.assign(rec, { email, name: name || rec.name || "", lastType: type, lastTs: ts, firstTs: rec.firstTs || ts, count: (rec.count || 0) + 1 });
+  let prev = {};
+  try { const raw = await env.REPORTS_KV.get(key); if (raw) prev = JSON.parse(raw); } catch { /* new */ }
+  const rec = {
+    email, name: name || prev.name || "", lastType: type, lastTs: ts, firstTs: prev.firstTs || ts, count: (prev.count || 0) + 1,
+    approved: prev.approved || 0, rejected: prev.rejected || 0, corroborated: prev.corroborated || 0,
+  };
   await env.REPORTS_KV.put(key, JSON.stringify(rec));
 }
 
