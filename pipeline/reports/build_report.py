@@ -504,14 +504,13 @@ def assemble(S: dict[str, dict], now: datetime) -> dict:
     if vis_grids:
         for site in sites.SHORE_SITES:
             area = visibility.area_of(site["lat"], site["lng"])
-            site_vis[site["id"]] = visibility.stated(visibility.sample(vis_grids, site["lat"], site["lng"]), cals["areas"][area["id"]])
+            site_vis[site["id"]] = visibility.stated(visibility.sample(vis_grids, site["lat"], site["lng"]), visibility.cal_at(site["lat"], site["lng"], cals["areas"]))
             if site_vis[site["id"]]:
                 site_vis[site["id"]]["area"] = area["id"]
         for c in cards:
             if c["group"] == "inshore" or c["name"] == "Coronado Islands":
                 m, _ = zones.zone_mean(vis_grids["p50"], tuple(c["center"]), c["radius_nm"])
-                area = visibility.area_of(*c["center"])
-                c["vis_pred"] = visibility.stated({"p50": m} if m is not None else None, cals["areas"][area["id"]])
+                c["vis_pred"] = visibility.stated({"p50": m} if m is not None else None, visibility.cal_at(c["center"][0], c["center"][1], cals["areas"]))
     refs = {a["ref"]["id"]: visibility.sample(vis_grids, a["ref"]["lat"], a["ref"]["lng"]) for a in visibility.AREAS} if vis_grids else {}
     refs = {k: v for k, v in refs.items() if v}
     facts["visibility"] = {"calibration": cal, "areas": cals["areas"], "field_reports_used": sum(len(v) for v in field.values()),

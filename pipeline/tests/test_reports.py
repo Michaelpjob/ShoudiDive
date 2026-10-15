@@ -560,6 +560,18 @@ def test_vis_areas_fit_separately_and_short_areas_pool(monkeypatch, tmp_path):
     assert visibility.area_of(33.54, -117.80)["id"] == "laguna" and visibility.area_of(32.72, -117.25)["id"] == "la-jolla"
 
 
+def test_vis_scale_blends_between_areas_without_a_seam():
+    areas = {"la-jolla": {"applied": True, "scale": 0.5, "band_lo_x": 0.8, "band_hi_x": 1.2},
+             "laguna": {"applied": True, "scale": 0.25, "band_lo_x": 0.7, "band_hi_x": 1.4}}
+    assert visibility.cal_at(32.852, -117.272, areas)["scale"] == 0.5
+    assert visibility.cal_at(33.540, -117.780, areas)["scale"] == 0.25
+    mid = visibility.cal_at(33.20, -117.53, areas)  # about halfway
+    assert 0.3 < mid["scale"] < 0.45
+    a = visibility.cal_at(33.19, -117.52, areas)["scale"]
+    b = visibility.cal_at(33.21, -117.54, areas)["scale"]
+    assert abs(a - b) < 0.02
+
+
 def test_vis_field_reports_join_the_nearest_area():
     reps = [{"id": "abcdef12-x", "type": "dive", "date": "2026-10-14", "lat": 32.86, "lng": -117.26, "vis_lo_ft": 12, "vis_hi_ft": 18},
             {"id": "x", "type": "dive", "date": "2026-10-14", "lat": 32.40, "lng": -117.26, "vis_lo_ft": 40, "vis_hi_ft": 50},

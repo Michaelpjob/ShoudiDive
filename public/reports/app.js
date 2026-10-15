@@ -460,7 +460,7 @@
       }).join("") + '<span class="key"><i style="background:#fbbf24"></i>boat now</span><span class="key"><i class="ring"></i>break</span><span class="key"><i style="background:#22c55e"></i>paddies</span>' +
       '<span class="key"><i class="dia"></i>field report</span></div>' +
       '<p class="note">' + (view === "fishing" ? "Water temperature: " + esc(sstAsOf()) + " satellite map; blank is cloud or no data."
-        : "Predicted visibility: our model scaled to where recent shop reports landed, La Jolla and Laguna each on their own record; everywhere else takes the nearer of the two, an extrapolation. Water temperature is in the layer menu.") + "</p></section>";
+        : "Predicted visibility: our model scaled to where recent shop reports landed, La Jolla and Laguna each on their own record; in between and beyond, the two are blended by distance, an extrapolation. Water temperature is in the layer menu.") + "</p></section>";
   }
 
   // Predicted visibility overlay: one blue hue, pale for murky, deep for clear
@@ -472,17 +472,18 @@
     var i = Math.min(Math.floor(t), VIS_RAMP.length - 2), k = t - i, a = VIS_RAMP[i], b = VIS_RAMP[i + 1];
     return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
   }
-  // Each pixel takes the scale of the nearest area's fit (La Jolla, Laguna),
-  // the same rule the pipeline uses for sites and zones.
+  // Each pixel blends the areas' scales (La Jolla, Laguna) by inverse squared
+  // distance to their reference points, the same rule the pipeline uses
+  // (visibility.cal_at), so the correction has no seam between them.
   function visScaleAt(V, lat, lng) {
-    var areas = V.areas || {}, best = null;
+    var areas = V.areas || {}, wsum = 0, ssum = 0;
     Object.keys(areas).forEach(function (k) {
       var a = areas[k];
       if (!a.ref || !a.applied) return;
-      var dy = lat - a.ref[0], dx = (lng - a.ref[1]) * Math.cos(lat * Math.PI / 180), dd = dx * dx + dy * dy;
-      if (!best || dd < best.dd) best = { dd: dd, s: a.scale };
+      var dy = lat - a.ref[0], dx = (lng - a.ref[1]) * Math.cos(lat * Math.PI / 180), dd = Math.max(dx * dx + dy * dy, 1e-6);
+      wsum += 1 / dd; ssum += a.scale / dd;
     });
-    if (best) return best.s;
+    if (wsum) return ssum / wsum;
     return (V.calibration && V.calibration.applied) ? V.calibration.scale : 1;
   }
   function drawVis(V, bb, layer) {
@@ -799,8 +800,8 @@
         if (!cal.pairs || cal.pairs.length <= 5 || !cal.applied) return;
         var own = cal.pooled ? [cal.own_n, "reports here, too few for their own fit; scaled by the all-area", cal.scale]
           : [cal.pairs.length, "reports; prediction scaled by", cal.scale];
-        var base = cal.mae_persist_ft != null ? ["; off by", cal.mae_after_ft, "ft on average, against", cal.mae_persist_ft, "ft for repeating the previous post"] : [];
-        out += lineChart({ title: "Predicted vs posted visibility, " + (cal.label || k), sub: own.concat(base).join(" "), unit: " ft",
+        var base = cal.mae_persist_ft != null ? "; off by " + [cal.mae_after_ft, "ft on average, against", cal.mae_persist_ft, "ft for repeating the previous post"].join(" ") : "";
+        out += lineChart({ title: "Predicted vs posted visibility, " + (cal.label || k), sub: own.join(" ") + base, unit: " ft",
           series: [{ name: "Post (range)", short: "Posted", color: C.s1, range: true, points: cal.pairs.map(function (p) { return { d: p.date, lo: p.obs_lo, hi: p.obs_hi }; }) },
                    { name: "Predicted", short: "Predicted", color: C.s2, points: cal.pairs.map(function (p) { return { d: p.date, v: p.pred_ft }; }) }] });
       });
