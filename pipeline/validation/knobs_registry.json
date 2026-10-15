@@ -69,6 +69,14 @@
       "affects": "the fishing view's species picture and named-spot table",
       "note": "Bands and seasons from the 2026-10-15 research pass (Runcie 2019, Block 1997, Squire 1982, Marin-Enriquez 2018, CPFV records); the same evidence base as Pelagic Lab's profiles. To earn fit: hindcast each day's profile status against the next days' fleet stops and, once licensed, dock counts.",
       "fit_against": null
+    },
+    {
+      "name": "reports.vis_bias_correction",
+      "where": "pipeline/reports/visibility.py (calibration: geometric-mean ratio of posted / predicted p50 over the last 60 days of dive-shop pairs; band = 15th-85th percentile of log residuals)",
+      "status": "fit",
+      "affects": "the Ocean Report's predicted visibility numbers, map layer and highlights (not the main map)",
+      "note": "Fit 2026-10-15 on 50 pairs (Aug 15-Oct 14, almost all Just Get Wet La Jolla): published p50 ran about twice the posted visibility (+9.3 ft mean, ratio 0.48), r = 0.38. A ratio beat a flat offset on the same pairs (72% vs 62% inside the posted range, MAE 2.6 vs 2.8 ft). Refit every build from a rolling 60-day window (seed + the report archive's own daily predictions). Corrects scale, not skill; fit at La Jolla and applied region-wide, so island and offshore numbers are an extrapolation.",
+      "fit_against": "pipeline/reports/data/vis_pairs_seed.json"
     }
   ]
 }

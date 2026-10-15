@@ -167,8 +167,17 @@ def highlights(facts: dict) -> dict[str, list[str]]:
     if len(en) >= 5:
         out_fish.append(f"El Niño: weekly Niño-3.4 anomaly {en[-1]['nino34']:+.1f}°C, from {en[-5]['nino34']:+.1f}°C four weeks earlier.")
 
-    # Divers: visibility trend, water near shore, surf ahead, thermocline
+    # Divers: predicted visibility first, then the posts, water, surf, column
     sites = facts.get("dive_sites", [])
+    cal = (facts.get("visibility") or {}).get("calibration") or {}
+    preds = [(s["short"], s["vis_pred"]) for s in sites if s.get("vis_pred")]
+    if preds:
+        line = "Predicted visibility today: " + "; ".join(
+            f"{n} about {p['ft']} ft" + (f" ({p['lo_ft']}-{p['hi_ft']})" if p.get("lo_ft") is not None else "") for n, p in preds) + "."
+        if cal.get("applied"):
+            line += (f" That is our model's number scaled by {cal['scale']:.2f}, the ratio {cal['n']} La Jolla shop reports "
+                     f"have landed at since {_d(cal['since'])}.")
+        out_dive.append(line)
     for s in sites:
         v = s.get("vis") or []
         if len(v) >= 2:
