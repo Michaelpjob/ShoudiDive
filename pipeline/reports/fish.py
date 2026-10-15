@@ -390,10 +390,43 @@ def load_json(path: Path) -> dict | None:
         return None
 
 
+LIVE_RAW = "https://raw.githubusercontent.com/Michaelpjob/ShoudiDive/fleet-live/live/"
+
+
+def last_positions(lines: list[str]) -> dict:
+    """fleet-live jsonl rows -> the last position per MMSI, in the shape of
+    /api/fleet/now (the Pages function reads the same files)."""
+    last: dict[int, dict] = {}
+    names: dict[int, str] = {}
+    for line in lines:
+        try:
+            r = json.loads(line)
+        except ValueError:
+            continue  # the logger may be mid-write on the last line
+        m = r.get("mmsi")
+        if r.get("vessel_name"):
+            names[m] = r["vessel_name"]
+        t = str(r.get("base_date_time", "")).replace(" ", "T") + "Z"
+        if m not in last or t > last[m]["t"]:
+            last[m] = {"mmsi": m, "lat": r.get("latitude"), "lon": r.get("longitude"), "sog": r.get("sog"), "t": t}
+    boats = [{**b, "name": names.get(m)} for m, b in last.items()]
+    return {"boats": boats, "freshest": max((b["t"] for b in boats), default=None)}
+
+
 def fleet_now_fetch(now: datetime | None = None) -> dict:
-    url = "https://shouldidive.com/api/fleet/now"
+    """Live positions from the public fleet-live branch (what /api/fleet/now
+    reads); the site endpoint itself refuses datacenter clients."""
+    label = "Fleet Tracks live AIS positions (fleet-live branch)"
     def run():
-        d = sources._get(url).json()
-        return sources.source("fleet_now", "Fleet Tracks live AIS positions", "https://shouldidive.com/fleet/#view=live",
-                              ok=True, time=sources.parse_iso(d.get("freshest")), data=d, now=now)
-    return sources._guard("fleet_now", "Fleet Tracks live AIS positions", url, run)
+        now_ = now or sources.utcnow()
+        lines: list[str] = []
+        for d in sorted({(now_ - timedelta(hours=24)).date(), now_.date()}):
+            r = sources.http_get(LIVE_RAW + d.isoformat() + ".jsonl", timeout=sources.TIMEOUT)
+            if r is not None and r.status_code == 200:
+                lines += r.text.splitlines()
+        if not lines:
+            raise RuntimeError("no live fleet files for today or yesterday")
+        data = last_positions(lines)
+        return sources.source("fleet_now", label, "https://shouldidive.com/fleet/#view=live", ok=True,
+                              time=sources.parse_iso(data["freshest"]), data=data, now=now)
+    return sources._guard("fleet_now", label, LIVE_RAW, run)
