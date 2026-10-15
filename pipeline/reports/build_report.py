@@ -14,18 +14,19 @@ from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import evidence, explain, fish, nws_text, physics, render, season, sites, sources, views
+from . import evidence, explain, fish, nws_text, physics, render, season, sites, sources, story, trends, views, zones
 from . import thresholds as T
 from . import verdicts as V
 
 TZ = ZoneInfo("America/Los_Angeles")
-SCHEMA = "shoudidive.report/v1"
+SCHEMA = "shoudidive.report/v2"
 NEARSHORE_BUOYS = {"46254", "46232", "46258", "46225", "46253"}
 POST_MAX_DAYS = 3  # dive-shop posts older than this are history, not conditions
 SOURCE_KIND = {
     "alerts": "alerts", "cwf_sgx": "cwf", "cwf_lox": "cwf", "off_nhc": "off", "srf_sgx": "srf",
     "rain": "rain", "manifest": "manifest", "observations": "observations", "enso": "enso",
     "tides": "tides", "viz_column": "viz_column", "glider": "glider", "fleet_now": "fleet_now",
+    "glider_series": "glider_series", "enso_weekly": "enso_weekly",
 }
 POST_SOURCES = {
     "dive-shop-justgetwet": "Just Get Wet (La Jolla dive shop)",
@@ -78,6 +79,10 @@ def gather(now: datetime) -> dict[str, dict]:
         S[f"mop_{mop_id}"] = evidence.mop_site(mop_id, now=now)
     S["glider"] = sources.glider_thermocline(now=now)
     S["fleet_now"] = fish.fleet_now_fetch(now=now)
+    for bid, name in trends.TREND_BUOYS:
+        S[f"hist_{bid}"] = trends.buoy_history(bid, name, now=now)
+    S["glider_series"] = trends.glider_series(now=now)
+    S["enso_weekly"] = trends.enso_weekly(now=now)
     return S
 
 
@@ -437,8 +442,35 @@ def assemble(S: dict[str, dict], now: datetime) -> dict:
     facts["bottom_line"] = render.bottom_line(facts)
     facts["views"] = views.view_lines(facts)
 
+    # --- Zones and trends: what is going on, and how it moved ------------------
+    sst_hist = trends.sst_history()
+    cards = zones.build(today, sst_hist, chl_g, paddies, fish.paddy_offset(paddies, today), fleet, man,
+                        [today + timedelta(days=k) for k in range(3)])
+    buoy_hist = {bid: _usable(S.get(f"hist_{bid}")) for bid, _ in trends.TREND_BUOYS}
+    vis = trends.vis_series(today=today)
+    facts["zones"] = cards
+    facts["zone_groups"] = [{"key": k, "label": label} for k, label in zones.GROUPS]
+    facts["trends"] = {
+        "buoys": [{"id": bid, "name": name, "days": (buoy_hist[bid] or {}).get("days", [])[-45:]}
+                  for bid, name in trends.TREND_BUOYS if buoy_hist.get(bid)],
+        "glider": _usable(S.get("glider_series")) or [],
+        "vis": vis,
+        "enso": _usable(S.get("enso_weekly")) or [],
+    }
+    facts["weather"] = story.weather(synopsis, headlines, cards, buoys)
+    facts["dive_sites"] = story.dive_sites(S, sites.SHORE_SITES, TZ, today, vis, buoy_hist,
+                                           facts["divers"]["surge"]["sites"])
+    facts["bait"] = {"text": "No public feed reports bait. The barges post their own updates.",
+                     "links": [{"name": "Everingham Bros bait report (San Diego Bay, Mission Bay, Dana Point)",
+                                "url": "https://baitbarge.com/bait-report"}]}
+    facts["map"] = zones.map_layers(paddies, fish.paddy_offset(paddies, today), fleet, today, man)
+    facts["highlights"] = story.highlights(facts)
+    facts["archive_snapshot"] = zones.snapshot(cards)
+
     generated = list(facts["bottom_line"]) + NOT_COVERED + [T.CURRENT_TEXT, T.FREEDIVE_TEXT]
     for lines in facts["views"].values():
+        generated += lines
+    for lines in facts["highlights"].values():
         generated += lines
     generated += [facts["divers"]["suit"]["text"], facts["divers"]["hunting_vis"]["text"]]
     if facts["divers"]["best_bet"]:
@@ -454,6 +486,11 @@ def assemble(S: dict[str, dict], now: datetime) -> dict:
 
 def write(facts: dict, out_dir: Path) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
+    snap = facts.pop("archive_snapshot", None)
+    if snap is not None:
+        arch = trends.update_archive(out_dir / "trends.json", facts["date"], snap)
+        (out_dir / "trends.json").write_text(json.dumps(arch, separators=(",", ":")), encoding="utf-8")
+        facts.setdefault("trends", {})["archive_days"] = len(arch["days"])
     body = json.dumps(facts, indent=1, ensure_ascii=False, allow_nan=False)
     day_file = out_dir / f"{facts['date']}.json"
     day_file.write_text(body, encoding="utf-8")
