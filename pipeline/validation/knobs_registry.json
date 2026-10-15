@@ -37,6 +37,22 @@
       "status": "provisional",
       "affects": "float-life estimate in the origin block and the fouling rate driving sunkFrac",
       "note": "Literature medians for Macrocystis raft survival: ~41 d cool, ~22 d at/above 19 degC (sub-lethal stress, bryozoan fouling ballast is the kill mechanism rather than heat), ~14 d above 24 degC (hard-sink regime). Max observed 63-109 d. Pinned by tests so a change to a cited number fails CI and has to come with a citation."
+    },
+    {
+      "name": "reports.thresholds",
+      "where": "pipeline/reports/thresholds.py (WIND_KT, GUST_OUTSIDE_KT, SEAS_FT, SANTA_ANA_*, FOG_LEVEL, SURF_FT, EXPOSURE_SCALE, LONG_PERIOD_S, ONSHORE_WIND_KT)",
+      "status": "provisional",
+      "affects": "Morning Report verdicts (within / marginal / outside our thresholds) for shore dives and boat ranges",
+      "note": "Our own tiers, synthesized from DAN guidance (head-high surf, current), dive logs and practitioner consensus; the official triggers they sit beside (NWS headlines, the NWS San Diego steepness rule, rip current risk, the county 72-hour rain guidance) are sourced, not tuned. Shown to readers as 'our thresholds', never as standards. Offshore wind tiers were loosened from the research proposal (10/15 kt) to 15/20 kt after the first live run (2026-10-15) marked the ordinary 'NW 10 to 15 kt' day marginal at every offshore range; NWS's own advisory trigger is 21 kt. To earn fit: score archived verdicts against lifeguard closures, Coast Guard/harbor patrol incidents and diver reports of conditions. Evidence: Projects/ShouldIDive/fish-reports-research.md section 6.",
+      "fit_against": null
+    },
+    {
+      "name": "reports.site_exposure",
+      "where": "pipeline/reports/sites.py (faces_deg per shore site) + thresholds.EXPOSURE_INTO_DEG/EXPOSURE_OBLIQUE_DEG",
+      "status": "provisional",
+      "affects": "which shore entries count as facing the swell, at an angle, or in its lee, and so the surf-at-entry estimate",
+      "note": "Entry orientations read off the chart, not measured; exposure classes are 60/100 degree cutoffs. The surf-at-entry figure is the county surf forecast scaled 1.0 / 0.6 / 0.35 by exposure: a deliberate stand-in until CDIP MOP nearshore points per site replace it.",
+      "fit_against": null
     }
   ]
 }
