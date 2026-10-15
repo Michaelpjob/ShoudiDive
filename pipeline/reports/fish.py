@@ -375,8 +375,9 @@ def inshore_calendar(today: date, surface_f: float | None, thermocline_ft: float
         for r in rows:
             if r["key"] == "wsb":
                 r["today"] = (f"Surface water is {surface_f:.0f}°F, above the 55-61°F the tagged fish used"
-                              + (f"; the nearest observed thermocline is at about {thermocline_ft:.0f} ft" if thermocline_ft else "")
-                              + ", so expect them deep.") if surface_f > 63 else "Surface water is inside their tagged range."
+                              + (f"; offshore, the nearest glider puts the thermocline about {thermocline_ft:.0f} ft down, and the cooler water they favored sits below it"
+                                 if thermocline_ft else "; the cooler water they favored sits below the thermocline")
+                              + ".") if surface_f > 63 else "Surface water is inside their tagged range."
             if r["key"] == "yellowtail":
                 r["today"] = (f"Surface water is {surface_f:.0f}°F; San Diego catch rates have fallen above 69°F in fleet data."
                               if surface_f > 69 else f"Surface water is {surface_f:.0f}°F.")
