@@ -581,3 +581,22 @@ def test_vis_field_reports_join_the_nearest_area():
     days = [{"date": "2026-10-14", "vis_pred": {"la-jolla-ref": {"p50": 30.0}}}]
     pr = visibility.archive_pairs(days, f["la-jolla"], visibility.AREAS[0])
     assert pr and pr[0]["source"] == "field-report" and pr[0]["p50"] == 30.0
+
+
+def test_pacific_wilderness_rows_keep_their_own_range_and_site(monkeypatch, tmp_path):
+    # One Facebook post, two sites: each row has its own link and the posted
+    # range stored explicitly, so neither reader parses the shared sentence.
+    sent = "On the way back, we found 30–40 ft VIZ at Point Fermin and 15–25 ft VIZ at the breakwall."
+    post = "https://www.facebook.com/1537180991547431/posts/1557465569518973"
+    rows = [{"source": "dive-shop-pacificwilderness", "spot_name": site, "timestamp_utc": "2026-10-14T19:00Z",
+             "source_url": f"{post}#{slug}", "raw_excerpt": sent, "extraction_method": "regex",
+             "observed_secchi_ft": (lo + hi) / 2, "observed_lo_ft": lo, "observed_hi_ft": hi}
+            for site, slug, lo, hi in (("Point Fermin", "point-fermin", 30.0, 40.0), ("Cabrillo breakwall", "cabrillo-breakwall", 15.0, 25.0))]
+    out = sources.summarize_posts(rows, NOW - timedelta(days=5), NOW)
+    assert {(p["site"], p["vis_text"], p["post_date"]) for p in out["posts"]} == {
+        ("Point Fermin", "30-40 ft", "2026-10-14"), ("Cabrillo breakwall", "15-25 ft", "2026-10-14")}
+    obs = tmp_path / "observations.jsonl"
+    obs.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+    monkeypatch.setattr(sources, "OBS", obs)
+    pts = trends.vis_series(today=date(2026, 10, 15))["dive-shop-pacificwilderness"]
+    assert [(p["lo_ft"], p["hi_ft"]) for p in pts] in ([(30.0, 40.0)], [(15.0, 25.0)])  # one point per shop per day

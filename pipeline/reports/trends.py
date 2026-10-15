@@ -195,7 +195,10 @@ def vis_series(days: int = 45, today: date | None = None) -> dict:
         if url not in first_seen:
             continue
         m = _RANGE.search(o.get("raw_excerpt") or "")
-        if m:
+        if o.get("observed_lo_ft") is not None and o.get("observed_hi_ft") is not None:
+            # The scraper stored the posted range itself (Pacific Wilderness).
+            lo, hi = float(o["observed_lo_ft"]), float(o["observed_hi_ft"])
+        elif m:
             lo = float(m.group(1))
             hi = float(m.group(2)) if m.group(2) else lo
         elif o.get("extraction_method") == "regex" and o.get("raw_excerpt") and o.get("observed_secchi_ft") is not None:

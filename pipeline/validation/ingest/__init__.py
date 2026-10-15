@@ -23,6 +23,7 @@ from .cencoos import CeNCOOSScraper
 from .diveviz import DiveVizScraper
 from .justgetwet import JustGetWetScraper
 from .ndbc import NDBCScraper
+from .pacificwilderness import PacificWildernessScraper
 from .rcca import RCCAScraper
 from .reddit import RedditCAScraper
 from .southcoastdivers import SouthCoastDiversScraper
@@ -51,6 +52,13 @@ SCRAPERS = [
     # produced no rows in observations.jsonl. Laguna is covered by South
     # Coast Divers (robots.txt allows all). The file stays for reference;
     # ask the shop for permission before re-adding it.
+    PacificWildernessScraper(),  # San Pedro dive shop: weekly conditions posts
+                                 # (Palos Verdes, Point Fermin, the Long Beach
+                                 # oil rigs, Catalina). Reads the Facebook and
+                                 # Instagram feeds as the shop's own WordPress
+                                 # pages render them; never requests Meta.
+                                 # One row per named site, dated to the dive
+                                 # day the post names. conf 0.80.
 
     # Tier 2 — prose, LLM-extracted (no-ops gracefully without API key)
     DiveVizScraper(),      # SD + LA + OC dive shop, two-blog feed, conf 0.85
