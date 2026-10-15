@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import html
 import json
+import os
 import re
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -58,6 +59,21 @@ def _guard(sid: str, label: str, url: str | None, fn: Callable[[], dict]) -> dic
         return fn()
     except Exception as e:  # noqa: BLE001  one bad feed must never stop the report
         return source(sid, label, url, ok=False, error=f"{type(e).__name__}: {e}")
+
+
+def field_reports(now: datetime | None = None) -> dict:
+    """Approved reports sent in from the water (the report page's intake),
+    from the public feed: no reporter details. The dev preview reads its own
+    feed; set REPORTS_FEED_URL to read another."""
+    branch = os.environ.get("GITHUB_REF_NAME", "dev")
+    url = os.environ.get("REPORTS_FEED_URL") or (
+        "https://shouldidive.com/api/reports/feed" if branch == "main" else "https://dev.shouldidive.pages.dev/api/reports/feed")
+    label = "Field reports sent in from the water (approved)"
+
+    def run():
+        reps = _get(url).json().get("reports", [])
+        return source("field_reports", label, None, ok=True, time=now or utcnow(), data=reps, now=now)
+    return _guard("field_reports", label, None, run)
 
 
 def _get(url: str, **kw):
