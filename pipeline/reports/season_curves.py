@@ -162,10 +162,13 @@ def fleet_season(fleet: dict | None, today: date) -> dict:
         hours[(iy, wk, "group", ZONES[z][1])] += h
     covered = {k for k, days in heard.items() if len(days) >= COVERED_DAYS_PER_WEEK}
 
+    def complete(y, wk):  # hours pile up through a week, so a week counts once it has ended
+        return date.fromisocalendar(y, wk, 7) < today
+
     def series(kind, key):
         rows = []
         for wk in range(1, 53):
-            this = round(hours.get((year, wk, kind, key), 0.0), 1) if (year, wk) in covered else None
+            this = round(hours.get((year, wk, kind, key), 0.0), 1) if (year, wk) in covered and complete(year, wk) else None
             prev = round(hours.get((last, wk, kind, key), 0.0), 1) if (last, wk) in covered else None
             rows.append({"w": week_monday(year, wk), "this": this, "last": prev})
         return rows
@@ -185,16 +188,18 @@ def fleet_season(fleet: dict | None, today: date) -> dict:
 
 
 def recent_vs_last_year(fs: dict, zone_id: int, today: date, n: int = 4) -> dict | None:
-    """Hours in the last n covered weeks this year against the same weeks last
-    year (both covered), for one zone."""
+    """Hours over the last n complete weeks this year against the same weeks
+    last year, for one zone; weeks missing in either year are left out, so the
+    count can be under n."""
     z = next((r for r in fs.get("zones", []) if r["id"] == zone_id), None)
     if not z:
         return None
-    cur_wk = today.isocalendar()[1]
-    idx = [k for k in range(min(cur_wk, 52) - 1, -1, -1) if z["this"][k] is not None and z["last"][k] is not None][:n]
+    cur = today.isocalendar()[1] - 1  # index of the current (incomplete) week
+    idx = [k for k in range(cur - 1, cur - 1 - n, -1) if 0 <= k < 52 and z["this"][k] is not None and z["last"][k] is not None]
     if not idx:
         return None
-    return {"weeks": len(idx), "this_h": round(sum(z["this"][k] for k in idx), 1), "last_h": round(sum(z["last"][k] for k in idx), 1)}
+    return {"weeks": len(idx), "since": fs["weeks"][min(idx)],
+            "this_h": round(sum(z["this"][k] for k in idx), 1), "last_h": round(sum(z["last"][k] for k in idx), 1)}
 
 
 def load_climo(manifest: dict, data_dir: Path | None = None):

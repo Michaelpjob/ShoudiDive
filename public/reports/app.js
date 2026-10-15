@@ -80,6 +80,7 @@
   // Line and range charts: the figure shell is built with the page, then each
   // plot is drawn at its real pixel width (so text stays 11-12 px on phones and
   // desktops) on a true time axis, breaking the line where days are missing.
+  var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   function dayNum(d) { return Date.parse(String(d).slice(0, 10) + "T00:00:00Z") / 864e5; }
 
   function lineChart(spec) {
@@ -91,14 +92,14 @@
     spec.dates = dates;
     CHARTS[id] = spec;
     var legend = spec.series.length > 1 ? '<div class="legend-row">' + spec.series.map(function (s) {
-      return '<span class="key"><i style="background:' + esc(s.color) + '"></i>' + esc(s.name) + "</span>";
+      return '<span class="key"><i class="' + (s.band ? "band" : "") + '" style="background:' + esc(s.color) + '"></i>' + esc(s.name) + "</span>";
     }).join("") + "</div>" : "";
     var table = '<details class="data"><summary>Data</summary><div class="scroll"><table class="mini"><thead><tr><th>Date</th>' +
       spec.series.map(function (s) { return "<th>" + esc(s.short || s.name) + "</th>"; }).join("") + "</tr></thead><tbody>" +
       dates.map(function (d) {
-        return "<tr><td>" + esc(md(d)) + "</td>" + spec.series.map(function (s) {
+        return "<tr><td>" + esc((spec.tipPrefix || "") + md(d)) + "</td>" + spec.series.map(function (s) {
           var p = s.points.filter(function (q) { return q.d === d; })[0];
-          return "<td>" + (p ? esc(p.v != null ? p.v : [p.lo, p.hi].join("-")) : "") + "</td>";
+          return "<td>" + (p && (p.v != null || p.lo != null) ? esc(p.v != null ? p.v : [p.lo, p.hi].join("-")) : "") + "</td>";
         }).join("") + "</tr>";
       }).join("") + "</tbody></table></div></details>";
     return '<figure class="chart" data-chart="' + id + '"><figcaption>' + esc(spec.title) + (spec.sub ? '<span class="mut"> · ' + esc(spec.sub) + "</span>" : "") +
@@ -117,7 +118,7 @@
     var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
     if (spec.zero) { lo = Math.min(lo, 0); hi = Math.max(hi, 0); }
     var pad = (hi - lo) * 0.08 || 1; lo -= pad; hi += pad;
-    var d0 = dayNum(spec.dates[0]), d1 = dayNum(spec.dates[spec.dates.length - 1]);
+    var d0 = dayNum(spec.domain ? spec.domain[0] : spec.dates[0]), d1 = dayNum(spec.domain ? spec.domain[1] : spec.dates[spec.dates.length - 1]);
     var X = function (d) { return L + (dayNum(d) - d0) / Math.max(1, d1 - d0) * (W - L - R); };
     var Y = function (v) { var t = (v - lo) / (hi - lo); return spec.invert ? T + t * (H - T - B) : H - B - t * (H - T - B); };
     var g = "";
@@ -131,10 +132,35 @@
       g += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(r.v).toFixed(1) + '" y2="' + Y(r.v).toFixed(1) + '" stroke="#475569" stroke-dasharray="3 3"/>' +
         '<text x="' + (W - R + 6) + '" y="' + (Y(r.v) + 4).toFixed(1) + '" class="ax">' + esc(r.label) + "</text>";
     });
-    g += '<text x="' + L + '" y="' + (H - 5) + '" class="ax">' + esc(md(spec.dates[0])) + '</text><text x="' + (W - R) + '" y="' + (H - 5) +
-      '" text-anchor="end" class="ax">' + esc(md(spec.dates[spec.dates.length - 1])) + "</text>";
+    if (spec.domain) {
+      var yr = spec.domain[0].slice(0, 4), every = W < 520 ? 3 : 1;
+      for (var mo = 0; mo < 12; mo += every) {
+        var md0 = yr + "-" + (mo < 9 ? "0" : "") + (mo + 1) + "-01", mx = X(md0);
+        g += '<line x1="' + mx.toFixed(1) + '" x2="' + mx.toFixed(1) + '" y1="' + (H - B) + '" y2="' + (H - B + 4) + '" stroke="#334155"/>' +
+          '<text x="' + (mx + 2).toFixed(1) + '" y="' + (H - 5) + '" class="ax">' + esc(MONTHS[mo]) + "</text>";
+      }
+      if (spec.nowDate) {
+        var nx = X(spec.nowDate);
+        g += '<line x1="' + nx.toFixed(1) + '" x2="' + nx.toFixed(1) + '" y1="' + T + '" y2="' + (H - B) + '" stroke="#475569" stroke-dasharray="2 3"/>';
+      }
+    } else {
+      g += '<text x="' + L + '" y="' + (H - 5) + '" class="ax">' + esc(md(spec.dates[0])) + '</text><text x="' + (W - R) + '" y="' + (H - 5) +
+        '" text-anchor="end" class="ax">' + esc(md(spec.dates[spec.dates.length - 1])) + "</text>";
+    }
     var ends = [];
     spec.series.forEach(function (s) {
+      if (s.band) {
+        var seg = [], segs = [];
+        s.points.forEach(function (p) { if (p.lo != null && p.hi != null) seg.push(p); else if (seg.length) { segs.push(seg); seg = []; } });
+        if (seg.length) segs.push(seg);
+        segs.forEach(function (q) {
+          if (q.length < 2) return;
+          var top = q.map(function (p, k) { return (k ? "L" : "M") + X(p.d).toFixed(1) + " " + Y(p.hi).toFixed(1); }).join(" ");
+          var bot = q.slice().reverse().map(function (p) { return "L" + X(p.d).toFixed(1) + " " + Y(p.lo).toFixed(1); }).join(" ");
+          g += '<path d="' + top + " " + bot + ' Z" fill="' + esc(s.color) + '" fill-opacity="0.22" stroke="none"/>';
+        });
+        return;
+      }
       if (s.range) {
         s.points.forEach(function (p) {
           var x = X(p.d), y0 = Y(p.lo), y1 = Y(p.hi), top = Math.min(y0, y1), hgt = Math.max(4, Math.abs(y1 - y0));
@@ -171,9 +197,9 @@
       spec.dates.forEach(function (dd) { var dx = Math.abs(X(dd) - cx); if (!best || dx < best[0]) best = [dx, dd]; });
       var dsel = best[1], x = X(dsel);
       xh.setAttribute("x1", x); xh.setAttribute("x2", x); xh.setAttribute("visibility", "visible");
-      tip.innerHTML = '<div class="mut">' + esc(md(dsel)) + "</div>" + spec.series.map(function (s) {
+      tip.innerHTML = '<div class="mut">' + esc((spec.tipPrefix || "") + md(dsel)) + "</div>" + spec.series.map(function (s) {
         var p = s.points.filter(function (q) { return q.d === dsel; })[0];
-        if (!p) return "";
+        if (!p || (p.v == null && p.lo == null)) return "";
         var val = (p.v != null ? String(p.v) : [p.lo, p.hi].join("-")) + (spec.unit || "");
         return '<div><i style="background:' + esc(s.color) + '"></i>' + esc(s.short || s.name) + " <b>" + esc(val) + "</b></div>";
       }).join("");
@@ -612,7 +638,8 @@
       '<div class="mut small spots">' + esc(z.spots) + "</div>" +
       (z.notice ? '<div class="notice small">' + (z.notice.url ? link(z.notice.url, z.notice.text) : esc(z.notice.text)) + "</div>" : "") +
       '<div class="row"><div class="metric"><span class="k">Water</span><span class="v">' + (z.temp_f != null ? esc(z.temp_f) + "°F" : "n/a") + "</span>" +
-      (z.temp_change_f != null ? '<span class="d">' + esc(signed(z.temp_change_f, "°F")) + " in " + esc(z.temp_days) + " days</span>" : "") + "</div>" + spark(temps, C.s1) + "</div>" +
+      (z.temp_change_f != null ? '<span class="d">' + esc(signed(z.temp_change_f, "°F")) + " in " + esc(z.temp_days) + " days</span>" : "") +
+      (z.vs_normal_f != null ? '<span class="d">' + esc(signed(z.vs_normal_f, "°F")) + " against the " + esc(z.normal_label) + "</span>" : "") + "</div>" + spark(temps, C.s1) + "</div>" +
       '<dl class="facts">' +
       "<dt>Break</dt><dd>" + (b ? esc([b.step_f + "°F over", b.over_nm, "nm, warm side", b.warm_side].join(" ")) : '<span class="mut">no break in the zone</span>') + "</dd>" +
       "<dt>Color</dt><dd>" + (z.chl != null ? esc([z.chl, "mg/m³ (" + colorWord(z.chl) + ")"].join(" ")) : '<span class="mut">cloud, no reading</span>') + "</dd>" +
@@ -650,7 +677,7 @@
 
   function jumpNav() {
     var zs = facts.zones || [];
-    return '<nav class="jump" aria-label="Jump to a zone"><a href="#water">Reports</a>' + (facts.zone_groups || []).map(function (g) {
+    return '<nav class="jump" aria-label="Jump to a zone"><a href="#water">Reports</a><a href="#season">Season</a>' + (facts.zone_groups || []).map(function (g) {
       return zs.filter(function (z) { return z.group === g.key; }).map(function (z) {
         return '<a href="#z-' + esc(z.id) + '">' + esc(z.short || z.name) + "</a>";
       }).join("");
@@ -776,6 +803,49 @@
     return out + "</div>" + (t.archive_days ? '<p class="note">Our daily zone archive has ' + esc(t.archive_days) + " day(s) so far; zone trends lengthen as it grows.</p>" : "") + "</section>";
   }
 
+  function seasonSection() {
+    var sc = facts.season_curves;
+    if (!sc || !(sc.buoys || []).length) return "";
+    var yr = String(sc.year), ly = String(sc.last_year), dom = [yr + "-01-01", yr + "-12-31"];
+    var ids = view === "fishing" ? ["46232", "46086", "46047"] : ["46254", "46232", "46253"];
+    var out = '<section><h2 id="season">This season against last year</h2><div class="charts">';
+    ids.forEach(function (id) {
+      var b = sc.buoys.filter(function (x) { return x.id === id; })[0];
+      if (!b) return;
+      out += lineChart({ title: "Water at " + (BUOY_SHORT[id] || b.name), sub: "weekly mean, °F", unit: "°F", decimals: 0, domain: dom, nowDate: facts.date, tipPrefix: "Week of ",
+        series: [{ name: sc.range_label + " range", short: sc.range_label, color: "#94a3b8", band: true, points: b.weeks.map(function (w) { return { d: w.w, lo: w.lo, hi: w.hi }; }) },
+                 { name: ly, color: C.s2, points: b.weeks.map(function (w) { return { d: w.w, v: w.last }; }) },
+                 { name: yr, color: C.s1, points: b.weeks.map(function (w) { return { d: w.w, v: w["this"] }; }) }] });
+    });
+    var fl = sc.fleet;
+    if (view === "fishing" && fl) {
+      (fl.groups || []).forEach(function (g) {
+        out += lineChart({ title: "Fleet hours stopped: " + g.label, sub: "per week, AIS-tracked boats", unit: " h", decimals: 0, domain: dom, nowDate: facts.date, tipPrefix: "Week of ",
+          series: [{ name: ly, color: C.s2, points: g.weeks.map(function (w) { return { d: w.w, v: w.last }; }) },
+                   { name: yr, color: C.s1, points: g.weeks.map(function (w) { return { d: w.w, v: w["this"] }; }) }] });
+      });
+    }
+    out += "</div>";
+    if (view === "fishing") {
+      var zs = (facts.zones || []).filter(function (z) { return z.vs_normal_f != null || (z.fleet || {}).season; });
+      var lab = (zs.filter(function (z) { return z.normal_label; })[0] || {}).normal_label || "";
+      if (zs.length) {
+        out += '<h3>By zone</h3><div class="scroll"><table><thead><tr><th>Zone</th><th class="n">Water</th><th class="n">Against the ' + esc(lab) + '</th><th class="n">Fleet hours, recent weeks</th><th class="n">Same weeks ' + esc(ly) + "</th></tr></thead><tbody>" +
+          zs.map(function (z) {
+            var fs = (z.fleet || {}).season;
+            return "<tr><td>" + esc(z.short || z.name) + '</td><td class="n">' + esc(z.temp_f != null ? z.temp_f + "°F" : "") + '</td><td class="n">' + esc(z.vs_normal_f != null ? signed(z.vs_normal_f, "°F") : "") +
+              '</td><td class="n">' + esc(fs ? [fs.this_h, "h"].join(" ") : "") + '</td><td class="n">' + esc(fs ? [fs.last_h, "h"].join(" ") : "") + "</td></tr>";
+          }).join("") + "</tbody></table></div>";
+        var f0 = zs.map(function (z) { return (z.fleet || {}).season; }).filter(Boolean)[0];
+        if (f0) out += '<p class="note">Fleet hours cover ' + esc(f0.weeks) + " complete week" + (f0.weeks > 1 ? "s" : "") + " since " + esc(md(f0.since)) +
+          " that have AIS coverage in both years; the satellite water map is compared with NOAA's 1991-2020 average for the month (OISST, a coarser product, so a few tenths of a degree either way is noise).</p>";
+      }
+    }
+    var gaps = ((fl || {}).gaps || []).map(function (g) { return [g.weeks, "weeks in", g.year].join(" "); });
+    return out + '<p class="note">Buoy weekly means from NDBC; the band is the lowest to highest weekly mean of ' + esc(sc.range_label) + "." +
+      (view === "fishing" && fl ? " Fleet hours are the same " + esc(fl.boats) + " boats both years; weeks without AIS coverage are breaks, not zeros" + (gaps.length ? " (" + esc(gaps.join(", ")) + ")" : "") + "." : "") + "</p></section>";
+  }
+
   function fleetSection() {
     var now = (facts.fishing || {}).fleet_now;
     if (!now || !now.at_sea || !now.at_sea.length) return "";
@@ -834,9 +904,9 @@
   }
 
   function body() {
-    if (view === "diving") return mapSection() + diveSites() + waterSection() + trendsSection() + weather() + basics() + sourcesBlock();
-    if (view === "spearfishing") return diveSites() + waterSection() + around(true) + trendsSection() + mapSection() + weather() + basics() + sourcesBlock();
-    return jumpNav() + mapSection() + weather() + zonesSection(["offshore", "mexico", "inshore"]) + waterSection() + fleetSection() + trendsSection() + bait() + around(false) + spotsTable() + sourcesBlock();
+    if (view === "diving") return mapSection() + diveSites() + waterSection() + trendsSection() + seasonSection() + weather() + basics() + sourcesBlock();
+    if (view === "spearfishing") return diveSites() + waterSection() + around(true) + trendsSection() + seasonSection() + mapSection() + weather() + basics() + sourcesBlock();
+    return jumpNav() + mapSection() + weather() + zonesSection(["offshore", "mexico", "inshore"]) + waterSection() + fleetSection() + trendsSection() + seasonSection() + bait() + around(false) + spotsTable() + sourcesBlock();
   }
 
   function render() {
