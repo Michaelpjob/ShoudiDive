@@ -562,7 +562,7 @@
     var best = bestSpots();
     if (best.length && (best[0].total || Object.keys(best[0].fish).length)) {
       var b0 = best[0], t0 = b0.top;
-      tiles.push(tile("Where the fish are", esc(b0.place),
+      tiles.unshift(tile("Where the fish are", esc(b0.place),
         [esc(catchLine(b0.fish, 3) || Object.keys(b0.fish).join(", ")), esc(Object.keys(b0.boats).slice(0, 2).join(", ")),
          best[1] ? esc(["Next:", best[1].place, catchLine(best[1].fish, 2)].join(" ").trim()) : ""],
         t0 && !t0.zoneOnly ? gpsActs(ddm(t0.lat, t0.lng), t0.lat, t0.lng, b0.place) : "", "#hot"));
@@ -687,8 +687,12 @@
     var z = p.zone ? null : zoneOf(p.lat, p.lng);
     return p.zone || (z ? zname(z) : "outside the zones");
   }
+  // Game fish lead, then by count: "186 yellowfin, 86 yellowtail" before "215 bullet tuna".
+  var GAME = ["bluefin", "yellowfin", "yellowtail", "dorado", "wahoo", "striped marlin", "white seabass", "halibut", "calico bass", "lingcod"];
   function catchLine(c, n) {
-    return Object.keys(c || {}).sort(function (a, b) { return c[b] - c[a]; }).slice(0, n || 4).map(function (k) { return [c[k].toLocaleString("en-US"), k].join(" "); }).join(", ");
+    var rank = function (k) { var i = GAME.indexOf(k); return i < 0 ? 1 : 0; };
+    return Object.keys(c || {}).filter(function (k) { return c[k] > 0; }).sort(function (a, b) { return rank(a) - rank(b) || c[b] - c[a]; })
+      .slice(0, n || 4).map(function (k) { return [c[k].toLocaleString("en-US"), k].join(" "); }).join(", ");
   }
   function boatLine(b) {
     return b.name + (b.source || b.landing ? " (" + [b.source || b.landing, b.trip].filter(Boolean).join(", ") + ")" : "");
