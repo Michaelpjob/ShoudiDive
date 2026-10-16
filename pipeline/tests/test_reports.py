@@ -661,3 +661,15 @@ def test_dock_trip_names_the_fish_at_the_boats_longest_stop():
     assert p["place"] == "14 Mile Bank"
     assert {t["boat"] for t in r["landed"]} == {"Freelance", "Sum Fun"}   # the twilight trip and a boat AIS never heard
     assert hot_bites.place_name(33.61, -118.00).endswith("of Newport")
+
+
+from reports import bait_barges  # noqa: E402
+
+
+def test_bait_barges_by_location():
+    b = bait_barges.parse_sheet((FIX / "bait_barges.csv").read_text(encoding="utf-8"), 2026)
+    by = {x["barge"]: x for x in b}
+    assert set(by) == {"San Diego Bay", "Mission Bay", "Dana Point"}
+    assert by["San Diego Bay"]["serving"] == ["5-7 inch Sardine"] and by["San Diego Bay"]["notes"] == ["2 scoops max purchase"]
+    assert by["Dana Point"]["serving"] == ["3-5 inch Anchovy", "3-8 inch Sardine/Chovy Mix"]
+    assert by["Dana Point"]["as_of"] == "2026-10-15T10:16" and by["Mission Bay"]["as_of"] == "2026-10-15T08:16"

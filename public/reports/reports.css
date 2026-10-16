@@ -30,7 +30,11 @@ h3{font-size:13px;margin:18px 0 6px;color:var(--mut);text-transform:uppercase;le
 .jump a{flex:0 0 auto;font-size:12px;text-decoration:none;color:var(--fg);background:#1e293b;border:1px solid var(--line2);border-radius:12px;padding:2px 10px;white-space:nowrap}
 .jump a:hover{border-color:var(--link)}
 /* Map */
-.map{height:440px;border:1px solid var(--line);border-radius:6px;background:#0b1220}
+.map{position:relative;height:440px;border:1px solid var(--line);border-radius:6px;background:#0b1220;scroll-margin-top:110px;touch-action:pan-y}
+.map-hint{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:1000;max-width:90%;background:rgba(11,18,32,.9);color:#fff;padding:6px 12px;border-radius:6px;font:600 13px system-ui,sans-serif;pointer-events:none;text-align:center}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#111827;color:var(--fg)}
+.leaflet-popup-content{margin:10px 12px;font-size:13px}
+.leaflet-popup-content .small{margin-top:4px}
 .leaflet-container{background:#0b1220;font:12px system-ui,sans-serif}
 .pix{image-rendering:pixelated}
 .leaflet-control-layers-toggle,.leaflet-retina .leaflet-control-layers-toggle{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23334155' stroke-width='2' stroke-linejoin='round'%3E%3Cpath d='M12 3 2 8l10 5 10-5-10-5Z'/%3E%3Cpath d='m2 13 10 5 10-5'/%3E%3C/svg%3E");background-size:22px 22px}
@@ -105,6 +109,9 @@ ul.plain{margin:6px 0;padding-left:18px}
 ul.plain li{margin:4px 0}
 ul.cols{columns:2 320px}
 .status-ok{color:#86efac}.status-stale{color:#fcd34d}.status-missing{color:#fca5a5}
+/* The short version */
+.summary h2{border-top:0;margin:8px 0 2px;padding-top:0;font-size:16px}
+.summary li{margin:7px 0}
 /* At a glance */
 .glance h2{border-top:0;margin-top:16px}
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin-top:10px}
@@ -155,6 +162,8 @@ ul.hb .age{display:inline-block;min-width:38px;text-align:center;font:700 11px s
 ul.hb .age.a1{opacity:.8}ul.hb .age.a2{opacity:.6}ul.hb .age.a3{opacity:.45}
 ul.hb li.hb-fleet .age{background:#f97316}
 .key i.hbf{background:#f97316;border:1px solid #0b1220}
+.key i.hbd{background:#f97316;border:2px solid #fff;width:8px;height:8px}
+.key i.brk{width:18px;height:3px;border-radius:2px;background:#1e293b;box-shadow:0 0 0 1.5px rgba(255,255,255,.75)}
 .obs-pin.hot i{width:12px;height:12px;border-width:2px}
 table.sboard td{vertical-align:top}
 @media (max-width:560px){table.sboard tr{grid-template-columns:1fr 1fr}table.sboard td:empty{display:none}}

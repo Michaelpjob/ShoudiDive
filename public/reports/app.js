@@ -539,44 +539,33 @@
           : lo > 0 ? ["Every zone warmed", lo.toFixed(1) + "-" + hi.toFixed(1) + "°F in", days, "days"].join(" ")
           : ["Zones moved", signed(lo, "°F"), "to", signed(hi, "°F"), "in", days, "days"].join(" ");
       }
-      var vn = warm.vs_normal_f != null ? [" ·", signed(warm.vs_normal_f, "°F"), "vs", String(warm.normal_label || "normal").split(",")[0]].join(" ") : "";
-      tiles.push(tile("Warmest water", esc(warm.temp_f + "°F"), [esc(zname(warm) + vn), esc(["Coolest:", zname(cool), cool.temp_f + "°F"].join(" ")), esc(chLine)], "", "#zones"));
+      var mon = String(warm.normal_label || "").split(" ")[0];
+      var vn = warm.vs_normal_f != null ? [Math.abs(warm.vs_normal_f).toFixed(1) + "°F", warm.vs_normal_f >= 0 ? "warmer" : "cooler", "than an average", mon || "day"].join(" ") : "";
+      tiles.push(tile("Warmest water", esc(warm.temp_f + "°F"), [esc(zname(warm)), esc(vn), esc(["Coolest:", zname(cool), cool.temp_f + "°F"].join(" ")), esc(chLine)], "", "#zones"));
     }
     var br = all.filter(function (z) { return z["break"]; }).sort(byDesc(function (z) { return z["break"].step_f; }));
     if (br.length) {
       var b0 = br[0]["break"];
-      tiles.push(tile("Sharpest break", esc([b0.step_f + "°F over", b0.over_nm, "nm"].join(" ")),
-        [esc([zname(br[0]) + ", warm side", b0.warm_side].join(" ")), br[1] ? esc(["Next:", zname(br[1]), br[1]["break"].step_f + "°F"].join(" ")) : ""],
+      tiles.push(tile("Strongest temperature break", esc([b0.step_f + "°F change across", Math.round(b0.over_nm), "nm"].join(" ")),
+        [esc([zname(br[0]) + ", warmer to the", b0.warm_side].join(" ")), br[1] ? esc(["Next:", zname(br[1]), br[1]["break"].step_f + "°F"].join(" ")) : ""],
         gpsActs(b0.gps, b0.lat, b0.lng, ["Break", b0.step_f + "°F"].join(" ")), "#zones"));
     }
     var core = all.filter(function (z) { return z.paddy && z.paddy.word === "core"; }), likely = all.filter(function (z) { return z.paddy && z.paddy.word === "likely"; });
     if (core.length || likely.length) {
       var lead = core.length ? core : likely, top = lead[0];
-      tiles.push(tile("Paddies, drift model", esc([lead.length, lead.length > 1 ? "zones" : "zone", core.length ? "with a core" : "likely"].join(" ")),
+      tiles.push(tile("Kelp paddies (drift model)", esc([core.length ? "Most likely in" : "Likely in", lead.length, lead.length > 1 ? "zones" : "zone"].join(" ")),
         [esc(firstFew(lead.map(zname), 3)), core.length && likely.length ? esc("Likely: " + firstFew(likely.map(zname), 3)) : ""],
-        gpsActs(top.paddy.gps, top.paddy.lat, top.paddy.lng, "Paddies (" + top.paddy.word + ")"), "#zones"));
+        gpsActs(top.paddy.gps, top.paddy.lat, top.paddy.lng, "Paddies (" + paddyWord(top.paddy.word) + ")"), "#zones"));
     }
     var fz = all.filter(function (z) { return (z.fleet || {}).last3_hours > 0; }).sort(byDesc(function (z) { return z.fleet.last3_hours; }));
     var ly = all.filter(function (z) { return (z.fleet || {}).last_year_hours > 0; }).sort(byDesc(function (z) { return z.fleet.last_year_hours; }));
     var atSea = (((facts.fishing || {}).fleet_now || {}).at_sea || []).length;
-    var best = bestSpots().filter(function (g) { return !g.noPos; });
-    if (best.length && (best[0].total || Object.keys(best[0].fish).length)) {
-      var b0 = best[0], t0 = b0.top;
-      tiles.unshift(tile("Where the fish are", esc(b0.place),
-        [esc(catchLine(b0.fish, 3) || Object.keys(b0.fish).join(", ")), esc(Object.keys(b0.boats).slice(0, 2).join(", ")),
-         best[1] ? esc(["Next:", best[1].place, catchLine(best[1].fish, 2)].join(" ").trim()) : ""],
-        t0 && !t0.zoneOnly ? gpsActs(ddm(t0.lat, t0.lng), t0.lat, t0.lng, b0.place) : "", "#hot"));
-    }
-    tiles.push(tile("Where the fleet stopped", esc(fz.length ? fz[0].fleet.last3_hours + " h" : "No offshore stops"),
-      [fz.length ? esc([zname(fz[0]) + ", last 3 days"].concat(fz[1] ? ["· then", zname(fz[1]), fz[1].fleet.last3_hours + " h"] : []).join(" ")) : "",
-       ly.length ? esc(["Same weeks last year:", zname(ly[0]), ly[0].fleet.last_year_hours + " h"].join(" ")) : "",
+    tiles.push(tile("Where boats spent time", esc(fz.length ? hm(fz[0].fleet.last3_hours * 60) : "No offshore stops"),
+      [fz.length ? esc([zname(fz[0]) + ", last 3 days"].concat(fz[1] ? ["· then", zname(fz[1]), hm(fz[1].fleet.last3_hours * 60)] : []).join(" ")) : "",
+       ly.length ? esc(["Same weeks last year:", zname(ly[0]), hm(ly[0].fleet.last_year_hours * 60)].join(" ")) : "",
        atSea ? '<a href="#fleet">' + esc([atSea, atSea > 1 ? "boats out now" : "boat out now"].join(" ")) + "</a>" : ""], "", "#zones"));
-    var rec = obsRecent(["catch", "sighting"]);
-    tiles.push(tile("From the water", esc(rec.length ? [rec.length, rec.length > 1 ? "reports" : "report", "this week"].join(" ") : "No reports yet"),
-      rec.length ? rec.slice(0, 2).map(function (o) { var z = zoneOf(o.lat, o.lng); return esc([obsWhat(o), z ? "at " + zname(z) : "", "(" + md(o.date) + ")"].join(" ")); })
-        : [sendLink("Send what you're seeing")], "", "#water"));
     tiles.push(weatherTile());
-    return '<section class="glance"><h2 id="glance">At a glance</h2>' + tilesHtml(tiles) + "</section>";
+    return '<section class="glance"><h2 id="glance">Conditions</h2>' + tilesHtml(tiles) + "</section>";
   }
 
   function visChip(ft) {
@@ -620,14 +609,74 @@
     var rec = obsRecent(["dive", "catch", "sighting"]);
     tiles.push(tile("From the water", esc(rec.length ? [rec.length, rec.length > 1 ? "reports" : "report", "this week"].join(" ") : "No reports yet"),
       rec.length ? rec.slice(0, 2).map(function (o) { return esc([obsWhat(o), "(" + md(o.date) + ")"].join(" ")); }) : [sendLink("Send your dive")], "", "#water"));
-    return '<section class="glance"><h2 id="glance">At a glance</h2>' + table + tilesHtml(tiles) + "</section>";
+    return '<section class="glance"><h2 id="glance">Dive sites today</h2>' + table + tilesHtml(tiles) + "</section>";
+  }
+
+  // --- The short version: the day in a few plain sentences, every number from the sections below ---
+  function sumWeek(lw, k) { var v = lw[k] || {}; return Object.keys(v).reduce(function (tot, port) { return tot + v[port]; }, 0); }
+  function waterLine(zs) {
+    var tmp = zs.map(function (z) { return z.temp_f; }).filter(function (x) { return x != null; });
+    var vn = zs.map(function (z) { return z.vs_normal_f; }).filter(function (x) { return x != null; });
+    var ch = zs.map(function (z) { return z.temp_change_f; }).filter(function (x) { return x != null; });
+    if (!tmp.length) return "";
+    var rng = function (a, unit) { var lo = Math.min.apply(null, a), hi = Math.max.apply(null, a); return (lo === hi ? lo.toFixed(1) : lo.toFixed(1) + "-" + hi.toFixed(1)) + unit; };
+    var mon = String(((zs.filter(function (z) { return z.normal_label; })[0]) || {}).normal_label || "").split(" ")[0];
+    var parts = ["Surface water is " + rng(tmp, "°F")];
+    if (vn.length && Math.min.apply(null, vn) > 0) parts.push(rng(vn, "°F") + " warmer than an average " + (mon || "day"));
+    if (ch.length && Math.max.apply(null, ch) < 0) parts.push("down " + rng(ch.map(Math.abs), "°F") + " over the last " + zs[0].temp_days + " days");
+    if (ch.length && Math.min.apply(null, ch) > 0) parts.push("up " + rng(ch, "°F") + " over the last " + zs[0].temp_days + " days");
+    return parts.join(", ") + ".";
+  }
+  function summaryFishing() {
+    var out = [], hb = facts.hot_bites || {}, lw = hb.dock_week || {};
+    var ports = (hb.dock_sources || []).map(function (src) { return src.port; });
+    var landed = GAME.concat(["skipjack", "bonito"]).filter(function (k) { return sumWeek(lw, k) > 0; }).slice(0, 3)
+      .map(function (k) { return [sumWeek(lw, k).toLocaleString("en-US"), k].join(" "); });
+    if (landed.length) out.push("This week, boats from " + joinAnd(ports) + " brought in " + joinAnd(landed) + ".");
+    var best = bestSpots().filter(function (g) { return !g.noPos && g.total > 0; })[0];
+    if (best) {
+      var who = Object.keys(best.boats).slice(0, 2).map(function (n) { return boatLine(best.boats[n]); });
+      out.push("The biggest catch with a known spot: " + catchLine(best.fish, 3) + " " + placePhrase(best.place) + " (" + who.concat([md(best.latest)]).join(", ") + ").");
+    }
+    var rep = obsRecent(["catch", "sighting"]).length;
+    out.push(rep ? [rep, rep > 1 ? "reports" : "report", "from the water this week."].join(" ") : "No reports from the water yet this week.");
+    var wl = waterLine((facts.zones || []).filter(function (z) { return z.temp_f != null; }));
+    if (wl) out.push(wl);
+    var bb = (facts.bait || {}).barges || [];
+    if (bb.length) out.push("Bait: " + bb.map(function (x) { return [x.barge, x.serving.join(" and ").toLowerCase()].join(", "); }).join("; ") + ".");
+    var adv = ((facts.weather || {}).headlines || []).filter(function (a) { return (a.zones || []).some(function (zid) { return /^P[ZM]Z/.test(zid); }); });
+    var wind = windiest();
+    if (adv.length || wind) out.push(adv.slice(0, 2).map(function (a) { return [a.event, "until", a.until, "(" + (a.where || a.area) + ")"].join(" "); }).concat(wind ? [wind] : []).join("; ") + ".");
+    return '<section class="hl summary"><h2 id="summary">The short version</h2><ul>' + out.map(function (l) { return "<li>" + esc(l) + "</li>"; }).join("") + "</ul></section>";
+  }
+  function summaryDiving() {
+    var out = [], sites = facts.dive_sites || [];
+    var vis = sites.filter(function (site) { return site.vis_pred; }).map(function (site) { return [site.short, site.vis_pred.ft + " ft"].join(" "); });
+    if (vis.length) out.push("Predicted visibility today: " + joinAnd(vis) + ".");
+    var shop = sites.filter(function (site) { return (site.vis || []).length; })[0];
+    if (shop) {
+      var lp = shop.vis[shop.vis.length - 1];
+      out.push("Last shop post: " + (lp.lo_ft === lp.hi_ft ? lp.lo_ft : lp.lo_ft + "-" + lp.hi_ft) + " ft (" + [shop.vis_source, md(lp.date)].join(", ") + ").");
+    }
+    var dv = obsRecent(["dive"]);
+    out.push(dv.length ? [dv.length, dv.length > 1 ? "dive reports" : "dive report", "this week; latest", visRange(dv[0]), "ft on", md(dv[0].date) + "."].join(" ") : "No dive reports yet this week.");
+    var temps = sites.map(function (site) { var ts = site.temp_series || []; return ts.length ? ts[ts.length - 1].temp_f : null; }).filter(function (x) { return x != null; });
+    if (temps.length) out.push("Water at the nearshore buoys: " + Math.min.apply(null, temps) + (Math.max.apply(null, temps) !== Math.min.apply(null, temps) ? "-" + Math.max.apply(null, temps) : "") + "°F.");
+    var sets = sites.map(function (site) { return ((site.surf || [])[0] || {}).sets_ft; }).filter(function (x) { return x != null; });
+    if (sets.length) {
+      var lo = Math.min.apply(null, sets), hi = Math.max.apply(null, sets);
+      out.push("Sets at the entries today: " + (lo < 1 ? "under 1" : Math.round(lo)) + " to " + Math.round(hi) + " ft.");
+    }
+    var adv = ((facts.weather || {}).headlines || []).filter(function (a) { return (a.zones || []).some(function (zid) { return /^CAZ|PZZ740|PZZ655/.test(zid); }); });
+    if (adv.length) out.push(adv.slice(0, 2).map(function (a) { return [a.event, "until", a.until, "(" + (a.where || a.area) + ")"].join(" "); }).join("; ") + ".");
+    return '<section class="hl summary"><h2 id="summary">The short version</h2><ul>' + out.map(function (l) { return "<li>" + esc(l) + "</li>"; }).join("") + "</ul></section>";
   }
 
   // Sticky links to each section, instead of a long scroll.
   function sectionNav() {
     var items = view === "fishing"
-      ? [["glance", "At a glance"], ["hot", "Hot Bites"], ["species", "Species"], ["zones", "Zones"], ["weather", "Weather"], ["water", "Reports"], ["trends", "Trends"], ["season", "Season"], ["bait", "Bait"]]
-      : [["glance", "At a glance"], ["map-h", "Map"], ["hot", "Hot Bites"], ["species", "Species"], ["water", "Reports"], ["weather", "Weather"], ["trends", "Trends"], ["season", "Season"], ["sites", "Site details"]];
+      ? [["summary", "Short version"], ["hot", "Fish"], ["species", "Species"], ["glance", "Conditions"], ["bait", "Bait"], ["zones", "Zones"], ["weather", "Weather"], ["water", "Reports"], ["trends", "Trends"], ["season", "Season"]]
+      : [["summary", "Short version"], ["glance", "Dive sites"], ["map-h", "Map"], ["hot", "Fish"], ["water", "Reports"], ["weather", "Weather"], ["trends", "Trends"], ["season", "Season"], ["sites", "Site details"]];
     return '<nav class="jump" aria-label="Sections">' + items.map(function (i) { return '<a href="#' + i[0] + '">' + esc(i[1]) + "</a>"; }).join("") + "</nav>";
   }
   function chartsBlock(prim, more) {
@@ -658,8 +707,8 @@
       pts.push({ kind: catchKeys.length ? "dock" : "fleet", date: h.date, age: a, lat: h.lat, lng: h.lng, species: catchKeys, zone: h.zone,
         place: h.place, nBoats: h.n_boats || boats.length, catchMap: h.catch || {}, boatList: boats,
         what: catchKeys.length ? catchLine(h.catch, 4)
-          : (h.n_boats > 1 ? [h.n_boats, "boats on one spot"].join(" ") : [lead.name || "A boat", "held a spot"].join(" ")),
-        how: boats.map(boatLine).join("; ") + " · " + [h.minutes, "min stopped"].join(" ") });
+          : (h.n_boats > 1 ? [h.n_boats, "boats stopped on one spot for", hm(h.minutes)].join(" ") : [lead.name || "A boat", "stopped here for", hm(h.minutes)].join(" ")),
+        how: boats.map(boatLine).join("; ") + (catchKeys.length ? " · stopped here " + hm(h.minutes) : "") });
     });
     return pts.sort(function (a, b) { return a.age - b.age || (a.kind === "report" ? -1 : 1) - (b.kind === "report" ? -1 : 1); });
   }
@@ -694,6 +743,15 @@
     return Object.keys(c || {}).filter(function (k) { return c[k] > 0; }).sort(function (a, b) { return rank(a) - rank(b) || c[b] - c[a]; })
       .slice(0, n || 4).map(function (k) { return [c[k].toLocaleString("en-US"), k].join(" "); }).join(", ");
   }
+  // 97 -> "1 h 37 min"; 45 -> "45 min".
+  function hm(min) {
+    min = Math.round(min || 0);
+    var h = Math.floor(min / 60), m = min % 60;
+    return h ? [h, "h"].concat(m ? [m, "min"] : []).join(" ") : [m, "min"].join(" ");
+  }
+  function joinAnd(list) { return list.length < 2 ? list.join("") : list.slice(0, -1).join(", ") + " and " + list[list.length - 1]; }
+  function paddyWord(w) { return w === "core" ? "most likely" : w; }
+  function placePhrase(pl) { return /^\d/.test(pl) ? "about " + pl : "at " + pl; }
   function boatLine(b) {
     return b.name + (b.source || b.landing ? " (" + [b.source || b.landing, b.trip].filter(Boolean).join(", ") + ")" : "");
   }
@@ -703,7 +761,7 @@
     return '<ul class="plain hb">' + pts.map(function (p) {
       var g = ddm(p.lat, p.lng);
       return '<li class="hb-' + esc(p.kind) + '"><span class="age a' + esc(p.age) + '">' + esc(p.age === 0 ? "today" : p.age + "d") + "</span><b>" + esc(p.what) + "</b>" +
-        tagHtml(p.kind === "fleet" ? "AIS fleet" : p.kind === "dock" ? "dock count + AIS" : p.confirmed ? "confirmed" : "report") +
+        tagHtml(p.kind === "fleet" ? "boat tracking" : p.kind === "dock" ? "dock count + tracking" : p.confirmed ? "confirmed report" : "report") +
         '<div class="small">' + esc([hotPlace(p), p.how, p.extra].filter(Boolean).join(" · ")) + "</div>" +
         '<div class="mut small">' + esc(md(p.date)) + " · " + (p.zoneOnly ? esc("zone named, no GPS") : '<span class="gps">' + esc(g) + '</span><button type="button" class="mini-btn" data-copy="' + esc(g) +
           '">Copy</button><button type="button" class="mini-btn" data-lat="' + esc(p.lat) + '" data-lng="' + esc(p.lng) + '" data-tip="' + esc(p.what + " · " + g) + '">Map</button>') + "</div></li>";
@@ -724,7 +782,7 @@
       if (fishHere > g.topFish && !p.zoneOnly) { g.top = p; g.topFish = fishHere; }
     });
     landedFiltered().forEach(function (t) {
-      var key = ["Boats out of", t.port, "(no position)"].join(" ");
+      var key = ["Boats out of", t.port, "(spot not tracked)"].join(" ");
       var g = groups[key] || (groups[key] = { place: key, fish: {}, total: 0, reports: 0, boats: {}, fleet: 0, latest: t.date, top: null, topFish: -1, noPos: true });
       Object.keys(t.catch || {}).forEach(function (k) { g.fish[k] = (g.fish[k] || 0) + t.catch[k]; g.total += t.catch[k]; });
       g.fleet += 1;
@@ -763,10 +821,10 @@
   function landedHtml() {
     var rows = landedFiltered();
     if (!rows.length) return "";
-    return '<details class="more"><summary>' + esc(["Landed with no AIS position", "(" + rows.length + ")"].join(" ")) + '</summary><div class="scroll"><table class="mini"><tbody>' +
+    return '<details class="more"><summary>' + esc(["Trips that landed fish but weren't tracked", "(" + rows.length + ")"].join(" ")) + '</summary><div class="scroll"><table class="mini"><tbody>' +
       rows.map(function (t) {
         return "<tr><td>" + esc(md(t.date)) + "</td><td><b>" + esc(t.boat) + "</b></td><td>" + esc([t.landing, t.trip].filter(Boolean).join(", ")) + "</td><td>" + esc(catchLine(t.catch, 5)) + "</td></tr>";
-      }).join("") + '</tbody></table></div><p class="note">These trips landed fish but the shore receivers did not hear where the boat stopped (most boats under 65 ft carry no AIS, and range ends 30-50 nm out).</p></details>';
+      }).join("") + '</tbody></table></div><p class="note">The shore receivers did not hear where these boats stopped: most boats under 65 ft carry no tracker, and coverage ends 30-50 nm out.</p></details>';
   }
 
   function drawHot() {
@@ -803,15 +861,15 @@
     var chips = HB_DAYS.map(function (d) { return '<button type="button" class="chip' + (HB.days === d[0] ? " on" : "") + '" data-hbdays="' + d[0] + '">' + esc(d[1]) + "</button>"; }).join("");
     var sel = '<select id="hb-species" aria-label="Species"><option value="">All fish and fleet</option>' + Object.keys(counts).sort().map(function (sp) {
       return '<option value="' + esc(sp) + '"' + (HB.species === sp ? " selected" : "") + ">" + esc([sp, "(" + counts[sp] + ")"].join(" ")) + "</option>";
-    }).join("") + '<option value="_fleet"' + (HB.species === "_fleet" ? " selected" : "") + ">Fleet only (no species)</option></select>";
+    }).join("") + '<option value="_fleet"' + (HB.species === "_fleet" ? " selected" : "") + ">Boats with no count</option></select>";
     var dockSrc = (facts.hot_bites || {}).dock_sources || [];
-    return '<section><h2 id="hot">Hot Bites</h2><div class="hb-ctl">' + chips + sel + '<button type="button" class="mini-btn" id="hb-gpx">Download GPX</button></div>' +
-      '<h3>Where the fish are</h3><div id="hb-best">' + bestSpotsHtml() + "</div>" +
-      (withMap ? mapBlock() : "") + '<h3>Every report and boat</h3><div id="hb-list">' + hotList() + "</div>" + '<div id="hb-landed">' + landedHtml() + "</div>" +
-      (dockSrc.length ? '<p class="note">Dock counts from ' + dockSrc.map(function (d) { return link(d.url, d.landing); }).join(" and ") +
-        ", joined to where AIS heard each boat sit longest that day; the count is the whole trip's.</p>" : "") +
-      '<p class="note">Reports come from people on the water and show once a moderator approves them; a report that names a spot but no GPS sits at the zone\'s center. ' +
-      "Fleet points are AIS: boats that stopped and held a spot offshore, which says where they fished, not what they caught. GPX opens in most chartplotters and phone apps.</p></section>";
+    return '<section><h2 id="hot">Where the fish are</h2><div class="hb-ctl">' + chips + sel + '<button type="button" class="mini-btn" id="hb-gpx">Save to GPS (GPX)</button></div>' +
+      '<h3>Top places</h3><div id="hb-best">' + bestSpotsHtml() + "</div>" +
+      (withMap ? mapBlock() : "") + '<h3>All reports and boats</h3><div id="hb-list">' + hotList() + "</div>" + '<div id="hb-landed">' + landedHtml() + "</div>" +
+      '<p class="note">Places are ranked by fish counted. Fish counts come from the landings\' own dock counts (' +
+        (dockSrc.length ? dockSrc.map(function (src) { return link(src.url, src.landing); }).join(" and ") : "none today") +
+        ") and from reports people send in; a dock count covers the whole trip, placed where tracking heard the boat stop longest. " +
+      "Boat positions come from public AIS tracking: they show where a boat stopped, not what it caught. The GPX file opens in most chartplotters and phone apps.</p></section>";
   }
   function bindHot() {
     var list = document.getElementById("hb-list");
@@ -873,7 +931,7 @@
     }).filter(function (r) { return r.n || r.before || r.landed || r.fits.length || r.season; })
       .sort(function (a, b) { return b.landed - a.landed || b.n - a.n || b.fits.length - a.fits.length; });
     if (!rows.length) return "";
-    var head = ["Species", "Landed, 7 days", "Reports, 7 days", "Where reported", "How", "Biggest, water", "Water fits or season"];
+    var head = ["Species", "Landed this week", "Reports this week", "Where reported", "How", "Biggest, water", "Right water in"];
     // Report columns show once any report exists; the landed column once any count does.
     var anyReports = rows.some(function (r) { return r.n || r.before; }), anyLanded = rows.some(function (r) { return r.landed; });
     var keep = function (i) { return (i < 2 || i > 5 || anyReports) && (i !== 1 || anyLanded); };
@@ -893,7 +951,7 @@
     return '<section><h2 id="species">' + esc(view === "fishing" ? "Species" : "Species for divers") + '</h2><div class="scroll"><table class="stable sboard"><thead><tr>' +
       head.map(function (h, i) { return keep(i) ? "<th>" + esc(h) + "</th>" : ""; }).join("") + "</tr></thead><tbody>" + body + "</tbody></table></div>" +
       (anyReports ? "" : '<p class="small mut">No reports from the water this week yet, so the report columns are hidden. ' + sendLink("Send one") + ".</p>") +
-      '<p class="note">"Landed" is the dock counts the landings publish themselves (Dana Wharf, Davey\'s Locker); the core San Diego and LA landings publish through a network whose terms forbid reuse, so they are not counted here. Reports and "how" come from approved reports in the last ' + OBS_DAYS + ' days, against the week before. "Water fits" lists the zones where this month\'s satellite water matches the species\' usual range; it is not a catch.</p></section>';
+      '<p class="note">"Landed" counts what boats from Dana Point and Newport brought in, from the landings\' own posts. San Diego\'s and most LA landings publish only through a service that doesn\'t allow reuse, so their fish aren\'t in these numbers. "Right water in" lists zones where today\'s water temperature suits the fish; it is not a sighting.</p></section>';
   }
 
   // --- Sections -------------------------------------------------------------------
@@ -906,11 +964,10 @@
         : '<div class="maplegend"><span class="mut small">Predicted visibility</span><span class="ramp vis" aria-hidden="true">' +
           VIS_RAMP.map(function (s) { return '<b style="left:' + (s[0] / VIS_SHOW_FT[1] * 100) + '%">' + s[0] + (s[0] === VIS_SHOW_FT[1] ? "+" : "") + "</b>"; }).join("") +
           '</span><span class="mut small">ft</span></div>') +
-      '<div class="maplegend"><span class="mut small">Fleet stops:</span>' + ["today", "1 day", "2 days", "3 days"].map(function (t, i) {
-        return '<span class="key"><i style="background:' + AGE_COLORS[i] + '"></i>' + t + "</span>";
-      }).join("") + '<span class="key"><i style="background:#fbbf24"></i>boat now</span><span class="key"><i class="ring"></i>break</span>' + (view === "fishing" ? '<span class="key"><i style="background:#22c55e"></i>paddies</span>' : "") +
-      '<span class="key"><i class="dia"></i>reported fish</span><span class="key"><i class="hbf"></i>fleet on a spot</span></div>' +
-      '<p class="note">' + (view === "fishing" ? "Water temperature: " + esc(sstAsOf()) + " satellite map; blank is cloud or no data."
+      '<div class="maplegend"><span class="key"><i class="dia"></i>reported fish</span><span class="key"><i class="hbd"></i>boat with a dock count</span>' +
+      '<span class="key"><i class="hbf"></i>boat stopped</span><span class="key"><i style="background:#fbbf24"></i>boat out now</span>' +
+      (view === "fishing" ? '<span class="key"><i class="brk"></i>temperature break</span><span class="key"><i style="background:#22c55e"></i>kelp paddies (model)</span>' : "") + "</div>" +
+      '<p class="note">' + (view === "fishing" ? "Water temperature from the " + esc(sstAsOf()) + " satellite map; blank areas are cloud. Lines are temperature breaks traced from the same map: tap one for GPS. More layers are in the menu at top right."
         : "Predicted visibility: our model scaled to where recent shop reports landed, La Jolla and Laguna each on their own record; in between and beyond, the two are blended by distance, an extrapolation. Water temperature is in the layer menu.") + "</p>";
   }
 
@@ -988,7 +1045,7 @@
     }
     return SST_STOPS[SST_STOPS.length - 1][1];
   }
-  function drawSst(M, layer) {
+  function drawSst(M, layer, onGrid) {
     var img = new Image();
     img.onload = function () {
       var cv = document.createElement("canvas");
@@ -997,34 +1054,106 @@
       ctx.drawImage(img, 0, 0);
       var px = ctx.getImageData(0, 0, cv.width, cv.height), d = px.data;
       var lo = M.sst_range_c[0], hi = M.sst_range_c[1];
+      var grid = new Float32Array(cv.width * cv.height);
       for (var i = 0; i < d.length; i += 4) {
         var v = d[i];
-        if (!v) { d[i + 3] = 0; continue; }
-        var f = (lo + (v - 1) / 254 * (hi - lo)) * 9 / 5 + 32;
+        if (!v) { d[i + 3] = 0; grid[i / 4] = NaN; continue; }
+        grid[i / 4] = lo + (v - 1) / 254 * (hi - lo);
+        var f = grid[i / 4] * 9 / 5 + 32;
         var c = rampColor((f - SST_SHOW_F[0]) / (SST_SHOW_F[1] - SST_SHOW_F[0]));
         d[i] = c[0]; d[i + 1] = c[1]; d[i + 2] = c[2]; d[i + 3] = 215;
       }
       ctx.putImageData(px, 0, 0);
       var bb = M.bbox; // [lng0, lat0, lng1, lat1]
       L.imageOverlay(cv.toDataURL(), [[bb[1], bb[0]], [bb[3], bb[2]]], { className: "pix", interactive: false }).addTo(layer);
+      if (onGrid) onGrid({ data: grid, width: cv.width, height: cv.height }, bb);
     };
     img.src = M.sst_url;
+  }
+
+  // Temperature breaks drawn the way the main map draws them (src/lib/sstBreaks.js,
+  // copied as breaks.js): one smooth line per front, solid for hard edges, dotted
+  // for softer ones, white casing so it reads on any color. Tap for GPS.
+  function smoothLine(pts, n) {
+    if (pts.length < 3) return pts;
+    var out = [];
+    for (var i = 0; i < pts.length - 1; i++) {
+      var p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(pts.length - 1, i + 2)];
+      for (var k = 0; k < n; k++) {
+        var t = k / n, t2 = t * t, t3 = t2 * t;
+        out.push([0, 1].map(function (j) {
+          return 0.5 * (2 * p1[j] + (-p0[j] + p2[j]) * t + (2 * p0[j] - 5 * p1[j] + 4 * p2[j] - p3[j]) * t2 + (-p0[j] + 3 * p1[j] - 3 * p2[j] + p3[j]) * t3);
+        }));
+      }
+    }
+    out.push(pts[pts.length - 1]);
+    return out;
+  }
+  function drawBreaks(grid, bb, layer) {
+    if (!window.SDBreaks || !layer) return;
+    var box = { latMin: bb[1], latMax: bb[3], lngMin: bb[0], lngMax: bb[2] };
+    // the ~9 km fallback grid smears fronts; the tracer refuses it, as on the main map
+    var res = window.SDBreaks.computeBreakMask(grid, box, { sourceFallback: grid.width < 400 });
+    if (!res) return;
+    var toLL = function (pt) { var q = window.SDBreaks.gridToLngLat(pt[0], pt[1], grid.width, grid.height, box); return [q[1], q[0]]; };
+    res.fronts.forEach(function (fr) {
+      var line = smoothLine(fr.points.map(toLL), 6), strong = fr.maxGradient >= window.SDBreaks.BREAK_STRONG_C_PER_KM;
+      L.polyline(line, { color: "#ffffff", weight: strong ? 3.2 : 2.4, opacity: strong ? 0.6 : 0.45, lineCap: "round", lineJoin: "round", interactive: false }).addTo(layer);
+      L.polyline(line, { color: "#1e293b", weight: strong ? 1.7 : 1.3, opacity: strong ? 0.9 : 0.75, dashArray: strong ? null : "1 6", lineCap: "round", lineJoin: "round", interactive: false }).addTo(layer);
+      var name = (strong ? "Strong" : "Softer") + " temperature break, about " + Math.round(fr.spanKm / 1.852) + " nm long";
+      var wps = window.SDBreaks.pickWaypoints(fr.points).map(toLL);
+      var labels = wps.length === 2 ? ["Start", "End"] : ["Start"].concat(wps.slice(1, -1).map(function (_, i) { return "Mid " + (i + 1); }), ["End"]);
+      var pop = "<b>" + esc(name) + "</b>" + wps.map(function (ll, i) {
+        var g = ddm(ll[0], ll[1]);
+        return '<div class="small">' + esc(labels[i]) + ' <span class="gps">' + esc(g) + '</span><button type="button" class="mini-btn" data-copy="' + esc(g) + '">Copy</button></div>';
+      }).join("") + '<div class="mut small">From the ' + esc(sstAsOf()) + " satellite map. Breaks move day to day: treat it as a line to search along.</div>";
+      L.polyline(line, { color: "#000000", weight: 16, opacity: 0, lineCap: "round" })
+        .bindTooltip(esc(name), { sticky: true }).bindPopup(pop, { maxWidth: 260 }).addTo(layer);
+    });
+  }
+
+  // Scrolling the page never gets caught by the map: on a computer the wheel
+  // zooms the map only with Ctrl (or Cmd, or a trackpad pinch); on a phone one
+  // finger scrolls the page and two fingers move and zoom the map.
+  function gestureHandling(m, el) {
+    var hint = document.createElement("div"), timer = null, acc = 0;
+    hint.className = "map-hint"; hint.hidden = true; el.appendChild(hint);
+    var say = function (msg) { hint.textContent = msg; hint.hidden = false; clearTimeout(timer); timer = setTimeout(function () { hint.hidden = true; }, 1300); };
+    el.addEventListener("wheel", function (ev) {
+      if (ev.ctrlKey || ev.metaKey) {
+        ev.preventDefault();
+        acc += -ev.deltaY / 120;
+        if (Math.abs(acc) >= 0.25) {
+          m.setZoomAround(m.mouseEventToContainerPoint(ev), m.getZoom() + Math.max(-1, Math.min(1, acc)));
+          acc = 0;
+        }
+      } else {
+        say(/Mac|iPhone|iPad/.test(navigator.platform || "") ? "Hold Cmd and scroll to zoom the map" : "Hold Ctrl and scroll to zoom the map");
+      }
+    }, { passive: false });
+    if (L.Browser.mobile) {
+      el.addEventListener("touchmove", function (ev) { if (ev.touches.length === 1) say("Use two fingers to move the map"); }, { passive: true });
+    }
   }
 
   function initMap() {
     var el = document.getElementById("map");
     if (!el || !window.L) return;
     if (map) { map.remove(); map = null; }
-    map = L.map(el, { zoomControl: true, attributionControl: false, scrollWheelZoom: false });
+    map = L.map(el, { zoomControl: true, attributionControl: false, scrollWheelZoom: false, zoomSnap: 0.25, zoomDelta: 0.5,
+      dragging: !L.Browser.mobile, tap: false, minZoom: 6, maxZoom: 12, maxBounds: [[29.5, -122.5], [35.5, -115.5]], maxBoundsViscosity: 0.7 });
+    gestureHandling(map, el);
     var view0 = L.latLngBounds(view === "fishing" ? [[31.9, -119.4], [33.6, -117.0]] : [[32.55, -117.95], [33.6, -117.1]]);
     if (view === "fishing") hotFiltered().forEach(function (p) { view0.extend([p.lat, p.lng]); });
     map.fitBounds(view0, { padding: [12, 12] });
     var M = facts.map || {};
     var sstLayer = L.layerGroup().addTo(map), landLayer = L.layerGroup().addTo(map), padLayer = L.layerGroup().addTo(map),
-      zoneLayer = L.layerGroup().addTo(map), fleetLayer = L.layerGroup().addTo(map), liveLayer = L.layerGroup().addTo(map), spotLayer = L.layerGroup();
+      zoneLayer = L.layerGroup(), fleetLayer = L.layerGroup().addTo(map), liveLayer = L.layerGroup().addTo(map), spotLayer = L.layerGroup(),
+      breakLayer = L.layerGroup();
+    if (view === "fishing") breakLayer.addTo(map);
     var V = facts.visibility || {};
     var visLayer = L.layerGroup();
-    if (M.sst_url && M.bbox && M.sst_range_c) drawSst(M, sstLayer);
+    if (M.sst_url && M.bbox && M.sst_range_c) drawSst(M, sstLayer, function (grid, bb) { drawBreaks(grid, bb, breakLayer); });
     if (V.url && M.bbox) drawVis(V, M.bbox, visLayer);
     // Diving opens on visibility; paddies start off there because their green
     // would sit on the visibility ramp's green (still in the layer menu).
@@ -1040,11 +1169,6 @@
     (facts.zones || []).forEach(function (z) {
       L.circle(z.center, { radius: z.radius_nm * 1852, color: "#cbd5e1", weight: 1, opacity: 0.5, fill: false, dashArray: "4 5" })
         .bindTooltip(esc(z.name) + (z.temp_f != null ? " · " + esc(z.temp_f) + "°F" : ""), { sticky: true }).addTo(zoneLayer);
-      var b = z["break"];
-      if (b) {
-        L.circleMarker([b.lat, b.lng], { radius: 6, color: "#ffffff", weight: 2, fill: false })
-          .bindTooltip("Break " + esc(b.step_f) + "°F over " + esc(b.over_nm) + " nm · " + esc(b.gps), { direction: "top" }).addTo(zoneLayer);
-      }
     });
     (M.stops || []).forEach(function (s) {
       var age = Math.round((Date.parse(facts.date) - Date.parse(s.date)) / 864e5);
@@ -1077,8 +1201,10 @@
       if (st) st.textContent = "Position set from the map.";
       openSend();
     });
-    L.control.layers(null, { "Water temperature": sstLayer, "Predicted visibility": visLayer, "Zones and breaks": zoneLayer, "Paddies": padLayer,
-      "Fleet stops, 3 days": fleetLayer, "Boats now": liveLayer, "Hot bites": hotLayer, "Field reports, 7 days": obsLayer, "Named spots": spotLayer }, { position: "topright", collapsed: true }).addTo(map);
+    L.control.layers(null, { "Water temperature": sstLayer, "Predicted visibility": visLayer, "Temperature breaks": breakLayer, "Kelp paddies (drift model)": padLayer,
+      "Fish and boats, 4 days": hotLayer, "Every boat stop, 3 days": fleetLayer, "Boats out now": liveLayer, "All reports, 7 days": obsLayer,
+      "Zones": zoneLayer, "Named spots": spotLayer }, { position: "topright", collapsed: true }).addTo(map);
+    map.on("popupopen", function (ev) { bindGpsIn(ev.popup.getElement()); });
     // Hot bites carry the last 4 days of reports and fleet clusters; the raw layers stay in the menu.
     if (view === "fishing") { map.removeLayer(obsLayer); map.removeLayer(fleetLayer); }
   }
@@ -1172,8 +1298,8 @@
         var ll = [parseFloat(btn.getAttribute("data-lat")), parseFloat(btn.getAttribute("data-lng"))];
         gpsMarkers.clearLayers();
         L.circleMarker(ll, { radius: 9, color: "#fbbf24", weight: 3, fill: false }).bindTooltip(esc(btn.getAttribute("data-tip")), { permanent: true, direction: "top" }).addTo(gpsMarkers);
-        map.setView(ll, 10, { animate: false });
         document.getElementById("map").scrollIntoView({ behavior: "smooth", block: "center" });
+        map.flyTo(ll, Math.max(map.getZoom(), 9), { duration: 0.7 });
       });
     });
   }
@@ -1184,10 +1310,10 @@
     var n = obsRecent(["catch", "sighting", "dive"]).filter(function (o) { var w = zoneOf(o.lat, o.lng); return w && w.id === z.id; }).length;
     var cells = [
       ["Water", z.temp_f != null ? esc(z.temp_f + "°F") + (z.temp_change_f != null ? ' <span class="d">' + esc(signed(z.temp_change_f, "")) + "</span>" : "") : '<span class="mut">n/a</span>'],
-      ["vs normal", z.vs_normal_f != null ? esc(signed(z.vs_normal_f, "°F")) : ""],
-      ["Break", b ? esc(b.step_f + "°F") : '<span class="mut">none</span>'],
-      ["Paddies", p ? esc(p.word) : '<span class="mut">none</span>'],
-      ["Fleet 3 d", esc((f.last3_hours || 0) + " h")],
+      ["vs average", z.vs_normal_f != null ? esc(signed(z.vs_normal_f, "°F")) : ""],
+      ["Temp break", b ? esc(b.step_f + "°F") : '<span class="mut">none</span>'],
+      ["Paddies", p ? esc(paddyWord(p.word)) : '<span class="mut">none</span>'],
+      ["Boat time", esc(hm((f.last3_hours || 0) * 60))],
       ["Reports", n ? esc(String(n)) : '<span class="mut">0</span>'],
     ];
     return '<details class="zrow" id="z-' + esc(z.id) + '"><summary><span class="zn">' + esc(zname(z)) + ' <span class="mut small">' + esc(z.nm_from_sd + " nm") + "</span></span>" +
@@ -1196,8 +1322,8 @@
 
   function zonesSection(groups) {
     var zs = facts.zones || [];
-    var head = '<div class="zhead"><span class="zn">Zone</span><span class="zc">Water (6-day change)</span><span class="zc">vs normal</span><span class="zc">Break</span><span class="zc">Paddies</span><span class="zc">Fleet, 3 days</span><span class="zc">Reports</span></div>';
-    return '<section><h2 id="zones">Zones</h2><p class="small mut">Tap a zone for its GPS, water line, color, fleet history, species that fit the water and the next days.</p>' +
+    var head = '<div class="zhead"><span class="zn">Zone</span><span class="zc">Water (6-day change)</span><span class="zc">vs average month</span><span class="zc">Temp break</span><span class="zc">Paddies</span><span class="zc">Boat time, 3 days</span><span class="zc">Reports</span></div>';
+    return '<section><h2 id="zones">Zones</h2><p class="small mut">Tap a zone for GPS numbers, its water over the week, color, boat history and the next three days.</p>' +
       (facts.zone_groups || []).filter(function (g) { return groups.indexOf(g.key) >= 0; }).map(function (g) {
         return "<h3>" + esc(g.label) + "</h3>" + head + zs.filter(function (z) { return z.group === g.key; }).map(zoneRow).join("");
       }).join("") + '<p class="note">Water and breaks from the satellite map, color from chlorophyll, fleet from AIS (heard within about 30-50 nm of shore; most boats under 65 ft never broadcast). ' +
@@ -1357,8 +1483,19 @@
     }).join("") + '</ul><p class="note">AIS positions under ' + esc(now.max_age_h) + " hours old. " + link("/fleet/#view=live", "Live fleet map") + ".</p></section>";
   }
 
+  function postedAt(iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(iso || "");
+    if (!m) return "";
+    var hr = +m[4], ampm = hr < 12 ? "AM" : "PM";
+    return [md(iso.slice(0, 10)) + ",", ((hr % 12) || 12) + ":" + m[5], ampm].join(" ");
+  }
   function bait() {
-    var b = facts.bait;
+    var b = facts.bait || {}, eb = b.barges || [];
+    var posted = eb.length ? '<div class="scroll"><table><thead><tr><th>Barge</th><th>Serving</th><th>Note</th><th>Posted</th></tr></thead><tbody>' +
+      eb.map(function (x) {
+        return "<tr><td><b>" + esc(x.barge) + "</b></td><td>" + esc(x.serving.join("; ")) + "</td><td>" + esc(x.notes.join("; ")) + "</td><td>" + esc(postedAt(x.as_of)) + "</td></tr>";
+      }).join("") + '</tbody></table></div><p class="note">From ' + link(b.url, b.source || "the barge") + "'s bait report, updated through the day; what's in the tanks can change by the hour. " +
+      esc(b.text || "") + "</p>" : "";
     var rows = obsRecent(["bait"]), latest = {}, n = {};
     rows.forEach(function (o) { n[o.barge] = (n[o.barge] || 0) + 1; if (!latest[o.barge]) latest[o.barge] = o; });
     var barges = OBS_BARGES.filter(function (k) { return latest[k]; });
@@ -1368,8 +1505,8 @@
         return "<tr><td>" + esc(k) + "</td><td>" + esc(o.bait) + (o.confidence === "confirmed" ? tagHtml("confirmed") : "") + "</td><td>" + esc(o.bait_size || "") +
           "</td><td>" + esc(md(o.date)) + '</td><td class="n">' + esc(n[k]) + "</td></tr>";
       }).join("") + "</tbody></table></div>"
-      : '<p class="small mut">No bait reports in the last ' + OBS_DAYS + " days. " + sendLink("Report what the barge had") + ".</p>";
-    return '<section><h2 id="bait">Bait</h2>' + table + (b ? '<p class="small">' + esc(b.text) + " " + b.links.map(function (l) { return link(l.url, l.name); }).join("; ") + ".</p>" : "") + "</section>";
+      : '<p class="small mut">Bait at another barge? ' + sendLink("Report it") + ".</p>";
+    return '<section><h2 id="bait">Bait</h2>' + posted + (barges.length ? "<h3>From reports</h3>" : "") + table + "</section>";
   }
 
   function spotsTable() {
@@ -1406,8 +1543,8 @@
   }
 
   function body() {
-    if (view === "diving") return sectionNav() + glanceDiving() + mapSection() + hotSection(false) + speciesBoard() + waterSection() + weather() + trendsSection() + seasonSection() + diveSites() + around(true) + basics() + sourcesBlock();
-    return sectionNav() + glanceFishing() + hotSection(true) + speciesBoard() + zonesSection(["offshore", "mexico", "inshore"]) + weather() + waterSection() + trendsSection() + seasonSection() + bait() + fleetSection() + around(false) + spotsTable() + sourcesBlock();
+    if (view === "diving") return sectionNav() + summaryDiving() + glanceDiving() + mapSection() + hotSection(false) + speciesBoard() + waterSection() + weather() + trendsSection() + seasonSection() + diveSites() + around(true) + basics() + sourcesBlock();
+    return sectionNav() + summaryFishing() + hotSection(true) + speciesBoard() + glanceFishing() + bait() + zonesSection(["offshore", "mexico", "inshore"]) + weather() + waterSection() + trendsSection() + seasonSection() + fleetSection() + around(false) + spotsTable() + sourcesBlock();
   }
 
   function render() {

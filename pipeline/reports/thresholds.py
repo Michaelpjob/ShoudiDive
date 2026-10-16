@@ -91,7 +91,7 @@ FREEDIVE_TEXT = ("Solo freediving is outside our thresholds in any conditions: o
 MAX_AGE_H = {
     "alerts": 3, "cwf": 18, "off": 18, "srf": 30, "buoy": 6, "coops": 6, "rain": 48,
     "manifest": 48, "observations": 120, "enso": 24 * 45, "tides": 48, "viz_column": 48, "mop": 36,
-    "glider": 36, "fleet_now": 6, "hist": 48, "glider_series": 60, "enso_weekly": 24 * 14, "dock": 24 * 7,
+    "glider": 36, "fleet_now": 6, "hist": 48, "glider_series": 60, "enso_weekly": 24 * 14, "dock": 24 * 7, "bait": 48,
 }
 
 BANNED_WORDS = ("safe", "unsafe", "all clear", "guaranteed", "go/no-go")
