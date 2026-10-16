@@ -674,14 +674,16 @@
   }
   function briefFishing() {
     var html = "", spots = bestSpots();
-    var placed = spots.filter(function (g) { return !g.noPos; }).slice(0, 3), untracked = spots.filter(function (g) { return g.noPos && g.total > 0; });
+    // Only places with fish: a boat that stopped with no count stays in the full report.
+    var placed = spots.filter(function (g) { return !g.noPos && (g.total > 0 || Object.keys(g.fish).length); }).slice(0, 3),
+      untracked = spots.filter(function (g) { return g.noPos && g.total > 0; });
     var fish = placed.length ? '<ol class="best brief-list">' + placed.map(function (g) {
       var t = g.top, gp = t && !t.zoneOnly ? ddm(t.lat, t.lng) : null;
       var who = Object.keys(g.boats).slice(0, 2).map(function (n) { var bt = g.boats[n]; return bt.source || bt.landing ? [n, "(" + (bt.source || bt.landing) + ")"].join(" ") : n; }).join(", ") ||
         (g.reports ? [g.reports, g.reports > 1 ? "reports" : "report"].join(" ") : "");
       return "<li><b>" + esc(g.place) + "</b> " + esc(catchLine(g.fish, 3) || Object.keys(g.fish).join(", ")) +
         '<div class="small mut">' + esc([who, md(g.latest)].filter(Boolean).join(" · ")) + copyGps(gp) + "</div></li>";
-    }).join("") + "</ol>" : '<p class="small mut">No fish reported or counted in the last ' + HB.days + " days. " + sendLink("Send a report") + ".</p>";
+    }).join("") + "</ol>" : '<p class="small mut">No fish with a known spot in the last ' + HB.days + " days. " + sendLink("Send a report") + ".</p>";
     if (untracked.length) {
       fish += '<p class="small"><b>Also landed, spot not tracked:</b> ' + esc(untracked.map(function (g) {
         return [g.place.replace(/^Boats out of (.*) \(spot not tracked\)$/, "$1"), "boats,", catchLine(g.fish, 2)].join(" ");
