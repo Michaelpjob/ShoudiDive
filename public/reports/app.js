@@ -16,7 +16,7 @@
   var BUOY_SHORT = { "46254": "La Jolla", "46232": "Point Loma S", "46086": "S. Clemente Basin", "46047": "Tanner Bank", "46253": "San Pedro S" };
   var main = document.getElementById("report");
   var picker = document.getElementById("date");
-  var facts = null, view = initialView(), map = null, CHARTS = {}, chartSeq = 0;
+  var facts = null, view = initialView(), depth = initialDepth(), map = null, CHARTS = {}, chartSeq = 0;
 
   function initialView() {
     // Spearfishing had its own tab until 2026-10-15; old links and saved choices land on diving.
@@ -24,6 +24,13 @@
     if (m) return m[1] === "fishing" ? "fishing" : "diving";
     try { var v = localStorage.getItem("sd:report:view"); if (v) return v === "fishing" ? "fishing" : "diving"; } catch (e) { /* storage blocked */ }
     return "fishing";
+  }
+  // "brief" (the default) is the few facts a reader acts on; "full" is everything.
+  function initialDepth() {
+    if (/[#&]full\b/.test(location.hash)) return "full";
+    if (/view=/.test(location.hash)) return "brief";
+    try { if (localStorage.getItem("sd:report:depth") === "full") return "full"; } catch (e) { /* storage blocked */ }
+    return "brief";
   }
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -492,6 +499,7 @@
     });
   }
   function openSend() {
+    if (!document.getElementById("send") && depth === "brief") setDepth("full", true);
     var d = document.getElementById("send");
     if (d) { d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" }); }
   }
@@ -572,28 +580,37 @@
     var c = visColor(ft), lum = 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
     return '<span class="vchip" style="background:rgb(' + c.map(Math.round).join(",") + ");color:" + (lum > 150 ? "#0b1220" : "#ffffff") + '">' + esc(ft + " ft") + "</span>";
   }
-  function glanceDiving() {
-    var sites = facts.dive_sites || [];
-    var head = ["Site", "Visibility, predicted", "Last seen", "Sets today", "Water", "Surge"];
-    var rows = sites.map(function (site) {
+  function siteCells(site) {
       var vp = site.vis_pred, posts = site.vis || [], lp = posts.length ? posts[posts.length - 1] : null;
       var dv = obsRecent(["dive"]).filter(function (o) { return nearestSite(o) === site; });
       var seen = dv.length ? esc(visRange(dv[0]) + " ft") + ' <span class="mut small">' + esc(["divers,", md(dv[0].date)].join(" ")) + "</span>"
         : lp ? esc([lp.lo_ft === lp.hi_ft ? lp.lo_ft : [lp.lo_ft, lp.hi_ft].join("-"), "ft"].join(" ")) + ' <span class="mut small">' + esc(["shop,", md(lp.date)].join(" ")) + "</span>"
         : '<span class="mut">no posts</span>';
-      var today = (site.surf || [])[0], temps = (site.temp_series || []).map(function (x) { return x.temp_f; });
-      var cells = [
-        esc(site.short),
-        vp ? visChip(vp.ft) + (vp.lo_ft != null ? ' <span class="mut small">' + esc([vp.lo_ft, vp.hi_ft].join("-")) + "</span>" : "") : '<span class="mut">n/a</span>',
-        seen,
-        today ? esc([today.sets_ft < 1 ? "under 1" : today.sets_ft.toFixed(0), "ft at", today.tp_s, "s"].join(" ")) : "",
-        temps.length ? esc(temps[temps.length - 1] + "°F") : "",
-        site.surge ? esc(site.surge.level) : "",
-      ];
-      return "<tr>" + cells.map(function (c, i) { return "<td" + (i ? ' data-l="' + esc(head[i]) + '"' : "") + ">" + c + "</td>"; }).join("") + "</tr>";
-    }).join("");
-    var table = sites.length ? '<div class="scroll"><table class="stable"><thead><tr>' + head.map(function (h) { return "<th>" + esc(h) + "</th>"; }).join("") +
-      "</tr></thead><tbody>" + rows + '</tbody></table></div><p class="note">Visibility in the map\'s colors: our model scaled to recent shop posts (see Trends for how it has done). Sets are the CDIP nearshore model at the entry; surge is bottom water speed.</p>' : "";
+      var surf = site.surf || [], today = surf[0], temps = (site.temp_series || []).map(function (x) { return x.temp_f; });
+      var setsFt = function (x) { return x.sets_ft < 1 ? "under 1" : x.sets_ft.toFixed(0); };
+      return {
+        "Site": esc(site.short),
+        "Visibility, predicted": vp ? visChip(vp.ft) + (vp.lo_ft != null ? ' <span class="mut small">' + esc([vp.lo_ft, vp.hi_ft].join("-")) + "</span>" : "") : '<span class="mut">n/a</span>',
+        "Last seen": seen,
+        "Sets today": today ? esc([setsFt(today), "ft at", today.tp_s, "s"].join(" ")) : "",
+        "Sets, 3 days": surf.length ? esc(surf.slice(0, 3).map(function (x) { return [x.label, x.sets_ft < 1 ? "<1" : x.sets_ft.toFixed(0)].join(" "); }).join(" · ") + " ft") : "",
+        "Water": temps.length ? esc(temps[temps.length - 1] + "°F") : "",
+        "Surge": site.surge ? esc(site.surge.level) : "",
+      };
+  }
+  function siteTable(head) {
+    var sites = facts.dive_sites || [];
+    if (!sites.length) return "";
+    return '<div class="scroll"><table class="stable"><thead><tr>' + head.map(function (h) { return "<th>" + esc(h) + "</th>"; }).join("") + "</tr></thead><tbody>" +
+      sites.map(function (site) {
+        var c = siteCells(site);
+        return "<tr>" + head.map(function (h, i) { return "<td" + (i ? ' data-l="' + esc(h) + '"' : "") + ">" + c[h] + "</td>"; }).join("") + "</tr>";
+      }).join("") + "</tbody></table></div>";
+  }
+  function glanceDiving() {
+    var sites = facts.dive_sites || [];
+    var table = sites.length ? siteTable(["Site", "Visibility, predicted", "Last seen", "Sets today", "Water", "Surge"]) +
+      '<p class="note">Visibility in the map\'s colors: our model scaled to recent shop posts (see Trends for how it has done). Sets are the CDIP nearshore model at the entry; surge is bottom water speed.</p>' : "";
     var tiles = [];
     tiles.push(weatherTile(function (h) { return (h.zones || []).some(function (zid) { return /^CAZ|PZZ740|PZZ655/.test(zid); }); }));
     var w = facts.water || {}, tide = ((w.tide || {}).events || []);
@@ -610,6 +627,126 @@
     tiles.push(tile("From the water", esc(rec.length ? [rec.length, rec.length > 1 ? "reports" : "report", "this week"].join(" ") : "No reports yet"),
       rec.length ? rec.slice(0, 2).map(function (o) { return esc([obsWhat(o), "(" + md(o.date) + ")"].join(" ")); }) : [sendLink("Send your dive")], "", "#water"));
     return '<section class="glance"><h2 id="glance">Dive sites today</h2>' + table + tilesHtml(tiles) + "</section>";
+  }
+
+  // --- The brief: about a fifth of the report, the facts a reader acts on ---
+  // Where the fish are with GPS, the bait, the water to look for, and wind and
+  // waves by day; for divers, visibility and entries by site plus tides and
+  // advisories. Numbers only, no verdicts; the full report is one tap away.
+  function copyGps(g) { return g ? '<div class="gps-row"><span class="gps">' + esc(g) + '</span><button type="button" class="mini-btn" data-copy="' + esc(g) + '">Copy</button></div>' : ""; }
+  function briefBlock(id, title, sub, html) {
+    return '<section class="brief"><h2 id="' + esc(id) + '">' + esc(title) + (sub ? ' <span class="sub">' + esc(sub) + "</span>" : "") + "</h2>" + html + "</section>";
+  }
+  function rangeTxt(a, digits) {
+    var lo = Math.min.apply(null, a), hi = Math.max.apply(null, a), f = function (x) { return x.toFixed(digits == null ? 1 : digits); };
+    return lo === hi ? f(lo) : f(lo) + "-" + f(hi);
+  }
+  // "3:00 AM Oct 16" .. "5:00 PM Oct 16" -> "Oct 16, 3 AM to 5 PM"
+  function advSpan(a) {
+    var re = /^(\d{1,2}):(\d{2}) ([AP]M) (\w{3} \d{1,2})$/, f = re.exec(a.from || ""), u = re.exec(a.until || "");
+    var t = function (m) { return (m[2] === "00" ? m[1] : m[1] + ":" + m[2]) + " " + m[3]; };
+    if (f && u) return f[4] === u[4] ? [f[4] + ",", t(f), "to", t(u)].join(" ") : [f[4] + ",", t(f), "to", u[4] + ",", t(u)].join(" ");
+    return ["until", a.until].join(" ");
+  }
+  function advItems(re) {
+    var seen = {};
+    return ((facts.weather || {}).headlines || []).filter(function (a) { return (a.zones || []).some(function (zid) { return re.test(zid); }); })
+      .filter(function (a) { var k = [a.event, a.where || a.area].join("|"); if (seen[k]) return false; seen[k] = 1; return true; })
+      .map(function (a) { return "<li><b>" + esc(a.event) + "</b> " + esc(advSpan(a)) + '<div class="mut small">' + esc(a.where || a.area) + "</div></li>"; });
+  }
+  function seaTable(names) {
+    var ol = (facts.weather || {}).outlook || [];
+    if (!ol.length) return "";
+    var rows = ol.filter(function (r) { return names.indexOf(r.zone) >= 0; });
+    ol.forEach(function (r) { if (rows.length < 4 && rows.indexOf(r) < 0) rows.push(r); });
+    rows.sort(function (a, b) { return ol.indexOf(a) - ol.indexOf(b); });
+    var days = rows[0].days.slice(0, 3);
+    return '<div class="scroll"><table class="sea"><thead><tr><th>Area</th>' + days.map(function (x) { return "<th>" + esc(x.label) + "</th>"; }).join("") + "</tr></thead><tbody>" +
+      rows.map(function (r) {
+        return "<tr><td>" + esc(r.zone) + "</td>" + r.days.slice(0, 3).map(function (x) {
+          return "<td" + (x.wind_max_kt >= 15 ? ' class="hi"' : "") + ">" + esc([x.wind_dir, x.wind_max_kt].join(" ")) + '<div class="mut">' + esc(x.hs_max_ft + " ft") + "</div></td>";
+        }).join("") + "</tr>";
+      }).join("") + '</tbody></table></div><p class="note">Forecast peak for each day: wind in knots (15 and up in amber), wave height in feet. Every zone is in the full report.</p>';
+  }
+  function briefMore() {
+    return '<p class="brief-more"><button type="button" class="more-btn" data-depth="full">Full report</button> <span class="mut small">' +
+      esc(view === "fishing" ? "Map, every report and boat, species, all zones, trends and season" : "Map, every dive report, site details, trends and season") + "</span></p>";
+  }
+  function briefFishing() {
+    var html = "", spots = bestSpots();
+    var placed = spots.filter(function (g) { return !g.noPos; }).slice(0, 3), untracked = spots.filter(function (g) { return g.noPos && g.total > 0; });
+    var fish = placed.length ? '<ol class="best brief-list">' + placed.map(function (g) {
+      var t = g.top, gp = t && !t.zoneOnly ? ddm(t.lat, t.lng) : null;
+      var who = Object.keys(g.boats).slice(0, 2).map(function (n) { var bt = g.boats[n]; return bt.source || bt.landing ? [n, "(" + (bt.source || bt.landing) + ")"].join(" ") : n; }).join(", ") ||
+        (g.reports ? [g.reports, g.reports > 1 ? "reports" : "report"].join(" ") : "");
+      return "<li><b>" + esc(g.place) + "</b> " + esc(catchLine(g.fish, 3) || Object.keys(g.fish).join(", ")) +
+        '<div class="small mut">' + esc([who, md(g.latest)].filter(Boolean).join(" · ")) + copyGps(gp) + "</div></li>";
+    }).join("") + "</ol>" : '<p class="small mut">No fish reported or counted in the last ' + HB.days + " days. " + sendLink("Send a report") + ".</p>";
+    if (untracked.length) {
+      fish += '<p class="small"><b>Also landed, spot not tracked:</b> ' + esc(untracked.map(function (g) {
+        return [g.place.replace(/^Boats out of (.*) \(spot not tracked\)$/, "$1"), "boats,", catchLine(g.fish, 2)].join(" ");
+      }).join("; ") + ".") + "</p>";
+    }
+    html += briefBlock("b-fish", "Where they're biting", "last " + HB.days + " days", fish);
+
+    var b = facts.bait || {}, bb = b.barges || [];
+    var newest = bb.map(function (x) { return x.as_of || ""; }).sort().pop();
+    html += briefBlock("b-bait", "Bait at the barges", "", bb.length ? '<ul class="plain brief-list">' + bb.map(function (x) {
+      var lim = x.notes.filter(function (n) { return /scoop|limit|max|only/i.test(n); });
+      return "<li><b>" + esc(x.barge) + "</b> " + esc(x.serving.join(", ").replace(/ inch\b/g, " in").toLowerCase()) + (lim.length ? ' <span class="mut">(' + esc(lim.join("; ").toLowerCase()) + ")</span>" : "") + "</li>";
+    }).join("") + '</ul><p class="note">From ' + link(b.url, b.source) + (newest ? ", posted " + esc(postedAt(newest)) : "") + ".</p>"
+      : '<p class="small mut">No barge report today. ' + sendLink("Report what the barge had") + ".</p>");
+
+    var all = facts.zones || [], zs = all.filter(function (z) { return z.temp_f != null; }), wl = [];
+    if (zs.length) {
+      var warm = zs.slice().sort(byDesc(function (z) { return z.temp_f; }))[0];
+      var ch = zs.map(function (z) { return z.temp_change_f; }).filter(function (x) { return x != null; });
+      var trend = ch.length && Math.max.apply(null, ch) < 0 ? ["; cooling", rangeTxt(ch.map(Math.abs)) + "°F over", zs[0].temp_days, "days"].join(" ")
+        : ch.length && Math.min.apply(null, ch) > 0 ? ["; warming", rangeTxt(ch) + "°F over", zs[0].temp_days, "days"].join(" ") : "";
+      wl.push("<li>" + esc(["Warmest", warm.temp_f + "°F at", zname(warm) + trend].join(" ")) + "</li>");
+    }
+    var br = all.filter(function (z) { return z["break"]; }).sort(byDesc(function (z) { return z["break"].step_f; }))[0];
+    if (br) {
+      var b0 = br["break"];
+      wl.push("<li>" + esc(["Strongest break:", b0.step_f + "°F across", Math.round(b0.over_nm), "nm at", zname(br) + ", warmer to the", b0.warm_side].join(" ")) + copyGps(b0.gps) + "</li>");
+    }
+    var core = all.filter(function (z) { return z.paddy && z.paddy.word === "core"; }), lik = all.filter(function (z) { return z.paddy && z.paddy.word === "likely"; });
+    var lead = core.length ? core : lik;
+    if (lead.length) {
+      wl.push("<li>" + esc([core.length ? "Kelp paddies most likely at" : "Kelp paddies likely at", firstFew(lead.map(zname), 3)].join(" ")) +
+        ' <span class="mut small">(drift model)</span>' + copyGps(lead[0].paddy.gps) + "</li>");
+    }
+    if (wl.length) html += briefBlock("b-water", "Water to look for", "satellite map " + sstAsOf(), '<ul class="plain brief-list">' + wl.join("") + "</ul>");
+
+    var names = [];
+    placed.forEach(function (g) {
+      var t = g.top, z = t ? zoneOf(t.lat, t.lng) : null;
+      if (z) names.push(z.name, zname(z));
+    });
+    var adv = advItems(/^PZZ/);
+    var sea = seaTable(names);
+    if (sea || adv.length) html += briefBlock("b-sea", "Wind and waves", "next 3 days", sea + (adv.length ? '<ul class="plain brief-list adv">' + adv.join("") + "</ul>" : ""));
+    return html + briefMore();
+  }
+  function briefDiving() {
+    var html = briefBlock("b-sites", "Dive sites", "today and the next 2 days",
+      siteTable(["Site", "Visibility, predicted", "Last seen", "Sets, 3 days", "Surge"]) +
+      '<p class="note">Predicted visibility is our model scaled to recent shop posts, in the map\'s colors. Last seen is the latest diver report or shop post near the site.</p>');
+    var w = facts.water || {}, lines = [];
+    var bu = (w.buoys || []).filter(function (x) { return x.nearshore && x.temp_f != null; });
+    if (bu.length) lines.push("<li>" + esc(["Water", rangeTxt(bu.map(function (x) { return x.temp_f; })) + "°F at the nearshore buoys", "(" + bu[0].observed + ")"].join(" ")) + "</li>");
+    var tide = (w.tide || {}).events || [];
+    if (tide.length) lines.push("<li>" + esc("Tides: " + tide.slice(0, 4).map(function (e) { return [e.type, e.ft + " ft", e.time].join(" "); }).join(", ")) + "</li>");
+    var shore = ((facts.can_i_go || {}).shore || [])[0], rip = shore ? ((shore.days.today || {}).factors || []).filter(function (f0) { return f0.key === "rip"; })[0] : null;
+    if (rip && rip.value) lines.push("<li>" + esc("Rip current risk: " + String(rip.value).split(";")[0]) + "</li>");
+    var hunt = ((facts.fishing || {}).inshore || []).filter(function (r) { return r.spear; });
+    if (hunt.length) lines.push("<li>" + esc("Spearfishing: " + hunt.slice(0, 3).map(function (r) { return [r.label.split(" (")[0] + ",", r.status].join(" "); }).join("; ")) + "</li>");
+    var dv = obsRecent(["dive"]);
+    lines.push("<li>" + (dv.length ? esc(["Latest diver report:", visRange(dv[0]), "ft,", md(dv[0].date)].join(" ")) : esc("No diver reports this week.")) + " " + sendLink("Send yours") + "</li>");
+    html += briefBlock("b-cond", "Water, tides and what's around", "", '<ul class="plain brief-list">' + lines.join("") + "</ul>");
+    var adv = advItems(/^CAZ|PZZ740|PZZ655/);
+    if (adv.length) html += briefBlock("b-adv", "Advisories", "", '<ul class="plain brief-list adv">' + adv.join("") + "</ul>");
+    return html + briefMore();
   }
 
   // --- The short version: the day in a few plain sentences, every number from the sections below ---
@@ -1554,6 +1691,7 @@
   }
 
   function body() {
+    if (depth === "brief") return view === "diving" ? briefDiving() : briefFishing();
     if (view === "diving") return sectionNav() + summaryDiving() + glanceDiving() + mapSection() + hotSection(false) + speciesBoard() + waterSection() + weather() + trendsSection() + seasonSection() + diveSites() + around(true) + basics() + sourcesBlock();
     return sectionNav() + summaryFishing() + hotSection(true) + speciesBoard() + glanceFishing() + bait() + zonesSection(["offshore", "mexico", "inshore"]) + weather() + waterSection() + trendsSection() + seasonSection() + fleetSection() + around(false) + spotsTable() + sourcesBlock();
   }
@@ -1563,14 +1701,20 @@
     var tabs = '<div class="tabs" role="tablist" aria-label="Report view">' + VIEWS.map(function (v) {
       return '<button type="button" role="tab" aria-selected="' + (v[0] === view) + '" data-view="' + v[0] + '" class="' + (v[0] === view ? "on" : "") + '">' + v[1] + "</button>";
     }).join("") + "</div>";
-    main.innerHTML = '<h1>Ocean Report</h1><p class="mut">' + esc(facts.date_label) + " · updated " + esc(facts.generated_local) + "</p>" + tabs + body();
+    var depthCtl = '<div class="depth" role="group" aria-label="How much to show">' + [["brief", "Brief"], ["full", "Full report"]].map(function (d) {
+      return '<button type="button" data-depth="' + d[0] + '" aria-pressed="' + (d[0] === depth) + '" class="' + (d[0] === depth ? "on" : "") + '">' + d[1] + "</button>";
+    }).join("") + "</div>";
+    main.innerHTML = '<h1>Ocean Report</h1><p class="mut">' + esc(facts.date_label) + " · updated " + esc(facts.generated_local) + "</p>" + tabs + depthCtl + body();
     Array.prototype.forEach.call(main.querySelectorAll(".tabs button"), function (b) {
       b.addEventListener("click", function () {
         view = b.getAttribute("data-view");
         try { localStorage.setItem("sd:report:view", view); } catch (e) { /* storage blocked */ }
-        history.replaceState(null, "", "#view=" + view);
+        history.replaceState(null, "", "#view=" + view + (depth === "full" ? "&full" : ""));
         var y = window.scrollY; render(); window.scrollTo(0, y);
       });
+    });
+    Array.prototype.forEach.call(main.querySelectorAll("button[data-depth]"), function (b) {
+      b.addEventListener("click", function () { setDepth(b.getAttribute("data-depth")); });
     });
     bindCharts();
     // Charts inside a closed expander have no width yet; draw them when it opens.
@@ -1584,6 +1728,14 @@
     Array.prototype.forEach.call(main.querySelectorAll("a.send-open"), function (a) {
       a.addEventListener("click", function (ev) { ev.preventDefault(); openSend(); });
     });
+  }
+
+  function setDepth(d, stay) {
+    depth = d === "full" ? "full" : "brief";
+    try { localStorage.setItem("sd:report:depth", depth); } catch (e) { /* storage blocked */ }
+    history.replaceState(null, "", "#view=" + view + (depth === "full" ? "&full" : ""));
+    render();
+    if (!stay) main.scrollIntoView({ block: "start" });
   }
 
   function load(date) {
