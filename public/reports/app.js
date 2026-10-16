@@ -860,6 +860,9 @@
       .sort(function (a, b) { return b.landed - a.landed || b.n - a.n || b.fits.length - a.fits.length; });
     if (!rows.length) return "";
     var head = ["Species", "Landed, 7 days", "Reports, 7 days", "Where reported", "How", "Biggest, water", "Water fits or season"];
+    // Report columns show once any report exists; the landed column once any count does.
+    var anyReports = rows.some(function (r) { return r.n || r.before; }), anyLanded = rows.some(function (r) { return r.landed; });
+    var keep = function (i) { return (i < 2 || i > 5 || anyReports) && (i !== 1 || anyLanded); };
     var body = rows.map(function (r) {
       var trend = r.n || r.before ? [r.n, r.before ? (r.n > r.before ? "(up from " + r.before + ")" : r.n < r.before ? "(down from " + r.before + ")" : "(same)") : r.n ? "(new)" : ""].join(" ") : "none yet";
       var cells = [
@@ -871,10 +874,11 @@
         esc([r.big ? r.big + " lb" : "", r.temps.length ? Math.min.apply(null, r.temps) + (Math.max.apply(null, r.temps) !== Math.min.apply(null, r.temps) ? "-" + Math.max.apply(null, r.temps) : "") + "°F" : ""].filter(Boolean).join(", ")),
         r.fits.length ? esc(firstFew(r.fits, 3)) : r.season ? esc("Season: " + r.season) : "",
       ];
-      return "<tr>" + cells.map(function (c, i) { return "<td" + (i ? ' data-l="' + esc(head[i]) + '"' : "") + ">" + c + "</td>"; }).join("") + "</tr>";
+      return "<tr>" + cells.map(function (c, i) { return keep(i) ? "<td" + (i ? ' data-l="' + esc(head[i]) + '"' : "") + ">" + c + "</td>" : ""; }).join("") + "</tr>";
     }).join("");
     return '<section><h2 id="species">' + esc(view === "fishing" ? "Species" : "Species for divers") + '</h2><div class="scroll"><table class="stable sboard"><thead><tr>' +
-      head.map(function (h) { return "<th>" + esc(h) + "</th>"; }).join("") + "</tr></thead><tbody>" + body + "</tbody></table></div>" +
+      head.map(function (h, i) { return keep(i) ? "<th>" + esc(h) + "</th>" : ""; }).join("") + "</tr></thead><tbody>" + body + "</tbody></table></div>" +
+      (anyReports ? "" : '<p class="small mut">No reports from the water this week yet, so the report columns are hidden. ' + sendLink("Send one") + ".</p>") +
       '<p class="note">"Landed" is the dock counts the landings publish themselves (Dana Wharf, Davey\'s Locker); the core San Diego and LA landings publish through a network whose terms forbid reuse, so they are not counted here. Reports and "how" come from approved reports in the last ' + OBS_DAYS + ' days, against the week before. "Water fits" lists the zones where this month\'s satellite water matches the species\' usual range; it is not a catch.</p></section>';
   }
 
