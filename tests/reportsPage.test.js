@@ -52,3 +52,20 @@ test("the report form offers exactly what the field-report API accepts", async (
   assert.match(app, /"\/api\/reports\/submit"/);
   assert.match(app, /"\/api\/reports\/feed"/);
 });
+
+test("visibility uses the main map's colors", () => {
+  const overlay = readFileSync(join(root, "src/components/DataOverlay.jsx"), "utf8");
+  const block = overlay.slice(overlay.indexOf("const VIZ_RAMP = ["), overlay.indexOf("];", overlay.indexOf("const VIZ_RAMP = [")));
+  const main = [...block.matchAll(/ft:\s*(\d+),\s*c:\s*\[\s*(\d+),\s*(\d+),\s*(\d+)\s*\]/g)].map((m) => [+m[1], [+m[2], +m[3], +m[4]]]);
+  const start = app.indexOf("var VIS_RAMP = [");
+  const ours = JSON.parse(app.slice(app.indexOf("[", start), app.indexOf("];", start) + 1));
+  assert.ok(main.length >= 5);
+  assert.deepEqual(ours, main);
+});
+
+test("diving and spearfishing share one view, and old spearfishing links still land", () => {
+  const start = app.indexOf("var VIEWS = [");
+  const views = JSON.parse(app.slice(app.indexOf("[", start), app.indexOf("];", start) + 1));
+  assert.deepEqual(views.map((v) => v[0]), ["fishing", "diving"]);
+  assert.match(app, /view=\(fishing\|diving\|spearfishing\)/);
+});

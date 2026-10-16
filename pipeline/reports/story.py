@@ -98,7 +98,7 @@ def _fmt_change(x: float) -> str:
 def highlights(facts: dict) -> dict[str, list[str]]:
     cards = facts.get("zones", [])
     tr = facts.get("trends", {})
-    out_fish, out_dive, out_spear = [], [], []
+    out_fish, out_dive = [], []
 
     # Water temperature over the week, across zones
     ch = [(c["short"], c["temp_change_f"], c["temp_f"]) for c in cards if c.get("temp_change_f") is not None]
@@ -170,14 +170,17 @@ def highlights(facts: dict) -> dict[str, list[str]]:
 
     # Divers: predicted visibility first, then the posts, water, surf, column
     sites = facts.get("dive_sites", [])
-    cal = (facts.get("visibility") or {}).get("calibration") or {}
+    V = facts.get("visibility") or {}
+    areas = V.get("areas") or {"la-jolla": {**(V.get("calibration") or {}), "label": "La Jolla"}}
     preds = [(s["short"], s["vis_pred"]) for s in sites if s.get("vis_pred")]
     if preds:
         line = "Predicted visibility today: " + "; ".join(
             f"{n} about {p['ft']} ft" + (f" ({p['lo_ft']}-{p['hi_ft']})" if p.get("lo_ft") is not None else "") for n, p in preds) + "."
-        if cal.get("applied"):
-            line += (f" That is our model's number scaled by {cal['scale']:.2f}, the ratio {cal['n']} La Jolla shop reports "
-                     f"have landed at since {_d(cal['since'])}.")
+        fits = [f"{a.get('label', k)} x{a['scale']:.2f} from {a['own_n'] if a.get('pooled') else a['n']} reports"
+                + (" (too few, all-area ratio)" if a.get("pooled") else "")
+                for k, a in areas.items() if a.get("applied")]
+        if fits:
+            line += " Our model's number, scaled to where recent shop reports landed: " + "; ".join(fits) + "."
         out_dive.append(line)
     for s in sites:
         v = s.get("vis") or []
@@ -206,17 +209,14 @@ def highlights(facts: dict) -> dict[str, list[str]]:
         g0, g1 = gs[0], gs[-1]
         out_dive.append(f"Offshore water column (Spray gliders, nearest each day): the warm top layer reached {g1['mixed_layer_ft']} ft "
                         f"on {_d(g1['date'])}, against {g0['mixed_layer_ft']} ft on {_d(g0['date'])}; {g1['t60_f']}°F at 60 ft.")
-    out_dive += [x for x in out_fish if x.startswith("NWS:")]
-
-    # Spearfishing: visibility, water column, what's around
-    out_spear = [x for x in out_dive if not x.startswith("Set height")]
+    # What hunters look for (one view for diving and spearfishing since 2026-10-15)
     inshore = (facts.get("fishing") or {}).get("inshore", [])
-    wsb = next((r for r in inshore if r["key"] == "wsb"), None)
-    yt = next((r for r in inshore if r["key"] == "yellowtail"), None)
-    for r in (wsb, yt):
+    for key in ("wsb", "yellowtail"):
+        r = next((x for x in inshore if x["key"] == key), None)
         if r and r.get("today"):
-            out_spear.append(f"{r['label']}: {r['today']}")
-    return {"fishing": out_fish, "diving": out_dive, "spearfishing": out_spear}
+            out_dive.append(f"{r['label']}: {r['today']}")
+    out_dive += [x for x in out_fish if x.startswith("NWS:")]
+    return {"fishing": out_fish, "diving": out_dive}
 
 
 def generated_at_label(now: datetime, tz) -> str:
