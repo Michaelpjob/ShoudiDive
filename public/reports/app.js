@@ -797,8 +797,11 @@
     rs.forEach(function (r) { trips += r.n_trips; boats += r.n_boats; if (r.farthest && (!far || r.farthest.nm > far.nm)) far = r.farthest; });
     var cards = [[String(trips), trips === 1 ? "trip" : "trips"], [String(boats), boats === 1 ? "boat out" : "boats out"]];
     if (far) cards.push([far.nm.toFixed(0) + " nm", "farthest, " + far.boat + ", " + md(far.date)]);
+    var ports = ((facts.hot_bites || {}).dock_sources || []).map(function (src) { return src.port; });
+    var noCounts = R && !ports.some(function (port) { return R.ports.indexOf(port) >= 0; });
     return briefBlock("b-fleet", "Boats out this week", "AIS and the landings' own posts",
       '<div class="stats">' + cards.map(function (c) { return '<div class="st"><b>' + esc(c[0]) + "</b><span>" + esc(c[1]) + "</span></div>"; }).join("") + "</div>" +
+      (noCounts ? '<p class="note">' + esc(["No", R.name, "landing posts its own fish counts; the others publish them only through a service that does not allow reuse, so this region shows where boats went, not what they caught."].join(" ")) + "</p>" : "") +
       '<p><a class="more-btn as-link" href="/reports/fleets/#r=' + esc(R ? R.id : "sd") + '">Fleet log: where each boat went</a></p>');
   }
 
@@ -861,9 +864,7 @@
     var keys = Object.keys(lw).filter(function (k) { return sumR(k) > 0; })
       .sort(function (a, b) { return rank(a) - rank(b) || sumR(b) - sumR(a); }).slice(0, 4);
     var why = "Other landings publish their counts only through a service that does not allow reuse, so their fish are not in these numbers.";
-    if (!keys.length) {
-      return R ? briefBlock("b-landed", "Landed this week", "", '<p class="small mut">' + esc(["No", R.name, "landing posts its own counts.", why].join(" ")) + "</p>") : "";
-    }
+    if (!keys.length) return "";
     return briefBlock("b-landed", "Landed this week", ports.length ? "boats from " + joinAnd(ports) : "", '<div class="catch n' + keys.length + '">' + keys.map(function (k) {
       return '<div class="cc">' + fishIcon(k) + "<b>" + esc(sumR(k).toLocaleString("en-US")) + "</b><span>" + esc(k) + "</span></div>";
     }).join("") + '</div><p class="note">' + esc("From the landings' own dock counts (Dana Wharf, Davey's Locker). " + why) + "</p>");

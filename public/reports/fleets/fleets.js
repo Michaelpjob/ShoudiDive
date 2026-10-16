@@ -63,7 +63,7 @@
     var parts = [day(tr.date, true)];
     if (!tr.heard) parts.push("not heard by AIS");
     else if (heardWell(tr) && tr.dep && tr.ret) parts.push([tr.dep, "to", tr.ret, ["(", tr.hours, " h)"].join("")].join(" "));
-    else parts.push(["AIS heard part of it (", Math.round((tr.cov || 0) * 100), "%)"].join("").replace("( ", "("));
+    else parts.push("partly heard by AIS");
     if (tr.heard && tr.max_nm) parts.push(["out to", tr.max_nm.toFixed(0), "nm from the dock"].join(" "));
     return parts.join(" · ");
   }
@@ -113,7 +113,7 @@
     var chips = '<div class="regions" role="group" aria-label="Region">' + data.regions.map(function (r) {
       return '<button type="button" class="chip' + (r.id === regionSel ? " on" : "") + '" data-region="' + esc(r.id) + '" aria-pressed="' + (r.id === regionSel) + '">' + esc(r.name) + "</button>";
     }).join("") + "</div>";
-    var stats = [[String(R.n_trips), R.n_trips === 1 ? "trip" : "trips", R.n_heard < R.n_trips ? R.n_heard + " heard by AIS" : "all heard by AIS"],
+    var stats = [[String(R.n_trips), R.n_trips === 1 ? "trip" : "trips", R.n_heard < R.n_trips ? [R.n_heard, "from AIS,", R.n_trips - R.n_heard, "posted by landings"].join(" ") : "from AIS"],
       [String(R.n_boats), R.n_boats === 1 ? "boat out" : "boats out", [R.n_active, "of", R.n_landings, "landings"].join(" ")],
       [hm(R.offshore_min), "on offshore spots", "time boats held a spot"],
       [R.farthest ? R.farthest.nm.toFixed(0) + " nm" : "none", "farthest from a dock", R.farthest ? [R.farthest.boat, day(R.farthest.date)].join(", ") : ""]];
