@@ -593,7 +593,7 @@
         "Visibility, predicted": vp ? visChip(vp.ft) + (vp.lo_ft != null ? ' <span class="mut small">' + esc([vp.lo_ft, vp.hi_ft].join("-")) + "</span>" : "") : '<span class="mut">n/a</span>',
         "Last seen": seen,
         "Sets today": today ? esc([setsFt(today), "ft at", today.tp_s, "s"].join(" ")) : "",
-        "Sets, 3 days": surf.length ? esc(surf.slice(0, 3).map(function (x) { return [x.label, x.sets_ft < 1 ? "<1" : x.sets_ft.toFixed(0)].join(" "); }).join(" · ") + " ft") : "",
+        "Sets, 3 days": surf.length ? setsBars(surf) + ' <span class="mut small">ft</span>' : "",
         "Water": temps.length ? esc(temps[temps.length - 1] + "°F") : "",
         "Surge": site.surge ? esc(site.surge.level) : "",
       };
@@ -627,6 +627,199 @@
     tiles.push(tile("From the water", esc(rec.length ? [rec.length, rec.length > 1 ? "reports" : "report", "this week"].join(" ") : "No reports yet"),
       rec.length ? rec.slice(0, 2).map(function (o) { return esc([obsWhat(o), "(" + md(o.date) + ")"].join(" ")); }) : [sendLink("Send your dive")], "", "#water"));
     return '<section class="glance"><h2 id="glance">Dive sites today</h2>' + table + tilesHtml(tiles) + "</section>";
+  }
+
+  // --- Pictures for the brief: drawn species, wind arrows, bars, strips -------
+  // Simple side-on silhouettes (64 x 30, facing right), one per kind of fish,
+  // so a reader sees what is biting before reading a number.
+  function svgFish(parts, label) {
+    return '<svg class="fi" viewBox="0 0 64 30" role="img" aria-label="' + esc(label) + '">' + parts + "</svg>";
+  }
+  function eye(cx, cy) { return '<circle cx="' + cx + '" cy="' + cy + '" r="1.4" fill="#0b1220"/><circle cx="' + (cx + 0.3) + '" cy="' + (cy - 0.3) + '" r=".5" fill="#fff"/>'; }
+  function tunaArt(back, belly, fin, extra) {
+    return '<path fill="' + fin + '" d="M33 8 Q30 2 25 .8 Q28 5 29 9.2Z"/><path fill="' + fin + '" d="M33 22 Q30 28 25 29.2 Q28 25 29 20.8Z"/>' +
+      '<path fill="' + back + '" d="M15 14 L3 3 Q9 10 9.5 15 Q9 20 3 27 L15 16Z"/>' +
+      '<path fill="' + back + '" d="M61 15 C53 7 37 5 23 10 C18 12 15 13.5 13 15 C15 16.5 18 18 23 20 C37 25 53 23 61 15Z"/>' +
+      '<path fill="' + belly + '" d="M61 15 C53 21.5 37 24 23 20 C18 18 15 16.5 13 15 C28 18 46 19 61 15Z"/>' +
+      '<path fill="' + back + '" d="M45 7.3 L41 3.2 L37 7.6Z"/><path fill="' + fin + '" opacity=".9" d="M47 15.5 L37 13.2 L46.5 17.2Z"/>' +
+      '<g fill="' + fin + '"><circle cx="21" cy="10.8" r=".9"/><circle cx="18.2" cy="12" r=".8"/><circle cx="21" cy="19.2" r=".9"/><circle cx="18.2" cy="18" r=".8"/></g>' +
+      (extra || "") + eye(55, 13.6);
+  }
+  function plainArt(back, belly, fin, slim) {
+    var k = slim ? 0.6 : 1, y = function (v) { return (15 + (v - 15) * k).toFixed(1); };
+    return '<path fill="' + fin + '" d="M15 14 L5 ' + y(6) + " Q7.5 15 5 " + y(24) + ' L15 16Z"/>' +
+      '<path fill="' + back + '" d="M61 15 C54 ' + y(8.5) + " 36 " + y(7.5) + " 22 " + y(11) + " C18 " + y(12) + " 15 " + y(13.5) + " 13 15 C15 " + y(16.5) + " 18 " + y(18) + " 22 " + y(19) + " C36 " + y(22.5) + " 54 " + y(21.5) + ' 61 15Z"/>' +
+      '<path fill="' + belly + '" d="M61 15 C54 ' + y(21) + " 36 " + y(22.5) + " 22 " + y(19) + " C18 " + y(18) + " 15 " + y(16.5) + " 13 15 C28 " + y(17.5) + " 46 " + y(18) + ' 61 15Z"/>' +
+      '<path fill="' + fin + '" d="M42 ' + y(9) + " L36 " + y(5.5) + " L28 " + y(10) + 'Z"/>' + eye(55, 14);
+  }
+  var ART_BY = {
+    yellowfin: function () { return tunaArt("#1e3a8a", "#cbd5e1", "#facc15"); },
+    bluefin: function () { return tunaArt("#172554", "#cbd5e1", "#64748b"); },
+    albacore: function () { return tunaArt("#1e3a5f", "#e2e8f0", "#94a3b8", '<path fill="#94a3b8" d="M48 15 L28 12.4 L47 17Z"/>'); },
+    skipjack: function () { return tunaArt("#334155", "#e2e8f0", "#64748b", '<g stroke="#475569" stroke-width=".8" fill="none"><path d="M50 18 C40 20 30 20 22 18.5"/><path d="M48 19.8 C40 21.5 30 21.5 24 20"/></g>'); },
+    "bullet tuna": function () { return ART_BY.skipjack(); },
+    bonito: function () { return tunaArt("#1e40af", "#e2e8f0", "#64748b", '<g stroke="#0f172a" stroke-width=".9"><path d="M52 9.5 L47 13"/><path d="M46 8.5 L41 12.5"/><path d="M40 8.3 L35 12.5"/><path d="M34 9 L29 13"/></g>'); },
+    yellowtail: function () {
+      return '<path fill="#eab308" d="M15 14 L3 4 Q8 11 9.5 15 Q8 19 3 26 L15 16Z"/>' +
+        '<path fill="#2b6cb0" d="M62 15 C55 9 38 8 22 11 C18 12 15 13.5 13 15 C15 16.5 18 18 22 19 C38 22 55 21 62 15Z"/>' +
+        '<path fill="#e2e8f0" d="M62 15 C55 20 38 21.5 22 19 C18 18 15 16.5 13 15 C28 16.8 46 17.6 62 15Z"/>' +
+        '<path fill="#facc15" d="M60 14.2 C46 12.8 30 13.4 14 14.7 L14 15.5 C30 14.9 46 14.6 60 15.4Z"/>' +
+        '<path fill="#2b6cb0" d="M44 9.1 L40 6.6 L36 9.4Z"/><path fill="#eab308" d="M34 9.6 L32 7 L20 11.4 L22 11.8Z"/><path fill="#eab308" d="M34 20.4 L32 22.6 L21 18.8 L23 18.4Z"/>' + eye(56, 13.8);
+    },
+    dorado: function () {
+      return '<path fill="#a3e635" d="M16 14.2 L4 4 Q9 11 10 15 Q9 19 4 26 L16 15.8Z"/>' +
+        '<path fill="#65a30d" d="M60 15 C60 9 56 6.5 49 7 C37 8 24 11 14 14.2 L14 15.8 C24 19 37 22.5 48 22.5 C56 22.5 60 19.5 60 15Z"/>' +
+        '<path fill="#facc15" d="M60 16 C59 20 55 22.5 48 22.5 C37 22.5 24 19 14 15.8 C28 17.5 44 19.5 60 16Z"/>' +
+        '<path fill="#0e7490" d="M57 7.4 C46 2.5 28 6 16 13.2 L19 13.2 C30 8.5 45 6.8 56.5 9Z"/>' +
+        '<g fill="#22d3ee"><circle cx="44" cy="12" r=".8"/><circle cx="38" cy="13" r=".8"/><circle cx="32" cy="14.5" r=".7"/><circle cx="46" cy="15.5" r=".7"/></g>' + eye(56, 12.5);
+    },
+    "calico bass": function () {
+      return '<path fill="#57534e" d="M15 15 L5 7.5 Q3.2 15 5 22.5Z"/>' +
+        '<path fill="#78716c" d="M61 15.5 C58 10 48 8.5 36 9 C26 9.5 18 12 14 15 C18 18.5 26 21 36 21.5 C48 22 58 20.5 61 15.5Z"/>' +
+        '<path fill="#d6d3d1" d="M61 16 C58 20 48 22 36 21.5 C26 21 18 18.5 14 15 C26 17.5 44 18.3 61 16Z"/>' +
+        '<path fill="#57534e" d="M46 9.2 L44.5 4.5 L42 8.9 L40 4.2 L37.5 9 L35.5 4.6 L33 9.2 L31 5.8 L28.5 9.6Z"/><path fill="#57534e" d="M28 9.8 Q22 7.5 18.5 12.4 L22 11.6Z"/>' +
+        '<g fill="#e7e5e4" opacity=".8"><circle cx="40" cy="12" r="1.1"/><circle cx="33" cy="13" r="1.1"/><circle cx="27" cy="14" r="1"/><circle cx="44" cy="15.5" r="1"/><circle cx="36" cy="17" r="1"/></g>' + eye(54, 12.8);
+    },
+    "sand bass": function () { return ART_BY["calico bass"](); },
+    "white seabass": function () { return plainArt("#64748b", "#e2e8f0", "#475569"); },
+    barracuda: function () { return plainArt("#475569", "#cbd5e1", "#334155", true); },
+    wahoo: function () { return plainArt("#1d4ed8", "#cbd5e1", "#1e3a8a", true); },
+    "striped marlin": function () { return plainArt("#1e3a8a", "#cbd5e1", "#3b82f6", true); },
+    rockfish: function () { return plainArt("#b91c1c", "#fca5a5", "#7f1d1d"); },
+    sheephead: function () { return plainArt("#1f2937", "#f472b6", "#111827"); },
+    halibut: function () { return plainArt("#78716c", "#a8a29e", "#57534e"); },
+    lingcod: function () { return plainArt("#4d7c0f", "#a3a3a3", "#365314"); },
+    sardine: function () {
+      return '<path fill="#64748b" d="M15 14 L6 8 Q8.5 15 6 22 L15 16Z"/>' +
+        '<path fill="#0f766e" d="M60 15 C54 10.5 36 10 20 12.5 C17 13.3 15 14 13 15 C15 16 17 16.7 20 17.5 C36 20 54 19.5 60 15Z"/>' +
+        '<path fill="#e2e8f0" d="M60 15 C54 18.5 36 19.5 20 17.5 C17 16.7 15 16 13 15 C28 16.2 46 16.6 60 15Z"/>' +
+        '<g fill="#0f172a"><circle cx="46" cy="14" r=".6"/><circle cx="41" cy="14.2" r=".6"/><circle cx="36" cy="14.5" r=".6"/></g>' + eye(55.5, 14.2);
+    },
+    anchovy: function () {
+      return '<path fill="#64748b" d="M15 14 L6 9 Q8.5 15 6 21 L15 16Z"/>' +
+        '<path fill="#94a3b8" d="M60 15 C54 11.5 36 11 20 13 C17 13.6 15 14.2 13 15 C15 15.8 17 16.4 20 17 C36 19 54 18.5 60 15Z"/>' +
+        '<path fill="#e2e8f0" d="M58 15.3 C46 15 30 15.2 16 15.4 L16 16 C30 16 46 16 58 15.9Z"/>' + eye(56, 14.3);
+    },
+    mackerel: function () {
+      return plainArt("#0e7490", "#e2e8f0", "#155e75", true) +
+        '<g stroke="#0f172a" stroke-width=".8"><path d="M50 12 L46 14.5"/><path d="M45 11.8 L41 14.5"/><path d="M40 11.8 L36 14.5"/><path d="M35 12 L31 14.5"/></g>';
+    },
+  };
+  function fishIcon(name) {
+    var k = String(name || "").toLowerCase(), f = ART_BY[k];
+    if (!f) f = /tuna/.test(k) ? ART_BY.skipjack : /bass/.test(k) ? ART_BY["calico bass"] : /sardine|chovy/.test(k) ? ART_BY.sardine : /anchov/.test(k) ? ART_BY.anchovy : /mackerel/.test(k) ? ART_BY.mackerel : null;
+    return svgFish(f ? f() : plainArt("#64748b", "#cbd5e1", "#475569"), name);
+  }
+  // Counts with their fish, in catchLine's order (game fish first).
+  function catchChips(c, n) {
+    var rank = function (k) { return GAME.indexOf(k) < 0 ? 1 : 0; };
+    var keys = Object.keys(c || {}), counted = keys.filter(function (k) { return c[k] > 0; }).sort(function (a, b) { return rank(a) - rank(b) || c[b] - c[a]; }).slice(0, n || 3);
+    var named = keys.filter(function (k) { return !c[k]; }).slice(0, Math.max(0, (n || 3) - counted.length));
+    return '<span class="fchips">' + counted.map(function (k) { return '<span class="fchip">' + fishIcon(k) + esc([c[k].toLocaleString("en-US"), k].join(" ")) + "</span>"; }).join("") +
+      named.map(function (k) { return '<span class="fchip">' + fishIcon(k) + esc(k) + "</span>"; }).join("") + "</span>";
+  }
+  var DIRS16 = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+  // Arrow points where the wind blows to (a north wind points south).
+  function windArrow(dir) {
+    var i = DIRS16.indexOf(String(dir || "").toUpperCase());
+    if (i < 0) return "";
+    return '<svg class="wa" viewBox="0 0 16 16" aria-hidden="true" style="transform:rotate(' + (i * 22.5 + 180) + 'deg)"><path d="M8 1.5 L12.5 12.5 L8 10 L3.5 12.5Z"/></svg>';
+  }
+  function waveBar(ft) {
+    var px = Math.max(2, Math.min(16, ft / 6 * 16));
+    return '<span class="wv" aria-hidden="true"><i style="height:' + px.toFixed(1) + 'px"></i></span>';
+  }
+  function setsBars(surf) {
+    return '<span class="sets" aria-label="Set heights, next three days">' + surf.slice(0, 3).map(function (x) {
+      var px = Math.max(2, Math.min(24, x.sets_ft / 6 * 24));
+      return '<span class="sb"><i style="height:' + px.toFixed(1) + 'px"></i><em>' + esc(x.sets_ft < 1 ? "<1" : x.sets_ft.toFixed(0)) + "</em><small>" + esc(x.label) + "</small></span>";
+    }).join("") + "</span>";
+  }
+  // Zone water today against the same zones' average for the month, on the map's color ramp.
+  function tempStrip(zs) {
+    var lo = SST_SHOW_F[0], hi = SST_SHOW_F[1], pos = function (v) { return Math.max(0, Math.min(100, (v - lo) / (hi - lo) * 100)).toFixed(1); };
+    var grad = SST_STOPS.map(function (st) { return "rgb(" + st[1].join(",") + ") " + (st[0] * 100) + "%"; }).join(",");
+    var now = zs.map(function (z) { return z.temp_f; });
+    var avg = zs.filter(function (z) { return z.vs_normal_f != null; }).map(function (z) { return z.temp_f - z.vs_normal_f; });
+    var mon = String(((zs.filter(function (z) { return z.normal_label; })[0]) || {}).normal_label || "").split(" ")[0];
+    return '<div class="tstrip" role="img" aria-label="' + esc(["Zone water", rangeTxt(now) + "°F today", avg.length ? "against an average " + rangeTxt(avg) + "°F" : ""].join(" ")) + '">' +
+      '<div class="tbar" style="background:linear-gradient(90deg,' + grad + ')">' +
+      avg.map(function (v) { return '<i class="avg" style="left:' + pos(v) + '%"></i>'; }).join("") +
+      now.map(function (v) { return '<i class="now" style="left:' + pos(v) + '%"></i>'; }).join("") + "</div>" +
+      '<div class="tlab"><span>' + lo + '°F</span><span class="key"><i class="now"></i>' + esc("today " + rangeTxt(now) + "°F") + "</span>" +
+      (avg.length ? '<span class="key"><i class="avg"></i>' + esc(["average", mon, rangeTxt(avg) + "°F"].join(" ")) + "</span>" : "") + "<span>" + hi + "°F</span></div></div>";
+  }
+  function clockH(txt) {
+    var m = /(\d{1,2}):(\d{2})\s*([AP])M/i.exec(txt || "");
+    return m ? (+m[1] % 12) + (/p/i.test(m[3]) ? 12 : 0) + (+m[2]) / 60 : null;
+  }
+  // The day on one line: daylight, high and low tide (NOAA times at La Jolla).
+  function dayLine() {
+    var w = facts.water || {}, evs = (w.tide || {}).events || [], sun = w.sun;
+    if (!evs.length && !sun) return "";
+    var x = function (hr) { return (hr / 24 * 100).toFixed(1); };
+    var rise = sun ? clockH(sun.rise) : null, set = sun ? clockH(sun.set) : null;
+    var marks = evs.map(function (ev0, i) {
+      var hr = clockH(ev0.time);
+      if (hr == null) return "";
+      var cls = ev0.type === "High" ? "hi" : "lo";
+      return '<span class="tm ' + cls + '" style="left:' + x(hr) + '%"><i></i><em>' + esc([ev0.type, ev0.ft + " ft"].join(" ")) + "</em><small>" + esc(ev0.time) + "</small></span>";
+    }).join("");
+    return '<div class="dayline" role="img" aria-label="' + esc(["Daylight", sun ? sun.rise + " to " + sun.set : "", "and tides:", evs.map(function (ev0) { return [ev0.type, ev0.ft + " ft", ev0.time].join(" "); }).join(", ")].join(" ")) + '">' +
+      '<div class="dbar">' + (rise != null && set != null ? '<span class="sun" style="left:' + x(rise) + "%;width:" + (x(set) - x(rise)).toFixed(1) + '%"></span>' : "") + marks + "</div>" +
+      '<div class="dticks"><span>12a</span><span>6a</span><span>noon</span><span>6p</span><span>12a</span></div>' +
+      (sun ? '<div class="mut small">' + esc(["Sun up", sun.rise + ", down", sun.set + ". Tides at", (w.tide || {}).station || "La Jolla", "(NOAA)."].join(" ")) + "</div>" : "") + "</div>";
+  }
+
+  // --- The brief's map: the list's places on today's water, or visibility at the sites ---
+  var bmap = null;
+  function briefMapHtml() {
+    var legend = view === "fishing"
+      ? '<div class="maplegend"><span class="mut small">' + SST_SHOW_F[0] + '°F</span><span class="ramp" aria-hidden="true"></span><span class="mut small">' + SST_SHOW_F[1] +
+        '°F</span><span class="key"><i class="num">1</i>places in the list</span><span class="key"><i class="brk"></i>temperature break</span></div>'
+      : '<div class="maplegend"><span class="mut small">Predicted visibility</span><span class="ramp vis" aria-hidden="true">' +
+        VIS_RAMP.map(function (st) { return '<b style="left:' + (st[0] / VIS_SHOW_FT[1] * 100) + '%">' + st[0] + (st[0] === VIS_SHOW_FT[1] ? "+" : "") + "</b>"; }).join("") + '</span><span class="mut small">ft</span></div>';
+    return '<div id="bmap" class="map bmap" role="region" aria-label="' + (view === "fishing" ? "Map of the places in the list on today's water temperature" : "Map of predicted visibility at the dive sites") + '"></div>' + legend;
+  }
+  function initBriefMap() {
+    if (bmap) { bmap.remove(); bmap = null; }
+    var el = document.getElementById("bmap");
+    if (!el || !window.L) return;
+    bmap = L.map(el, { zoomControl: true, attributionControl: false, scrollWheelZoom: false, zoomSnap: 0.25, zoomDelta: 0.5,
+      dragging: !L.Browser.mobile, tap: false, minZoom: 6, maxZoom: 12, maxBounds: AREA, maxBoundsViscosity: 0.7 });
+    gestureHandling(bmap, el);
+    var M = facts.map || {}, base = L.layerGroup().addTo(bmap), land = L.layerGroup().addTo(bmap), lines = L.layerGroup().addTo(bmap), pins = L.layerGroup().addTo(bmap);
+    fetch("/data/land.geojson").then(function (r) { return r.ok ? r.json() : null; }).then(function (g) {
+      if (g) L.geoJSON(g, { style: { color: "#475569", weight: 0.6, fillColor: "#1f2937", fillOpacity: 1 }, interactive: false }).addTo(land);
+    }).catch(function () { /* map still useful without land */ });
+    bmap.on("popupopen", function (ev) { bindGpsIn(ev.popup.getElement()); });
+    if (view === "fishing") {
+      var box = L.latLngBounds([[32.15, -119.3], [33.75, -117.05]]);
+      if (M.sst_url && M.bbox && M.sst_range_c) drawSst(M, base, function (grid, bb) { drawBreaks(grid, bb, lines); });
+      L.polyline([[32.5344, -117.1249], [32.58948, -117.46373], [32.62694, -117.82528], [31.13278, -118.605]],
+        { color: "#f87171", weight: 1.5, dashArray: "6 6", opacity: 0.8, interactive: false }).addTo(lines);
+      briefPlaces().forEach(function (g, i) {
+        var tp = g.top;
+        if (!tp || tp.zoneOnly) return;
+        var gp = ddm(tp.lat, tp.lng);
+        L.marker([tp.lat, tp.lng], { icon: L.divIcon({ className: "num-pin", html: "<b>" + (i + 1) + "</b>", iconSize: [24, 24] }), keyboard: false })
+          .bindPopup("<b>" + esc(g.place) + "</b><div>" + esc(catchLine(g.fish, 3) || Object.keys(g.fish).join(", ")) + '</div><div class="small">' + esc(md(g.latest)) +
+            ' <span class="gps">' + esc(gp) + '</span><button type="button" class="mini-btn" data-copy="' + esc(gp) + '">Copy</button></div>', { maxWidth: 240 }).addTo(pins);
+        box.extend([tp.lat, tp.lng]);
+      });
+      bmap.fitBounds(box, { padding: [10, 10] });
+    } else {
+      var V = facts.visibility || {}, sites = facts.dive_sites || [];
+      if (V.url && M.bbox) drawVis(V, M.bbox, base);
+      var sb = L.latLngBounds(sites.map(function (site) { return [site.lat, site.lng]; }));
+      if (sites.length) bmap.fitBounds(sb.pad(0.25), { maxZoom: 10 });
+      sites.forEach(function (site) {
+        var vp = site.vis_pred, c = vp ? visColor(vp.ft) : [148, 163, 184];
+        var west = sites.some(function (o) { return o !== site && o.lng < site.lng && nm([site.lat, site.lng], [o.lat, o.lng]) < 3; });
+        L.circleMarker([site.lat, site.lng], { radius: 7, color: "#0b1220", weight: 2, fillColor: "rgb(" + c.map(Math.round).join(",") + ")", fillOpacity: 1 })
+          .bindTooltip(esc(site.short) + (vp ? " · " + esc(vp.ft + " ft") : ""), { permanent: true, direction: west ? "top" : bmap.latLngToContainerPoint([site.lat, site.lng]).x < 170 ? "right" : "left", offset: west ? [0, -6] : [0, 0], className: "site-lab" }).addTo(pins);
+      });
+    }
   }
 
   // --- The brief: about a fifth of the report, the facts a reader acts on ---
@@ -664,26 +857,41 @@
     return '<div class="scroll"><table class="sea"><thead><tr><th>Area</th>' + days.map(function (x) { return "<th>" + esc(x.label) + "</th>"; }).join("") + "</tr></thead><tbody>" +
       rows.map(function (r) {
         return "<tr><td>" + esc(r.zone) + "</td>" + r.days.slice(0, 3).map(function (x) {
-          return "<td" + (x.wind_max_kt >= 15 ? ' class="hi"' : "") + ">" + esc([x.wind_dir, x.wind_max_kt].join(" ")) + '<div class="mut">' + esc(x.hs_max_ft + " ft") + "</div></td>";
+          return "<td" + (x.wind_max_kt >= 15 ? ' class="hi"' : "") + '><div class="w1">' + windArrow(x.wind_dir) + esc([x.wind_dir, x.wind_max_kt].join(" ")) + "</div>" +
+            '<div class="w2 mut">' + waveBar(x.hs_max_ft) + esc(x.hs_max_ft + " ft") + "</div></td>";
         }).join("") + "</tr>";
-      }).join("") + '</tbody></table></div><p class="note">Forecast peak for each day: wind in knots (15 and up in amber), wave height in feet. Every zone is in the full report.</p>';
+      }).join("") + '</tbody></table></div><p class="note">Forecast peak for each day. Arrows point where the wind blows, in knots (15 and up in amber); bars are wave height in feet. Every zone is in the full report.</p>';
   }
   function briefMore() {
     return '<p class="brief-more"><button type="button" class="more-btn" data-depth="full">Full report</button> <span class="mut small">' +
       esc(view === "fishing" ? "Map, every report and boat, species, all zones, trends and season" : "Map, every dive report, site details, trends and season") + "</span></p>";
   }
+  // Only places with fish: a boat that stopped with no count stays in the full report.
+  function briefPlaces() {
+    return bestSpots().filter(function (g) { return !g.noPos && (g.total > 0 || Object.keys(g.fish).length); }).slice(0, 3);
+  }
+  function landedStrip() {
+    var hb = facts.hot_bites || {}, lw = hb.dock_week || {};
+    var ports = (hb.dock_sources || []).map(function (src) { return src.port; });
+    var rank = function (k) { return GAME.indexOf(k) < 0 ? 1 : 0; };
+    var keys = Object.keys(lw).filter(function (k) { return sumWeek(lw, k) > 0; })
+      .sort(function (a, b) { return rank(a) - rank(b) || sumWeek(lw, b) - sumWeek(lw, a); }).slice(0, 4);
+    if (!keys.length) return "";
+    return briefBlock("b-landed", "Landed this week", ports.length ? "boats from " + joinAnd(ports) : "", '<div class="catch n' + keys.length + '">' + keys.map(function (k) {
+      return '<div class="cc">' + fishIcon(k) + "<b>" + esc(sumWeek(lw, k).toLocaleString("en-US")) + "</b><span>" + esc(k) + "</span></div>";
+    }).join("") + '</div><p class="note">' + esc("From the landings' own dock counts. San Diego's landings publish only through a service that does not allow reuse, so their fish are not in these numbers.") + "</p>");
+  }
   function briefFishing() {
-    var html = "", spots = bestSpots();
-    // Only places with fish: a boat that stopped with no count stays in the full report.
-    var placed = spots.filter(function (g) { return !g.noPos && (g.total > 0 || Object.keys(g.fish).length); }).slice(0, 3),
-      untracked = spots.filter(function (g) { return g.noPos && g.total > 0; });
+    var html = landedStrip(), spots = bestSpots();
+    var placed = briefPlaces(), untracked = spots.filter(function (g) { return g.noPos && g.total > 0; });
     var fish = placed.length ? '<ol class="best brief-list">' + placed.map(function (g) {
       var t = g.top, gp = t && !t.zoneOnly ? ddm(t.lat, t.lng) : null;
       var who = Object.keys(g.boats).slice(0, 2).map(function (n) { var bt = g.boats[n]; return bt.source || bt.landing ? [n, "(" + (bt.source || bt.landing) + ")"].join(" ") : n; }).join(", ") ||
         (g.reports ? [g.reports, g.reports > 1 ? "reports" : "report"].join(" ") : "");
-      return "<li><b>" + esc(g.place) + "</b> " + esc(catchLine(g.fish, 3) || Object.keys(g.fish).join(", ")) +
+      return "<li><b>" + esc(g.place) + "</b>" + catchChips(g.fish, 3) +
         '<div class="small mut">' + esc([who, md(g.latest)].filter(Boolean).join(" · ")) + copyGps(gp) + "</div></li>";
     }).join("") + "</ol>" : '<p class="small mut">No fish with a known spot in the last ' + HB.days + " days. " + sendLink("Send a report") + ".</p>";
+    fish = briefMapHtml() + fish;
     if (untracked.length) {
       fish += '<p class="small"><b>Also landed, spot not tracked:</b> ' + esc(untracked.map(function (g) {
         return [g.place.replace(/^Boats out of (.*) \(spot not tracked\)$/, "$1"), "boats,", catchLine(g.fish, 2)].join(" ");
@@ -695,7 +903,12 @@
     var newest = bb.map(function (x) { return x.as_of || ""; }).sort().pop();
     html += briefBlock("b-bait", "Bait at the barges", "", bb.length ? '<ul class="plain brief-list">' + bb.map(function (x) {
       var lim = x.notes.filter(function (n) { return /scoop|limit|max|only/i.test(n); });
-      return "<li><b>" + esc(x.barge) + "</b> " + esc(x.serving.join(", ").replace(/ inch\b/g, " in").toLowerCase()) + (lim.length ? ' <span class="mut">(' + esc(lim.join("; ").toLowerCase()) + ")</span>" : "") + "</li>";
+      var kinds = [];
+      x.serving.forEach(function (it0) {
+        [["sardine", /sardine/i], ["anchovy", /chovy|anchov/i], ["mackerel", /mackerel/i]].forEach(function (kv) { if (kv[1].test(it0) && kinds.indexOf(kv[0]) < 0) kinds.push(kv[0]); });
+      });
+      return '<li class="bait-li"><span class="bait-art">' + kinds.map(fishIcon).join("") + "</span><span><b>" + esc(x.barge) + "</b> " + esc(x.serving.join(", ").replace(/ inch\b/g, " in").toLowerCase()) +
+        (lim.length ? ' <span class="mut">(' + esc(lim.join("; ").toLowerCase()) + ")</span>" : "") + "</span></li>";
     }).join("") + '</ul><p class="note">From ' + link(b.url, b.source) + (newest ? ", posted " + esc(postedAt(newest)) : "") + ".</p>"
       : '<p class="small mut">No barge report today. ' + sendLink("Report what the barge had") + ".</p>");
 
@@ -718,7 +931,7 @@
       wl.push("<li>" + esc([core.length ? "Kelp paddies most likely at" : "Kelp paddies likely at", firstFew(lead.map(zname), 3)].join(" ")) +
         ' <span class="mut small">(drift model)</span>' + copyGps(lead[0].paddy.gps) + "</li>");
     }
-    if (wl.length) html += briefBlock("b-water", "Water to look for", "satellite map " + sstAsOf(), '<ul class="plain brief-list">' + wl.join("") + "</ul>");
+    if (wl.length) html += briefBlock("b-water", "Water to look for", "satellite map " + sstAsOf(), (zs.length ? tempStrip(zs) : "") + '<ul class="plain brief-list">' + wl.join("") + "</ul>");
 
     var names = [];
     placed.forEach(function (g) {
@@ -731,21 +944,20 @@
     return html + briefMore();
   }
   function briefDiving() {
-    var html = briefBlock("b-sites", "Dive sites", "today and the next 2 days",
+    var html = briefBlock("b-sites", "Dive sites", "today and the next 2 days", briefMapHtml() +
       siteTable(["Site", "Visibility, predicted", "Last seen", "Sets, 3 days", "Surge"]) +
       '<p class="note">Predicted visibility is our model scaled to recent shop posts, in the map\'s colors. Last seen is the latest diver report or shop post near the site.</p>');
     var w = facts.water || {}, lines = [];
     var bu = (w.buoys || []).filter(function (x) { return x.nearshore && x.temp_f != null; });
     if (bu.length) lines.push("<li>" + esc(["Water", rangeTxt(bu.map(function (x) { return x.temp_f; })) + "°F at the nearshore buoys", "(" + bu[0].observed + ")"].join(" ")) + "</li>");
-    var tide = (w.tide || {}).events || [];
-    if (tide.length) lines.push("<li>" + esc("Tides: " + tide.slice(0, 4).map(function (e) { return [e.type, e.ft + " ft", e.time].join(" "); }).join(", ")) + "</li>");
+
     var shore = ((facts.can_i_go || {}).shore || [])[0], rip = shore ? ((shore.days.today || {}).factors || []).filter(function (f0) { return f0.key === "rip"; })[0] : null;
     if (rip && rip.value) lines.push("<li>" + esc("Rip current risk: " + String(rip.value).split(";")[0]) + "</li>");
     var hunt = ((facts.fishing || {}).inshore || []).filter(function (r) { return r.spear; });
     if (hunt.length) lines.push("<li>" + esc("Spearfishing: " + hunt.slice(0, 3).map(function (r) { return [r.label.split(" (")[0] + ",", r.status].join(" "); }).join("; ")) + "</li>");
     var dv = obsRecent(["dive"]);
     lines.push("<li>" + (dv.length ? esc(["Latest diver report:", visRange(dv[0]), "ft,", md(dv[0].date)].join(" ")) : esc("No diver reports this week.")) + " " + sendLink("Send yours") + "</li>");
-    html += briefBlock("b-cond", "Water, tides and what's around", "", '<ul class="plain brief-list">' + lines.join("") + "</ul>");
+    html += briefBlock("b-cond", "Today's water, tides and light", "", dayLine() + '<ul class="plain brief-list">' + lines.join("") + "</ul>");
     var adv = advItems(/^CAZ|PZZ740|PZZ655/);
     if (adv.length) html += briefBlock("b-adv", "Advisories", "", '<ul class="plain brief-list adv">' + adv.join("") + "</ul>");
     return html + briefMore();
@@ -1724,6 +1936,7 @@
       d.addEventListener("toggle", function () { if (d.open) Array.prototype.forEach.call(d.querySelectorAll("figure.chart"), drawChart); });
     });
     initMap();
+    initBriefMap();
     bindGps();
     bindHot();
     bindForm();
