@@ -460,7 +460,7 @@
           '</span><span class="mut small">ft</span></div>') +
       '<div class="maplegend"><span class="mut small">Fleet stops:</span>' + ["today", "1 day", "2 days", "3 days"].map(function (t, i) {
         return '<span class="key"><i style="background:' + AGE_COLORS[i] + '"></i>' + t + "</span>";
-      }).join("") + '<span class="key"><i style="background:#fbbf24"></i>boat now</span><span class="key"><i class="ring"></i>break</span><span class="key"><i style="background:#22c55e"></i>paddies</span>' +
+      }).join("") + '<span class="key"><i style="background:#fbbf24"></i>boat now</span><span class="key"><i class="ring"></i>break</span>' + (view === "fishing" ? '<span class="key"><i style="background:#22c55e"></i>paddies</span>' : "") +
       '<span class="key"><i class="dia"></i>field report</span></div>' +
       '<p class="note">' + (view === "fishing" ? "Water temperature: " + esc(sstAsOf()) + " satellite map; blank is cloud or no data."
         : "Predicted visibility: our model scaled to where recent shop reports landed, La Jolla and Laguna each on their own record; in between and beyond, the two are blended by distance, an extrapolation. Water temperature is in the layer menu.") + "</p></section>";
@@ -576,7 +576,9 @@
     var visLayer = L.layerGroup();
     if (M.sst_url && M.bbox && M.sst_range_c) drawSst(M, sstLayer);
     if (V.url && M.bbox) drawVis(V, M.bbox, visLayer);
-    if (view !== "fishing") { map.removeLayer(sstLayer); visLayer.addTo(map); }
+    // Diving opens on visibility; paddies start off there because their green
+    // would sit on the visibility ramp's green (still in the layer menu).
+    if (view !== "fishing") { map.removeLayer(sstLayer); map.removeLayer(padLayer); visLayer.addTo(map); }
     fetch("/data/land.geojson").then(function (r) { return r.ok ? r.json() : null; }).then(function (g) {
       if (g) L.geoJSON(g, { style: { color: "#475569", weight: 0.6, fillColor: "#1f2937", fillOpacity: 1 }, interactive: false }).addTo(landLayer);
     }).catch(function () { /* map still useful without land */ });
