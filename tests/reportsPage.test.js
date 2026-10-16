@@ -83,3 +83,16 @@ test("the brief is the default, carries no verdicts, and the full report is one 
   assert.ok(brief.length > 1000);
   assert.doesNotMatch(brief, /\b(go|no-go|good day|bad day|marginal|outside our thresholds|within our thresholds)\b/i);
 });
+
+test("the fleet log escapes its data, stays out of search, and shows only the landings' own counts", () => {
+  const fl = readFileSync(join(root, "public/reports/fleets/fleets.js"), "utf8");
+  const flHtml = readFileSync(join(root, "public/reports/fleets/index.html"), "utf8");
+  assert.match(fl, /function esc\(/);
+  const bare = fl.match(/\+\s*[A-Za-z]+\.[a-z_]+(?:\.[a-z_]+)*\s*\+/g) || [];
+  assert.deepEqual(bare, [], `unescaped fields: ${bare.join(" ")}`);
+  assert.match(flHtml, /<meta name="robots" content="noindex"\/>/);
+  assert.match(fl, /"\/data\/reports\/fleets\.json"/);
+  // catch shows only where the landing posts its own counts
+  assert.match(fl, /L\.counts\s*\?/);
+  assert.doesNotMatch(fl, /sportfishingreport|fish_kept|anglers\b.*trips\[/i);
+});
