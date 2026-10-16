@@ -774,7 +774,7 @@
       var cells = [
         "<b>" + esc(r.sp) + "</b>",
         esc(trend) + (r.fish ? '<div class="mut small">' + esc(r.fish + " fish counted") + "</div>" : ""),
-        r.n ? esc(tally(r.zc)) : '<span class="mut">no reports</span>',
+        r.n ? esc(tally(r.zc)) : "",
         r.n ? esc(tally(r.how)) || '<span class="mut">not said</span>' : "",
         esc([r.big ? r.big + " lb" : "", r.temps.length ? Math.min.apply(null, r.temps) + (Math.max.apply(null, r.temps) !== Math.min.apply(null, r.temps) ? "-" + Math.max.apply(null, r.temps) : "") + "°F" : ""].filter(Boolean).join(", ")),
         r.fits.length ? esc(firstFew(r.fits, 3)) : r.season ? esc("Season: " + r.season) : "",
