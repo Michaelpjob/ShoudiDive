@@ -151,11 +151,14 @@ def fleet_hot_bites(fleet: dict | None, today: date, trips: list[dict] | None = 
 
 def dock_week(dock: list[dict], today: date, days: int = WEEK) -> dict:
     """Fish landed in the last `days` days, {species: {port: count}}. Landing
-    day totals where published (Dana Wharf), else the sum of its trips."""
+    day totals where published (Dana Wharf), plus its trips on days the totals
+    don't cover yet (the latest day appears per boat first)."""
     since = (today - timedelta(days=days - 1)).isoformat()
     out: dict[str, dict[str, int]] = defaultdict(dict)
     for d in dock or []:
-        rows = d.get("days") or d.get("trips") or []
+        totals = d.get("days") or []
+        covered = {r["date"] for r in totals}
+        rows = totals + [t for t in d.get("trips") or [] if t["date"] not in covered]
         for r in rows:
             if since <= r["date"] <= today.isoformat():
                 for k, n in (r.get("catch") or {}).items():
