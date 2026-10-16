@@ -559,7 +559,7 @@
     var fz = all.filter(function (z) { return (z.fleet || {}).last3_hours > 0; }).sort(byDesc(function (z) { return z.fleet.last3_hours; }));
     var ly = all.filter(function (z) { return (z.fleet || {}).last_year_hours > 0; }).sort(byDesc(function (z) { return z.fleet.last_year_hours; }));
     var atSea = (((facts.fishing || {}).fleet_now || {}).at_sea || []).length;
-    var best = bestSpots();
+    var best = bestSpots().filter(function (g) { return !g.noPos; });
     if (best.length && (best[0].total || Object.keys(best[0].fish).length)) {
       var b0 = best[0], t0 = b0.top;
       tiles.unshift(tile("Where the fish are", esc(b0.place),
@@ -723,12 +723,23 @@
       if (p.date > g.latest) g.latest = p.date;
       if (fishHere > g.topFish && !p.zoneOnly) { g.top = p; g.topFish = fishHere; }
     });
+    landedFiltered().forEach(function (t) {
+      var key = ["Boats out of", t.port, "(no position)"].join(" ");
+      var g = groups[key] || (groups[key] = { place: key, fish: {}, total: 0, reports: 0, boats: {}, fleet: 0, latest: t.date, top: null, topFish: -1, noPos: true });
+      Object.keys(t.catch || {}).forEach(function (k) { g.fish[k] = (g.fish[k] || 0) + t.catch[k]; g.total += t.catch[k]; });
+      g.fleet += 1;
+      g.boats[t.boat] = { name: t.boat, source: t.landing, trip: t.trip };
+      if (t.date > g.latest) g.latest = t.date;
+    });
     return Object.keys(groups).map(function (k) { return groups[k]; })
       .filter(function (g) { return Object.keys(g.fish).length || g.fleet; })
-      .sort(function (a, b) { return b.total - a.total || (b.reports + b.fleet) - (a.reports + a.fleet) || Object.keys(b.boats).length - Object.keys(a.boats).length; });
+      .sort(function (a, b) {
+        return (a.noPos ? 1 : 0) - (b.noPos ? 1 : 0) || b.total - a.total || (b.reports + b.fleet) - (a.reports + a.fleet) ||
+          Object.keys(b.boats).length - Object.keys(a.boats).length;
+      });
   }
   function bestSpotsHtml() {
-    var rows = bestSpots().slice(0, 5);
+    var all = bestSpots(), rows = all.filter(function (g) { return !g.noPos; }).slice(0, 5).concat(all.filter(function (g) { return g.noPos; }));
     if (!rows.length) return '<p class="small mut">No fish reported or counted in this window yet.</p>';
     return '<ol class="best">' + rows.map(function (g) {
       var fishTxt = catchLine(Object.keys(g.fish).reduce(function (o, k) { if (g.fish[k]) o[k] = g.fish[k]; return o; }, {}), 5);
@@ -742,12 +753,15 @@
           esc(t.lat) + '" data-lng="' + esc(t.lng) + '" data-tip="' + esc(g.place + " · " + gp) + '">Map</button></div>' : "") + "</li>";
     }).join("") + "</ol>";
   }
-  function landedHtml() {
-    var rows = ((facts.hot_bites || {}).landed || []).filter(function (t) {
+  function landedFiltered() {
+    return ((facts.hot_bites || {}).landed || []).filter(function (t) {
       var a = Math.round(dayNum(facts.date) - dayNum(t.date));
       if (a < 0 || a >= HB.days) return false;
       return !HB.species || HB.species === "_fleet" ? !HB.species : (t.catch || {})[HB.species] > 0;
     });
+  }
+  function landedHtml() {
+    var rows = landedFiltered();
     if (!rows.length) return "";
     return '<details class="more"><summary>' + esc(["Landed with no AIS position", "(" + rows.length + ")"].join(" ")) + '</summary><div class="scroll"><table class="mini"><tbody>' +
       rows.map(function (t) {
@@ -1002,7 +1016,9 @@
     if (!el || !window.L) return;
     if (map) { map.remove(); map = null; }
     map = L.map(el, { zoomControl: true, attributionControl: false, scrollWheelZoom: false });
-    map.fitBounds(view === "fishing" ? [[31.9, -119.4], [33.6, -117.0]] : [[32.55, -117.95], [33.6, -117.1]]);
+    var view0 = L.latLngBounds(view === "fishing" ? [[31.9, -119.4], [33.6, -117.0]] : [[32.55, -117.95], [33.6, -117.1]]);
+    if (view === "fishing") hotFiltered().forEach(function (p) { view0.extend([p.lat, p.lng]); });
+    map.fitBounds(view0, { padding: [12, 12] });
     var M = facts.map || {};
     var sstLayer = L.layerGroup().addTo(map), landLayer = L.layerGroup().addTo(map), padLayer = L.layerGroup().addTo(map),
       zoneLayer = L.layerGroup().addTo(map), fleetLayer = L.layerGroup().addTo(map), liveLayer = L.layerGroup().addTo(map), spotLayer = L.layerGroup();
