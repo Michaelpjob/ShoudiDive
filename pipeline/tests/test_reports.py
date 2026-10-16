@@ -581,3 +581,47 @@ def test_vis_field_reports_join_the_nearest_area():
     days = [{"date": "2026-10-14", "vis_pred": {"la-jolla-ref": {"p50": 30.0}}}]
     pr = visibility.archive_pairs(days, f["la-jolla"], visibility.AREAS[0])
     assert pr and pr[0]["source"] == "field-report" and pr[0]["p50"] == 30.0
+
+
+# --- Catch-report text ---------------------------------------------------------------
+
+from reports import catch_text  # noqa: E402
+
+
+def test_catch_text_reads_fish_place_and_method():
+    r = catch_text.extract("Overnight trip to the 9 Mile Bank: 45 yellowtail and 3 bluefin tuna on fly-lined sardines "
+                           "and surface iron, stopping on kelp paddies in 68 degree water. Back to the dock at 2 PM.")
+    sp = {s["key"]: s["count"] for s in r["species"]}
+    assert sp == {"yellowtail": 45, "bluefin": 3}
+    assert r["zones"] == [6]
+    assert r["bait"] == ["sardine"] and {"fly-line", "surface iron"} <= set(r["methods"])
+    assert "kelp paddy" in r["signs"] and r["water_f"] == [68.0]
+
+
+def test_catch_text_numbers_and_places_that_trip_readers():
+    r = catch_text.extract("South 9 and the 302 gave up 12 yellowfin; the 2026 season keeps going. Left out of Oceanside.")
+    assert r["zones"] == [10]                      # "South 9" is not the 9 Mile, a port is not a place fished
+    assert r["species"] == [{"key": "yellowfin", "name": "Yellowfin tuna", "count": 12}]
+    r = catch_text.extract("Rockfish limits at San Clemente Island, plus lingcod on the dropper loop.")
+    assert r["zones"] == [5] and {s["key"] for s in r["species"]} == {"rockfish", "lingcod"}
+    assert "dropper loop" in r["methods"] and all(s["count"] is None for s in r["species"])
+    r = catch_text.extract("Long-range boats report wahoo at Alijos and yellowfin at Guadalupe.")
+    assert r["zones"] == [] and set(r["elsewhere"]) == {"Alijos Rocks", "Guadalupe Island", "Revillagigedo and long range"}
+
+
+from reports import hot_bites  # noqa: E402
+
+
+def test_hot_bites_cluster_boats_and_keep_long_lone_stops():
+    boats = [{"name": "Alpha"}, {"name": "Bravo"}, {"name": "Charlie"}]
+    stops = [
+        [0, "2026-10-14", 32.660, -117.720, 40, 0, "h", "t1", 0],   # Alpha and Bravo within a mile: one spot
+        [1, "2026-10-14", 32.668, -117.725, 50, 0, "h", "t2", 0],
+        [2, "2026-10-14", 32.300, -117.500, 30, 0, "h", "t3", 0],   # lone and short: dropped
+        [2, "2026-10-13", 32.300, -117.500, 75, 0, "h", "t4", 0],   # lone but held 75 min: kept
+        [0, "2026-10-14", 32.840, -117.280, 90, 0, "h", "t5", 1],   # nearshore band: dropped
+        [1, "2026-10-08", 32.660, -117.720, 90, 0, "h", "t6", 0],   # older than 4 days: dropped
+    ]
+    hb = hot_bites.fleet_hot_bites({"boats": boats, "stops": stops}, date(2026, 10, 15))
+    assert [(h["date"], h["boats"], h["minutes"]) for h in hb] == [("2026-10-14", 2, 90), ("2026-10-13", 1, 75)]
+    assert hb[0]["names"] == ["Alpha", "Bravo"] and hb[0]["zone"] == "9 Mile / 43"

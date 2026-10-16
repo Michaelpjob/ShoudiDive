@@ -224,7 +224,9 @@
   // --- Field reports (approved, from /api/reports/feed) --------------------------
   // Lists mirror functions/api/reports/_lib.js; the server rejects anything else.
   var OBS_SPECIES = ["yellowfin", "bluefin", "skipjack", "dorado", "yellowtail", "wahoo", "striped marlin", "white seabass",
-    "calico bass", "sand bass", "halibut", "sheephead", "bonito", "barracuda", "rockfish", "lingcod", "lobster", "mako", "other"];
+    "calico bass", "sand bass", "halibut", "sheephead", "bonito", "barracuda", "rockfish", "lingcod", "whitefish", "sculpin", "lobster", "mako", "other"];
+  var OBS_METHODS = ["fly-line", "surface iron", "yo-yo iron", "flat-fall", "kite", "slow-troll", "trolling", "dropper loop", "sinker rig", "popper", "swimbait",
+    "bottom fishing", "spear", "jig"];
   var OBS_SIGHTINGS = ["kelp paddy", "birds working", "foamers or breezers", "porpoise", "whales", "bait ball",
     "marlin (tailer or sleeper)", "color or temperature break", "current line", "red tide"];
   var OBS_BAITS = ["sardine", "anchovy", "mackerel", "squid", "mixed", "none"];
@@ -268,7 +270,11 @@
   }
   function visRange(o) { return o.vis_lo_ft === o.vis_hi_ft ? String(o.vis_lo_ft) : [o.vis_lo_ft, o.vis_hi_ft].join("-"); }
   function obsWhat(o) {
-    if (o.type === "catch") return (o.species || []).join(", ") + (o.bait && o.bait !== "none" ? " on " + o.bait : "");
+    if (o.type === "catch") {
+      var cnt = o.counts || {};
+      return (o.species || []).map(function (sp) { return (cnt[sp] ? cnt[sp] + " " : "") + sp; }).join(", ") +
+        (o.bait && o.bait !== "none" ? " on " + o.bait : "") + (o.method ? " (" + o.method + ")" : "");
+    }
     if (o.type === "sighting") return o.sighting + ((o.species || []).length ? " (" + o.species.join(", ") + ")" : "");
     if (o.type === "bait") return [o.bait, o.bait_size || "", "at", o.barge].join(" ").replace(/\s+/g, " ");
     if (o.type === "dive") return [visRange(o), "ft visibility", o.depth_ft ? "at " + o.depth_ft + " ft" : "", o.surge ? "(" + o.surge + " surge)" : ""].join(" ").replace(/\s+/g, " ").trim();
@@ -311,6 +317,9 @@
     try { saved = JSON.parse(localStorage.getItem("sd:obs:who") || "{}") || {}; } catch (e) { /* storage blocked */ }
     var today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
     return '<details class="raw send" id="send"><summary><b>Send a report</b>: what you caught, saw or dove</summary>' +
+      '<div class="say"><label for="obs-say" class="small">Say it in a sentence (or use your phone\'s mic):</label>' +
+      '<textarea id="obs-say" rows="2" maxlength="1000" placeholder="12 yellowtail at the 9 Mile on fly-lined sardines, 70 degrees"></textarea>' +
+      '<div class="send-row"><button type="button" class="mini-btn" id="obs-read">Fill in the form</button><span id="obs-say-status" class="small mut" role="status" aria-live="polite"></span></div></div>' +
       '<form id="obs-form" novalidate><fieldset class="types"><legend class="mut small">What kind</legend>' + OBS_TYPES.map(function (t) {
         return '<label><input type="radio" name="type" value="' + t[0] + '"' + (t[0] === def ? " checked" : "") + "> " + esc(t[1]) + "</label>";
       }).join("") + "</fieldset>" +
@@ -320,7 +329,10 @@
       '<span class="btns"><button type="button" class="mini-btn" id="obs-pick">Pick on the map</button><button type="button" class="mini-btn" id="obs-here">Where I am</button></span></label>' +
       '<label data-for="catch">Species <select name="species">' + opts(OBS_SPECIES, "Pick one") + "</select></label>" +
       '<label data-for="catch">Also caught <select name="species2">' + opts(OBS_SPECIES, "(none)") + "</select></label>" +
+      '<label data-for="catch">How many <input type="number" name="count" min="1" max="2000" inputmode="numeric" placeholder="first species"></label>' +
       '<label data-for="catch">Bait used <select name="bait_used">' + opts(OBS_BAITS, "(not sure)") + "</select></label>" +
+      '<label data-for="catch">Method <select name="method">' + opts(OBS_METHODS, "(skip)") + "</select></label>" +
+      '<label data-for="catch">Biggest (lb) <input type="number" name="size_lb" min="0" max="1000" step="0.5" inputmode="decimal"></label>' +
       '<label data-for="sighting">What you saw <select name="sighting">' + opts(OBS_SIGHTINGS, "Pick one") + "</select></label>" +
       '<label data-for="sighting">Fish with it <select name="species_seen">' + opts(OBS_SPECIES, "(none)") + "</select></label>" +
       '<label data-for="bait">Barge <select name="barge">' + opts(OBS_BARGES, "Pick one") + "</select></label>" +
@@ -371,10 +383,52 @@
     }
   }
 
+  var saidZone = null;
+  function setVal(el, v) { if (el && v != null && v !== "") el.value = v; }
+  function fillFromSentence(form, draft) {
+    var f = form.elements;
+    if (draft.type) {
+      var r = form.querySelector('input[name=type][value="' + draft.type + '"]');
+      if (r) { r.checked = true; r.dispatchEvent(new Event("change")); }
+    }
+    setVal(f.date, draft.date);
+    saidZone = null;
+    if (draft.lat != null) {
+      if (draft.loc === "zone") {
+        var z = zoneOf(draft.lat, draft.lng);
+        saidZone = { ll: [draft.lat, draft.lng], label: (z ? zname(z) : "Zone") + " (zone, no GPS)" };
+        f.gps.value = saidZone.label;
+      } else {
+        f.gps.value = draft.lat.toFixed(4) + ", " + draft.lng.toFixed(4);
+      }
+    }
+    if (draft.type === "catch") {
+      setVal(f.species, (draft.species || [])[0]); setVal(f.species2, (draft.species || [])[1]);
+      var c = draft.counts || {}, first = (draft.species || [])[0];
+      setVal(f.count, first ? c[first] : null);
+      setVal(f.bait_used, draft.bait); setVal(f.method, draft.method);
+    }
+    if (draft.type === "sighting") setVal(f.sighting, draft.sighting);
+    setVal(f.water_temp_f, draft.water_temp_f);
+  }
+
   function bindForm() {
     var form = document.getElementById("obs-form");
     if (!form) return;
     var status = document.getElementById("obs-status");
+    var readBtn = document.getElementById("obs-read");
+    if (readBtn) readBtn.addEventListener("click", function () {
+      var text = document.getElementById("obs-say").value, st = document.getElementById("obs-say-status");
+      st.textContent = "Reading...";
+      fetch("/api/reports/parse", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: text }) })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (!j.ok) { st.textContent = j.error || "Couldn't read that."; return; }
+          fillFromSentence(form, j.draft);
+          st.textContent = j.missing.length ? "Filled what we could. Still need " + j.missing.join(" and ") + "." : "Filled in. Check it and add your email.";
+        })
+        .catch(function () { st.textContent = "Couldn't reach the reader; fill the form below."; });
+    });
     function show() {
       var t = form.querySelector("input[name=type]:checked").value;
       Array.prototype.forEach.call(form.querySelectorAll("[data-for]"), function (el) {
@@ -405,10 +459,17 @@
         email: f.email.value.trim(), name: f.name.value.trim(), deviceId: deviceId() };
       if (t !== "bait") {
         var ll = parseGps(f.gps.value);
+        if (!ll && saidZone && f.gps.value === saidZone.label) { ll = saidZone.ll; body.loc = "zone"; }
         if (!ll) { status.textContent = "Add a GPS position in Southern California waters (or pick it on the map)."; return; }
         body.lat = ll[0]; body.lng = ll[1];
       }
-      if (t === "catch") { body.species = [f.species.value, f.species2.value].filter(Boolean); body.bait = f.bait_used.value; }
+      var said = document.getElementById("obs-say");
+      if (said && said.value.trim()) body.raw_text = said.value.trim();
+      if (t === "catch") {
+        body.species = [f.species.value, f.species2.value].filter(Boolean); body.bait = f.bait_used.value;
+        body.method = f.method.value; body.size_lb = f.size_lb.value;
+        if (f.count.value && body.species[0]) { body.counts = {}; body.counts[body.species[0]] = f.count.value; }
+      }
       if (t === "sighting") { body.sighting = f.sighting.value; body.species = f.species_seen.value ? [f.species_seen.value] : []; }
       if (t === "bait") { body.barge = f.barge.value; body.bait = f.bait.value; body.bait_size = f.bait_size.value; }
       if (t === "dive") { body.vis_lo_ft = f.vis_lo_ft.value; body.vis_hi_ft = f.vis_hi_ft.value; body.depth_ft = f.depth_ft.value; body.surge = f.surge.value; }
@@ -422,7 +483,9 @@
           btn.disabled = false;
           if (!j.ok) { status.textContent = "Not sent: " + (j.error || "try again"); return; }
           status.textContent = "Thanks. It shows here once a moderator approves it.";
-          ["gps", "notes", "vis_lo_ft", "vis_hi_ft", "depth_ft", "water_temp_f", "bait_size"].forEach(function (k) { if (f[k]) f[k].value = ""; });
+          ["gps", "notes", "vis_lo_ft", "vis_hi_ft", "depth_ft", "water_temp_f", "bait_size", "count", "size_lb"].forEach(function (k) { if (f[k]) f[k].value = ""; });
+          if (said) said.value = "";
+          saidZone = null;
           if (pickMarker) { pickMarker.remove(); pickMarker = null; }
         })
         .catch(function () { btn.disabled = false; status.textContent = "Not sent: the network dropped. Try again."; });
@@ -555,8 +618,8 @@
   // Sticky links to each section, instead of a long scroll.
   function sectionNav() {
     var items = view === "fishing"
-      ? [["glance", "At a glance"], ["map-h", "Map"], ["zones", "Zones"], ["weather", "Weather"], ["water", "Reports"], ["trends", "Trends"], ["season", "Season"], ["bait", "Bait"]]
-      : [["glance", "At a glance"], ["map-h", "Map"], ["water", "Reports"], ["weather", "Weather"], ["trends", "Trends"], ["season", "Season"], ["sites", "Site details"], ["around", "What's around"]];
+      ? [["glance", "At a glance"], ["hot", "Hot Bites"], ["species", "Species"], ["zones", "Zones"], ["weather", "Weather"], ["water", "Reports"], ["trends", "Trends"], ["season", "Season"], ["bait", "Bait"]]
+      : [["glance", "At a glance"], ["map-h", "Map"], ["hot", "Hot Bites"], ["species", "Species"], ["water", "Reports"], ["weather", "Weather"], ["trends", "Trends"], ["season", "Season"], ["sites", "Site details"]];
     return '<nav class="jump" aria-label="Sections">' + items.map(function (i) { return '<a href="#' + i[0] + '">' + esc(i[1]) + "</a>"; }).join("") + "</nav>";
   }
   function chartsBlock(prim, more) {
@@ -564,9 +627,171 @@
       (more.length ? '<details class="more"><summary>' + esc(["More charts", "(" + more.length + ")"].join(" ")) + '</summary><div class="charts">' + more.join("") + "</div></details>" : "");
   }
 
+  // --- Hot Bites: where fish were reported and where the fleet sat on a spot -----
+  // Reports are approved field reports (species, place, how); fleet points are
+  // AIS clusters (pipeline/reports/hot_bites.py): boats and minutes, never species.
+  var HB = { days: 4, species: "" }, hotLayer = null;
+  var HB_DAYS = [[1, "Today"], [2, "2 days"], [3, "3 days"], [4, "4 days"]];
+  function hotPoints() {
+    var pts = [];
+    obsRecent(["catch", "sighting"]).forEach(function (o) {
+      var a = obsAge(o);
+      if (a > 3) return;
+      pts.push({ kind: "report", date: o.date, age: a, lat: o.lat, lng: o.lng, zoneOnly: o.loc === "zone", species: o.species || [],
+        what: obsWhat(o), how: o.type === "sighting" ? "sighting" : "",
+        extra: [o.size_lb ? "biggest " + o.size_lb + " lb" : "", o.water_temp_f != null ? o.water_temp_f + "°F" : "", o.via && o.via !== "web" ? "by " + o.via : ""].filter(Boolean).join(", "),
+        confirmed: o.confidence === "confirmed" });
+    });
+    ((facts.hot_bites || {}).fleet || []).forEach(function (h) {
+      var a = Math.round(dayNum(facts.date) - dayNum(h.date));
+      if (a < 0 || a > 3) return;
+      var names = h.names || [];
+      pts.push({ kind: "fleet", date: h.date, age: a, lat: h.lat, lng: h.lng, species: [], zone: h.zone, boats: h.boats,
+        what: h.boats > 1 ? [h.boats, "boats stopped within a mile"].join(" ") : "One boat held a spot",
+        how: [h.minutes, "min"].join(" ") + (names.length ? " · " + names.slice(0, 3).join(", ") + (names.length > 3 ? " +" + (names.length - 3) : "") : "") });
+    });
+    return pts.sort(function (a, b) { return a.age - b.age || (a.kind === "report" ? -1 : 1) - (b.kind === "report" ? -1 : 1); });
+  }
+  function hotFiltered() {
+    return hotPoints().filter(function (p) {
+      if (p.age >= HB.days) return false;
+      if (!HB.species) return true;
+      if (HB.species === "_fleet") return p.kind === "fleet";
+      return p.species.indexOf(HB.species) >= 0;
+    });
+  }
+  function hotPlace(p) {
+    var z = p.zone ? null : zoneOf(p.lat, p.lng);
+    return p.zone || (z ? zname(z) : "outside the zones");
+  }
+  function hotList() {
+    var pts = hotFiltered();
+    if (!pts.length) return '<p class="small mut">Nothing in this window yet. ' + sendLink("Send a report") + " when you find fish.</p>";
+    return '<ul class="plain hb">' + pts.map(function (p) {
+      var g = ddm(p.lat, p.lng);
+      return '<li class="hb-' + esc(p.kind) + '"><span class="age a' + esc(p.age) + '">' + esc(p.age === 0 ? "today" : p.age + "d") + "</span><b>" + esc(p.what) + "</b>" +
+        tagHtml(p.kind === "fleet" ? "AIS fleet" : p.confirmed ? "confirmed" : "report") +
+        '<div class="small">' + esc([hotPlace(p), p.how, p.extra].filter(Boolean).join(" · ")) + "</div>" +
+        '<div class="mut small">' + esc(md(p.date)) + " · " + (p.zoneOnly ? esc("zone named, no GPS") : '<span class="gps">' + esc(g) + '</span><button type="button" class="mini-btn" data-copy="' + esc(g) +
+          '">Copy</button><button type="button" class="mini-btn" data-lat="' + esc(p.lat) + '" data-lng="' + esc(p.lng) + '" data-tip="' + esc(p.what + " · " + g) + '">Map</button>') + "</div></li>";
+    }).join("") + "</ul>";
+  }
+  function drawHot() {
+    if (!hotLayer) return;
+    hotLayer.clearLayers();
+    hotFiltered().forEach(function (p) {
+      var op = [1, 0.8, 0.6, 0.45][p.age] || 0.45;
+      var tip = esc(p.what) + ", " + esc(md(p.date));
+      if (p.kind === "fleet") {
+        L.circleMarker([p.lat, p.lng], { radius: 5 + Math.min(p.boats || 1, 6) * 1.5, color: "#0b1220", weight: 1.5, fillColor: "#f97316", fillOpacity: op, opacity: op })
+          .bindTooltip(tip, { direction: "top" }).addTo(hotLayer);
+      } else if (p.zoneOnly) {
+        L.circleMarker([p.lat, p.lng], { radius: 14, color: "#e879f9", weight: 2, dashArray: "4 4", fill: false, opacity: op })
+          .bindTooltip(tip + " (zone, no GPS)", { direction: "top" }).addTo(hotLayer);
+      } else {
+        L.marker([p.lat, p.lng], { icon: L.divIcon({ className: "obs-pin hot", html: '<i style="opacity:' + op + '"></i>', iconSize: [16, 16] }), keyboard: false })
+          .bindTooltip(tip, { direction: "top" }).addTo(hotLayer);
+      }
+    });
+  }
+  function hotGpx() {
+    var x = function (v) { return String(v).replace(/[<>&"]/g, function (c) { return { "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c]; }); };
+    return '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="ShouldIDive Ocean Report" xmlns="http://www.topografix.com/GPX/1/1">\n' +
+      hotFiltered().filter(function (p) { return !p.zoneOnly; }).map(function (p) {
+        return '<wpt lat="' + p.lat.toFixed(5) + '" lon="' + p.lng.toFixed(5) + '"><time>' + x(p.date) + "T12:00:00Z</time><name>" + x(p.what.slice(0, 30)) +
+          "</name><desc>" + x([p.date, hotPlace(p), p.how].filter(Boolean).join(" · ")) + "</desc></wpt>\n";
+      }).join("") + "</gpx>\n";
+  }
+  function hotSection(withMap) {
+    var counts = {};
+    hotPoints().forEach(function (p) { p.species.forEach(function (sp) { counts[sp] = (counts[sp] || 0) + 1; }); });
+    var chips = HB_DAYS.map(function (d) { return '<button type="button" class="chip' + (HB.days === d[0] ? " on" : "") + '" data-hbdays="' + d[0] + '">' + esc(d[1]) + "</button>"; }).join("");
+    var sel = '<select id="hb-species" aria-label="Species"><option value="">All fish and fleet</option>' + Object.keys(counts).sort().map(function (sp) {
+      return '<option value="' + esc(sp) + '"' + (HB.species === sp ? " selected" : "") + ">" + esc([sp, "(" + counts[sp] + ")"].join(" ")) + "</option>";
+    }).join("") + '<option value="_fleet"' + (HB.species === "_fleet" ? " selected" : "") + ">Fleet only (no species)</option></select>";
+    return '<section><h2 id="hot">Hot Bites</h2><div class="hb-ctl">' + chips + sel + '<button type="button" class="mini-btn" id="hb-gpx">Download GPX</button></div>' +
+      (withMap ? mapBlock() : "") + '<div id="hb-list">' + hotList() + "</div>" +
+      '<p class="note">Reports come from people on the water and show once a moderator approves them; a report that names a spot but no GPS sits at the zone\'s center. ' +
+      "Fleet points are AIS: boats that stopped and held a spot offshore, which says where they fished, not what they caught. GPX opens in most chartplotters and phone apps.</p></section>";
+  }
+  function bindHot() {
+    var list = document.getElementById("hb-list");
+    if (!list) return;
+    function refresh() {
+      list.innerHTML = hotList();
+      bindGpsIn(list);
+      drawHot();
+      Array.prototype.forEach.call(main.querySelectorAll(".hb-ctl .chip"), function (c) { c.classList.toggle("on", +c.getAttribute("data-hbdays") === HB.days); });
+    }
+    Array.prototype.forEach.call(main.querySelectorAll(".hb-ctl .chip"), function (c) {
+      c.addEventListener("click", function () { HB.days = +c.getAttribute("data-hbdays"); refresh(); });
+    });
+    var sel = document.getElementById("hb-species");
+    if (sel) sel.addEventListener("change", function () { HB.species = sel.value; refresh(); });
+    var gpxBtn = document.getElementById("hb-gpx");
+    if (gpxBtn) gpxBtn.addEventListener("click", function () {
+      var blob = new Blob([hotGpx()], { type: "application/gpx+xml" });
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "shouldidive-hot-bites-" + facts.date + ".gpx";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+    });
+  }
+
+  // --- Species board: each fish, where it was reported, how, and where the water fits ---
+  var FIT_NAME = { yellowfin: "Yellowfin tuna", bluefin: "Bluefin tuna", dorado: "Dorado", "striped marlin": "Striped marlin", wahoo: "Wahoo", yellowtail: "Yellowtail" };
+  var INSHORE_KEY = { yellowtail: "yellowtail", "white seabass": "wsb", "calico bass": "calico", halibut: "halibut", sheephead: "sheephead" };
+  var SPEAR_SPECIES = ["yellowtail", "white seabass", "calico bass", "halibut", "sheephead", "lobster", "rockfish", "lingcod"];
+  function tally(list) {
+    return Object.keys(list).sort(function (a, b) { return list[b] - list[a]; }).slice(0, 3).map(function (k) { return list[k] > 1 ? k + " (" + list[k] + ")" : k; }).join(", ");
+  }
+  function speciesBoard() {
+    var cur = obsRecent(["catch", "sighting"]);
+    var prev = OBS.filter(function (o) { var a = obsAge(o); return (o.type === "catch" || o.type === "sighting") && a >= OBS_DAYS && a < 2 * OBS_DAYS; });
+    var inshore = (facts.fishing || {}).inshore || [];
+    var pool = view === "fishing" ? OBS_SPECIES.filter(function (sp) { return sp !== "other"; }) : SPEAR_SPECIES;
+    var rows = pool.map(function (sp) {
+      var has = function (o) { return (o.species || []).indexOf(sp) >= 0; };
+      var mine = cur.filter(has), before = prev.filter(has).length, zc = {}, how = {}, fish = 0, big = 0, temps = [];
+      mine.forEach(function (o) {
+        var z = zoneOf(o.lat, o.lng), k = z ? zname(z) : "outside the zones";
+        zc[k] = (zc[k] || 0) + 1;
+        [o.method, o.bait && o.bait !== "none" ? o.bait : ""].filter(Boolean).forEach(function (h) { how[h] = (how[h] || 0) + 1; });
+        fish += (o.counts || {})[sp] || 0;
+        big = Math.max(big, o.size_lb || 0);
+        if (o.water_temp_f != null) temps.push(o.water_temp_f);
+      });
+      var fits = FIT_NAME[sp] ? (facts.zones || []).filter(function (z) { return (z.water_fits || []).indexOf(FIT_NAME[sp]) >= 0; }).map(zname) : [];
+      var ins = inshore.filter(function (r) { return r.key === INSHORE_KEY[sp]; })[0];
+      return { sp: sp, n: mine.length, before: before, zc: zc, how: how, fish: fish, big: big, temps: temps, fits: fits, season: ins ? ins.status : "" };
+    }).filter(function (r) { return r.n || r.before || r.fits.length || r.season; })
+      .sort(function (a, b) { return b.n - a.n || b.fits.length - a.fits.length; });
+    if (!rows.length) return "";
+    var head = ["Species", "Reports, 7 days", "Where reported", "How", "Biggest, water", "Water fits or season"];
+    var body = rows.map(function (r) {
+      var trend = r.n || r.before ? [r.n, r.before ? (r.n > r.before ? "(up from " + r.before + ")" : r.n < r.before ? "(down from " + r.before + ")" : "(same)") : r.n ? "(new)" : ""].join(" ") : "none yet";
+      var cells = [
+        "<b>" + esc(r.sp) + "</b>",
+        esc(trend) + (r.fish ? '<div class="mut small">' + esc(r.fish + " fish counted") + "</div>" : ""),
+        r.n ? esc(tally(r.zc)) : '<span class="mut">no reports</span>',
+        r.n ? esc(tally(r.how)) || '<span class="mut">not said</span>' : "",
+        esc([r.big ? r.big + " lb" : "", r.temps.length ? Math.min.apply(null, r.temps) + (Math.max.apply(null, r.temps) !== Math.min.apply(null, r.temps) ? "-" + Math.max.apply(null, r.temps) : "") + "°F" : ""].filter(Boolean).join(", ")),
+        r.fits.length ? esc(firstFew(r.fits, 3)) : r.season ? esc("Season: " + r.season) : "",
+      ];
+      return "<tr>" + cells.map(function (c, i) { return "<td" + (i ? ' data-l="' + esc(head[i]) + '"' : "") + ">" + c + "</td>"; }).join("") + "</tr>";
+    }).join("");
+    return '<section><h2 id="species">' + esc(view === "fishing" ? "Species" : "Species for divers") + '</h2><div class="scroll"><table class="stable sboard"><thead><tr>' +
+      head.map(function (h) { return "<th>" + esc(h) + "</th>"; }).join("") + "</tr></thead><tbody>" + body + "</tbody></table></div>" +
+      '<p class="note">Reports and "how" come from approved reports in the last ' + OBS_DAYS + ' days, against the week before. "Water fits" lists the zones where this month\'s satellite water matches the species\' usual range; it is not a catch.</p></section>';
+  }
+
   // --- Sections -------------------------------------------------------------------
   function mapSection() {
-    return '<section><h2 id="map-h">Where things are</h2><div id="map" class="map" role="region" aria-label="Map of water temperature, zones, breaks, paddies and fleet"></div>' +
+    return '<section><h2 id="map-h">Where things are</h2>' + mapBlock() + "</section>";
+  }
+  function mapBlock() {
+    return '<div id="map" class="map" role="region" aria-label="Map of hot bites, water temperature, zones, breaks, paddies and fleet"></div>' +
       (view === "fishing" ? '<div class="maplegend"><span class="mut small">' + SST_SHOW_F[0] + '°F</span><span class="ramp" aria-hidden="true"></span><span class="mut small">' + SST_SHOW_F[1] + "°F</span></div>"
         : '<div class="maplegend"><span class="mut small">Predicted visibility</span><span class="ramp vis" aria-hidden="true">' +
           VIS_RAMP.map(function (s) { return '<b style="left:' + (s[0] / VIS_SHOW_FT[1] * 100) + '%">' + s[0] + (s[0] === VIS_SHOW_FT[1] ? "+" : "") + "</b>"; }).join("") +
@@ -574,9 +799,9 @@
       '<div class="maplegend"><span class="mut small">Fleet stops:</span>' + ["today", "1 day", "2 days", "3 days"].map(function (t, i) {
         return '<span class="key"><i style="background:' + AGE_COLORS[i] + '"></i>' + t + "</span>";
       }).join("") + '<span class="key"><i style="background:#fbbf24"></i>boat now</span><span class="key"><i class="ring"></i>break</span>' + (view === "fishing" ? '<span class="key"><i style="background:#22c55e"></i>paddies</span>' : "") +
-      '<span class="key"><i class="dia"></i>field report</span></div>' +
+      '<span class="key"><i class="dia"></i>reported fish</span><span class="key"><i class="hbf"></i>fleet on a spot</span></div>' +
       '<p class="note">' + (view === "fishing" ? "Water temperature: " + esc(sstAsOf()) + " satellite map; blank is cloud or no data."
-        : "Predicted visibility: our model scaled to where recent shop reports landed, La Jolla and Laguna each on their own record; in between and beyond, the two are blended by distance, an extrapolation. Water temperature is in the layer menu.") + "</p></section>";
+        : "Predicted visibility: our model scaled to where recent shop reports landed, La Jolla and Laguna each on their own record; in between and beyond, the two are blended by distance, an extrapolation. Water temperature is in the layer menu.") + "</p>";
   }
 
   // Predicted visibility overlay in the main map's colors (VIZ_RAMP in
@@ -724,6 +949,8 @@
       L.circleMarker([s.lat, s.lng], { radius: 2.5, color: "#e2e8f0", weight: 1, fillOpacity: 1 })
         .bindTooltip(esc(s.name) + (s.sst_f != null ? " · " + esc(s.sst_f) + "°F" : ""), { direction: "right" }).addTo(spotLayer);
     });
+    hotLayer = L.layerGroup().addTo(map);
+    drawHot();
     var obsLayer = L.layerGroup().addTo(map);
     obsRecent().forEach(function (o) {
       var a = obsAge(o), op = OBS_AGE_OPACITY[a === 0 ? 0 : a <= 2 ? 1 : 2];
@@ -739,7 +966,9 @@
       openSend();
     });
     L.control.layers(null, { "Water temperature": sstLayer, "Predicted visibility": visLayer, "Zones and breaks": zoneLayer, "Paddies": padLayer,
-      "Fleet stops, 3 days": fleetLayer, "Boats now": liveLayer, "Field reports, 7 days": obsLayer, "Named spots": spotLayer }, { position: "topright", collapsed: true }).addTo(map);
+      "Fleet stops, 3 days": fleetLayer, "Boats now": liveLayer, "Hot bites": hotLayer, "Field reports, 7 days": obsLayer, "Named spots": spotLayer }, { position: "topright", collapsed: true }).addTo(map);
+    // Hot bites carry the last 4 days of reports and fleet clusters; the raw layers stay in the menu.
+    if (view === "fishing") { map.removeLayer(obsLayer); map.removeLayer(fleetLayer); }
   }
 
   function weather() {
@@ -816,15 +1045,16 @@
       '<div class="mut small">latest ' + esc(md(rows[0].date)) + "</div>";
   }
 
-  function bindGps() {
-    Array.prototype.forEach.call(main.querySelectorAll("button[data-copy]"), function (btn) {
+  function bindGps() { bindGpsIn(main); }
+  function bindGpsIn(root) {
+    Array.prototype.forEach.call(root.querySelectorAll("button[data-copy]"), function (btn) {
       btn.addEventListener("click", function () {
         var t = btn.getAttribute("data-copy");
         var done = function () { btn.textContent = "Copied"; setTimeout(function () { btn.textContent = "Copy"; }, 1500); };
         if (navigator.clipboard) navigator.clipboard.writeText(t).then(done, function () { /* clipboard blocked */ });
       });
     });
-    Array.prototype.forEach.call(main.querySelectorAll("button[data-lat]"), function (btn) {
+    Array.prototype.forEach.call(root.querySelectorAll("button[data-lat]"), function (btn) {
       btn.addEventListener("click", function () {
         if (!map || !gpsMarkers) return;
         var ll = [parseFloat(btn.getAttribute("data-lat")), parseFloat(btn.getAttribute("data-lng"))];
@@ -1064,8 +1294,8 @@
   }
 
   function body() {
-    if (view === "diving") return sectionNav() + glanceDiving() + mapSection() + waterSection() + weather() + trendsSection() + seasonSection() + diveSites() + around(true) + basics() + sourcesBlock();
-    return sectionNav() + glanceFishing() + mapSection() + zonesSection(["offshore", "mexico", "inshore"]) + weather() + waterSection() + trendsSection() + seasonSection() + bait() + fleetSection() + around(false) + spotsTable() + sourcesBlock();
+    if (view === "diving") return sectionNav() + glanceDiving() + mapSection() + hotSection(false) + speciesBoard() + waterSection() + weather() + trendsSection() + seasonSection() + diveSites() + around(true) + basics() + sourcesBlock();
+    return sectionNav() + glanceFishing() + hotSection(true) + speciesBoard() + zonesSection(["offshore", "mexico", "inshore"]) + weather() + waterSection() + trendsSection() + seasonSection() + bait() + fleetSection() + around(false) + spotsTable() + sourcesBlock();
   }
 
   function render() {
@@ -1089,6 +1319,7 @@
     });
     initMap();
     bindGps();
+    bindHot();
     bindForm();
     Array.prototype.forEach.call(main.querySelectorAll("a.send-open"), function (a) {
       a.addEventListener("click", function (ev) { ev.preventDefault(); openSend(); });
