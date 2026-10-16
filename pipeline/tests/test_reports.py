@@ -623,6 +623,41 @@ def test_hot_bites_cluster_boats_and_keep_long_lone_stops():
         [1, "2026-10-08", 32.660, -117.720, 90, 0, "h", "t6", 0],   # older than 4 days: dropped
         [0, "2026-10-14", 32.670, -117.230, 236, 0, "h", "t7", 0],  # San Diego Bay mouth: waiting, dropped
     ]
-    hb = hot_bites.fleet_hot_bites({"boats": boats, "stops": stops}, date(2026, 10, 15))
-    assert [(h["date"], h["boats"], h["minutes"]) for h in hb] == [("2026-10-14", 2, 90), ("2026-10-13", 1, 75)]
-    assert hb[0]["names"] == ["Alpha", "Bravo"] and hb[0]["zone"] == "9 Mile / 43"
+    hb = hot_bites.fleet_hot_bites({"boats": boats, "stops": stops}, date(2026, 10, 15))["fleet"]
+    assert [(h["date"], h["n_boats"], h["minutes"]) for h in hb] == [("2026-10-14", 2, 90), ("2026-10-13", 1, 75)]
+    assert [b["name"] for b in hb[0]["boats"]] == ["Bravo", "Alpha"] and hb[0]["zone"] == "9 Mile / 43"
+    assert hb[0]["place"] == "The Corner" or hb[0]["place"].startswith(("the ", "North", "182", "The"))
+
+
+from reports import dock_counts  # noqa: E402
+
+
+def test_dock_counts_parse_both_landings():
+    dana = dock_counts.parse_dana((FIX / "dock_dana.html").read_text(encoding="utf-8"))
+    sf = next(t for t in dana["trips"] if t["boat"] == "Sum Fun")
+    assert sf["date"] == "2026-10-15" and sf["anglers"] == 46 and sf["catch"]["dorado"] == 137
+    assert dana["days"][0]["date"] == "2026-10-14" and dana["days"][0]["catch"]["yellowfin"] == 92
+    assert dana["days"][0]["released"] == {"bass": 305}
+    dv = dock_counts.parse_daveys((FIX / "dock_daveys.html").read_text(encoding="utf-8"))
+    fl = next(t for t in dv["trips"] if t["boat"] == "Freelance" and t["date"] == "2026-10-14" and "3/4" in t["trip"])
+    assert fl["catch"] == {"yellowtail": 86, "yellowfin": 186, "dorado": 2, "bullet tuna": 215, "skipjack": 5}
+    kept, rel = dock_counts.parse_fish("1 Striped Marlin 434 Bullet Tuna, 119 Skipjack. 2 Ling Cod, 120 Spiny Lobster Released")
+    assert kept == {"striped marlin": 1, "bullet tuna": 434, "skipjack": 119, "lingcod": 2} and rel == {"lobster": 120}
+
+
+def test_dock_trip_names_the_fish_at_the_boats_longest_stop():
+    boats = [{"name": "Freelance", "landing": "Davey's Locker", "port": "Newport Beach"}, {"name": "Victory", "port": "San Pedro"}]
+    stops = [[0, "2026-10-14", 33.40, -118.00, 25, 0, "h", "t1", 0],    # short, but the dock count confirms fishing
+             [0, "2026-10-14", 33.30, -117.90, 10, 0, "h", "t1", 0],
+             [1, "2026-10-14", 33.60, -118.17, 40, 0, "h", "t2", 0]]    # lone, short, no count: dropped
+    trips = [{"date": "2026-10-14", "boat": "Freelance", "trip": "ext 3/4 day", "anglers": 50, "catch": {"yellowfin": 186, "yellowtail": 86},
+              "landing": "Davey's Locker", "port": "Newport Beach", "url": "u"},
+             {"date": "2026-10-14", "boat": "Freelance", "trip": "twilight", "anglers": 15, "catch": {"sculpin": 12}, "landing": "Davey's Locker", "port": "Newport Beach", "url": "u"},
+             {"date": "2026-10-14", "boat": "Sum Fun", "trip": "3/4 day", "catch": {"dorado": 137}, "landing": "Dana Wharf", "port": "Dana Point", "url": "u"}]
+    r = hot_bites.fleet_hot_bites({"boats": boats, "stops": stops}, date(2026, 10, 15), trips)
+    assert len(r["fleet"]) == 1
+    p = r["fleet"][0]
+    assert p["catch"] == {"yellowfin": 186, "yellowtail": 86} and p["boats"][0]["trip"] == "ext 3/4 day"
+    assert p["place"] == "14 Mile Bank"
+    assert {t["boat"] for t in r["landed"]} == {"Freelance", "Sum Fun"}   # the twilight trip and a boat AIS never heard
+    assert hot_bites.place_name(33.61, -118.00).endswith("of Newport")
