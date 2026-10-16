@@ -36,7 +36,11 @@ h3{font-size:13px;margin:18px 0 6px;color:var(--mut);text-transform:uppercase;le
 .leaflet-control-layers-toggle,.leaflet-retina .leaflet-control-layers-toggle{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23334155' stroke-width='2' stroke-linejoin='round'%3E%3Cpath d='M12 3 2 8l10 5 10-5-10-5Z'/%3E%3Cpath d='m2 13 10 5 10-5'/%3E%3C/svg%3E");background-size:22px 22px}
 .maplegend{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:6px 0 0}
 .maplegend .ramp{flex:1 1 200px;max-width:320px;height:10px;border-radius:5px;background:linear-gradient(90deg,rgb(12,38,130),rgb(40,130,210) 25%,rgb(120,220,220) 50%,rgb(240,220,110) 70%,rgb(230,110,60) 85%,rgb(170,20,35))}
-.maplegend .ramp.vis{background:linear-gradient(90deg,rgb(205,226,251),rgb(109,167,236) 33%,rgb(37,106,191) 66%,rgb(13,54,107))}
+/* The main map's visibility ramp (VIZ_RAMP, 0/10/20/30/50 ft over 0..50 ft) */
+.maplegend .ramp.vis{position:relative;margin-bottom:14px;background:linear-gradient(90deg,rgb(194,65,12) 0%,rgb(34,197,94) 20%,rgb(6,182,212) 40%,rgb(3,105,161) 60%,rgb(31,77,117) 100%)}
+.maplegend .ramp.vis b{position:absolute;top:12px;transform:translateX(-50%);font:500 11px system-ui,sans-serif;color:var(--mut)}
+.maplegend .ramp.vis b:first-child{transform:none}
+.maplegend .ramp.vis b:last-child{transform:translateX(-100%)}
 .metric.right{text-align:right}
 .metric .v2{font-size:16px;font-weight:600}
 .key{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--mut)}

@@ -4,7 +4,7 @@
 (function () {
   "use strict";
   var DATA = "/data/reports/";
-  var VIEWS = [["fishing", "Fishing"], ["diving", "Diving"], ["spearfishing", "Spearfishing"]];
+  var VIEWS = [["fishing", "Fishing"], ["diving", "Diving and spearfishing"]];
   // Dark-surface categorical steps (dataviz reference palette, validated order).
   var C = { s1: "#3987e5", s2: "#d95926", s3: "#199e70", s4: "#c98500" };
   // The main map's SST ramp (src/lib/mapData.js SST_STOPS), stretched to SoCal fall water.
@@ -19,9 +19,10 @@
   var facts = null, view = initialView(), map = null, CHARTS = {}, chartSeq = 0;
 
   function initialView() {
+    // Spearfishing had its own tab until 2026-10-15; old links and saved choices land on diving.
     var m = /view=(fishing|diving|spearfishing)/.exec(location.hash);
-    if (m) return m[1];
-    try { var v = localStorage.getItem("sd:report:view"); if (v) return v; } catch (e) { /* storage blocked */ }
+    if (m) return m[1] === "fishing" ? "fishing" : "diving";
+    try { var v = localStorage.getItem("sd:report:view"); if (v) return v === "fishing" ? "fishing" : "diving"; } catch (e) { /* storage blocked */ }
     return "fishing";
   }
   function esc(s) {
@@ -287,7 +288,7 @@
   function sendLink(text) { return '<a href="#send" class="send-open">' + esc(text) + "</a>"; }
 
   function obsHighlight() {
-    var types = view === "fishing" ? ["catch", "sighting"] : view === "diving" ? ["dive"] : ["dive", "catch", "sighting"];
+    var types = view === "fishing" ? ["catch", "sighting"] : ["dive", "catch", "sighting"];
     var recent = obsRecent(types).filter(function (o) { return obsAge(o) <= 2; });
     if (!recent.length) return "";
     var top = recent.slice(0, 2).map(function (o) {
@@ -298,7 +299,7 @@
   }
 
   function waterSection() {
-    var types = view === "diving" ? ["dive", "sighting"] : ["catch", "sighting", "dive"];
+    var types = ["catch", "sighting", "dive"];
     var recent = obsRecent(types);
     var groups = [], seen = {};
     recent.forEach(function (o) {
@@ -454,7 +455,9 @@
   function mapSection() {
     return '<section><h2 id="map-h">Where things are</h2><div id="map" class="map" role="region" aria-label="Map of water temperature, zones, breaks, paddies and fleet"></div>' +
       (view === "fishing" ? '<div class="maplegend"><span class="mut small">' + SST_SHOW_F[0] + '°F</span><span class="ramp" aria-hidden="true"></span><span class="mut small">' + SST_SHOW_F[1] + "°F</span></div>"
-        : '<div class="maplegend"><span class="mut small">Predicted visibility ' + VIS_SHOW_FT[0] + ' ft</span><span class="ramp vis" aria-hidden="true"></span><span class="mut small">' + VIS_SHOW_FT[1] + "+ ft</span></div>") +
+        : '<div class="maplegend"><span class="mut small">Predicted visibility</span><span class="ramp vis" aria-hidden="true">' +
+          VIS_RAMP.map(function (s) { return '<b style="left:' + (s[0] / VIS_SHOW_FT[1] * 100) + '%">' + s[0] + (s[0] === VIS_SHOW_FT[1] ? "+" : "") + "</b>"; }).join("") +
+          '</span><span class="mut small">ft</span></div>') +
       '<div class="maplegend"><span class="mut small">Fleet stops:</span>' + ["today", "1 day", "2 days", "3 days"].map(function (t, i) {
         return '<span class="key"><i style="background:' + AGE_COLORS[i] + '"></i>' + t + "</span>";
       }).join("") + '<span class="key"><i style="background:#fbbf24"></i>boat now</span><span class="key"><i class="ring"></i>break</span><span class="key"><i style="background:#22c55e"></i>paddies</span>' +
@@ -463,14 +466,21 @@
         : "Predicted visibility: our model scaled to where recent shop reports landed, La Jolla and Laguna each on their own record; in between and beyond, the two are blended by distance, an extrapolation. Water temperature is in the layer menu.") + "</p></section>";
   }
 
-  // Predicted visibility overlay: one blue hue, pale for murky, deep for clear
-  // (dataviz sequential blue, 100 -> 700), after the model's recent bias.
-  var VIS_RAMP = [[205, 226, 251], [158, 197, 244], [109, 167, 236], [57, 135, 229], [37, 106, 191], [24, 79, 149], [13, 54, 107]];
-  var VIS_SHOW_FT = [0, 35];
+  // Predicted visibility overlay in the main map's colors (VIZ_RAMP in
+  // src/components/DataOverlay.jsx): burnt orange for murky, green at 10 ft,
+  // then deepening blues to navy at 50 ft, after the model's recent bias.
+  var VIS_RAMP = [[0, [194, 65, 12]], [10, [34, 197, 94]], [20, [6, 182, 212]], [30, [3, 105, 161]], [50, [31, 77, 117]]];
+  var VIS_SHOW_FT = [0, 50];
   function visColor(ft) {
-    var t = Math.max(0, Math.min(1, (ft - VIS_SHOW_FT[0]) / (VIS_SHOW_FT[1] - VIS_SHOW_FT[0]))) * (VIS_RAMP.length - 1);
-    var i = Math.min(Math.floor(t), VIS_RAMP.length - 2), k = t - i, a = VIS_RAMP[i], b = VIS_RAMP[i + 1];
-    return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+    if (ft <= VIS_RAMP[0][0]) return VIS_RAMP[0][1];
+    for (var i = 0; i < VIS_RAMP.length - 1; i++) {
+      var a = VIS_RAMP[i], b = VIS_RAMP[i + 1];
+      if (ft <= b[0]) {
+        var k = (ft - a[0]) / (b[0] - a[0]);
+        return [a[1][0] + (b[1][0] - a[1][0]) * k, a[1][1] + (b[1][1] - a[1][1]) * k, a[1][2] + (b[1][2] - a[1][2]) * k];
+      }
+    }
+    return VIS_RAMP[VIS_RAMP.length - 1][1];
   }
   // Each pixel blends the areas' scales (La Jolla, Laguna) by inverse squared
   // distance to their reference points, the same rule the pipeline uses
@@ -809,7 +819,7 @@
     var vis = (t.vis || {})["dive-shop-justgetwet"];
     if (view !== "fishing" && vis && vis.length > 2) {
       out += lineChart({ title: "Visibility posted by Just Get Wet (La Jolla)", sub: "low to high of each post, ft", unit: " ft",
-        refs: view === "spearfishing" ? [{ v: 15, label: "15 ft" }] : [],
+        refs: [{ v: 15, label: "15 ft" }],
         series: [{ name: "Visibility", color: C.s1, range: true, points: vis.map(function (p) { return { d: p.date, lo: p.lo_ft, hi: p.hi_ft }; }) }] });
     }
     var gl = (t.glider || []).filter(function (g) { return g.mixed_layer_ft != null; });
@@ -926,8 +936,7 @@
   }
 
   function body() {
-    if (view === "diving") return mapSection() + diveSites() + waterSection() + trendsSection() + seasonSection() + weather() + basics() + sourcesBlock();
-    if (view === "spearfishing") return diveSites() + waterSection() + around(true) + trendsSection() + seasonSection() + mapSection() + weather() + basics() + sourcesBlock();
+    if (view === "diving") return mapSection() + diveSites() + waterSection() + around(true) + trendsSection() + seasonSection() + weather() + basics() + sourcesBlock();
     return jumpNav() + mapSection() + weather() + zonesSection(["offshore", "mexico", "inshore"]) + waterSection() + fleetSection() + trendsSection() + seasonSection() + bait() + around(false) + spotsTable() + sourcesBlock();
   }
 
