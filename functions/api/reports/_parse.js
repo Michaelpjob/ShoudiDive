@@ -55,8 +55,6 @@ const SIGHT_RX = [
   ["color or temperature break", /temp(?:erature)?\s+break|color\s+break/i], ["current line", /current\s+line/i], ["red tide", /red\s+tide/i],
 ];
 
-function num(spots) { return new RegExp("\\bthe\\s+(?:" + spots + ")\\b|\\b(?:" + spots + ")\\s*(?:spot|fathom|bank|knuckle)\\b", "i"); }
-
 // Zones in pipeline/reports/zones.py order: [short name, center, place patterns].
 export const ZONES = [
   ["La Jolla to IB", [32.74, -117.28], [/la\s*jolla/i, /point\s*loma|pt\.?\s*loma/i, /imperial\s*beach|\bib\s+(?:pipe|kelp)/i, /whistler\s*buoy/i, /mission\s+beach\s+kelp/i]],
@@ -65,21 +63,32 @@ export const ZONES = [
   ["Coronados", [32.41, -117.26], [/coronado(?:s|\s+islands?)\b/i, /middle\s+grounds/i, /south\s+kelp\s+ridge|\bskr\b/i]],
   ["Catalina", [33.38, -118.42], [/catalina(?!\s+channel)/i, /farnsworth/i, /avalon(?!\s+bank)/i, /\bisthmus\b/i]],
   ["San Clemente Is.", [32.90, -118.50], [/san\s*clemente\s*island|\bclemente\s+island|\bsci\b/i, /pyramid\s+(?:head|cove)/i, /china\s+point/i, /desperation\s+reef/i]],
-  ["9 Mile / 43", [32.66, -117.72], [/(?<!south\s)(?<!south)\b(?:9|nine)\s*mile/i, num("178|182|43"), /\bthe\s+corner\b/i]],
-  ["267 / 209-312", [33.12, -117.82], [num("267|209|312|181|289")]],
-  ["14 Mile / Avalon Bank", [33.36, -118.08], [/\b(?:14|fourteen)\s*mile/i, /avalon\s+bank/i, num("152|277"), /\bthe\s+slide\b/i]],
+  ["9 Mile / 43", [32.66, -117.72], [/(?<!south\s)(?<!south)\b(?:9|nine)\s*mile/i, /\bthe\s+(?:178|182|43)\b|\b(?:178|182|43)\s*(?:spot|fathom|bank|knuckle)\b/i, /\bthe\s+corner\b/i]],
+  ["267 / 209-312", [33.12, -117.82], [/\bthe\s+(?:267|209|312|181|289)\b|\b(?:267|209|312|181|289)\s*(?:spot|fathom|bank|knuckle)\b/i]],
+  ["14 Mile / Avalon Bank", [33.36, -118.08], [/\b(?:14|fourteen)\s*mile/i, /avalon\s+bank/i, /\bthe\s+(?:152|277)\b|\b(?:152|277)\s*(?:spot|fathom|bank|knuckle)\b/i, /\bthe\s+slide\b/i]],
   ["Tanner / Cortes", [32.60, -119.20], [/tanner/i, /cort[ez]s/i, /cherry\s+bank/i]],
-  ["South 9 / 302 / 425", [32.33, -117.55], [/south\s*(?:9|nine)/i, num("226|302|425|371|230"), /upper\s+hidden|hidden\s+bank/i, /coronado\s+canyon/i]],
+  ["South 9 / 302 / 425", [32.33, -117.55], [/south\s*(?:9|nine)/i, /\bthe\s+(?:226|302|425|371|230)\b|\b(?:226|302|425|371|230)\s*(?:spot|fathom|bank|knuckle)\b/i, /upper\s+hidden|hidden\s+bank/i, /coronado\s+canyon/i]],
   ["Rockpile / Upper 500", [31.85, -117.45], [/rock\s*pile/i, /salsipuedes/i, /upper\s*500/i, /\b1010\b/i, /todos\s+santos/i, /off\s+ensenada/i]],
 ];
 
-const COUNT_WORDS = "(?:[a-z-]+\\s+){0,2}?";
+// "12 yellowtail", "5 nice yellowtail", "3 big fat yellowfin": a number, up to
+// two words, then the species. Fixed patterns only (no RegExp built at runtime).
 function countFor(text, rx) {
-  const r = new RegExp("\\b(\\d{1,4})\\s+" + COUNT_WORDS + "(?:" + rx.source + ")", "gi");
+  const t = String(text || ""), numRx = /\b(\d{1,4})\s+/g;
   let sum = 0, m;
-  while ((m = r.exec(text))) {
+  while ((m = numRx.exec(t))) {
+    let rest = t.slice(numRx.lastIndex), hit = false;
+    for (let k = 0; k <= 2 && !hit; k++) {
+      const s = rx.exec(rest);
+      if (s && s.index === 0) hit = true;
+      else {
+        const w = /^[a-z-]+\s+/i.exec(rest);
+        if (!w) break;
+        rest = rest.slice(w[0].length);
+      }
+    }
     const n = parseInt(m[1], 10);
-    if (!/^(19|20)\d\d$/.test(m[1]) && n < 2000) sum += n;
+    if (hit && !/^(19|20)\d\d$/.test(m[1]) && n < 2000) sum += n;
   }
   return sum || null;
 }

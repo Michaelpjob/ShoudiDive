@@ -22,8 +22,9 @@ export async function inboundReport(env, text, who, via, nowMs = Date.now()) {
 // --- Email: the text part of a MIME message ------------------------------------
 function unfold(head) { return head.replace(/\r?\n[ \t]+/g, " "); }
 function header(head, name) {
-  const m = new RegExp("^" + name + ":\\s*(.*)$", "im").exec(unfold(head));
-  return m ? m[1].trim() : "";
+  const want = name.toLowerCase() + ":";
+  const line = unfold(head).split(/\r?\n/).find((l) => l.toLowerCase().startsWith(want));
+  return line ? line.slice(want.length).trim() : "";
 }
 function decodeBody(body, enc) {
   enc = String(enc || "").toLowerCase();
