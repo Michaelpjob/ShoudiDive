@@ -80,10 +80,10 @@
     },
     {
       "name": "reports.hot_bites",
-      "where": "pipeline/reports/hot_bites.py (DAYS 4, CLUSTER_NM 1.0, LONE_MIN 60, HARBOR_NM 1.0 + HARBOR_MOUTHS)",
+      "where": "pipeline/reports/hot_bites.py (DAYS 4, CLUSTER_NM 1.0, LONE_MIN 60, HARBOR_NM 1.0 + HARBORS, SPOT_NM 4.0, TRIP_RANK) + public/reports/app.js spotName (4 nm) and bestSpots order",
       "status": "provisional",
-      "affects": "which AIS fleet stops the Ocean Report's Hot Bites shows as 'fleet on a spot' (no species, boats and minutes only)",
-      "note": "Hand-set: 2+ boats within 1 nm the same day, or one boat holding 60+ min, offshore of the nearshore band and more than 1 nm from a harbor mouth (added after the first run showed a 4-hour stop at the San Diego Bay entrance). To earn fit: join clusters to dock counts per trip (licensed or permitted landings) and check how often a cluster day had fish.",
+      "affects": "which AIS fleet stops the Ocean Report's Hot Bites shows, which named spot a point takes, which dock-count trip a boat's stops carry, and the order of 'Where the fish are'",
+      "note": "Hand-set: 2+ boats within 1 nm the same day, or one boat holding 60+ min, or any boat whose own landing posted a count that day (Dana Wharf, Davey's Locker; the trip with the longest trip type goes with the offshore stops); offshore of the nearshore band and more than 1 nm from a harbor mouth (added after the first run showed a 4-hour stop at the San Diego Bay entrance). A point takes the name of a gazetteer spot within 4 nm, else distance and direction from the nearest harbor. 'Where the fish are' orders places by fish counted, then by how many reports and boats; it ranks evidence, not a forecast. To earn fit: score each day's top places against the next days' counts and reports.",
       "fit_against": null
     }
   ]

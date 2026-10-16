@@ -14,7 +14,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import evidence, explain, fish, hot_bites, nws_text, physics, render, season, season_curves, sites, sources, story, trends, views, visibility, zones
+from . import dock_counts, evidence, explain, fish, hot_bites, nws_text, physics, render, season, season_curves, sites, sources, story, trends, views, visibility, zones
 from . import thresholds as T
 from . import verdicts as V
 
@@ -85,6 +85,8 @@ def gather(now: datetime) -> dict[str, dict]:
     S["enso_weekly"] = trends.enso_weekly(now=now)
     S["season_curves"] = season_source(today, now, S)
     S["field_reports"] = sources.field_reports(now=now)
+    for d in dock_counts.fetch(now=now):
+        S[d["id"]] = d
     return S
 
 
@@ -526,7 +528,11 @@ def assemble(S: dict[str, dict], now: datetime) -> dict:
                      "links": [{"name": "Everingham Bros bait report (San Diego Bay, Mission Bay, Dana Point)",
                                 "url": "https://baitbarge.com/bait-report"}]}
     facts["map"] = zones.map_layers(paddies, fish.paddy_offset(paddies, today), fleet, today, man)
-    facts["hot_bites"] = {"days": hot_bites.DAYS, "fleet": hot_bites.fleet_hot_bites(fleet, today)}
+    dock = [x for x in (_usable(S.get(L["id"])) for L in dock_counts.LANDINGS) if x]
+    hb = hot_bites.fleet_hot_bites(fleet, today, dock_counts.trips_since(dock, today - timedelta(days=hot_bites.DAYS - 1)))
+    facts["hot_bites"] = {"days": hot_bites.DAYS, "fleet": hb["fleet"], "landed": hb["landed"],
+                          "dock_week": hot_bites.dock_week(dock, today),
+                          "dock_sources": [{"landing": d["landing"], "port": d["port"], "url": d["url"]} for d in dock]}
     facts["highlights"] = story.highlights(facts)
     facts["archive_snapshot"] = zones.snapshot(cards)
     if refs:
