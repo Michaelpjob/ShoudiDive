@@ -14,7 +14,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import dock_counts, evidence, explain, fish, hot_bites, nws_text, physics, render, season, season_curves, sites, sources, story, trends, views, visibility, zones
+from . import bait_barges, dock_counts, evidence, explain, fish, hot_bites, nws_text, physics, render, season, season_curves, sites, sources, story, trends, views, visibility, zones
 from . import thresholds as T
 from . import verdicts as V
 
@@ -38,7 +38,7 @@ POST_SOURCES = {
 }
 NOT_COVERED = [
     "Fish counts. No licensed source yet, so the fishing view shows where the water matches each species, not how many fish are there.",
-    "Bait. No barge publishes a feed; the bait table shows what people on the water send in, and where the fleet stops is the other proxy.",
+    "Bait at barges other than Everingham's three (Oceanside, Newport, San Pedro, Redondo, Marina del Rey): they post by phone or social media, so only reports from the water cover them.",
     "Current at dive depth. HF radar measures the surface only and is blank within about 1.5 miles of shore.",
     "Beach water-quality notices. San Diego County's beach status site has no public data feed; connecting it needs a feed from the county.",
     "The thermocline at the kelp. The observed profile comes from a glider offshore; the SCCOOS Del Mar kelp mooring did not answer when this was built.",
@@ -87,6 +87,7 @@ def gather(now: datetime) -> dict[str, dict]:
     S["field_reports"] = sources.field_reports(now=now)
     for d in dock_counts.fetch(now=now):
         S[d["id"]] = d
+    S["bait_barges"] = bait_barges.fetch(now=now)
     return S
 
 
@@ -524,9 +525,10 @@ def assemble(S: dict[str, dict], now: datetime) -> dict:
                                            facts["divers"]["surge"]["sites"])
     for ds, site in zip(facts["dive_sites"], sites.SHORE_SITES):
         ds["vis_pred"] = site_vis.get(site["id"])
-    facts["bait"] = {"text": "The barges also post their own updates:",
-                     "links": [{"name": "Everingham Bros bait report (San Diego Bay, Mission Bay, Dana Point)",
-                                "url": "https://baitbarge.com/bait-report"}]}
+    bb = _usable(S.get("bait_barges")) or {}
+    facts["bait"] = {"barges": bb.get("barges", []), "source": "Everingham Bros Bait Co", "url": bait_barges.URL,
+                     "text": "Other barges (Oceanside, Newport, San Pedro, Redondo, Marina del Rey) post by phone or social media; reports from the water fill in below.",
+                     "links": []}
     facts["map"] = zones.map_layers(paddies, fish.paddy_offset(paddies, today), fleet, today, man)
     dock = [x for x in (_usable(S.get(L["id"])) for L in dock_counts.LANDINGS) if x]
     hb = hot_bites.fleet_hot_bites(fleet, today, dock_counts.trips_since(dock, today - timedelta(days=hot_bites.DAYS - 1)))
