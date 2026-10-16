@@ -49,6 +49,8 @@ test("the report form offers exactly what the field-report API accepts", async (
   assert.deepEqual(grab("OBS_BAITS"), lib.BAITS);
   assert.deepEqual(grab("OBS_BARGES"), Object.keys(lib.BARGES));
   assert.deepEqual(grab("OBS_COLORS"), lib.COLORS);
+  assert.deepEqual(grab("OBS_METHODS"), lib.METHODS);
+  assert.match(app, /"\/api\/reports\/parse"/);
   assert.match(app, /"\/api\/reports\/submit"/);
   assert.match(app, /"\/api\/reports\/feed"/);
 });

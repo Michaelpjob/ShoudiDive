@@ -14,7 +14,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import evidence, explain, fish, nws_text, physics, render, season, season_curves, sites, sources, story, trends, views, visibility, zones
+from . import evidence, explain, fish, hot_bites, nws_text, physics, render, season, season_curves, sites, sources, story, trends, views, visibility, zones
 from . import thresholds as T
 from . import verdicts as V
 
@@ -526,6 +526,7 @@ def assemble(S: dict[str, dict], now: datetime) -> dict:
                      "links": [{"name": "Everingham Bros bait report (San Diego Bay, Mission Bay, Dana Point)",
                                 "url": "https://baitbarge.com/bait-report"}]}
     facts["map"] = zones.map_layers(paddies, fish.paddy_offset(paddies, today), fleet, today, man)
+    facts["hot_bites"] = {"days": hot_bites.DAYS, "fleet": hot_bites.fleet_hot_bites(fleet, today)}
     facts["highlights"] = story.highlights(facts)
     facts["archive_snapshot"] = zones.snapshot(cards)
     if refs:

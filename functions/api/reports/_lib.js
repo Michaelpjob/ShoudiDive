@@ -14,6 +14,7 @@
 import {
   jsonResponse, snap, clip, emailOk, clientIp, sha256hex, nmBetween, withinDays, modGate, repScore,
 } from "../paddies/_lib.js";
+import { METHODS } from "./_parse.js";
 
 export { jsonResponse, clip, emailOk, clientIp, sha256hex, modGate, repScore };
 
@@ -32,8 +33,10 @@ export const TYPES = ["catch", "sighting", "bait", "dive"];
 export const SPECIES = [
   "yellowfin", "bluefin", "skipjack", "dorado", "yellowtail", "wahoo", "striped marlin", "white seabass",
   "calico bass", "sand bass", "halibut", "sheephead", "bonito", "barracuda", "rockfish", "lingcod",
-  "lobster", "mako", "other",
+  "whitefish", "sculpin", "lobster", "mako", "other",
 ];
+export { METHODS };
+export const VIA = ["web", "email", "text"];
 export const SIGHTINGS = [
   "kelp paddy", "birds working", "foamers or breezers", "porpoise", "whales", "bait ball",
   "marlin (tailer or sleeper)", "color or temperature break", "current line", "red tide",
@@ -97,12 +100,24 @@ export function validate(body, nowMs) {
     if (!bboxOk(lat, lng)) return { error: "location is outside Southern California waters" };
     rec.lat = snap(lat);
     rec.lng = snap(lng);
+    if (body.loc === "zone") rec.loc = "zone";
   }
   if (type === "catch") {
     const sp = Array.isArray(body.species) ? body.species : [body.species];
     rec.species = [...new Set(sp.map((s) => pick(s, SPECIES)).filter(Boolean))].slice(0, 5);
     if (!rec.species.length) return { error: "pick at least one species" };
     rec.bait = pick(body.bait, BAITS);
+    rec.method = pick(body.method, METHODS);
+    const size = num(body.size_lb, 0, 1000);
+    if (size === undefined) return { error: "size must be 0-1000 lb" };
+    rec.size_lb = size;
+    const counts = {};
+    const given = body.counts && typeof body.counts === "object" ? body.counts : {};
+    for (const sp of rec.species) {
+      const n = num(given[sp], 1, 2000);
+      if (n) counts[sp] = Math.round(n);
+    }
+    if (Object.keys(counts).length) rec.counts = counts;
   }
   if (type === "sighting") {
     rec.sighting = pick(body.sighting, SIGHTINGS);
@@ -126,7 +141,23 @@ export function validate(body, nowMs) {
   rec.water_temp_f = t;
   rec.color = pick(body.color, COLORS);
   rec.notes = clip(body.notes, 280);
+  rec.via = pick(body.via, VIA) || "web";
   return { rec };
+}
+
+// Store a validated report in the pending queue; returns its id. `who` is
+// moderator-only (email or phone, name, device, IP hash, the raw text of an
+// emailed or texted report).
+export async function storePending(env, rec, who, nowMs) {
+  const id = crypto.randomUUID();
+  const full = { id, ...rec, name: who.name || "", email: who.email, deviceId: who.deviceId || "anon", ipHash: who.ipHash || "",
+    submittedAt: nowMs, status: "pending" };
+  if (who.raw_text) full.raw_text = String(who.raw_text).slice(0, 2000);
+  const expiresAt = Date.parse(rec.date + "T12:00:00Z") + MAX_AGE_DAYS * 86400000;
+  const ttl = Math.max(3600, Math.floor((expiresAt - nowMs) / 1000));
+  await env.REPORTS_KV.put(PENDING_PREFIX + id, JSON.stringify(full), { expirationTtl: ttl });
+  await recordEmail(env, who.email, who.name, rec.type, nowMs);
+  return id;
 }
 
 export async function rateOk(env, id, limit, windowSec) {
@@ -260,7 +291,7 @@ export function publicView(r) {
   const out = { id: r.id, type: r.type, date: r.date, lat: r.lat, lng: r.lng, confidence: r._tier || "single report",
     sources: r._sources || 1 };
   for (const k of ["species", "sighting", "barge", "bait", "bait_size", "vis_lo_ft", "vis_hi_ft", "depth_ft", "surge",
-    "water_temp_f", "color", "notes"]) {
+    "water_temp_f", "color", "notes", "method", "size_lb", "counts", "loc", "via"]) {
     if (r[k] != null && r[k] !== "" && !(Array.isArray(r[k]) && !r[k].length)) out[k] = r[k];
   }
   return out;

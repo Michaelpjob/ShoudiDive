@@ -77,6 +77,14 @@
       "affects": "the Ocean Report's predicted visibility numbers, map layer and highlights (not the main map), per area",
       "note": "Fit 2026-10-15. La Jolla: 50 Just Get Wet pairs (Aug 15-Oct 14), published p50 about twice the posts (ratio 0.48), r = 0.38; the ratio beat a flat offset (72% vs 62% inside the posted range, MAE 2.6 vs 2.8 ft). Laguna: 36 South Coast Divers pairs (Aug 4-Oct 15, read deterministically from the posts), the model sat at 27-29 ft while posts ran 0-20 ft: ratio 0.27, r = 0.70 but scaled MAE 3.3 ft, no better than always saying the average (3.2) and worse than repeating the previous post (2.8). La Jolla likewise: 2.6 vs 2.7 (average) and 2.4 (previous post). The correction fixes scale, not day-to-day skill; each build reports both baselines next to the model. Approved diver reports within 6 nm of an area's reference point join its pairs. Refit every build (seed + the report archive's own daily predictions at each area's reference point). Elsewhere the ratio is blended between the areas by inverse squared distance to their reference points (no seam), an extrapolation for islands and offshore.",
       "fit_against": "pipeline/reports/data/vis_pairs_seed.json"
+    },
+    {
+      "name": "reports.hot_bites",
+      "where": "pipeline/reports/hot_bites.py (DAYS 4, CLUSTER_NM 1.0, LONE_MIN 60, HARBOR_NM 1.0 + HARBOR_MOUTHS)",
+      "status": "provisional",
+      "affects": "which AIS fleet stops the Ocean Report's Hot Bites shows as 'fleet on a spot' (no species, boats and minutes only)",
+      "note": "Hand-set: 2+ boats within 1 nm the same day, or one boat holding 60+ min, offshore of the nearshore band and more than 1 nm from a harbor mouth (added after the first run showed a 4-hour stop at the San Diego Bay entrance). To earn fit: join clusters to dock counts per trip (licensed or permitted landings) and check how often a cluster day had fish.",
+      "fit_against": null
     }
   ]
 }
