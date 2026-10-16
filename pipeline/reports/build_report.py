@@ -14,7 +14,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import bait_barges, dock_counts, evidence, explain, fish, hot_bites, nws_text, physics, render, season, season_curves, sites, sources, story, trends, views, visibility, zones
+from . import bait_barges, dock_counts, fleets, regions, evidence, explain, fish, hot_bites, nws_text, physics, render, season, season_curves, sites, sources, story, trends, views, visibility, zones
 from . import thresholds as T
 from . import verdicts as V
 
@@ -535,6 +535,11 @@ def assemble(S: dict[str, dict], now: datetime) -> dict:
     facts["hot_bites"] = {"days": hot_bites.DAYS, "fleet": hb["fleet"], "landed": hb["landed"],
                           "dock_week": hot_bites.dock_week(dock, today),
                           "dock_sources": [{"landing": d["landing"], "port": d["port"], "url": d["url"]} for d in dock]}
+    # Regions by home port, and each landing's week from AIS + its own counts (fleets.json).
+    facts["regions"] = regions.REGIONS
+    fl = fleets.build(fleet, sources.DATA.parent / "fleet" / "trips", dock, today)
+    facts["fleet_week"] = {"days": fl["days"], "regions": fl["regions"]}
+    facts["fleets_file"] = fl
     facts["highlights"] = story.highlights(facts)
     facts["archive_snapshot"] = zones.snapshot(cards)
     if refs:
@@ -561,6 +566,10 @@ def write(facts: dict, out_dir: Path) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     snap = facts.pop("archive_snapshot", None)
     sea = facts.pop("season_cache", None)
+    fl = facts.pop("fleets_file", None)
+    if fl is not None:
+        (out_dir / "fleets.json").write_text(json.dumps({"date": facts["date"], "generated_local": facts.get("generated_local"), **fl},
+                                                        separators=(",", ":"), ensure_ascii=False, allow_nan=False), encoding="utf-8")
     if sea is not None:
         (out_dir / "season.json").write_text(json.dumps(sea, separators=(",", ":")), encoding="utf-8")
     if snap is not None:

@@ -673,3 +673,47 @@ def test_bait_barges_by_location():
     assert by["San Diego Bay"]["serving"] == ["5-7 inch Sardine"] and by["San Diego Bay"]["notes"] == ["2 scoops max purchase"]
     assert by["Dana Point"]["serving"] == ["3-5 inch Anchovy", "3-8 inch Sardine/Chovy Mix"]
     assert by["Dana Point"]["as_of"] == "2026-10-15T10:16" and by["Mission Bay"]["as_of"] == "2026-10-15T08:16"
+
+
+from reports import fleets, regions  # noqa: E402
+
+
+def test_fleet_log_joins_the_landings_own_counts_and_never_reads_network_counts(tmp_path):
+    boats = [{"mmsi": 1, "name": "Freelance", "landing": "Davey's Locker", "port": "Newport Beach", "length_ft": 65, "trip_type": "3/4 day"},
+             {"mmsi": 2, "name": "Victory", "landing": "Long Beach Sportfishing", "port": "Long Beach", "length_ft": 85, "trip_type": "full day"}]
+    landings = {"Davey's Locker": [33.6032, -117.929, "Newport Beach"], "Long Beach Sportfishing": [33.7657, -118.2162, "Long Beach"],
+                "Seaforth Sportfishing": [32.7623, -117.2362, "Mission Bay"]}
+    # trips[9:13] = anglers, kept, released, trip type from the count network: must never surface
+    trips = [[0, "2026-10-14", 9.6, 33.0, 0.8, 2, 120, 33.4, -118.0, 99, 999, 0, "Network 3/4", 11],
+             [1, "2026-10-12", 10.1, 40.0, 0.7, 1, 106, 33.58, -118.17, 77, 777, 0, "Network full", 12],
+             [1, "2026-10-01", 10.0, 40.0, 0.7, 1, 50, 33.58, -118.17, None, None, None, None, 13]]   # older than a week
+    stops = [[0, "2026-10-14", 33.40, -118.00, 97, 0, "h", 11, 0],
+             [0, "2026-10-14", 33.41, -118.01, 20, 0, "h", 11, 0],    # same named spot: merged
+             [0, "2026-10-14", 33.59, -117.90, 35, 0, "h", 11, 1],    # nearshore band: a total, not a place
+             [1, "2026-10-12", 33.60, -118.17, 106, 0, "h", 12, 0]]
+    (tmp_path / "1.json").write_text(json.dumps({"trips": [{"id": 11, "dep": "2026-10-14T13:02Z", "ret": "2026-10-14T22:40Z",
+                                                             "pts": [[0, 33.6, -117.9, 9.0], [1, 33.4, -118.0, 0.2], [2, 33.6, -117.9, 9.0]]}]}), encoding="utf-8")
+    dock = [{"landing": "Davey's Locker", "port": "Newport Beach", "url": "u",
+             "trips": [{"date": "2026-10-14", "boat": "Freelance", "trip": "ext 3/4 day", "anglers": 50, "catch": {"yellowfin": 186}},
+                       {"date": "2026-10-13", "boat": "Western Pride", "trip": "1/2 day am", "anglers": 30, "catch": {"calico bass": 40}}]}]
+    fl = fleets.build({"boats": boats, "landings": landings, "trips": trips, "stops": stops}, tmp_path, dock, date(2026, 10, 15))
+    by = {L["name"]: L for L in fl["landings"]}
+    dl = by["Davey's Locker"]
+    assert dl["region"] == "oc" and dl["counts"]["landing"] == "Davey's Locker"
+    fr = next(b for b in dl["boats"] if b["name"] == "Freelance")["trips"][0]
+    assert fr["catch"] == {"yellowfin": 186} and fr["trip"] == "ext 3/4 day" and fr["heard"]
+    assert fr["dep"] == "6:02 AM" and fr["ret"] == "3:40 PM" and fr["max_nm"] == 17.8
+    assert fr["places"][0]["place"] == "14 Mile Bank" and fr["places"][0]["minutes"] == 117 and fr["near_min"] == 35
+    assert len(fr["track"]) == 3
+    wp = next(b for b in dl["boats"] if b["name"] == "Western Pride")["trips"][0]
+    assert not wp["heard"] and wp["catch"] == {"calico bass": 40}
+    assert dl["catch"] == {"yellowfin": 186, "calico bass": 40}
+    lb = by["Long Beach Sportfishing"]
+    assert lb["region"] == "la" and lb["counts"] is None and lb["n_trips"] == 1
+    assert "catch" not in lb["boats"][0]["trips"][0] and lb["boats"][0]["trips"][0]["track"] == []   # no track file: no line
+    assert by["Seaforth Sportfishing"]["n_trips"] == 0                                            # known landing, quiet week
+    blob = json.dumps(fl)
+    assert "999" not in blob and "777" not in blob and "Network" not in blob
+    oc = next(r for r in fl["regions"] if r["id"] == "oc")
+    assert oc["n_trips"] == 2 and oc["n_heard"] == 1 and oc["offshore_min"] == 117
+    assert regions.region_of_point(32.4, -117.26) == "sd" and regions.region_of_point(33.5, -117.8) == "oc"
