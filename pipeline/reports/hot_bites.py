@@ -15,6 +15,21 @@ from .zones import SHORT, ZONES, nm_between, zone_of
 DAYS = 4
 CLUSTER_NM = 1.0       # stops this close on the same day are one spot
 LONE_MIN = 60          # a single boat counts once it held a spot this long
+# Harbor mouths: a boat holding here is waiting on bait, a slip or the tide,
+# not fishing (the first live run put a 4-hour "spot" at the San Diego Bay
+# entrance). Approximate entrance centers.
+HARBOR_NM = 1.0
+HARBOR_MOUTHS = [
+    (32.678, -117.236),   # San Diego Bay
+    (32.756, -117.253),   # Mission Bay
+    (33.204, -117.396),   # Oceanside
+    (33.456, -117.697),   # Dana Point
+    (33.594, -117.879),   # Newport
+    (33.709, -118.250),   # Angels Gate, LA Harbor
+    (33.846, -118.400),   # King Harbor, Redondo
+    (33.966, -118.462),   # Marina del Rey
+    (31.853, -116.630),   # Ensenada
+]
 
 
 def fleet_hot_bites(fleet: dict | None, today: date, days: int = DAYS) -> list[dict]:
@@ -25,6 +40,8 @@ def fleet_hot_bites(fleet: dict | None, today: date, days: int = DAYS) -> list[d
     by_day: dict[str, list] = {}
     for st in fleet.get("stops", []):
         if st[1] < since or st[1] > today.isoformat() or st[-1]:
+            continue
+        if any(nm_between((st[2], st[3]), h) <= HARBOR_NM for h in HARBOR_MOUTHS):
             continue
         by_day.setdefault(st[1], []).append(st)
     out = []

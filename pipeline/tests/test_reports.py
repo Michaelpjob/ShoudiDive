@@ -621,6 +621,7 @@ def test_hot_bites_cluster_boats_and_keep_long_lone_stops():
         [2, "2026-10-13", 32.300, -117.500, 75, 0, "h", "t4", 0],   # lone but held 75 min: kept
         [0, "2026-10-14", 32.840, -117.280, 90, 0, "h", "t5", 1],   # nearshore band: dropped
         [1, "2026-10-08", 32.660, -117.720, 90, 0, "h", "t6", 0],   # older than 4 days: dropped
+        [0, "2026-10-14", 32.670, -117.230, 236, 0, "h", "t7", 0],  # San Diego Bay mouth: waiting, dropped
     ]
     hb = hot_bites.fleet_hot_bites({"boats": boats, "stops": stops}, date(2026, 10, 15))
     assert [(h["date"], h["boats"], h["minutes"]) for h in hb] == [("2026-10-14", 2, 90), ("2026-10-13", 1, 75)]
