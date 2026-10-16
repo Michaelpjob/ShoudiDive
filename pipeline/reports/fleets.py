@@ -8,7 +8,10 @@ data's count columns (trips[9:13]) come from a network whose terms forbid
 reuse and are never read here.
 
 Spots are named only offshore, as in the fleet tool; time inside the nearshore
-band is one total per trip. A dock trip with no AIS trip that day is listed as
+band is one total per trip. "cov" is the share of the trip AIS heard: below
+about half, departure and return times are where AIS first and last heard the
+boat, not the dock times. Distances are straight-line from the landing. A dock
+trip with no AIS trip that day is listed as
 not heard (most boats under 65 ft carry no AIS, and shore receivers lose a
 boat 30-50 nm out).
 """
@@ -107,7 +110,7 @@ def build(fleet: dict | None, track_dir: Path, dock: list[dict] | None, today: d
         dep, ret = _local(rec.get("dep")), _local(rec.get("ret"))
         by_landing[b.get("landing")][b.get("name")].append({
             "date": t[1], "ret_date": ret.date().isoformat() if ret else None, "dep": _clock(dep), "ret": _clock(ret),
-            "hours": t[2], "max_nm": round(t[3] / 1.852, 1) if t[3] is not None else None,
+            "hours": t[2], "max_nm": round(t[3] / 1.852, 1) if t[3] is not None else None, "cov": t[4],
             "places": places, "near_min": near, "heard": True, "track": _thin(rec.get("pts") or []),
         })
 
@@ -171,7 +174,7 @@ def build(fleet: dict | None, track_dir: Path, dock: list[dict] | None, today: d
         catch: dict[str, int] = {}
         for L in Ls:
             hot_bites._add(catch, L["catch"])
-        summary.append({"id": r["id"], "name": r["name"], "n_landings": len(Ls), "n_active": sum(1 for L in Ls if L["n_trips"]),
+        summary.append({"id": r["id"], "name": r["name"], "box": r["box"], "fleet_only": bool(r.get("fleet_only")), "n_landings": len(Ls), "n_active": sum(1 for L in Ls if L["n_trips"]),
                         "n_trips": sum(L["n_trips"] for L in Ls), "n_heard": len(heard),
                         "n_boats": len({(L["name"], b["name"]) for L in Ls for b in L["boats"] if b["trips"]}),
                         "offshore_min": round(sum(p["minutes"] for _, tr in heard for p in tr["places"])),
