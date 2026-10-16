@@ -512,7 +512,7 @@
   function firstFew(names, n) {
     return names.length > n ? names.slice(0, n).join(", ") + " +" + (names.length - n) + " more" : names.join(", ");
   }
-  function tilesHtml(tiles) { return '<div class="tiles n' + tiles.length + '">' + tiles.join("") + "</div>"; }
+  function tilesHtml(tiles) { return '<div class="tiles n' + (tiles.length === 5 ? 3 : tiles.length) + '">' + tiles.join("") + "</div>"; }
   function byDesc(get) { return function (a, b) { return get(b) - get(a); }; }
   function windiest() {
     var best = null;
@@ -635,8 +635,8 @@
     if (landed.length) out.push("This week, boats from " + joinAnd(ports) + " brought in " + joinAnd(landed) + ".");
     var best = bestSpots().filter(function (g) { return !g.noPos && g.total > 0; })[0];
     if (best) {
-      var who = Object.keys(best.boats).slice(0, 2).map(function (n) { return boatLine(best.boats[n]); });
-      out.push("The biggest catch with a known spot: " + catchLine(best.fish, 3) + " " + placePhrase(best.place) + " (" + who.concat([md(best.latest)]).join(", ") + ").");
+      var who = Object.keys(best.boats).slice(0, 2).map(function (n) { return boatPhrase(best.boats[n]); });
+      out.push(["Biggest catch with a known spot:", catchLine(best.fish, 3), placePhrase(best.place) + (who.length ? "," : ""), who.length ? "on " + joinAnd(who) : "", "(" + md(best.latest) + ")."].filter(Boolean).join(" "));
     }
     var rep = obsRecent(["catch", "sighting"]).length;
     out.push(rep ? [rep, rep > 1 ? "reports" : "report", "from the water this week."].join(" ") : "No reports from the water yet this week.");
@@ -646,7 +646,8 @@
     if (bb.length) out.push("Bait: " + bb.map(function (x) { return [x.barge, x.serving.join(" and ").toLowerCase()].join(", "); }).join("; ") + ".");
     var adv = ((facts.weather || {}).headlines || []).filter(function (a) { return (a.zones || []).some(function (zid) { return /^P[ZM]Z/.test(zid); }); });
     var wind = windiest();
-    if (adv.length || wind) out.push(adv.slice(0, 2).map(function (a) { return [a.event, "until", a.until, "(" + (a.where || a.area) + ")"].join(" "); }).concat(wind ? [wind] : []).join("; ") + ".");
+    adv.slice(0, 2).forEach(function (a) { out.push(advisoryLine(a) + "."); });
+    if (wind) out.push(wind + ".");
     return '<section class="hl summary"><h2 id="summary">The short version</h2><ul>' + out.map(function (l) { return "<li>" + esc(l) + "</li>"; }).join("") + "</ul></section>";
   }
   function summaryDiving() {
@@ -668,7 +669,7 @@
       out.push("Sets at the entries today: " + (lo < 1 ? "under 1" : Math.round(lo)) + " to " + Math.round(hi) + " ft.");
     }
     var adv = ((facts.weather || {}).headlines || []).filter(function (a) { return (a.zones || []).some(function (zid) { return /^CAZ|PZZ740|PZZ655/.test(zid); }); });
-    if (adv.length) out.push(adv.slice(0, 2).map(function (a) { return [a.event, "until", a.until, "(" + (a.where || a.area) + ")"].join(" "); }).join("; ") + ".");
+    adv.slice(0, 2).forEach(function (a) { out.push(advisoryLine(a) + "."); });
     return '<section class="hl summary"><h2 id="summary">The short version</h2><ul>' + out.map(function (l) { return "<li>" + esc(l) + "</li>"; }).join("") + "</ul></section>";
   }
 
@@ -752,6 +753,12 @@
   function joinAnd(list) { return list.length < 2 ? list.join("") : list.slice(0, -1).join(", ") + " and " + list[list.length - 1]; }
   function paddyWord(w) { return w === "core" ? "most likely" : w; }
   function placePhrase(pl) { return /^\d/.test(pl) ? "about " + pl : "at " + pl; }
+  // "the Freelance out of Davey's Locker, extended 3/4-day trip"
+  function boatPhrase(b) {
+    var trip = String(b.trip || "").replace(/^ext\b\.?\s*/i, "extended ").replace(/(\d\/\d|\d) day\b/, "$1-day");
+    return ["the", b.name].join(" ") + (b.source || b.landing ? " out of " + (b.source || b.landing) : "") + (trip ? ", " + trip + " trip" : "");
+  }
+  function advisoryLine(a) { return [a.event, "until", a.until, "for", a.where || a.area].join(" "); }
   function boatLine(b) {
     return b.name + (b.source || b.landing ? " (" + [b.source || b.landing, b.trip].filter(Boolean).join(", ") + ")" : "");
   }
@@ -965,7 +972,7 @@
           VIS_RAMP.map(function (s) { return '<b style="left:' + (s[0] / VIS_SHOW_FT[1] * 100) + '%">' + s[0] + (s[0] === VIS_SHOW_FT[1] ? "+" : "") + "</b>"; }).join("") +
           '</span><span class="mut small">ft</span></div>') +
       '<div class="maplegend"><span class="key"><i class="dia"></i>reported fish</span><span class="key"><i class="hbd"></i>boat with a dock count</span>' +
-      '<span class="key"><i class="hbf"></i>boat stopped</span><span class="key"><i style="background:#fbbf24"></i>boat out now</span>' +
+      '<span class="key"><i class="hbf"></i>boat stopped</span><span class="key"><i style="background:#fbbf24"></i>boat out now</span><span class="key"><i class="mx"></i>US-Mexico line</span>' +
       (view === "fishing" ? '<span class="key"><i class="brk"></i>temperature break</span><span class="key"><i style="background:#22c55e"></i>kelp paddies (model)</span>' : "") + "</div>" +
       '<p class="note">' + (view === "fishing" ? "Water temperature from the " + esc(sstAsOf()) + " satellite map; blank areas are cloud. Lines are temperature breaks traced from the same map: tap one for GPS. More layers are in the menu at top right."
         : "Predicted visibility: our model scaled to where recent shop reports landed, La Jolla and Laguna each on their own record; in between and beyond, the two are blended by distance, an extrapolation. Water temperature is in the layer menu.") + "</p>";
@@ -1089,6 +1096,9 @@
     out.push(pts[pts.length - 1]);
     return out;
   }
+  // The report covers the Bight; the satellite map covers all of California.
+  var AREA = [[29.5, -122.5], [35.5, -115.5]];
+  function inArea(ll) { return ll[0] >= AREA[0][0] && ll[0] <= AREA[1][0] && ll[1] >= AREA[0][1] && ll[1] <= AREA[1][1]; }
   function drawBreaks(grid, bb, layer) {
     if (!window.SDBreaks || !layer) return;
     var box = { latMin: bb[1], latMax: bb[3], lngMin: bb[0], lngMax: bb[2] };
@@ -1097,6 +1107,7 @@
     if (!res) return;
     var toLL = function (pt) { var q = window.SDBreaks.gridToLngLat(pt[0], pt[1], grid.width, grid.height, box); return [q[1], q[0]]; };
     res.fronts.forEach(function (fr) {
+      if (!fr.points.map(toLL).some(inArea)) return;
       var line = smoothLine(fr.points.map(toLL), 6), strong = fr.maxGradient >= window.SDBreaks.BREAK_STRONG_C_PER_KM;
       L.polyline(line, { color: "#ffffff", weight: strong ? 3.2 : 2.4, opacity: strong ? 0.6 : 0.45, lineCap: "round", lineJoin: "round", interactive: false }).addTo(layer);
       L.polyline(line, { color: "#1e293b", weight: strong ? 1.7 : 1.3, opacity: strong ? 0.9 : 0.75, dashArray: strong ? null : "1 6", lineCap: "round", lineJoin: "round", interactive: false }).addTo(layer);
@@ -1141,7 +1152,7 @@
     if (!el || !window.L) return;
     if (map) { map.remove(); map = null; }
     map = L.map(el, { zoomControl: true, attributionControl: false, scrollWheelZoom: false, zoomSnap: 0.25, zoomDelta: 0.5,
-      dragging: !L.Browser.mobile, tap: false, minZoom: 6, maxZoom: 12, maxBounds: [[29.5, -122.5], [35.5, -115.5]], maxBoundsViscosity: 0.7 });
+      dragging: !L.Browser.mobile, tap: false, minZoom: 6, maxZoom: 12, maxBounds: AREA, maxBoundsViscosity: 0.7 });
     gestureHandling(map, el);
     var view0 = L.latLngBounds(view === "fishing" ? [[31.9, -119.4], [33.6, -117.0]] : [[32.55, -117.95], [33.6, -117.1]]);
     if (view === "fishing") hotFiltered().forEach(function (p) { view0.extend([p.lat, p.lng]); });
