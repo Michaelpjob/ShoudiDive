@@ -245,7 +245,14 @@ function boot(d){D=d;F=D.default_frame;LCH=D.default_launch;
  measHandle.on('drag',updateMeas);
  coordbox=document.getElementById('coordbox');setReadout(map.getCenter());
  map.on('mousemove',function(e){setReadout(e.latlng);});
- map.on('click',function(e){dropWp(e.latlng);});
+ // One owner per map tap: an open Log-a-catch form takes the position (its
+ // copy promises "tap the map to fill these"), then the paddy tracker while
+ // it is waiting for a position, else the tap drops the GPS waypoint.
+ map.on('click',function(e){var pk=document.getElementById('picker');
+  if(pk&&pk.style.display!=='none'){var a=document.getElementById('plat'),b=document.getElementById('plng');
+   if(a&&b){a.value=e.latlng.lat.toFixed(5);b.value=e.latlng.lng.toFixed(5);}dropWp(e.latlng);return;}
+  if(window.PTUI&&PTUI.wantsClick&&PTUI.wantsClick())return;
+  dropWp(e.latlng);});
  map.on('popupopen',wireCopy);
  var panelEl=document.getElementById('panel');panelEl.classList.add('min');
  panelEl.addEventListener('click',function(e){if(e.target.closest('.panel-head'))panelEl.classList.toggle('min');});
