@@ -508,6 +508,39 @@ KD_BLEND_WEIGHT_FRESH = 0.7
 KD_BLEND_TAU_DAYS    = 5.0
 
 
+# ---- Offshore satellite-chl distrust (clarity honesty) -----------------
+#
+# Ocean-color chl reads only the top ~1-2 m optical layer and averages over
+# an ~18x13 km pixel. Offshore and over banks (localized upwelling/
+# productivity hotspots) it systematically MISSES sub-pixel plumes and
+# subsurface green layers a diver drops into — so a "gin-clear" ~0.12 mg/m3
+# offshore reading is effectively a LOWER bound on true near-diver chl, and
+# the clarity we derive from it is an UPPER bound. We have ZERO offshore
+# ground truth to calibrate a correction, so the honest move is not to
+# invent a magnitude but to STOP OVER-CLAIMING: pull the reported clarity
+# (p50) and the pessimistic bound (p10) down toward a green-water floor,
+# scaled by how deep into the untrustworthy regime (far offshore AND very
+# low chl) the cell is. The optimistic bound (p90) is LEFT ALONE, so the
+# band widens honestly: "probably green, but could be clear on a good day."
+# Nearshore / non-low-chl cells are untouched.
+#
+# Diagnosed 2026-07-06 from a real dive: Northeast Bank off San Diego read
+# ~44 ft (satellite chl 0.12 mg/m3) while the water was green at 15-20 ft.
+# We key the distrust on the SYMPTOM — an offshore cell reporting
+# implausibly clear water — rather than on chl. Keying on modeled chl
+# missed the real failure (Northeast Bank): offshore turbidity penalties
+# are ~zero, so a moderate chl still yields a 44 ft reading. High offshore
+# visibility only ever comes from a low satellite chl the sensor can't
+# verify, so "offshore AND very clear" is exactly the untrustworthy set.
+APPLY_OFFSHORE_CHL_DISTRUST = True
+OFFSHORE_DISTRUST_START_KM = 8.0    # distrust begins beyond ~8 km offshore
+OFFSHORE_DISTRUST_FULL_KM   = 25.0  # full offshore weight by ~25 km (banks are 15-50 nm out)
+OFFSHORE_TRUST_CEIL_FT      = 25.0  # offshore viz we'll trust unverified (up to ~25 ft)
+OFFSHORE_TRUST_FULL_FT      = 45.0  # full distrust at/above this offshore viz
+OFFSHORE_DISTRUST_PULL      = 0.85  # max fraction to pull p10 toward the floor (p50 gets 0.75x)
+OFFSHORE_GREEN_FLOOR_FT     = 15.0  # green-water floor (real Northeast-Bank observation)
+
+
 # 0-100 clarity score
 SCORE_FULL_SECCHI_M = 30.0
 
