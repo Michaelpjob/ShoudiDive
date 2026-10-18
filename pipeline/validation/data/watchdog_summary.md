@@ -1,24 +1,24 @@
-# Validation watchdog — 2026-10-17T18:17Z
+# Validation watchdog — 2026-10-18T06:21Z
 
 **3 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
-### 🔴 1. Only 20 observations in the last 24h (floor: 50)
+### 🔴 1. Only 21 observations in the last 24h (floor: 50)
 
 Multiple scrapers may be silently broken.
 
 **Suggested action:** Open the latest hourly ingest workflow run; look for `FAILED` lines per scraper.
 
-### ⚠️ 2. 2 non-critical external feed(s) are red
+### ⚠️ 2. 1 non-critical external feed(s) are red
 
-Red feeds: cpc_precip_psl, osm_overpass_main. Fallbacks may keep the model running, but redundancy is degraded.
+Red feeds: cdfw_mpa. Fallbacks may keep the model running, but redundancy is degraded.
 
 **Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
 
 ### 🔴 3. Published-data freshness gate found 1 issue(s)
 
-Freshness/completeness failures: sst7d:summary_days_short.
+Freshness/completeness failures: swell5d:summary_day_sparse.
 
 **Suggested action:** Open `pipeline/validation/data/freshness_health.json`; fix the failing fetcher or rerun the matching workflow before trusting the deploy.
 
@@ -26,16 +26,16 @@ Freshness/completeness failures: sst7d:summary_days_short.
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_nearshore` | 4 | 8.07 | +2.22 | 25% | -0.94 |
-| `central_nearshore` | 1 | 2.61 | +2.61 | 100% | — |
+| `bight_nearshore` | 4 | 8.03 | -1.49 | 0% | -0.56 |
+| `central_nearshore` | 1 | 2.61 | -2.61 | 100% | — |
 
 ## Per-source bias (informational)
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `cencoos` | 1 | +2.61 ft |
-| `dive-shop-diveviz` | 1 | -10.38 ft |
-| `dive-shop-justgetwet` | 3 | +6.42 ft |
+| `cencoos` | 1 | -2.61 ft |
+| `dive-shop-diveviz` | 1 | -9.55 ft |
+| `dive-shop-justgetwet` | 3 | +1.20 ft |
 
 ## How to act on this issue
 
