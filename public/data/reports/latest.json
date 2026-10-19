@@ -2,8 +2,8 @@
  "schema": "shoudidive.report/v2",
  "date": "2026-10-18",
  "date_label": "Sunday, October 18, 2026",
- "generated_utc": "2026-10-18T23:10Z",
- "generated_local": "4:10 PM PDT",
+ "generated_utc": "2026-10-19T01:04Z",
+ "generated_local": "6:04 PM PDT",
  "days": [
   {
    "key": "today",
@@ -54,10 +54,10 @@
        {
         "key": "surf",
         "label": "Surf at the entry",
-        "level": "marginal",
-        "value": "CDIP MOP at this entry's 10 m line: 2.6 ft at 15 s from 336°, so sets about 3.3 ft",
-        "rule": "Set height (1.27 x the modeled significant height, the mean of the highest tenth of waves): under 2.5 ft within, under 4.5 ft marginal, otherwise outside.",
-        "source": "mop_D0482",
+        "level": "within",
+        "value": "county sets to 6 ft from 210°; the entry in the swell's lee, so about 2 ft here",
+        "rule": "County sets scaled by how the entry faces the swell (1.0 facing, 0.6 at an angle, 0.35 in the lee); under 2.5 ft within, under 4.5 ft marginal, otherwise outside; long-period swell (13 s+) raises it one level where the entry faces the swell.",
+        "source": "srf_sgx",
         "tag": "Modeled",
         "required": true
        },
@@ -93,22 +93,10 @@
        }
       ],
       "label": "Marginal",
-      "why": "NWS beach headlines: Beach Hazards Statement. Rip current risk: High (county forecast); lowered one level because the entry is in the swell's lee. Surf at the entry: CDIP MOP at this entry's 10 m line: 2.6 ft at 15 s from 336°, so sets about 3.3 ft.",
+      "why": "NWS beach headlines: Beach Hazards Statement. Rip current risk: High (county forecast); lowered one level because the entry is in the swell's lee.",
       "period": "THIS AFTERNOON THROUGH MONDAY",
       "period_fallback": false,
       "evidence": [
-       {
-        "kind": "series",
-        "label": "CDIP MOP waves at this entry's 10 m line (D0482)",
-        "tag": "Modeled",
-        "source": "mop_D0482",
-        "rows": [
-         {
-          "time": "5 PM",
-          "text": "2.6 ft at 15 s from 336°"
-         }
-        ]
-       },
        {
         "kind": "text",
         "label": "NWS surf zone forecast for the county",
@@ -125,10 +113,10 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46254 Scripps Nearshore (La Jolla), 3:26 PM",
+        "label": "Buoy 46254 Scripps Nearshore (La Jolla), 5:26 PM",
         "tag": "Observed",
         "source": "buoy_46254",
-        "text": "waves 1.3 ft, swell 1.0 ft at 15 s WNW, wind waves 1.0 ft at 10 s, water 74.5°F"
+        "text": "waves 1.6 ft, swell 1.3 ft at 17 s WNW, wind waves 1.0 ft at 10 s, water 73.8°F"
        }
       ]
      },
@@ -247,10 +235,10 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46254 Scripps Nearshore (La Jolla), 3:26 PM",
+        "label": "Buoy 46254 Scripps Nearshore (La Jolla), 5:26 PM",
         "tag": "Observed",
         "source": "buoy_46254",
-        "text": "waves 1.3 ft, swell 1.0 ft at 15 s WNW, wind waves 1.0 ft at 10 s, water 74.5°F"
+        "text": "waves 1.6 ft, swell 1.3 ft at 17 s WNW, wind waves 1.0 ft at 10 s, water 73.8°F"
        }
       ]
      }
@@ -265,14 +253,14 @@
     "depth_m": 12,
     "days": {
      "today": {
-      "level": "marginal",
-      "exposure": "lee",
+      "level": "outside",
+      "exposure": "oblique",
       "swell_from_deg": 210,
       "factors": [
        {
         "key": "headlines",
         "label": "NWS beach headlines",
-        "level": "marginal",
+        "level": "outside",
         "value": "Beach Hazards Statement",
         "rule": "Any High Surf Advisory or Warning is outside; a Beach Hazards or Rip Current Statement is outside at a site facing the swell, marginal in its lee.",
         "source": "alerts",
@@ -282,8 +270,8 @@
        {
         "key": "rip",
         "label": "Rip current risk",
-        "level": "marginal",
-        "value": "High (county forecast); lowered one level because the entry is in the swell's lee",
+        "level": "outside",
+        "value": "High (county forecast)",
         "rule": "Low is within, moderate marginal, high outside (NWS Surf Zone Forecast).",
         "source": "srf_sgx",
         "tag": "Rule",
@@ -292,10 +280,10 @@
        {
         "key": "surf",
         "label": "Surf at the entry",
-        "level": "within",
-        "value": "CDIP MOP at this entry's 10 m line: 0.3 ft at 12 s from 266°, so sets about 0.4 ft",
-        "rule": "Set height (1.27 x the modeled significant height, the mean of the highest tenth of waves): under 2.5 ft within, under 4.5 ft marginal, otherwise outside.",
-        "source": "mop_D0500",
+        "level": "marginal",
+        "value": "county sets to 6 ft from 210°; the entry takes the swell at an angle, so about 4 ft here",
+        "rule": "County sets scaled by how the entry faces the swell (1.0 facing, 0.6 at an angle, 0.35 in the lee); under 2.5 ft within, under 4.5 ft marginal, otherwise outside; long-period swell (13 s+) raises it one level where the entry faces the swell.",
+        "source": "srf_sgx",
         "tag": "Modeled",
         "required": true
        },
@@ -330,23 +318,11 @@
         "required": false
        }
       ],
-      "label": "Marginal",
-      "why": "NWS beach headlines: Beach Hazards Statement. Rip current risk: High (county forecast); lowered one level because the entry is in the swell's lee.",
+      "label": "Outside our thresholds",
+      "why": "NWS beach headlines: Beach Hazards Statement. Rip current risk: High (county forecast). Surf at the entry: county sets to 6 ft from 210°; the entry takes the swell at an angle, so about 4 ft here.",
       "period": "THIS AFTERNOON THROUGH MONDAY",
       "period_fallback": false,
       "evidence": [
-       {
-        "kind": "series",
-        "label": "CDIP MOP waves at this entry's 10 m line (D0500)",
-        "tag": "Modeled",
-        "source": "mop_D0500",
-        "rows": [
-         {
-          "time": "5 PM",
-          "text": "0.3 ft at 12 s from 266°"
-         }
-        ]
-       },
        {
         "kind": "text",
         "label": "NWS surf zone forecast for the county",
@@ -363,10 +339,10 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46254 Scripps Nearshore (La Jolla), 3:26 PM",
+        "label": "Buoy 46254 Scripps Nearshore (La Jolla), 5:26 PM",
         "tag": "Observed",
         "source": "buoy_46254",
-        "text": "waves 1.3 ft, swell 1.0 ft at 15 s WNW, wind waves 1.0 ft at 10 s, water 74.5°F"
+        "text": "waves 1.6 ft, swell 1.3 ft at 17 s WNW, wind waves 1.0 ft at 10 s, water 73.8°F"
        }
       ]
      },
@@ -485,10 +461,10 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46254 Scripps Nearshore (La Jolla), 3:26 PM",
+        "label": "Buoy 46254 Scripps Nearshore (La Jolla), 5:26 PM",
         "tag": "Observed",
         "source": "buoy_46254",
-        "text": "waves 1.3 ft, swell 1.0 ft at 15 s WNW, wind waves 1.0 ft at 10 s, water 74.5°F"
+        "text": "waves 1.6 ft, swell 1.3 ft at 17 s WNW, wind waves 1.0 ft at 10 s, water 73.8°F"
        }
       ]
      }
@@ -521,9 +497,9 @@
         "key": "surf",
         "label": "Surf at the entry",
         "level": "marginal",
-        "value": "CDIP MOP at this entry's 10 m line: 2.9 ft at 15 s from 252°, so sets about 3.7 ft",
-        "rule": "Set height (1.27 x the modeled significant height, the mean of the highest tenth of waves): under 2.5 ft within, under 4.5 ft marginal, otherwise outside.",
-        "source": "mop_D0324",
+        "value": "county sets to 6 ft from 210°; the entry takes the swell at an angle, so about 4 ft here",
+        "rule": "County sets scaled by how the entry faces the swell (1.0 facing, 0.6 at an angle, 0.35 in the lee); under 2.5 ft within, under 4.5 ft marginal, otherwise outside; long-period swell (13 s+) raises it one level where the entry faces the swell.",
+        "source": "srf_sgx",
         "tag": "Modeled",
         "required": true
        },
@@ -559,22 +535,10 @@
        }
       ],
       "label": "Outside our thresholds",
-      "why": "NWS beach headlines: Beach Hazards Statement. Surf at the entry: CDIP MOP at this entry's 10 m line: 2.9 ft at 15 s from 252°, so sets about 3.7 ft.",
+      "why": "NWS beach headlines: Beach Hazards Statement. Surf at the entry: county sets to 6 ft from 210°; the entry takes the swell at an angle, so about 4 ft here.",
       "period": "THIS AFTERNOON THROUGH MONDAY",
       "period_fallback": false,
       "evidence": [
-       {
-        "kind": "series",
-        "label": "CDIP MOP waves at this entry's 10 m line (D0324)",
-        "tag": "Modeled",
-        "source": "mop_D0324",
-        "rows": [
-         {
-          "time": "5 PM",
-          "text": "2.9 ft at 15 s from 252°"
-         }
-        ]
-       },
        {
         "kind": "text",
         "label": "NWS surf zone forecast for the county",
@@ -591,10 +555,10 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46232 Point Loma South, 3:26 PM",
+        "label": "Buoy 46232 Point Loma South, 5:26 PM",
         "tag": "Observed",
         "source": "buoy_46232",
-        "text": "waves 4.3 ft, swell 3.9 ft at 15 s S, wind waves 1.3 ft at 10 s, water 73.6°F"
+        "text": "waves 4.6 ft, swell 4.6 ft at 15 s SSW, wind waves 1.6 ft at 10 s, water 73.2°F"
        }
       ]
      },
@@ -703,10 +667,10 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46232 Point Loma South, 3:26 PM",
+        "label": "Buoy 46232 Point Loma South, 5:26 PM",
         "tag": "Observed",
         "source": "buoy_46232",
-        "text": "waves 4.3 ft, swell 3.9 ft at 15 s S, wind waves 1.3 ft at 10 s, water 73.6°F"
+        "text": "waves 4.6 ft, swell 4.6 ft at 15 s SSW, wind waves 1.6 ft at 10 s, water 73.2°F"
        }
       ]
      }
@@ -748,10 +712,10 @@
        {
         "key": "surf",
         "label": "Surf at the entry",
-        "level": "marginal",
-        "value": "CDIP MOP at this entry's 10 m line: 3.2 ft at 15 s from 201°, so sets about 4.1 ft",
-        "rule": "Set height (1.27 x the modeled significant height, the mean of the highest tenth of waves): under 2.5 ft within, under 4.5 ft marginal, otherwise outside.",
-        "source": "mop_OC283",
+        "level": "outside",
+        "value": "county sets to 6 ft from 200°; the entry faces the swell, so about 6 ft here; raised one level for 15-second swell",
+        "rule": "County sets scaled by how the entry faces the swell (1.0 facing, 0.6 at an angle, 0.35 in the lee); under 2.5 ft within, under 4.5 ft marginal, otherwise outside; long-period swell (13 s+) raises it one level where the entry faces the swell.",
+        "source": "srf_sgx",
         "tag": "Modeled",
         "required": true
        },
@@ -787,22 +751,10 @@
        }
       ],
       "label": "Outside our thresholds",
-      "why": "NWS beach headlines: Beach Hazards Statement. Rip current risk: High (county forecast). Surf at the entry: CDIP MOP at this entry's 10 m line: 3.2 ft at 15 s from 201°, so sets about 4.1 ft.",
+      "why": "NWS beach headlines: Beach Hazards Statement. Rip current risk: High (county forecast). Surf at the entry: county sets to 6 ft from 200°; the entry faces the swell, so about 6 ft here; raised one level for 15-second swell.",
       "period": "THIS AFTERNOON THROUGH MONDAY",
       "period_fallback": false,
       "evidence": [
-       {
-        "kind": "series",
-        "label": "CDIP MOP waves at this entry's 10 m line (OC283)",
-        "tag": "Modeled",
-        "source": "mop_OC283",
-        "rows": [
-         {
-          "time": "5 PM",
-          "text": "3.2 ft at 15 s from 201°"
-         }
-        ]
-       },
        {
         "kind": "text",
         "label": "NWS surf zone forecast for the county",
@@ -819,10 +771,10 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46253 San Pedro South, 3:26 PM",
+        "label": "Buoy 46253 San Pedro South, 5:26 PM",
         "tag": "Observed",
         "source": "buoy_46253",
-        "text": "waves 3.0 ft, swell 2.6 ft at 17 s SSW, wind waves 1.3 ft at 9 s, water 74.3°F"
+        "text": "waves 3.3 ft, swell 3.0 ft at 15 s S, wind waves 1.6 ft at 9 s, water 73.8°F"
        }
       ]
      },
@@ -941,10 +893,10 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46253 San Pedro South, 3:26 PM",
+        "label": "Buoy 46253 San Pedro South, 5:26 PM",
         "tag": "Observed",
         "source": "buoy_46253",
-        "text": "waves 3.0 ft, swell 2.6 ft at 17 s SSW, wind waves 1.3 ft at 9 s, water 74.3°F"
+        "text": "waves 3.3 ft, swell 3.0 ft at 15 s S, wind waves 1.6 ft at 9 s, water 73.8°F"
        }
       ]
      }
@@ -1098,10 +1050,10 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46232 Point Loma South, 3:26 PM",
+        "label": "Buoy 46232 Point Loma South, 5:26 PM",
         "tag": "Observed",
         "source": "buoy_46232",
-        "text": "waves 4.3 ft, swell 3.9 ft at 15 s S, wind waves 1.3 ft at 10 s, water 73.6°F"
+        "text": "waves 4.6 ft, swell 4.6 ft at 15 s SSW, wind waves 1.6 ft at 10 s, water 73.2°F"
        }
       ]
      },
@@ -1243,10 +1195,10 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46232 Point Loma South, 3:26 PM",
+        "label": "Buoy 46232 Point Loma South, 5:26 PM",
         "tag": "Observed",
         "source": "buoy_46232",
-        "text": "waves 4.3 ft, swell 3.9 ft at 15 s S, wind waves 1.3 ft at 10 s, water 73.6°F"
+        "text": "waves 4.6 ft, swell 4.6 ft at 15 s SSW, wind waves 1.6 ft at 10 s, water 73.2°F"
        }
       ]
      }
@@ -1408,10 +1360,10 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46232 Point Loma South, 3:26 PM",
+        "label": "Buoy 46232 Point Loma South, 5:26 PM",
         "tag": "Observed",
         "source": "buoy_46232",
-        "text": "waves 4.3 ft, swell 3.9 ft at 15 s S, wind waves 1.3 ft at 10 s, water 73.6°F"
+        "text": "waves 4.6 ft, swell 4.6 ft at 15 s SSW, wind waves 1.6 ft at 10 s, water 73.2°F"
        }
       ]
      },
@@ -1561,10 +1513,10 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46232 Point Loma South, 3:26 PM",
+        "label": "Buoy 46232 Point Loma South, 5:26 PM",
         "tag": "Observed",
         "source": "buoy_46232",
-        "text": "waves 4.3 ft, swell 3.9 ft at 15 s S, wind waves 1.3 ft at 10 s, water 73.6°F"
+        "text": "waves 4.6 ft, swell 4.6 ft at 15 s SSW, wind waves 1.6 ft at 10 s, water 73.2°F"
        }
       ]
      }
@@ -1726,17 +1678,17 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46258 Mission Bay West, 3:26 PM",
+        "label": "Buoy 46258 Mission Bay West, 5:26 PM",
         "tag": "Observed",
         "source": "buoy_46258",
-        "text": "waves 4.3 ft, swell 3.9 ft at 15 s SSW, wind waves 1.3 ft at 10 s, water 73.2°F"
+        "text": "waves 5.2 ft, swell 5.2 ft at 17 s S, wind waves 1.3 ft at 10 s, water 73.2°F"
        },
        {
         "kind": "obs",
-        "label": "Buoy 46086 San Clemente Basin, 3:40 PM",
+        "label": "Buoy 46086 San Clemente Basin, 5:30 PM",
         "tag": "Observed",
         "source": "buoy_46086",
-        "text": "waves 6.2 ft, swell 6.2 ft at 16 s S, wind waves 0.3 ft at 4 s, wind 8 kt from W, gusts 10, water 74.3°F"
+        "text": "waves 4.9 ft, swell 4.9 ft at 16 s S, wind waves 0.7 ft at 2 s, wind 10 kt from WNW, gusts 10, water 73.6°F"
        }
       ]
      },
@@ -1886,17 +1838,17 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46258 Mission Bay West, 3:26 PM",
+        "label": "Buoy 46258 Mission Bay West, 5:26 PM",
         "tag": "Observed",
         "source": "buoy_46258",
-        "text": "waves 4.3 ft, swell 3.9 ft at 15 s SSW, wind waves 1.3 ft at 10 s, water 73.2°F"
+        "text": "waves 5.2 ft, swell 5.2 ft at 17 s S, wind waves 1.3 ft at 10 s, water 73.2°F"
        },
        {
         "kind": "obs",
-        "label": "Buoy 46086 San Clemente Basin, 3:40 PM",
+        "label": "Buoy 46086 San Clemente Basin, 5:30 PM",
         "tag": "Observed",
         "source": "buoy_46086",
-        "text": "waves 6.2 ft, swell 6.2 ft at 16 s S, wind waves 0.3 ft at 4 s, wind 8 kt from W, gusts 10, water 74.3°F"
+        "text": "waves 4.9 ft, swell 4.9 ft at 16 s S, wind waves 0.7 ft at 2 s, wind 10 kt from WNW, gusts 10, water 73.6°F"
        }
       ]
      }
@@ -2048,10 +2000,10 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46253 San Pedro South, 3:26 PM",
+        "label": "Buoy 46253 San Pedro South, 5:26 PM",
         "tag": "Observed",
         "source": "buoy_46253",
-        "text": "waves 3.0 ft, swell 2.6 ft at 17 s SSW, wind waves 1.3 ft at 9 s, water 74.3°F"
+        "text": "waves 3.3 ft, swell 3.0 ft at 15 s S, wind waves 1.6 ft at 9 s, water 73.8°F"
        }
       ]
      },
@@ -2193,10 +2145,10 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46253 San Pedro South, 3:26 PM",
+        "label": "Buoy 46253 San Pedro South, 5:26 PM",
         "tag": "Observed",
         "source": "buoy_46253",
-        "text": "waves 3.0 ft, swell 2.6 ft at 17 s SSW, wind waves 1.3 ft at 9 s, water 74.3°F"
+        "text": "waves 3.3 ft, swell 3.0 ft at 15 s S, wind waves 1.6 ft at 9 s, water 73.8°F"
        }
       ]
      }
@@ -2365,17 +2317,17 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46086 San Clemente Basin, 3:40 PM",
+        "label": "Buoy 46086 San Clemente Basin, 5:30 PM",
         "tag": "Observed",
         "source": "buoy_46086",
-        "text": "waves 6.2 ft, swell 6.2 ft at 16 s S, wind waves 0.3 ft at 4 s, wind 8 kt from W, gusts 10, water 74.3°F"
+        "text": "waves 4.9 ft, swell 4.9 ft at 16 s S, wind waves 0.7 ft at 2 s, wind 10 kt from WNW, gusts 10, water 73.6°F"
        },
        {
         "kind": "obs",
-        "label": "Buoy 46047 Tanner Bank, 3:40 PM",
+        "label": "Buoy 46047 Tanner Bank, 5:30 PM",
         "tag": "Observed",
         "source": "buoy_46047",
-        "text": "waves 5.6 ft, wind 6 kt from WNW, gusts 8, water 69.6°F"
+        "text": "waves 6.2 ft, wind 10 kt from WNW, gusts 12, water 70.2°F"
        }
       ]
      },
@@ -2539,17 +2491,17 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46086 San Clemente Basin, 3:40 PM",
+        "label": "Buoy 46086 San Clemente Basin, 5:30 PM",
         "tag": "Observed",
         "source": "buoy_46086",
-        "text": "waves 6.2 ft, swell 6.2 ft at 16 s S, wind waves 0.3 ft at 4 s, wind 8 kt from W, gusts 10, water 74.3°F"
+        "text": "waves 4.9 ft, swell 4.9 ft at 16 s S, wind waves 0.7 ft at 2 s, wind 10 kt from WNW, gusts 10, water 73.6°F"
        },
        {
         "kind": "obs",
-        "label": "Buoy 46047 Tanner Bank, 3:40 PM",
+        "label": "Buoy 46047 Tanner Bank, 5:30 PM",
         "tag": "Observed",
         "source": "buoy_46047",
-        "text": "waves 5.6 ft, wind 6 kt from WNW, gusts 8, water 69.6°F"
+        "text": "waves 6.2 ft, wind 10 kt from WNW, gusts 12, water 70.2°F"
        }
       ]
      }
@@ -2650,10 +2602,10 @@
       },
       {
        "kind": "obs",
-       "label": "Buoy 46232 Point Loma South, 3:26 PM",
+       "label": "Buoy 46232 Point Loma South, 5:26 PM",
        "tag": "Observed",
        "source": "buoy_46232",
-       "text": "waves 4.3 ft, swell 3.9 ft at 15 s S, wind waves 1.3 ft at 10 s, water 73.6°F"
+       "text": "waves 4.6 ft, swell 4.6 ft at 15 s SSW, wind waves 1.6 ft at 10 s, water 73.2°F"
       }
      ]
     },
@@ -2748,10 +2700,10 @@
       },
       {
        "kind": "obs",
-       "label": "Buoy 46232 Point Loma South, 3:26 PM",
+       "label": "Buoy 46232 Point Loma South, 5:26 PM",
        "tag": "Observed",
        "source": "buoy_46232",
-       "text": "waves 4.3 ft, swell 3.9 ft at 15 s S, wind waves 1.3 ft at 10 s, water 73.6°F"
+       "text": "waves 4.6 ft, swell 4.6 ft at 15 s SSW, wind waves 1.6 ft at 10 s, water 73.2°F"
       }
      ]
     }
@@ -2801,14 +2753,14 @@
     "id": "46254",
     "name": "Scripps Nearshore (La Jolla)",
     "status": "ok",
-    "observed": "3:26 PM",
-    "age_h": 0.7,
+    "observed": "5:26 PM",
+    "age_h": 0.6,
     "nearshore": true,
-    "wave_ft": 1.3,
-    "temp_f": 74.5,
+    "wave_ft": 1.6,
+    "temp_f": 73.8,
     "swell": {
-     "ft": 1.0,
-     "s": 15.4,
+     "ft": 1.3,
+     "s": 16.7,
      "dir": "WNW"
     },
     "wind_waves": {
@@ -2821,35 +2773,35 @@
     "id": "46232",
     "name": "Point Loma South",
     "status": "ok",
-    "observed": "3:26 PM",
-    "age_h": 0.7,
+    "observed": "5:26 PM",
+    "age_h": 0.6,
     "nearshore": true,
-    "wave_ft": 4.3,
-    "temp_f": 73.6,
+    "wave_ft": 4.6,
+    "temp_f": 73.2,
     "swell": {
-     "ft": 3.9,
+     "ft": 4.6,
      "s": 15.4,
-     "dir": "S"
+     "dir": "SSW"
     },
     "wind_waves": {
-     "ft": 1.3,
+     "ft": 1.6,
      "s": 9.9,
-     "dir": "SW"
+     "dir": "W"
     }
    },
    {
     "id": "46258",
     "name": "Mission Bay West",
     "status": "ok",
-    "observed": "3:26 PM",
-    "age_h": 0.7,
+    "observed": "5:26 PM",
+    "age_h": 0.6,
     "nearshore": true,
-    "wave_ft": 4.3,
+    "wave_ft": 5.2,
     "temp_f": 73.2,
     "swell": {
-     "ft": 3.9,
-     "s": 15.4,
-     "dir": "SSW"
+     "ft": 5.2,
+     "s": 16.7,
+     "dir": "S"
     },
     "wind_waves": {
      "ft": 1.3,
@@ -2861,18 +2813,18 @@
     "id": "46225",
     "name": "Torrey Pines Outer",
     "status": "ok",
-    "observed": "3:26 PM",
-    "age_h": 0.7,
+    "observed": "5:26 PM",
+    "age_h": 0.6,
     "nearshore": true,
-    "wave_ft": 3.6,
-    "temp_f": 73.9,
+    "wave_ft": 3.9,
+    "temp_f": 73.8,
     "swell": {
-     "ft": 3.3,
-     "s": 16.7,
+     "ft": 3.6,
+     "s": 15.4,
      "dir": "SSW"
     },
     "wind_waves": {
-     "ft": 1.0,
+     "ft": 1.3,
      "s": 9.9,
      "dir": "SW"
     }
@@ -2881,59 +2833,59 @@
     "id": "46253",
     "name": "San Pedro South",
     "status": "ok",
-    "observed": "3:26 PM",
-    "age_h": 0.7,
+    "observed": "5:26 PM",
+    "age_h": 0.6,
     "nearshore": true,
-    "wave_ft": 3.0,
-    "temp_f": 74.3,
+    "wave_ft": 3.3,
+    "temp_f": 73.8,
     "swell": {
-     "ft": 2.6,
-     "s": 16.7,
-     "dir": "SSW"
+     "ft": 3.0,
+     "s": 15.4,
+     "dir": "S"
     },
     "wind_waves": {
-     "ft": 1.3,
+     "ft": 1.6,
      "s": 9.1,
-     "dir": "WSW"
+     "dir": "W"
     }
    },
    {
     "id": "46086",
     "name": "San Clemente Basin",
     "status": "ok",
-    "observed": "3:40 PM",
-    "age_h": 0.5,
+    "observed": "5:30 PM",
+    "age_h": 0.6,
     "nearshore": false,
-    "wave_ft": 6.2,
-    "temp_f": 74.3,
+    "wave_ft": 4.9,
+    "temp_f": 73.6,
     "swell": {
-     "ft": 6.2,
+     "ft": 4.9,
      "s": 16.0,
      "dir": "S"
     },
     "wind_waves": {
-     "ft": 0.3,
-     "s": 3.6,
-     "dir": "S"
+     "ft": 0.7,
+     "s": 2.2,
+     "dir": "WNW"
     },
     "wind": {
-     "kt": 8,
+     "kt": 10,
      "gust_kt": 10,
-     "from_deg": 270.0
+     "from_deg": 290.0
     }
    },
    {
     "id": "46047",
     "name": "Tanner Bank",
     "status": "ok",
-    "observed": "3:40 PM",
-    "age_h": 0.5,
+    "observed": "5:30 PM",
+    "age_h": 0.6,
     "nearshore": false,
-    "wave_ft": 5.6,
-    "temp_f": 69.6,
+    "wave_ft": 6.2,
+    "temp_f": 70.2,
     "wind": {
-     "kt": 6,
-     "gust_kt": 8,
+     "kt": 10,
+     "gust_kt": 12,
      "from_deg": 290.0
     }
    }
@@ -2942,12 +2894,12 @@
    {
     "name": "Scripps Pier, La Jolla",
     "temp_f": 73.4,
-    "observed": "4:00 PM"
+    "observed": "5:54 PM"
    },
    {
     "name": "San Diego Bay (Broadway Pier)",
     "temp_f": 74.7,
-    "observed": "4:00 PM"
+    "observed": "5:54 PM"
    }
   ],
   "surf": {
@@ -3065,16 +3017,16 @@
    "method": "ShoudiDive water-column heuristic (seasonal mixed layer shoaled by upwelling); not yet checked against an observed profile.",
    "observed": {
     "glider": "sp030",
-    "lat": 32.931425,
-    "lng": -117.3627,
+    "lat": 32.932025,
+    "lng": -117.3687,
     "nm_from_sd": 15,
-    "time": "9:40 AM Oct 18",
-    "surface_f": 72.7,
-    "thermocline_ft": 105,
-    "t30_f": 72.7,
-    "t60_f": 72.7,
-    "t100_f": 72.5,
-    "drop_f_per_10ft": 2.0,
+    "time": "12:28 PM Oct 18",
+    "surface_f": 73.2,
+    "thermocline_ft": 112,
+    "t30_f": 73.1,
+    "t60_f": 73.0,
+    "t100_f": 72.7,
+    "drop_f_per_10ft": 1.6,
     "url": "https://gliders.ioos.us/erddap/tabledap/sp030-20260701T1719.html",
     "tag": "Observed",
     "note": "A glider profile offshore, not at the kelp: internal tides move the thermocline 15-65 ft within hours at San Diego kelp moorings."
@@ -3132,40 +3084,40 @@
      "site": "La Jolla Cove",
      "depth_ft": 33,
      "buoy": "46254",
-     "u_m_s": 0.19,
-     "u_ft_s": 0.6,
-     "level": "moderate"
+     "u_m_s": 0.23,
+     "u_ft_s": 0.7,
+     "level": "strong"
     },
     {
      "site": "La Jolla Canyon wall",
      "depth_ft": 66,
      "buoy": "46254",
-     "u_m_s": 0.12,
-     "u_ft_s": 0.4,
+     "u_m_s": 0.15,
+     "u_ft_s": 0.5,
      "level": "moderate"
     },
     {
      "site": "Point Loma kelp",
      "depth_ft": 49,
      "buoy": "46232",
-     "u_m_s": 0.46,
-     "u_ft_s": 1.5,
+     "u_m_s": 0.54,
+     "u_ft_s": 1.8,
      "level": "strong"
     },
     {
      "site": "Wreck Alley",
      "depth_ft": 66,
      "buoy": "46258",
-     "u_m_s": 0.39,
-     "u_ft_s": 1.3,
+     "u_m_s": 0.52,
+     "u_ft_s": 1.7,
      "level": "strong"
     },
     {
      "site": "Laguna Beach coves",
      "depth_ft": 33,
      "buoy": "46253",
-     "u_m_s": 0.41,
-     "u_ft_s": 1.4,
+     "u_m_s": 0.47,
+     "u_ft_s": 1.5,
      "level": "strong"
     }
    ],
@@ -3204,12 +3156,12 @@
   "suit": {
    "text": "Suit: 3-5 mm for most divers, sized for 73°F at 60 ft in the nearest glider profile. Kelp-bed bottoms can run colder when internal tides push cold water in.",
    "tag": "Guide",
-   "ref_f": 72.7
+   "ref_f": 73.0
   },
   "best_bet": {
-   "site": "La Jolla Shores",
+   "site": "La Jolla Cove",
    "level": "marginal",
-   "text": "Best bet from shore: La Jolla Shores (marginal, with sets around 0 ft at the entry in the CDIP model)."
+   "text": "Best bet from shore: La Jolla Cove (marginal)."
   },
   "hunting_vis": {
    "level": "within",
@@ -3230,7 +3182,7 @@
    "id": "alerts",
    "label": "NWS active alerts",
    "url": "https://api.weather.gov/alerts/active?zone=CAZ043,CAZ552,PZZ655,PZZ676,PZZ740,PZZ745",
-   "time_utc": "2026-10-18T23:10Z",
+   "time_utc": "2026-10-19T01:04Z",
    "age_h": 0.0,
    "error": null,
    "status": "ok"
@@ -3240,7 +3192,7 @@
    "label": "NWS Coastal Waters Forecast (SGX)",
    "url": "https://api.weather.gov/products/4fb63a28-6206-4e36-af22-94c7f42c70cb",
    "time_utc": "2026-10-18T19:39Z",
-   "age_h": 3.5,
+   "age_h": 5.4,
    "error": null,
    "status": "ok"
   },
@@ -3249,7 +3201,7 @@
    "label": "NWS Coastal Waters Forecast (LOX)",
    "url": "https://api.weather.gov/products/af0cc9f7-dc4d-4187-9edc-7afa59a70f87",
    "time_utc": "2026-10-18T21:02Z",
-   "age_h": 2.1,
+   "age_h": 4.0,
    "error": null,
    "status": "ok"
   },
@@ -3258,7 +3210,7 @@
    "label": "NWS Surf Zone Forecast (SGX)",
    "url": "https://api.weather.gov/products/b5db86c5-715d-49b2-9d66-9df1520cce14",
    "time_utc": "2026-10-18T19:39Z",
-   "age_h": 3.5,
+   "age_h": 5.4,
    "error": null,
    "status": "ok"
   },
@@ -3267,7 +3219,7 @@
    "label": "NHC Offshore Waters Forecast (Mexico, OFFPZ7)",
    "url": "https://www.nhc.noaa.gov/text/MIAOFFPZ7.shtml",
    "time_utc": "2026-10-18T21:10Z",
-   "age_h": 2.0,
+   "age_h": 3.9,
    "error": null,
    "status": "ok"
   },
@@ -3275,8 +3227,8 @@
    "id": "buoy_46254",
    "label": "Buoy 46254 Scripps Nearshore (La Jolla)",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46254",
-   "time_utc": "2026-10-18T22:26Z",
-   "age_h": 0.7,
+   "time_utc": "2026-10-19T00:26Z",
+   "age_h": 0.6,
    "error": null,
    "status": "ok"
   },
@@ -3284,8 +3236,8 @@
    "id": "buoy_46232",
    "label": "Buoy 46232 Point Loma South",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46232",
-   "time_utc": "2026-10-18T22:26Z",
-   "age_h": 0.7,
+   "time_utc": "2026-10-19T00:26Z",
+   "age_h": 0.6,
    "error": null,
    "status": "ok"
   },
@@ -3293,8 +3245,8 @@
    "id": "buoy_46258",
    "label": "Buoy 46258 Mission Bay West",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46258",
-   "time_utc": "2026-10-18T22:26Z",
-   "age_h": 0.7,
+   "time_utc": "2026-10-19T00:26Z",
+   "age_h": 0.6,
    "error": null,
    "status": "ok"
   },
@@ -3302,8 +3254,8 @@
    "id": "buoy_46225",
    "label": "Buoy 46225 Torrey Pines Outer",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46225",
-   "time_utc": "2026-10-18T22:26Z",
-   "age_h": 0.7,
+   "time_utc": "2026-10-19T00:26Z",
+   "age_h": 0.6,
    "error": null,
    "status": "ok"
   },
@@ -3311,8 +3263,8 @@
    "id": "buoy_46253",
    "label": "Buoy 46253 San Pedro South",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46253",
-   "time_utc": "2026-10-18T22:26Z",
-   "age_h": 0.7,
+   "time_utc": "2026-10-19T00:26Z",
+   "age_h": 0.6,
    "error": null,
    "status": "ok"
   },
@@ -3320,8 +3272,8 @@
    "id": "buoy_46086",
    "label": "Buoy 46086 San Clemente Basin",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46086",
-   "time_utc": "2026-10-18T22:40Z",
-   "age_h": 0.5,
+   "time_utc": "2026-10-19T00:30Z",
+   "age_h": 0.6,
    "error": null,
    "status": "ok"
   },
@@ -3329,8 +3281,8 @@
    "id": "buoy_46047",
    "label": "Buoy 46047 Tanner Bank",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46047",
-   "time_utc": "2026-10-18T22:40Z",
-   "age_h": 0.5,
+   "time_utc": "2026-10-19T00:30Z",
+   "age_h": 0.6,
    "error": null,
    "status": "ok"
   },
@@ -3338,7 +3290,7 @@
    "id": "coops_9410230",
    "label": "NOAA CO-OPS Scripps Pier, La Jolla",
    "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=9410230",
-   "time_utc": "2026-10-18T23:00Z",
+   "time_utc": "2026-10-19T00:54Z",
    "age_h": 0.2,
    "error": null,
    "status": "ok"
@@ -3347,7 +3299,7 @@
    "id": "coops_9410170",
    "label": "NOAA CO-OPS San Diego Bay (Broadway Pier)",
    "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=9410170",
-   "time_utc": "2026-10-18T23:00Z",
+   "time_utc": "2026-10-19T00:54Z",
    "age_h": 0.2,
    "error": null,
    "status": "ok"
@@ -3356,7 +3308,7 @@
    "id": "rain",
    "label": "Rain gauge, San Diego airport (KSAN) (IEM daily climate)",
    "url": "https://mesonet.agron.iastate.edu/sites/site.php?station=SAN&network=CA_ASOS",
-   "time_utc": "2026-10-18T23:10Z",
+   "time_utc": "2026-10-19T01:04Z",
    "age_h": 0.0,
    "error": null,
    "status": "ok"
@@ -3366,7 +3318,7 @@
    "label": "NOAA CPC ENSO diagnostic discussion",
    "url": "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso_advisory/ensodisc.shtml",
    "time_utc": "2026-10-08T00:00Z",
-   "age_h": 263.2,
+   "age_h": 265.1,
    "error": null,
    "status": "ok"
   },
@@ -3375,7 +3327,7 @@
    "label": "ShoudiDive layer manifest",
    "url": "/data/manifest.json",
    "time_utc": "2026-10-18T18:09Z",
-   "age_h": 5.0,
+   "age_h": 6.9,
    "error": null,
    "status": "ok"
   },
@@ -3384,7 +3336,7 @@
    "label": "NOAA CO-OPS tide predictions (ShoudiDive tides.json)",
    "url": "/data/tides.json",
    "time_utc": "2026-10-18T18:10Z",
-   "age_h": 5.0,
+   "age_h": 6.9,
    "error": null,
    "status": "ok"
   },
@@ -3393,7 +3345,7 @@
    "label": "ShoudiDive water-column heuristic",
    "url": "/data/viz_column_spots.json",
    "time_utc": "2026-10-18T18:11Z",
-   "age_h": 5.0,
+   "age_h": 6.9,
    "error": null,
    "status": "ok"
   },
@@ -3402,7 +3354,7 @@
    "label": "Dive-shop condition posts (ShoudiDive ground-truth ingest)",
    "url": "/pipeline/validation/data/observations.jsonl",
    "time_utc": "2026-10-18T17:05Z",
-   "age_h": 6.1,
+   "age_h": 8.0,
    "error": null,
    "status": "ok"
   },
@@ -3411,7 +3363,7 @@
    "label": "CDIP MOP nearshore wave model, point D0482",
    "url": "https://thredds.cdip.ucsd.edu/thredds/dodsC/cdip/model/MOP_alongshore/D0482_forecast.nc.html",
    "time_utc": "2026-10-18T19:04Z",
-   "age_h": 4.1,
+   "age_h": 6.0,
    "error": null,
    "status": "ok"
   },
@@ -3420,7 +3372,7 @@
    "label": "CDIP MOP nearshore wave model, point D0500",
    "url": "https://thredds.cdip.ucsd.edu/thredds/dodsC/cdip/model/MOP_alongshore/D0500_forecast.nc.html",
    "time_utc": "2026-10-18T19:04Z",
-   "age_h": 4.1,
+   "age_h": 6.0,
    "error": null,
    "status": "ok"
   },
@@ -3429,7 +3381,7 @@
    "label": "CDIP MOP nearshore wave model, point D0324",
    "url": "https://thredds.cdip.ucsd.edu/thredds/dodsC/cdip/model/MOP_alongshore/D0324_forecast.nc.html",
    "time_utc": "2026-10-18T19:03Z",
-   "age_h": 4.1,
+   "age_h": 6.0,
    "error": null,
    "status": "ok"
   },
@@ -3438,7 +3390,7 @@
    "label": "CDIP MOP nearshore wave model, point OC283",
    "url": "https://thredds.cdip.ucsd.edu/thredds/dodsC/cdip/model/MOP_alongshore/OC283_forecast.nc.html",
    "time_utc": "2026-10-18T19:09Z",
-   "age_h": 4.0,
+   "age_h": 5.9,
    "error": null,
    "status": "ok"
   },
@@ -3446,8 +3398,8 @@
    "id": "glider",
    "label": "Spray glider temperature profile (Scripps CUGN via IOOS Glider DAC)",
    "url": "https://gliders.ioos.us/erddap/tabledap/sp030-20260701T1719.html",
-   "time_utc": "2026-10-18T16:40Z",
-   "age_h": 6.5,
+   "time_utc": "2026-10-18T19:28Z",
+   "age_h": 5.6,
    "error": null,
    "status": "ok"
   },
@@ -3455,8 +3407,8 @@
    "id": "fleet_now",
    "label": "Fleet Tracks live AIS positions (fleet-live branch)",
    "url": "https://shouldidive.com/fleet/#view=live",
-   "time_utc": "2026-10-18T22:59Z",
-   "age_h": 0.2,
+   "time_utc": "2026-10-18T23:56Z",
+   "age_h": 1.1,
    "error": null,
    "status": "ok"
   },
@@ -3464,8 +3416,8 @@
    "id": "hist_46254",
    "label": "Buoy 46254 Scripps Nearshore (La Jolla), last 45 days",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46254",
-   "time_utc": "2026-10-18T00:00Z",
-   "age_h": 23.2,
+   "time_utc": "2026-10-19T00:00Z",
+   "age_h": 1.1,
    "error": null,
    "status": "ok"
   },
@@ -3473,8 +3425,8 @@
    "id": "hist_46232",
    "label": "Buoy 46232 Point Loma South, last 45 days",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46232",
-   "time_utc": "2026-10-18T00:00Z",
-   "age_h": 23.2,
+   "time_utc": "2026-10-19T00:00Z",
+   "age_h": 1.1,
    "error": null,
    "status": "ok"
   },
@@ -3482,8 +3434,8 @@
    "id": "hist_46086",
    "label": "Buoy 46086 San Clemente Basin, last 45 days",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46086",
-   "time_utc": "2026-10-18T00:00Z",
-   "age_h": 23.2,
+   "time_utc": "2026-10-19T00:00Z",
+   "age_h": 1.1,
    "error": null,
    "status": "ok"
   },
@@ -3491,8 +3443,8 @@
    "id": "hist_46047",
    "label": "Buoy 46047 Tanner Bank, last 45 days",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46047",
-   "time_utc": "2026-10-18T00:00Z",
-   "age_h": 23.2,
+   "time_utc": "2026-10-19T00:00Z",
+   "age_h": 1.1,
    "error": null,
    "status": "ok"
   },
@@ -3500,8 +3452,8 @@
    "id": "hist_46253",
    "label": "Buoy 46253 San Pedro South, last 45 days",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46253",
-   "time_utc": "2026-10-18T00:00Z",
-   "age_h": 23.2,
+   "time_utc": "2026-10-19T00:00Z",
+   "age_h": 1.1,
    "error": null,
    "status": "ok"
   },
@@ -3510,7 +3462,7 @@
    "label": "Spray glider profiles, one a day for 10 days",
    "url": "https://gliders.ioos.us/erddap/",
    "time_utc": "2026-10-18T00:00Z",
-   "age_h": 23.2,
+   "age_h": 25.1,
    "error": null,
    "status": "ok"
   },
@@ -3519,7 +3471,7 @@
    "label": "NOAA CPC weekly Nino-3.4 anomaly (OISST, 1991-2020 base)",
    "url": "https://www.cpc.ncep.noaa.gov/data/indices/wksst9120.for",
    "time_utc": "2026-10-07T00:00Z",
-   "age_h": 287.2,
+   "age_h": 289.1,
    "error": null,
    "status": "ok"
   },
@@ -3527,7 +3479,7 @@
    "id": "season_curves",
    "label": "NDBC buoy history: this year, last year and the 10 years before",
    "url": "https://www.ndbc.noaa.gov/historical_data.shtml",
-   "time_utc": "2026-10-18T23:10Z",
+   "time_utc": "2026-10-19T01:04Z",
    "age_h": 0.0,
    "error": null,
    "status": "ok"
@@ -3536,7 +3488,7 @@
    "id": "field_reports",
    "label": "Field reports sent in from the water (approved)",
    "url": null,
-   "time_utc": "2026-10-18T23:10Z",
+   "time_utc": "2026-10-19T01:04Z",
    "age_h": 0.0,
    "error": null,
    "status": "ok"
@@ -3546,7 +3498,7 @@
    "label": "Dana Wharf fish counts",
    "url": "https://danawharf.com/fish-counts/",
    "time_utc": "2026-10-17T23:00Z",
-   "age_h": 24.2,
+   "age_h": 26.1,
    "error": null,
    "status": "ok"
   },
@@ -3555,7 +3507,7 @@
    "label": "Davey's Locker fish counts",
    "url": "https://daveyslocker.com/fish-count/",
    "time_utc": "2026-10-17T23:00Z",
-   "age_h": 24.2,
+   "age_h": 26.1,
    "error": null,
    "status": "ok"
   },
@@ -3564,7 +3516,7 @@
    "label": "Everingham Bros bait report (San Diego Bay, Mission Bay, Dana Point)",
    "url": "https://baitbarge.com/bait-report",
    "time_utc": "2026-10-18T16:30Z",
-   "age_h": 6.7,
+   "age_h": 8.6,
    "error": null,
    "status": "ok"
   },
@@ -3572,8 +3524,8 @@
    "id": "model_frames",
    "label": "ShoudiDive hourly wind frames (HRRR/GFS/ECMWF blend)",
    "url": "/",
-   "time_utc": "2026-10-18T22:24Z",
-   "age_h": 0.8,
+   "time_utc": "2026-10-19T01:02Z",
+   "age_h": 0.0,
    "error": null,
    "status": "ok"
   },
@@ -3582,7 +3534,7 @@
    "label": "ShoudiDive hourly wave frames (NOAA WaveWatch III)",
    "url": "/",
    "time_utc": "2026-10-18T18:13Z",
-   "age_h": 4.9,
+   "age_h": 6.9,
    "error": null,
    "status": "ok"
   }
@@ -4496,74 +4448,64 @@
   "fleet_now": {
    "at_sea": [
     {
-     "name": "Catalina Duchess",
-     "sog": 0.3,
-     "stopped": true,
-     "lat": 33.456,
-     "lng": -118.49,
-     "spot": "Catalina",
-     "nm_from_sd": 77,
-     "t": "2026-10-18T22:55:58Z"
-    },
-    {
      "name": "New Del Mar",
-     "sog": 0.5,
+     "sog": 0.2,
      "stopped": true,
      "lat": 33.883,
      "lng": -118.52,
      "spot": null,
      "nm_from_sd": 95,
-     "t": "2026-10-18T22:56:59Z"
+     "t": "2026-10-18T23:48:00Z"
+    },
+    {
+     "name": "Pegasus",
+     "sog": 7,
+     "stopped": false,
+     "lat": 32.747,
+     "lng": -117.376,
+     "spot": "178",
+     "nm_from_sd": 8,
+     "t": "2026-10-18T23:48:39Z"
     },
     {
      "name": "Grande",
-     "sog": 8.5,
+     "sog": 8.1,
      "stopped": false,
-     "lat": 32.694,
-     "lng": -117.407,
+     "lat": 32.614,
+     "lng": -117.484,
      "spot": "North 9 Mile Bank",
-     "nm_from_sd": 9,
-     "t": "2026-10-18T22:59:30Z"
+     "nm_from_sd": 14,
+     "t": "2026-10-18T23:51:31Z"
     },
     {
      "name": "Noahs Ark",
-     "sog": 9.1,
+     "sog": 9.3,
      "stopped": false,
-     "lat": 33.248,
-     "lng": -117.862,
-     "spot": "267",
-     "nm_from_sd": 45,
-     "t": "2026-10-18T22:54:32Z"
+     "lat": 33.254,
+     "lng": -118.039,
+     "spot": "14 Mile Bank",
+     "nm_from_sd": 52,
+     "t": "2026-10-18T23:53:21Z"
     },
     {
      "name": "La Espada",
-     "sog": 18.7,
+     "sog": 5.9,
      "stopped": false,
-     "lat": 33.609,
-     "lng": -118.112,
+     "lat": 33.592,
+     "lng": -118.118,
      "spot": "Avalon Bank",
      "nm_from_sd": 69,
-     "t": "2026-10-18T22:58:58Z"
+     "t": "2026-10-18T23:50:38Z"
     },
     {
-     "name": "Victory",
-     "sog": 9.2,
+     "name": "Catalina Duchess",
+     "sog": 9.7,
      "stopped": false,
-     "lat": 33.624,
-     "lng": -118.166,
-     "spot": "Avalon Bank",
-     "nm_from_sd": 72,
-     "t": "2026-10-18T22:53:14Z"
-    },
-    {
-     "name": "Christopher",
-     "sog": 15.5,
-     "stopped": false,
-     "lat": 33.661,
-     "lng": -118.311,
-     "spot": null,
-     "nm_from_sd": 78,
-     "t": "2026-10-18T22:38:22Z"
+     "lat": 33.449,
+     "lng": -118.495,
+     "spot": "Catalina",
+     "nm_from_sd": 77,
+     "t": "2026-10-18T23:53:57Z"
     },
     {
      "name": "Eldorado",
@@ -4576,6 +4518,16 @@
      "t": "2026-10-18T22:38:06Z"
     },
     {
+     "name": "Vision",
+     "sog": 4.9,
+     "stopped": false,
+     "lat": 33.674,
+     "lng": -119.756,
+     "spot": null,
+     "nm_from_sd": 140,
+     "t": "2026-10-18T23:51:08Z"
+    },
+    {
      "name": "Islander",
      "sog": 19.2,
      "stopped": false,
@@ -4586,14 +4538,14 @@
      "t": "2026-10-18T22:05:05Z"
     },
     {
-     "name": "Vision",
-     "sog": 5.1,
+     "name": "Island Explorer",
+     "sog": 14.9,
      "stopped": false,
-     "lat": 33.683,
-     "lng": -119.843,
+     "lat": 34.1,
+     "lng": -119.518,
      "spot": null,
-     "nm_from_sd": 144,
-     "t": "2026-10-18T22:59:18Z"
+     "nm_from_sd": 142,
+     "t": "2026-10-18T23:54:58Z"
     },
     {
      "name": "Wmt",
@@ -4606,7 +4558,7 @@
      "t": "2026-10-18T22:39:10Z"
     }
    ],
-   "fresh": "2026-10-18T22:59:30Z",
+   "fresh": "2026-10-18T23:56:03Z",
    "max_age_h": 3.0
   },
   "inshore": [
@@ -4628,7 +4580,7 @@
     "drivers": "Spawning Mar-Jul (peak May); tagged fish spent half their time at 55-61°F, tracking the thermocline.",
     "look": "Kelp near squid grounds, at dusk; near the surface Apr-Oct, deeper Dec-Feb.",
     "evidence": "Thermal niche from one tagging study (Aalbers & Sepulveda 2015).",
-    "today": "Surface water is 74°F, above the 55-61°F the tagged fish used; offshore, the nearest glider puts the thermocline about 105 ft down, and the cooler water they favored sits below it."
+    "today": "Surface water is 74°F, above the 55-61°F the tagged fish used; offshore, the nearest glider puts the thermocline about 112 ft down, and the cooler water they favored sits below it."
    },
    {
     "key": "calico",
@@ -4682,26 +4634,26 @@
   "counts_note": "No dock counts: the network that publishes SoCal landing counts now forbids automated collection and republishing without a license."
  },
  "bottom_line": [
-  "Shore diving today: outside our thresholds at Point Loma and Sunset Cliffs and Laguna Beach; marginal at La Jolla Cove and La Jolla Shores. The San Diego County surf forecast is 3 to 6 feet from 210°, with a high rip current risk.",
+  "Shore diving today: outside our thresholds at La Jolla Shores, Point Loma and Sunset Cliffs, and Laguna Beach; marginal at La Jolla Cove. The San Diego County surf forecast is 3 to 6 feet from 210°, with a high rip current risk.",
   "By boat today: outside our thresholds for the outer islands; marginal for the Coronados and the offshore banks; within our thresholds for San Diego inshore and Catalina and the San Pedro Channel.",
-  "Nearshore buoys read 73-74°F as of 3:26 PM; the latest satellite temperature map is from Oct 16."
+  "Nearshore buoys read 73-74°F as of 5:26 PM; the latest satellite temperature map is from Oct 16."
  ],
  "views": {
   "fishing": [
    "By boat today: outside our thresholds for the outer islands; marginal for the Coronados and the offshore banks; within our thresholds for San Diego inshore and Catalina and the San Pedro Channel.",
    "Water at the named spots runs 68-75°F on the Oct 16 satellite map; the strongest break is near San Clemente Island, 1.5°F over 4.3 nm, warm side to the E.",
    "Season and water both match today for bluefin tuna, yellowfin tuna, dorado, yellowtail, striped marlin and wahoo. That says the water is right, not that fish are there.",
-   "AIS shows 11 boats at sea in the last 3 hours, 2 of them stopped. Over the last three days the fleet stopped longest at 33.65N 118.17W."
+   "AIS shows 11 boats at sea in the last 3 hours, 1 of them stopped. Over the last three days the fleet stopped longest at 33.65N 118.17W."
   ],
   "diving": [
-   "Shore diving today: outside our thresholds at Point Loma and Sunset Cliffs and Laguna Beach; marginal at La Jolla Cove and La Jolla Shores. The San Diego County surf forecast is 3 to 6 feet from 210°, with a high rip current risk.",
-   "Best bet from shore: La Jolla Shores (marginal, with sets around 0 ft at the entry in the CDIP model). Just Get Wet (La Jolla dive shop) reported 20-30 ft at La Jolla on Oct 17.",
-   "Suit: 3-5 mm for most divers, sized for 73°F at 60 ft in the nearest glider profile. Kelp-bed bottoms can run colder when internal tides push cold water in. A glider 15 nm from San Diego measured 73°F at the surface and 72°F at 100 ft, with the sharpest drop near 105 ft (9:40 AM Oct 18)."
+   "Shore diving today: outside our thresholds at La Jolla Shores, Point Loma and Sunset Cliffs, and Laguna Beach; marginal at La Jolla Cove. The San Diego County surf forecast is 3 to 6 feet from 210°, with a high rip current risk.",
+   "Best bet from shore: La Jolla Cove (marginal). Just Get Wet (La Jolla dive shop) reported 20-30 ft at La Jolla on Oct 17.",
+   "Suit: 3-5 mm for most divers, sized for 73°F at 60 ft in the nearest glider profile. Kelp-bed bottoms can run colder when internal tides push cold water in. A glider 15 nm from San Diego measured 73°F at the surface and 73°F at 100 ft, with the sharpest drop near 112 ft (12:28 PM Oct 18)."
   ],
   "spearfishing": [
-   "Entries today: outside our thresholds at Point Loma and Sunset Cliffs and Laguna Beach; marginal at La Jolla Cove and La Jolla Shores. The San Diego County surf forecast is 3 to 6 feet from 210°, with a high rip current risk.",
+   "Entries today: outside our thresholds at La Jolla Shores, Point Loma and Sunset Cliffs, and Laguna Beach; marginal at La Jolla Cove. The San Diego County surf forecast is 3 to 6 feet from 210°, with a high rip current risk.",
    "Just Get Wet (La Jolla dive shop) reported 20-30 ft at La Jolla on Oct 17: enough to hunt pelagics (15 ft or more).",
-   "A glider 15 nm from San Diego measured 73°F at the surface and 72°F at 100 ft, with the sharpest drop near 105 ft (9:40 AM Oct 18). White seabass: Surface water is 74°F, above the 55-61°F the tagged fish used; offshore, the nearest glider puts the thermocline about 105 ft down, and the cooler water they favored sits below it. Open now: spiny lobster (by hand only)."
+   "A glider 15 nm from San Diego measured 73°F at the surface and 73°F at 100 ft, with the sharpest drop near 112 ft (12:28 PM Oct 18). White seabass: Surface water is 74°F, above the 55-61°F the tagged fish used; offshore, the nearest glider puts the thermocline about 112 ft down, and the cooler water they favored sits below it. Open now: spiny lobster (by hand only)."
   ]
  },
  "season_curves": {
@@ -4750,7 +4702,7 @@
      },
      {
       "w": "2026-02-02",
-      "this": 63.3,
+      "this": 63.4,
       "last": 57.2,
       "lo": 58.0,
       "hi": 60.9
@@ -4848,7 +4800,7 @@
      },
      {
       "w": "2026-05-11",
-      "this": 67.0,
+      "this": 67.1,
       "last": 65.1,
       "lo": 63.3,
       "hi": 69.6
@@ -4960,7 +4912,7 @@
      },
      {
       "w": "2026-08-31",
-      "this": 72.5,
+      "this": 72.8,
       "last": 73.8,
       "lo": 68.0,
       "hi": 77.6
@@ -5120,7 +5072,7 @@
      },
      {
       "w": "2026-02-02",
-      "this": 63.9,
+      "this": 63.8,
       "last": 57.8,
       "lo": 58.1,
       "hi": 62.9
@@ -6070,7 +6022,7 @@
      },
      {
       "w": "2026-08-31",
-      "this": 69.5,
+      "this": 69.6,
       "last": 66.8,
       "lo": 64.1,
       "hi": 68.9
@@ -11716,13 +11668,6 @@
     "name": "Scripps Nearshore (La Jolla)",
     "days": [
      {
-      "date": "2026-09-04",
-      "temp_f": 71.2,
-      "wave_ft": 2.6,
-      "wave_max_ft": 3.3,
-      "period_s": 6
-     },
-     {
       "date": "2026-09-05",
       "temp_f": 72.3,
       "wave_ft": 2.2,
@@ -12025,8 +11970,15 @@
      },
      {
       "date": "2026-10-18",
-      "temp_f": 73.2,
+      "temp_f": 73.3,
       "wave_ft": 1.4,
+      "wave_max_ft": 1.6,
+      "period_s": 17
+     },
+     {
+      "date": "2026-10-19",
+      "temp_f": 73.8,
+      "wave_ft": 1.6,
       "wave_max_ft": 1.6,
       "period_s": 17
      }
@@ -12257,8 +12209,15 @@
       "date": "2026-10-18",
       "temp_f": 72.8,
       "wave_ft": 4.1,
-      "wave_max_ft": 4.9,
+      "wave_max_ft": 5.2,
       "period_s": 17
+     },
+     {
+      "date": "2026-10-19",
+      "temp_f": 73.2,
+      "wave_ft": 4.6,
+      "wave_max_ft": 4.6,
+      "period_s": 15
      }
     ]
    },
@@ -12266,15 +12225,6 @@
     "id": "46086",
     "name": "San Clemente Basin",
     "days": [
-     {
-      "date": "2026-09-04",
-      "temp_f": 70.5,
-      "wave_ft": 4.3,
-      "wave_max_ft": 4.9,
-      "period_s": 14,
-      "wind_max_kt": 17,
-      "wind_mean_kt": 8
-     },
      {
       "date": "2026-09-05",
       "temp_f": 70.5,
@@ -12613,8 +12563,17 @@
       "wave_ft": 4.6,
       "wave_max_ft": 6.2,
       "period_s": 17,
-      "wind_max_kt": 8,
+      "wind_max_kt": 10,
       "wind_mean_kt": 4
+     },
+     {
+      "date": "2026-10-19",
+      "temp_f": 73.7,
+      "wave_ft": 4.9,
+      "wave_max_ft": 4.9,
+      "period_s": 16,
+      "wind_max_kt": 10,
+      "wind_mean_kt": 10
      }
     ]
    },
@@ -12622,15 +12581,6 @@
     "id": "46047",
     "name": "Tanner Bank",
     "days": [
-     {
-      "date": "2026-09-04",
-      "temp_f": 69.3,
-      "wave_ft": 5.5,
-      "wave_max_ft": 7.9,
-      "period_s": 13,
-      "wind_max_kt": 17,
-      "wind_mean_kt": 13
-     },
      {
       "date": "2026-09-05",
       "temp_f": 69.6,
@@ -13022,10 +12972,19 @@
       "date": "2026-10-18",
       "temp_f": 68.4,
       "wave_ft": 4.8,
-      "wave_max_ft": 5.6,
+      "wave_max_ft": 5.9,
       "period_s": 16,
-      "wind_max_kt": 8,
+      "wind_max_kt": 10,
       "wind_mean_kt": 4
+     },
+     {
+      "date": "2026-10-19",
+      "temp_f": 70.2,
+      "wave_ft": 6.2,
+      "wave_max_ft": 6.2,
+      "period_s": 16,
+      "wind_max_kt": 10,
+      "wind_mean_kt": 10
      }
     ]
    },
@@ -13033,13 +12992,6 @@
     "id": "46253",
     "name": "San Pedro South",
     "days": [
-     {
-      "date": "2026-09-04",
-      "temp_f": 73.9,
-      "wave_ft": 2.8,
-      "wave_max_ft": 3.6,
-      "period_s": 13
-     },
      {
       "date": "2026-09-05",
       "temp_f": 73.9,
@@ -13347,21 +13299,18 @@
       "wave_ft": 3.0,
       "wave_max_ft": 3.6,
       "period_s": 17
+     },
+     {
+      "date": "2026-10-19",
+      "temp_f": 73.8,
+      "wave_ft": 3.3,
+      "wave_max_ft": 3.3,
+      "period_s": 15
      }
     ]
    }
   ],
   "glider": [
-   {
-    "date": "2026-10-08",
-    "glider": "sp030",
-    "km": 101,
-    "thermocline_ft": 33,
-    "mixed_layer_ft": 36,
-    "surface_f": 74.0,
-    "t60_f": 69.1,
-    "t100_f": 68.1
-   },
    {
     "date": "2026-10-11",
     "glider": "calanus",
@@ -15113,15 +15062,15 @@
   "wind_now": [
    {
     "name": "San Clemente Basin",
-    "kt": 8,
+    "kt": 10,
     "gust_kt": 10,
-    "observed": "3:40 PM"
+    "observed": "5:30 PM"
    },
    {
     "name": "Tanner Bank",
-    "kt": 6,
-    "gust_kt": 8,
-    "observed": "3:40 PM"
+    "kt": 10,
+    "gust_kt": 12,
+    "observed": "5:30 PM"
    }
   ]
  },
@@ -15270,10 +15219,6 @@
    "vis_source": "Just Get Wet (La Jolla)",
    "temp_series": [
     {
-     "date": "2026-09-28",
-     "temp_f": 73.9
-    },
-    {
      "date": "2026-09-29",
      "temp_f": 72.9
     },
@@ -15351,16 +15296,20 @@
     },
     {
      "date": "2026-10-18",
-     "temp_f": 73.2
+     "temp_f": 73.3
+    },
+    {
+     "date": "2026-10-19",
+     "temp_f": 73.8
     }
    ],
    "surge": {
     "site": "La Jolla Cove",
     "depth_ft": 33,
     "buoy": "46254",
-    "u_m_s": 0.19,
-    "u_ft_s": 0.6,
-    "level": "moderate"
+    "u_m_s": 0.23,
+    "u_ft_s": 0.7,
+    "level": "strong"
    },
    "vis_pred": {
     "ft": 10,
@@ -15515,10 +15464,6 @@
    "vis_source": "Just Get Wet (La Jolla)",
    "temp_series": [
     {
-     "date": "2026-09-28",
-     "temp_f": 73.9
-    },
-    {
      "date": "2026-09-29",
      "temp_f": 72.9
     },
@@ -15596,16 +15541,20 @@
     },
     {
      "date": "2026-10-18",
-     "temp_f": 73.2
+     "temp_f": 73.3
+    },
+    {
+     "date": "2026-10-19",
+     "temp_f": 73.8
     }
    ],
    "surge": {
     "site": "La Jolla Cove",
     "depth_ft": 33,
     "buoy": "46254",
-    "u_m_s": 0.19,
-    "u_ft_s": 0.6,
-    "level": "moderate"
+    "u_m_s": 0.23,
+    "u_ft_s": 0.7,
+    "level": "strong"
    },
    "vis_pred": {
     "ft": 10,
@@ -15660,10 +15609,6 @@
    "vis": [],
    "vis_source": null,
    "temp_series": [
-    {
-     "date": "2026-09-28",
-     "temp_f": 72.9
-    },
     {
      "date": "2026-09-29",
      "temp_f": 72.9
@@ -15743,14 +15688,18 @@
     {
      "date": "2026-10-18",
      "temp_f": 72.8
+    },
+    {
+     "date": "2026-10-19",
+     "temp_f": 73.2
     }
    ],
    "surge": {
     "site": "Point Loma kelp",
     "depth_ft": 49,
     "buoy": "46232",
-    "u_m_s": 0.46,
-    "u_ft_s": 1.5,
+    "u_m_s": 0.54,
+    "u_ft_s": 1.8,
     "level": "strong"
    },
    "vis_pred": {
@@ -15806,10 +15755,6 @@
    "vis": [],
    "vis_source": null,
    "temp_series": [
-    {
-     "date": "2026-09-28",
-     "temp_f": 73.2
-    },
     {
      "date": "2026-09-29",
      "temp_f": 73.2
@@ -15889,14 +15834,18 @@
     {
      "date": "2026-10-18",
      "temp_f": 72.9
+    },
+    {
+     "date": "2026-10-19",
+     "temp_f": 73.8
     }
    ],
    "surge": {
     "site": "Laguna Beach coves",
     "depth_ft": 33,
     "buoy": "46253",
-    "u_m_s": 0.41,
-    "u_ft_s": 1.4,
+    "u_m_s": 0.47,
+    "u_ft_s": 1.5,
     "level": "strong"
    },
    "vis_pred": {
@@ -20010,50 +19959,6 @@
    },
    {
     "date": "2026-10-17",
-    "boat": "Helena",
-    "landing": "Dana Wharf",
-    "port": "Dana Point",
-    "trip": "3/4 day",
-    "anglers": 25,
-    "catch": {
-     "yellowfin": 67,
-     "dorado": 3,
-     "skipjack": 2
-    },
-    "url": "https://danawharf.com/fish-counts/"
-   },
-   {
-    "date": "2026-10-17",
-    "boat": "Clemente",
-    "landing": "Dana Wharf",
-    "port": "Dana Point",
-    "trip": "pm 1/2 day",
-    "anglers": 41,
-    "catch": {
-     "calico bass": 23,
-     "sand bass": 13,
-     "whitefish": 2,
-     "sheephead": 1
-    },
-    "url": "https://danawharf.com/fish-counts/"
-   },
-   {
-    "date": "2026-10-17",
-    "boat": "New San Mateo",
-    "landing": "Dana Wharf",
-    "port": "Dana Point",
-    "trip": "all day",
-    "anglers": 11,
-    "catch": {
-     "yellowtail": 6,
-     "dorado": 2,
-     "yellowfin": 1,
-     "rockfish": 17
-    },
-    "url": "https://danawharf.com/fish-counts/"
-   },
-   {
-    "date": "2026-10-17",
     "boat": "Blackfish",
     "landing": "Davey's Locker",
     "port": "Newport Beach",
@@ -20064,32 +19969,6 @@
      "striped marlin": 1
     },
     "url": "https://daveyslocker.com/fish-count/"
-   },
-   {
-    "date": "2026-10-17",
-    "boat": "Clemente",
-    "landing": "Dana Wharf",
-    "port": "Dana Point",
-    "trip": "am 1/2 day",
-    "anglers": 44,
-    "catch": {
-     "calico bass": 4,
-     "sand bass": 4,
-     "whitefish": 3
-    },
-    "url": "https://danawharf.com/fish-counts/"
-   },
-   {
-    "date": "2026-10-17",
-    "boat": "Reel Fun",
-    "landing": "Dana Wharf",
-    "port": "Dana Point",
-    "trip": "am 1/2 day chrt",
-    "anglers": 25,
-    "catch": {
-     "calico bass": 10
-    },
-    "url": "https://danawharf.com/fish-counts/"
    },
    {
     "date": "2026-10-16",
@@ -20155,29 +20034,17 @@
     "Dana Point": 387,
     "Newport Beach": 776
    },
-   "dorado": {
-    "Dana Point": 201,
-    "Newport Beach": 35
-   },
    "yellowtail": {
     "Dana Point": 58,
     "Newport Beach": 95
    },
+   "dorado": {
+    "Dana Point": 201,
+    "Newport Beach": 35
+   },
    "skipjack": {
     "Dana Point": 105,
     "Newport Beach": 26
-   },
-   "bullet tuna": {
-    "Dana Point": 82,
-    "Newport Beach": 537
-   },
-   "rockfish": {
-    "Dana Point": 121,
-    "Newport Beach": 1
-   },
-   "bonito": {
-    "Dana Point": 33,
-    "Newport Beach": 142
    },
    "calico bass": {
     "Dana Point": 139,
@@ -20187,17 +20054,29 @@
     "Dana Point": 57,
     "Newport Beach": 136
    },
-   "sculpin": {
-    "Dana Point": 9,
-    "Newport Beach": 188
+   "rockfish": {
+    "Dana Point": 121,
+    "Newport Beach": 1
+   },
+   "whitefish": {
+    "Dana Point": 37,
+    "Newport Beach": 10
    },
    "sheephead": {
     "Dana Point": 8,
     "Newport Beach": 8
    },
-   "whitefish": {
-    "Dana Point": 34,
-    "Newport Beach": 10
+   "bullet tuna": {
+    "Dana Point": 82,
+    "Newport Beach": 537
+   },
+   "bonito": {
+    "Dana Point": 33,
+    "Newport Beach": 142
+   },
+   "sculpin": {
+    "Dana Point": 9,
+    "Newport Beach": 188
    },
    "white seabass": {
     "Dana Point": 1,
@@ -20481,26 +20360,26 @@
     ],
     "fleet_only": false,
     "n_landings": 3,
-    "n_active": 2,
-    "n_trips": 22,
+    "n_active": 1,
+    "n_trips": 17,
     "n_heard": 1,
-    "n_boats": 8,
+    "n_boats": 4,
     "offshore_min": 97,
     "catch": {
-     "whitefish": 15,
-     "rockfish": 18,
+     "whitefish": 10,
+     "rockfish": 1,
      "sculpin": 188,
-     "sand bass": 153,
-     "yellowfin": 844,
+     "sand bass": 136,
+     "yellowfin": 776,
      "bullet tuna": 537,
-     "skipjack": 28,
-     "yellowtail": 101,
-     "dorado": 40,
-     "calico bass": 173,
+     "skipjack": 26,
+     "yellowtail": 95,
+     "dorado": 35,
+     "calico bass": 136,
      "bonito": 142,
      "white seabass": 1,
      "barracuda": 1,
-     "sheephead": 9,
+     "sheephead": 8,
      "blacksmith perch": 5,
      "sargo": 1,
      "skip jack": 41,
@@ -20577,10 +20456,10 @@
   "diving": [
    "Predicted visibility today: La Jolla Cove about 10 ft (7-14); La Jolla Shores about 10 ft (7-14); Point Loma and Sunset Cliffs about 4 ft (3-6); Laguna Beach about 7 ft (4-12). Our model's number, scaled to where recent shop reports landed: La Jolla x0.49 from 50 reports; Laguna Beach x0.25 from 30 reports.",
    "Just Get Wet (La Jolla) visibility posts: 20-30 ft on Oct 17, against 0-2 ft on Oct 11.",
-   "Water at the La Jolla nearshore buoy: 73.2°F, +2.2°F over a week and +2.0°F since Sep 4.",
+   "Water at the La Jolla nearshore buoy: 73.8°F, +2.3°F over a week and +1.5°F since Sep 5.",
    "Set height at the entries (CDIP model): La Jolla Cove Sun 3 ft, Mon 3 ft, Tue 3 ft; La Jolla Shores Sun under 1 ft, Mon under 1 ft, Tue 1 ft; Point Loma and Sunset Cliffs Sun 4 ft, Mon 4 ft, Tue 4 ft.",
-   "Offshore water column (Spray gliders, nearest each day): the warm top layer reached 128 ft on Oct 18, against 36 ft on Oct 8; 72.7°F at 60 ft.",
-   "White seabass: Surface water is 74°F, above the 55-61°F the tagged fish used; offshore, the nearest glider puts the thermocline about 105 ft down, and the cooler water they favored sits below it.",
+   "Offshore water column (Spray gliders, nearest each day): the warm top layer reached 128 ft on Oct 18, against 49 ft on Oct 11; 72.7°F at 60 ft.",
+   "White seabass: Surface water is 74°F, above the 55-61°F the tagged fish used; offshore, the nearest glider puts the thermocline about 112 ft down, and the cooler water they favored sits below it.",
    "Yellowtail (islands and kelp): Surface water is 74°F; San Diego catch rates have fallen above 69°F in fleet data.",
    "NWS: Small Craft Advisory (outer waters to San Clemente Island) until 3:00 AM Oct 20."
   ]
