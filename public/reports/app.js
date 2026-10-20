@@ -967,10 +967,18 @@
       .sort(function (a, b) { return sumIn(lw, b) - sumIn(lw, a); }).slice(0, 3);
     if (!keys.length) return "";
     var both = ports.every(function (port) { return since[port] && since[port] <= isoMinus(facts.date, 13); });
-    var now = keys.map(function (k) { return [sumIn(lw, k).toLocaleString("en-US"), k].join(" "); });
-    var line = [joinAnd(shortPorts(ports)), ports.length > 1 ? "boats" : "boats", "landed", joinAnd(now), "this week"].join(" ");
-    if (both) line += ", against " + joinAnd(keys.map(function (k) { return sumIn(pw, k).toLocaleString("en-US"); })) + " the week before";
-    return line + ".";
+    var now = keys.map(function (k, i) {
+      var txt = [sumIn(lw, k).toLocaleString("en-US"), k].join(" ");
+      return both ? txt + " (" + sumIn(pw, k).toLocaleString("en-US") + (i ? ")" : " the week before)") : txt;
+    });
+    var line = [joinAnd(shortPorts(ports)), "boats landed", joinAnd(now), "this week."].join(" ");
+    if (both) {
+      var mover = keys.map(function (k) { var a = sumIn(lw, k), b = sumIn(pw, k); return { k: k, a: a, b: b, r: (a + 10) / (b + 10) }; })
+        .filter(function (m) { return Math.abs(m.a - m.b) >= 100 && (m.r >= 3 || m.r <= 1 / 3); })
+        .sort(function (x, y) { return Math.abs(Math.log(y.r)) - Math.abs(Math.log(x.r)); })[0];
+      if (mover) line += " " + [mover.k.charAt(0).toUpperCase() + mover.k.slice(1), "is the biggest change on the week:", mover.a.toLocaleString("en-US"), "against", mover.b.toLocaleString("en-US") + "."].join(" ");
+    }
+    return line;
   }
   function fleetSentence(R) {
     var fw = facts.fleet_week || {}, rs = (fw.regions || []).filter(function (r) { return R ? r.id === R.id : r.id !== "vsb"; });
@@ -998,7 +1006,7 @@
     var all = (facts.zones || []).filter(zoneInRegion), zs = all.filter(function (z) { return z.temp_f != null; });
     var out = [];
     var wl = waterLine(zs);
-    if (wl) out.push(wl.replace(/^Surface water is/, R ? "Surface water in " + R.name + "'s zones is" : "Surface water in the zones is"));
+    if (wl) out.push(wl.replace(/^Surface water is/, R ? "Surface water in the region's zones is" : "Surface water in the report's zones is"));
     var br = all.filter(function (z) { return z["break"]; }).sort(byDesc(function (z) { return z["break"].step_f; }))[0];
     if (br) out.push(["The strongest temperature break is at", zname(br) + ",", br["break"].step_f + "°F across", Math.round(br["break"].over_nm), "nm."].join(" "));
     return out.join(" ");
@@ -1019,15 +1027,17 @@
       });
       var calm = days.slice().sort(function (a, b) { return a.peak.x.wind_max_kt - b.peak.x.wind_max_kt; })[0];
       var rough = days.slice().sort(function (a, b) { return b.peak.x.wind_max_kt - a.peak.x.wind_max_kt; })[0];
-      var line = [calm.label, "has the lightest wind of the next three days across", R ? "the region's areas" : "the report's areas", "(up to", calm.peak.x.wind_max_kt, "kt)"].join(" ");
-      if (rough !== calm) line += "; " + [rough.label, "peaks at", rough.peak.x.wind_max_kt, "kt", rough.peak.x.wind_dir, "at", rough.peak.zone].join(" ");
+      var full = function (lb) { return { Mon: "Monday", Tue: "Tuesday", Wed: "Wednesday", Thu: "Thursday", Fri: "Friday", Sat: "Saturday", Sun: "Sunday" }[lb] || lb; };
+      var line = [full(calm.label), "has the lightest wind of the next three days across", R ? "the region's areas" : "the report's areas", "(up to", calm.peak.x.wind_max_kt, "kt)"].join(" ");
+      if (rough !== calm) line += "; " + [full(rough.label), "peaks at", rough.peak.x.wind_max_kt, "kt", rough.peak.x.wind_dir, "at", rough.peak.zone].join(" ");
       out.push(line + ".");
     }
     var codes = R ? R.marine_zones : null, seen = {};
     var adv = ((facts.weather || {}).headlines || []).filter(function (a) {
       return (a.zones || []).some(function (zid) { return codes ? codes.indexOf(zid) >= 0 : /^P[ZM]Z/.test(zid); });
     }).filter(function (a) { var k = a.event + (a.where || a.area); if (seen[k]) return false; seen[k] = 1; return true; });
-    if (adv.length) out.push([adv[0].event, "for", (adv[0].where || adv[0].area) + ",", advSpan(adv[0])].join(" ") + (adv.length > 1 ? "; " + (adv.length - 1) + " more below." : "."));
+    if (adv.length) out.push(["NWS has", adv.length === 1 ? "a " + adv[0].event : adv.length + " advisories, starting with a " + adv[0].event + ",", "out for the region's waters (details below)."].join(" ")
+      .replace("the region's waters", R ? "the region's waters" : "these waters"));
     return out.join(" ");
   }
   function fishStory() {
@@ -1058,10 +1068,12 @@
       var rng = function (i) { var v = sets.map(function (x) { return (x[i] || x[0]).sets_ft; }); var lo = Math.min.apply(null, v), hi = Math.max.apply(null, v); return (lo < 1 ? "under 1" : lo.toFixed(0)) + (Math.round(hi) !== Math.round(lo) ? " to " + hi.toFixed(0) : "") + " ft"; };
       p2.push(["Sets at the entries run", rng(0), "today and", rng(2), "by", sets[0][Math.min(2, sets[0].length - 1)].label + "."].join(" "));
     }
-    var bu = ((facts.water || {}).buoys || []).filter(function (x) { return x.nearshore && x.temp_f != null; });
-    if (bu.length) p2.push(["Water is", rangeTxt(bu.map(function (x) { return x.temp_f; })) + "°F at the nearshore buoys."].join(" "));
-    var shore = ((facts.can_i_go || {}).shore || [])[0], rip = shore ? ((shore.days.today || {}).factors || []).filter(function (f0) { return f0.key === "rip"; })[0] : null;
-    if (rip && rip.value) p2.push("Rip current risk: " + String(rip.value).split(";")[0].replace(/ \(county forecast\)/, " in the county forecast") + ".");
+    var temps = sites.map(function (site) { var ts = site.temp_series || []; return ts.length ? ts[ts.length - 1].temp_f : null; }).filter(function (x) { return x != null; });
+    if (temps.length) p2.push(["Water is", rangeTxt(temps) + "°F at", sites.length > 1 ? "the sites' nearshore buoys." : "the site's nearshore buoy."].join(" "));
+    // rip risk from the region's own site (its county's surf forecast)
+    var shore = ((facts.can_i_go || {}).shore || []).filter(function (e) { return sites.some(function (site) { return site.short === e.short; }); })[0];
+    var rip = shore ? ((shore.days.today || {}).factors || []).filter(function (f0) { return f0.key === "rip"; })[0] : null;
+    if (rip && rip.value) p2.push(["Rip current risk at", shore.short + ":", String(rip.value).split(";")[0].replace(/ \(county forecast\)/, " in the county forecast") + "."].join(" "));
     return storyBlock(R, [p1, p2]);
   }
   function storyBlock(R, paras) {
