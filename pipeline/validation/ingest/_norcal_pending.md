@@ -11,7 +11,9 @@ Probed 2026-05-10.
 
 ## ✅ Wired
 
-- `cencoos.py` — Monterey Wharf (`mlml_monterey`) + Morro Bay
+- `cencoos.py` — Monterey Wharf (`monterey-wharf-real-time-samplin`;
+  the original `mlml_monterey` id ended 2019-11-29 and 404'd every run
+  until 2026-10-20) + Morro Bay
   (`edu_calpoly_marine_morro`) ERDDAP. Confirmed reachable (HTTP 200,
   ~22 KB ERDDAP index, info CSV verified to include
   `sea_water_turbidity`). Hourly cron with same-day dedup.

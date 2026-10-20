@@ -39,6 +39,11 @@ import sys
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 
+try:
+    from .check_ingest_health import evaluate as evaluate_ingest_health
+except ImportError:  # run as a plain script from pipeline/validation/
+    from check_ingest_health import evaluate as evaluate_ingest_health
+
 
 HERE = pathlib.Path(__file__).resolve().parent
 DATA_DIR = HERE / "data"
@@ -337,21 +342,36 @@ def rule_freshness_health(freshness: dict | None) -> list[dict]:
 
 
 def rule_ingest_health(ingest_health: dict | None) -> list[dict]:
-    """R7: hourly scraper status artifact has failed sources."""
+    """R7: scraper status artifact has failed, silent or ended sources."""
     if not ingest_health:
         return []
-    results = ingest_health.get("sources") or []
-    failed = [r for r in results if r.get("status") == "failed"]
-    if not failed:
-        return []
-    names = ", ".join(r.get("source_id", "unknown") for r in failed[:8])
-    return [{
-        "rule": "R7",
-        "severity": "high",
-        "title": f"{len(failed)} ingest scraper(s) failed in the latest run",
-        "what": f"Failed scrapers: {names}. Silent scraper failures can starve validation before the daily volume floor catches up.",
-        "action": "Open `pipeline/validation/data/ingest_health.json`, inspect the scraper error, then run `ingest-ground-truth.yml` manually after the fix.",
-    }]
+    problems = evaluate_ingest_health(ingest_health)
+    out = []
+    failed = [p for p in problems if p["kind"] == "failed"]
+    if failed:
+        names = ", ".join(p["source_id"] for p in failed[:8])
+        out.append({
+            "rule": "R7",
+            "severity": "high",
+            "title": f"{len(failed)} ingest scraper(s) failed in the latest run",
+            "what": f"Failed scrapers: {names}. Silent scraper failures can starve validation before the daily volume floor catches up.",
+            "action": "Open `pipeline/validation/data/ingest_health.json`, inspect the scraper error, then run `ingest-ground-truth.yml` manually after the fix.",
+        })
+    quiet = [p for p in problems if p["kind"] != "failed"]
+    if quiet:
+        names = ", ".join(
+            f"{p['source_id']}/{p['feed_id']} ({p['kind']})" if p.get("feed_id")
+            else f"{p['source_id']} ({p['kind']})"
+            for p in quiet[:8]
+        )
+        out.append({
+            "rule": "R7",
+            "severity": "high",
+            "title": f"{len(quiet)} ingest source(s) or feed(s) silent or ended upstream",
+            "what": f"{names}. These report status ok but have stopped delivering ground truth.",
+            "action": "Run `python -m pipeline.validation.check_ingest_health` for the per-source detail; replace or retire ended datasets, fix or drop silent scrapers.",
+        })
+    return out
 
 
 # ---- Per-source bias (informational, computed from residuals) -------
