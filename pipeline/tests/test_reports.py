@@ -717,3 +717,14 @@ def test_fleet_log_joins_the_landings_own_counts_and_never_reads_network_counts(
     oc = next(r for r in fl["regions"] if r["id"] == "oc")
     assert oc["n_trips"] == 2 and oc["n_heard"] == 1 and oc["offshore_min"] == 117
     assert regions.region_of_point(32.4, -117.26) == "sd" and regions.region_of_point(33.5, -117.8) == "oc"
+
+
+def test_week_over_week_counts_use_only_ports_that_reach_back():
+    dock = [{"landing": "Dana Wharf", "port": "Dana Point", "url": "u",
+             "days": [{"date": "2026-10-05", "catch": {"yellowfin": 40}}, {"date": "2026-10-13", "catch": {"yellowfin": 90}}], "trips": []},
+            {"landing": "Davey's Locker", "port": "Newport Beach", "url": "u",
+             "trips": [{"date": "2026-10-14", "boat": "Freelance", "trip": "3/4 day", "catch": {"yellowfin": 186}}]}]
+    this = hot_bites.dock_week(dock, date(2026, 10, 15))
+    prev = hot_bites.dock_week(dock, date(2026, 10, 8))
+    assert this["yellowfin"] == {"Dana Point": 90, "Newport Beach": 186} and prev["yellowfin"] == {"Dana Point": 40}
+    assert hot_bites.dock_since(dock) == {"Dana Point": "2026-10-05", "Newport Beach": "2026-10-14"}

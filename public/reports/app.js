@@ -953,6 +953,122 @@
     return html + briefMore();
   }
 
+  // --- The week's story for the region: what changed, where the fish are, the
+  // water, the bait and the next three days, in a few sentences. Facts only, each
+  // from a block below; numbers, not calls on the day.
+  function isoMinus(iso, days) { return new Date(Date.parse(String(iso).slice(0, 10) + "T12:00:00Z") - days * 864e5).toISOString().slice(0, 10); }
+  function shortPorts(list) { return list.map(function (port) { return port.replace(/ Beach$/, ""); }); }
+  function countSentence(R) {
+    var hb = facts.hot_bites || {}, lw = hb.dock_week || {}, pw = hb.dock_prev_week || {}, since = hb.dock_since || {};
+    var ports = (hb.dock_sources || []).map(function (src) { return src.port; }).filter(function (port) { return !R || R.ports.indexOf(port) >= 0; });
+    if (!ports.length) return "";
+    var sumIn = function (w, k) { var v = w[k] || {}; return ports.reduce(function (tot, port) { return tot + (v[port] || 0); }, 0); };
+    var keys = Object.keys(lw).filter(function (k) { return GAME.indexOf(k) >= 0 && sumIn(lw, k) > 0; })
+      .sort(function (a, b) { return sumIn(lw, b) - sumIn(lw, a); }).slice(0, 3);
+    if (!keys.length) return "";
+    var both = ports.every(function (port) { return since[port] && since[port] <= isoMinus(facts.date, 13); });
+    var now = keys.map(function (k) { return [sumIn(lw, k).toLocaleString("en-US"), k].join(" "); });
+    var line = [joinAnd(shortPorts(ports)), ports.length > 1 ? "boats" : "boats", "landed", joinAnd(now), "this week"].join(" ");
+    if (both) line += ", against " + joinAnd(keys.map(function (k) { return sumIn(pw, k).toLocaleString("en-US"); })) + " the week before";
+    return line + ".";
+  }
+  function fleetSentence(R) {
+    var fw = facts.fleet_week || {}, rs = (fw.regions || []).filter(function (r) { return R ? r.id === R.id : r.id !== "vsb"; });
+    if (!rs.length) return "";
+    var prev = fw.prev ? fw.prev.filter(function (r) { return rs.some(function (x) { return x.id === r.id; }); }) : null;
+    var n = rs.reduce(function (tot, r) { return tot + r.n_heard; }, 0), np = prev ? prev.reduce(function (tot, r) { return tot + r.n_heard; }, 0) : null;
+    var line = ["AIS heard", n, n === 1 ? "trip" : "trips", R ? "from " + R.name + " landings" : "from the three regions' landings", "this week"].join(" ") +
+      (np != null ? ", against " + np + " the week before" : "");
+    var top = [];
+    rs.forEach(function (r) { (r.top_places || []).forEach(function (pl) { top.push(pl); }); });
+    top.sort(function (a, b) { return b.minutes - a.minutes; });
+    if (top.length) line += "; tracked boats held longest " + placePhrase(top[0].place) + " (" + [hm(top[0].minutes), "over", top[0].trips, top[0].trips === 1 ? "trip" : "trips"].join(" ") + ")";
+    return line + ".";
+  }
+  function whereSentence() {
+    var g = bestSpots().filter(function (x) { return !x.noPos && groupInRegion(x) && (x.total > 0 || Object.keys(x.fish).length); })[0];
+    if (!g) return "";
+    var who = Object.keys(g.boats).slice(0, 2).map(function (n) { return boatPhrase(g.boats[n]); });
+    if (g.total > 0) {
+      return ["The biggest catch with a known spot was", catchLine(g.fish, 3), placePhrase(g.place) + (who.length ? "," : ""), who.length ? "on " + joinAnd(who) : "", "(" + md(g.latest) + ")."].filter(Boolean).join(" ");
+    }
+    return ["Reports put", joinAnd(Object.keys(g.fish).slice(0, 3)), placePhrase(g.place), "(" + md(g.latest) + ")."].join(" ");
+  }
+  function waterStory(R) {
+    var all = (facts.zones || []).filter(zoneInRegion), zs = all.filter(function (z) { return z.temp_f != null; });
+    var out = [];
+    var wl = waterLine(zs);
+    if (wl) out.push(wl.replace(/^Surface water is/, R ? "Surface water in " + R.name + "'s zones is" : "Surface water in the zones is"));
+    var br = all.filter(function (z) { return z["break"]; }).sort(byDesc(function (z) { return z["break"].step_f; }))[0];
+    if (br) out.push(["The strongest temperature break is at", zname(br) + ",", br["break"].step_f + "°F across", Math.round(br["break"].over_nm), "nm."].join(" "));
+    return out.join(" ");
+  }
+  function baitStory(R) {
+    var bb = ((facts.bait || {}).barges || []).filter(function (x) { return !R || R.barges.indexOf(x.barge) >= 0; });
+    if (!bb.length) return "";
+    return "Bait: " + bb.map(function (x) { return [x.barge, "has", x.serving.join(" and ").toLowerCase()].join(" "); }).join("; ") + ".";
+  }
+  function windowStory(R) {
+    var ol = ((facts.weather || {}).outlook || []).filter(function (r) { return !R || R.zones.indexOf(r.zone) >= 0; });
+    var out = [];
+    if (ol.length) {
+      var days = ol[0].days.slice(0, 3).map(function (d0, i) {
+        var peak = null;
+        ol.forEach(function (r) { var x = r.days[i]; if (x && (!peak || x.wind_max_kt > peak.x.wind_max_kt)) peak = { x: x, zone: r.zone }; });
+        return { label: d0.label, peak: peak };
+      });
+      var calm = days.slice().sort(function (a, b) { return a.peak.x.wind_max_kt - b.peak.x.wind_max_kt; })[0];
+      var rough = days.slice().sort(function (a, b) { return b.peak.x.wind_max_kt - a.peak.x.wind_max_kt; })[0];
+      var line = [calm.label, "has the lightest wind of the next three days across", R ? "the region's areas" : "the report's areas", "(up to", calm.peak.x.wind_max_kt, "kt)"].join(" ");
+      if (rough !== calm) line += "; " + [rough.label, "peaks at", rough.peak.x.wind_max_kt, "kt", rough.peak.x.wind_dir, "at", rough.peak.zone].join(" ");
+      out.push(line + ".");
+    }
+    var codes = R ? R.marine_zones : null, seen = {};
+    var adv = ((facts.weather || {}).headlines || []).filter(function (a) {
+      return (a.zones || []).some(function (zid) { return codes ? codes.indexOf(zid) >= 0 : /^P[ZM]Z/.test(zid); });
+    }).filter(function (a) { var k = a.event + (a.where || a.area); if (seen[k]) return false; seen[k] = 1; return true; });
+    if (adv.length) out.push([adv[0].event, "for", (adv[0].where || adv[0].area) + ",", advSpan(adv[0])].join(" ") + (adv.length > 1 ? "; " + (adv.length - 1) + " more below." : "."));
+    return out.join(" ");
+  }
+  function fishStory() {
+    var R = REG();
+    var catchPara = [countSentence(R) || (R ? [R.name, "landings post their fish counts only through a service that does not allow reuse, so this region's story is where boats went."].join(" ") : ""),
+      whereSentence(), fleetSentence(R)].filter(Boolean);
+    var seaPara = [waterStory(R), baitStory(R), windowStory(R)].filter(Boolean);
+    return storyBlock(R, [catchPara, seaPara]);
+  }
+  function diveStory() {
+    var R = REG(), sites = regionSites();
+    if (!sites.length) return storyBlock(R, [[["The report has no dive sites in", (R ? R.name : "this region") + " yet; the fishing view covers its water."].join(" ")]]);
+    var vis = sites.filter(function (site) { return site.vis_pred; }).map(function (site) { return [site.short, site.vis_pred.ft + " ft"].join(" "); });
+    var p1 = [];
+    if (vis.length) p1.push("Predicted visibility today: " + joinAnd(vis) + ".");
+    var shop = sites.filter(function (site) { return (site.vis || []).length; })[0];
+    if (shop) {
+      var posts = shop.vis, lp = posts[posts.length - 1], wk = isoMinus(lp.date, 7);
+      var before = posts.filter(function (x) { return x.date <= wk; }).pop();
+      var ft = function (x) { return (x.lo_ft === x.hi_ft ? x.lo_ft : x.lo_ft + "-" + x.hi_ft) + " ft"; };
+      p1.push([shop.vis_source, "posted", ft(lp), "on", md(lp.date) + (before ? ", against " + ft(before) + " on " + md(before.date) : "") + "."].join(" "));
+    }
+    var dv = obsRecent(["dive"]).filter(function (o) { var near = nearestSite(o); return near && sites.indexOf(near) >= 0; });
+    if (dv.length) p1.push([dv.length, dv.length > 1 ? "diver reports" : "diver report", "this week; the latest says", visRange(dv[0]), "ft (" + md(dv[0].date) + ")."].join(" "));
+    var p2 = [];
+    var sets = sites.map(function (site) { return (site.surf || []).slice(0, 3); }).filter(function (x) { return x.length; });
+    if (sets.length) {
+      var rng = function (i) { var v = sets.map(function (x) { return (x[i] || x[0]).sets_ft; }); var lo = Math.min.apply(null, v), hi = Math.max.apply(null, v); return (lo < 1 ? "under 1" : lo.toFixed(0)) + (Math.round(hi) !== Math.round(lo) ? " to " + hi.toFixed(0) : "") + " ft"; };
+      p2.push(["Sets at the entries run", rng(0), "today and", rng(2), "by", sets[0][Math.min(2, sets[0].length - 1)].label + "."].join(" "));
+    }
+    var bu = ((facts.water || {}).buoys || []).filter(function (x) { return x.nearshore && x.temp_f != null; });
+    if (bu.length) p2.push(["Water is", rangeTxt(bu.map(function (x) { return x.temp_f; })) + "°F at the nearshore buoys."].join(" "));
+    var shore = ((facts.can_i_go || {}).shore || [])[0], rip = shore ? ((shore.days.today || {}).factors || []).filter(function (f0) { return f0.key === "rip"; })[0] : null;
+    if (rip && rip.value) p2.push("Rip current risk: " + String(rip.value).split(";")[0].replace(/ \(county forecast\)/, " in the county forecast") + ".");
+    return storyBlock(R, [p1, p2]);
+  }
+  function storyBlock(R, paras) {
+    var body = paras.filter(function (pa) { return pa.length; }).map(function (pa) { return "<p>" + esc(pa.join(" ")) + "</p>"; }).join("");
+    return body ? '<section class="story"><h2 id="story">' + esc(R ? "This week in " + R.name : "This week across Southern California") + "</h2>" + body + "</section>" : "";
+  }
+
   // --- The short version: the day in a few plain sentences, every number from the sections below ---
   function sumWeek(lw, k) { var v = lw[k] || {}; return Object.keys(v).reduce(function (tot, port) { return tot + v[port]; }, 0); }
   function waterLine(zs) {
@@ -1895,7 +2011,7 @@
   }
 
   function body() {
-    if (depth === "brief") return view === "diving" ? briefDiving() : briefFishing();
+    if (depth === "brief") return view === "diving" ? diveStory() + briefDiving() : fishStory() + briefFishing();
     if (view === "diving") return sectionNav() + summaryDiving() + glanceDiving() + mapSection() + hotSection(false) + speciesBoard() + waterSection() + weather() + trendsSection() + seasonSection() + diveSites() + around(true) + basics() + sourcesBlock();
     return sectionNav() + summaryFishing() + hotSection(true) + speciesBoard() + glanceFishing() + bait() + zonesSection(["offshore", "mexico", "inshore"]) + weather() + waterSection() + trendsSection() + seasonSection() + fleetSection() + around(false) + spotsTable() + sourcesBlock();
   }
