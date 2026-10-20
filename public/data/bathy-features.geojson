@@ -3,37 +3,39 @@
   "features": [
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-123.40, 37.40] },
+      "geometry": { "type": "Point", "coordinates": [-123.435, 37.352] },
       "properties": {
         "id": "pioneer-seamount",
         "name": "Pioneer Seamount",
         "shortName": "Pioneer",
         "class": "seamount",
-        "minDepthM": 800,
-        "minDepthFt": 2625,
+        "minDepthM": 820,
+        "minDepthFt": 2690,
         "importanceTier": "marquee",
         "source": "GEBCO-UFN",
-        "description": "About 30 mi WSW of Pillar Point. Top ~800 m. Pelagic structure on warm-water years.",
+        "positionSource": "Published summit 37°21.1'N 123°26.1'W, 820 m (GMRT 813 m)",
+        "description": "About 45 nmi WSW of Pillar Point. Top ~820 m. Pelagic structure on warm-water years.",
         "commonSpecies": ["albacore", "bluefin tuna", "swordfish"]
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-123.50, 37.55] },
+      "geometry": { "type": "Point", "coordinates": [-123.35, 37.01] },
       "properties": {
         "id": "guide-seamount",
         "name": "Guide Seamount",
         "shortName": "Guide",
         "class": "seamount",
-        "minDepthM": 1300,
+        "minDepthM": 1682,
         "importanceTier": "major",
         "source": "GEBCO-UFN",
-        "description": "About 20 mi west of San Francisco. Deep — primarily a navigation reference and longliner mark."
+        "positionSource": "Published summit 37°00.6'N 123°21.0'W, 1,682 m (GMRT 1,671 m)",
+        "description": "About 50 nmi southwest of Pillar Point. Deep: primarily a navigation reference and longliner mark."
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-122.75, 35.75] },
+      "geometry": { "type": "Point", "coordinates": [-122.703, 35.761] },
       "properties": {
         "id": "davidson-seamount",
         "name": "Davidson Seamount",
@@ -42,12 +44,13 @@
         "minDepthM": 1250,
         "importanceTier": "marquee",
         "source": "GEBCO-UFN",
+        "positionSource": "GMRT summit, 1,250 m (matches the published summit depth)",
         "description": "About 80 mi WSW of Monterey. Top ~1,250 m, base 3,650 m. Within Monterey Bay National Marine Sanctuary; deep-sea coral / sponge habitat protected."
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-122.50, 36.05] },
+      "geometry": { "type": "Point", "coordinates": [-122.313, 36.349] },
       "properties": {
         "id": "sur-ridge",
         "name": "Sur Ridge",
@@ -56,7 +59,8 @@
         "minDepthM": 800,
         "importanceTier": "major",
         "source": "GEBCO-UFN",
-        "description": "Off Big Sur. Deep cold-water coral and sponge habitat. Inside Monterey Bay NMS."
+        "positionSource": "GMRT ridge crest ~790 m; MBNMS: ridge 28 mi offshore, 817-1,569 m",
+        "description": "About 25-30 mi off Big Sur. Deep cold-water coral and sponge habitat. Inside Monterey Bay NMS."
       }
     },
     {
@@ -117,7 +121,7 @@
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-121.95, 36.55] },
+      "geometry": { "type": "Point", "coordinates": [-121.966, 36.5574] },
       "properties": {
         "id": "carmel-pinnacles",
         "name": "Carmel Pinnacles",
@@ -127,6 +131,7 @@
         "minDepthFt": 16,
         "importanceTier": "major",
         "source": "NOAA-ENC",
+        "positionSource": "CDFW Carmel Pinnacles SMR boundary",
         "divable": true,
         "description": "Inside Carmel Bay. Famous shore- and boat-launch dive — within Carmel Pinnacles SMR; check the MPAs layer for take rules.",
         "commonSpecies": []
@@ -145,7 +150,6 @@
         "description": "Big Sur coast. Upwelling boundary — SST breaks consistently form here."
       }
     },
-
     {
       "type": "Feature",
       "geometry": { "type": "Point", "coordinates": [-120.47, 34.45] },
@@ -161,7 +165,7 @@
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-120.42, 34.46] },
+      "geometry": { "type": "Point", "coordinates": [-120.439, 34.4444] },
       "properties": {
         "id": "cojo-anchorage",
         "name": "Cojo / Government Point",
@@ -169,12 +173,13 @@
         "class": "anchorage",
         "importanceTier": "major",
         "source": "NOAA-ENC",
+        "positionSource": "GNIS (Cojo Anchorage); CP7 anchorage in 5-10 fathoms",
         "description": "Famous lee anchorage just inside Pt. Conception. The classic wait-out for southbound boats when the point is howling."
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-119.95, 34.42] },
+      "geometry": { "type": "Point", "coordinates": [-119.93571, 34.41472] },
       "properties": {
         "id": "naples-reef",
         "name": "Naples Reef",
@@ -184,6 +189,7 @@
         "minDepthM": 15,
         "importanceTier": "major",
         "source": "NOAA-ENC",
+        "positionSource": "GNIS",
         "divable": true,
         "description": "Kelp-fringed reef off the Goleta coast. Popular shore-launch dive and freedive spot. Inside Naples SMCA.",
         "commonSpecies": ["calico bass", "sheephead", "lobster"]
@@ -191,35 +197,7 @@
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-120.05, 34.43] },
-      "properties": {
-        "id": "sandy-point-hollister",
-        "name": "Sandy Point / Hollister Ranch",
-        "shortName": "Hollister",
-        "class": "reef",
-        "importanceTier": "major",
-        "source": "NOAA-ENC",
-        "description": "SB Coast just east of Pt. Conception. Productive nearshore reefs."
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-119.85, 34.30] },
-      "properties": {
-        "id": "goleta-trench",
-        "name": "Goleta Trench",
-        "shortName": "Goleta Trench",
-        "class": "trough",
-        "minDepthM": 250,
-        "importanceTier": "major",
-        "source": "GEBCO-UFN",
-        "description": "Offshore Santa Barbara. Deep edge that breeds upwelling — productive for pelagic on north-wind days."
-      }
-    },
-
-    {
-      "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-119.45, 34.02] },
+      "geometry": { "type": "Point", "coordinates": [-119.42291, 34.00418] },
       "properties": {
         "id": "anacapa-west-end",
         "name": "Anacapa West End / Cat Rock",
@@ -229,6 +207,7 @@
         "minDepthM": 9,
         "importanceTier": "marquee",
         "source": "NOAA-ENC",
+        "positionSource": "GNIS (Cat Rock)",
         "divable": true,
         "description": "Iconic dive and fishing spot at Anacapa Island's west tip. Partly inside the Anacapa SMR — see the MPAs layer for boundaries.",
         "commonSpecies": ["calico bass", "sheephead", "white seabass", "lobster"]
@@ -236,37 +215,24 @@
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-119.40, 34.04] },
+      "geometry": { "type": "Point", "coordinates": [-119.4953, 33.9645] },
       "properties": {
         "id": "footprint-reef",
-        "name": "Footprint Reef",
+        "name": "The Footprint",
         "shortName": "Footprint",
-        "class": "reef",
-        "minDepthFt": 70,
-        "minDepthM": 21,
+        "class": "bank",
+        "minDepthFt": 282,
+        "minDepthM": 86,
         "importanceTier": "major",
-        "source": "NOAA-ENC",
-        "description": "Just north of Anacapa. Signature pelagic spot when the temp break aligns over it.",
-        "commonSpecies": ["yellowtail", "white seabass", "calico bass"]
+        "source": "GMRT + CDFW MPA boundary",
+        "positionSource": "GMRT summit (~96 m) inside the Footprint SMR/FMR polygon; least depth from the CDFW CRFS map's '47 fathom spot'",
+        "description": "Deep bank about 4 nmi southwest of West Anacapa, on the south side of Anacapa Passage. Inside the Footprint State and Federal Marine Reserves: no take.",
+        "commonSpecies": []
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-119.32, 34.05] },
-      "properties": {
-        "id": "hardsons-reef",
-        "name": "Hardson's Reef",
-        "shortName": "Hardson's",
-        "class": "reef",
-        "importanceTier": "major",
-        "source": "NOAA-ENC",
-        "description": "North of Anacapa. Reliable rockfish drift.",
-        "commonSpecies": ["rockfish", "lingcod"]
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-119.55, 33.95] },
+      "geometry": { "type": "Point", "coordinates": [-119.5403, 34.0116] },
       "properties": {
         "id": "yellowbanks",
         "name": "Yellowbanks",
@@ -274,13 +240,14 @@
         "class": "reef",
         "importanceTier": "major",
         "source": "NOAA-ENC",
-        "description": "East end of Santa Cruz Island. Reliable yellowtail when warm water pushes through the channel.",
+        "positionSource": "GNIS (Yellowbanks Anchorage), nearest 10-30 m water",
+        "description": "Off the southeast end of Santa Cruz Island. Reliable yellowtail when warm water pushes through the channel.",
         "commonSpecies": ["yellowtail", "calico bass"]
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-119.85, 33.95] },
+      "geometry": { "type": "Point", "coordinates": [-119.82542, 33.95057] },
       "properties": {
         "id": "gull-island",
         "name": "Gull Island",
@@ -288,12 +255,13 @@
         "class": "rock",
         "importanceTier": "major",
         "source": "NOAA-ENC",
+        "positionSource": "GNIS",
         "description": "South side of Santa Cruz Island. Sheltered hook-and-line and dive ground."
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-120.45, 34.05] },
+      "geometry": { "type": "Point", "coordinates": [-120.3869, 34.0173] },
       "properties": {
         "id": "wyckoff-ledge",
         "name": "San Miguel — Wyckoff Ledge",
@@ -301,13 +269,14 @@
         "class": "reef",
         "importanceTier": "major",
         "source": "NOAA-ENC",
-        "description": "San Miguel Island. Cold-water big-fish territory — white seabass, halibut, big calicos.",
+        "positionSource": "CP7: 1.4 mi west of Crook Point, 0.5 mi offshore, covered 1.5 fathoms",
+        "description": "Ledge off the south side of San Miguel Island, west of Crook Point. Cold-water big-fish territory: white seabass, halibut, big calicos.",
         "commonSpecies": ["white seabass", "calico bass", "halibut"]
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-120.10, 34.07] },
+      "geometry": { "type": "Point", "coordinates": [-120.2375, 34.0245] },
       "properties": {
         "id": "talcott-shoal",
         "name": "Talcott Shoal",
@@ -315,41 +284,46 @@
         "class": "reef",
         "importanceTier": "major",
         "source": "NOAA-ENC",
-        "description": "Off Santa Rosa Island. Long shallow bank — productive in spring and fall."
+        "positionSource": "CP7: 1.5 mi north-northeast of Sandy Point, least depth 1.75 fathoms",
+        "description": "Broad reef off the northwest corner of Santa Rosa Island. Productive in spring and fall."
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-119.20, 33.40] },
+      "geometry": { "type": "Point", "coordinates": [-119.8267, 33.25] },
       "properties": {
         "id": "potato-bank",
         "name": "Potato Bank",
         "shortName": "Potato",
         "class": "bank",
         "importanceTier": "major",
-        "source": "NOAA-ENC",
-        "description": "Between San Nicolas and Santa Catalina Islands. Pelagic structure on warm-water years."
+        "source": "BD chart + GMRT",
+        "positionSource": "BD Outdoors SoCal chart; GMRT shows an isolated rise topping out near 90 m",
+        "description": "Isolated bank about 12 nmi west of San Nicolas Island. Pelagic structure on warm-water years.",
+        "minDepthM": 90,
+        "minDepthFt": 295
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-119.18, 32.78] },
+      "geometry": { "type": "Point", "coordinates": [-119.1333, 32.7] },
       "properties": {
         "id": "tanner-bank",
         "name": "Tanner Bank",
         "shortName": "Tanner",
         "class": "bank",
-        "minDepthFt": 120,
-        "minDepthM": 37,
+        "minDepthFt": 54,
+        "minDepthM": 16,
         "importanceTier": "marquee",
-        "source": "NOAA-ENC",
-        "description": "Plateau ~70 fathoms about 110 mi west of San Diego. Tuna, yellowtail, and white seabass when the temp break aligns.",
+        "source": "BD chart + CP7",
+        "positionSource": "BD Outdoors SoCal chart (GMRT ~35-45 m); CP7 least survey depth 9 fathoms",
+        "description": "Bank about 12 mi long and 5 mi wide, about 110 mi west of San Diego; least depth 9 fathoms. Tuna, yellowtail, and white seabass when the temp break aligns.",
         "commonSpecies": ["yellowtail", "bluefin tuna", "yellowfin tuna", "white seabass"]
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-119.116, 32.443] },
+      "geometry": { "type": "Point", "coordinates": [-119.1256, 32.4461] },
       "properties": {
         "id": "cortes-bank",
         "name": "Cortes Bank — Bishop Rock",
@@ -359,59 +333,62 @@
         "minDepthM": 1.8,
         "importanceTier": "marquee",
         "source": "NOAA-ENC",
-        "description": "About 100 mi WSW of San Diego. Top ~6 ft below the surface at Bishop Rock. Famous big-wave break and pelagic fishing destination. Inside Cortes Bank SMCA — see the MPAs layer.",
+        "positionSource": "CP7: Bishop Rock 'in about 32°27'N 119°08'W'; GMRT shallowest cell",
+        "description": "About 100 nmi WSW of San Diego. Bishop Rock is awash: the farthest outlying danger on the coast. Famous big-wave break and pelagic fishing destination.",
         "commonSpecies": ["yellowtail", "white seabass", "bluefin tuna", "yellowfin tuna", "dorado"]
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-121.00, 33.00] },
+      "geometry": { "type": "Point", "coordinates": [-120.9586, 33.0937] },
       "properties": {
         "id": "san-juan-seamount",
         "name": "San Juan Seamount",
         "shortName": "San Juan",
         "class": "seamount",
-        "minDepthM": 1300,
+        "minDepthM": 553,
         "importanceTier": "major",
         "source": "GEBCO-UFN",
+        "positionSource": "GMRT summit, 553 m",
         "description": "Far offshore. Deep — primarily of interest to longliners and oceanographers."
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-121.10, 34.00] },
+      "geometry": { "type": "Point", "coordinates": [-121.0564, 34.0481] },
       "properties": {
         "id": "rodriguez-seamount",
         "name": "Rodriguez Seamount",
         "shortName": "Rodriguez",
         "class": "seamount",
-        "minDepthM": 800,
+        "minDepthM": 632,
         "importanceTier": "major",
         "source": "GEBCO-UFN",
+        "positionSource": "GMRT summit, 632 m (BD chart agrees)",
         "description": "Far offshore. Top ~800 m. Pelagic structure on years when warm water reaches that far north."
       }
     },
-
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-118.55, 33.30] },
+      "geometry": { "type": "Point", "coordinates": [-118.51759, 33.34337] },
       "properties": {
         "id": "farnsworth-bank",
         "name": "Farnsworth Bank",
         "shortName": "Farnsworth",
         "class": "bank",
-        "minDepthFt": 60,
-        "minDepthM": 18,
+        "minDepthFt": 54,
+        "minDepthM": 16,
         "importanceTier": "marquee",
-        "source": "NOAA-ENC",
+        "source": "GNIS + CP7",
+        "positionSource": "GNIS; CP7: 9.2 mi SSE of West End, 1.6 mi offshore, least depth 9 fathoms",
         "divable": true,
-        "description": "Leeward Catalina. Premier white seabass and dive site, famous for purple hydrocoral. Inside Farnsworth SMCA — see the MPAs layer for take rules.",
+        "description": "Off the back (southwest) side of Catalina. Premier white seabass and dive site, famous for purple hydrocoral. Inside the Farnsworth SMCAs: check the MPAs layer for take rules.",
         "commonSpecies": ["white seabass", "yellowtail", "calico bass"]
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-118.50, 33.46] },
+      "geometry": { "type": "Point", "coordinates": [-118.49176, 33.46253] },
       "properties": {
         "id": "ship-rock",
         "name": "Ship Rock",
@@ -419,13 +396,14 @@
         "class": "rock",
         "importanceTier": "major",
         "source": "NOAA-ENC",
+        "positionSource": "GNIS",
         "description": "North end of Catalina. Reliable yellowtail boil spot when there's any current.",
         "commonSpecies": ["yellowtail", "calico bass", "bonito"]
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-118.50, 33.45] },
+      "geometry": { "type": "Point", "coordinates": [-118.48704, 33.45142] },
       "properties": {
         "id": "bird-rock",
         "name": "Bird Rock",
@@ -433,13 +411,14 @@
         "class": "rock",
         "importanceTier": "major",
         "source": "NOAA-ENC",
+        "positionSource": "GNIS",
         "description": "North end Catalina. Adjacent to Ship Rock — both fish on the same conditions.",
         "commonSpecies": ["yellowtail", "calico bass"]
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-118.327, 33.353] },
+      "geometry": { "type": "Point", "coordinates": [-118.32481, 33.34864] },
       "properties": {
         "id": "casino-point",
         "name": "Casino Point Underwater Park",
@@ -449,6 +428,7 @@
         "minDepthM": 9,
         "importanceTier": "marquee",
         "source": "NOAA-ENC",
+        "positionSource": "GNIS",
         "divable": true,
         "description": "World-famous shore dive at Avalon. Inside the Casino Point Marine Park — no take.",
         "commonSpecies": []
@@ -456,7 +436,7 @@
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-118.49, 33.45] },
+      "geometry": { "type": "Point", "coordinates": [-118.47731, 33.44809] },
       "properties": {
         "id": "blue-cavern-point",
         "name": "Blue Cavern Point",
@@ -464,13 +444,14 @@
         "class": "reef",
         "importanceTier": "major",
         "source": "NOAA-ENC",
+        "positionSource": "GNIS",
         "divable": true,
         "description": "North Catalina. Classic dive site with healthy kelp forest."
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-118.45, 33.42] },
+      "geometry": { "type": "Point", "coordinates": [-118.4345, 33.4298] },
       "properties": {
         "id": "empire-landing",
         "name": "Empire Landing",
@@ -478,27 +459,28 @@
         "class": "reef",
         "importanceTier": "major",
         "source": "NOAA-ENC",
+        "positionSource": "GNIS, nearest ~9 m water",
         "description": "Catalina inshore — productive sand-bass and calico spot."
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-118.32, 33.32] },
+      "geometry": { "type": "Point", "coordinates": [-118.3098, 33.3359] },
       "properties": {
         "id": "east-end-quarry",
-        "name": "East End Quarry / V's",
-        "shortName": "V's",
+        "name": "East End Quarry (Pebbly Beach)",
+        "shortName": "Quarry",
         "class": "reef",
         "importanceTier": "major",
         "source": "NOAA-ENC",
-        "description": "East Catalina. Reliable late-summer yellowtail mark.",
+        "positionSource": "Pebbly Beach quarry (OpenStreetMap), nearest ~18 m water",
+        "description": "Off the Pebbly Beach quarry, east of Avalon. Reliable late-summer yellowtail mark.",
         "commonSpecies": ["yellowtail", "calico bass"]
       }
     },
-
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-118.500, 32.840] },
+      "geometry": { "type": "Point", "coordinates": [-118.3851, 32.8189] },
       "properties": {
         "id": "pyramid-cove",
         "name": "Pyramid Cove",
@@ -508,13 +490,14 @@
         "minDepthM": 11,
         "importanceTier": "major",
         "source": "NOAA-ENC",
+        "positionSource": "GNIS, nearest ~11 m water",
         "description": "South end of San Clemente Island. Anchorage and yellowtail spot. Note: Navy range — closures common, check NOTMARs.",
         "commonSpecies": ["yellowtail", "calico bass", "white seabass"]
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-118.55, 33.00] },
+      "geometry": { "type": "Point", "coordinates": [-118.5548, 33.0085] },
       "properties": {
         "id": "wilson-cove",
         "name": "Wilson Cove",
@@ -522,12 +505,13 @@
         "class": "anchorage",
         "importanceTier": "major",
         "source": "NOAA-ENC",
+        "positionSource": "GNIS, nearest ~10 m water",
         "description": "Northeast San Clemente Island. Sheltered anchorage."
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-118.60, 33.04] },
+      "geometry": { "type": "Point", "coordinates": [-118.5807, 33.0355] },
       "properties": {
         "id": "nw-harbor",
         "name": "NW Harbor",
@@ -535,12 +519,13 @@
         "class": "anchorage",
         "importanceTier": "major",
         "source": "NOAA-ENC",
+        "positionSource": "GNIS (Northwest Harbor)",
         "description": "Northwest end of San Clemente Island."
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-118.45, 32.85] },
+      "geometry": { "type": "Point", "coordinates": [-118.42592, 32.8006] },
       "properties": {
         "id": "china-point",
         "name": "China Point",
@@ -548,12 +533,13 @@
         "class": "landmark",
         "importanceTier": "major",
         "source": "NOAA-ENC",
-        "description": "South end San Clemente Island. Inside the China Point SMR — see MPAs."
+        "positionSource": "GNIS; CP7: southwest extremity of San Clemente Island",
+        "description": "Southwest tip of San Clemente Island, on the west side of Pyramid Cove. Navy range: closures are common, check NOTMARs."
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-118.62, 33.05] },
+      "geometry": { "type": "Point", "coordinates": [-118.61398, 33.0342] },
       "properties": {
         "id": "castle-rock",
         "name": "Castle Rock",
@@ -561,45 +547,47 @@
         "class": "rock",
         "importanceTier": "major",
         "source": "NOAA-ENC",
+        "positionSource": "GNIS; CP7: 0.4 mi off the northwest point",
         "description": "Off northwest San Clemente Island. Pinnacle structure for yellowtail."
       }
     },
-
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-117.50, 32.69] },
+      "geometry": { "type": "Point", "coordinates": [-117.4333, 32.6333] },
       "properties": {
         "id": "nine-mile-bank",
         "name": "9 Mile Bank",
         "shortName": "9 Mile",
         "class": "bank",
-        "minDepthFt": 280,
-        "minDepthM": 85,
+        "minDepthFt": 425,
+        "minDepthM": 130,
         "importanceTier": "marquee",
-        "source": "NOAA-ENC",
-        "description": "About 9 nmi off Pt. Loma. Sand bass year-round; reliable yellowtail when warm water pushes in.",
+        "source": "BD chart + GMRT",
+        "positionSource": "BD Outdoors SoCal chart ('North 9 Mile Bank'); GMRT top ~130 m",
+        "description": "About 10 nmi west of Point Loma. Sand bass year-round; reliable yellowtail when warm water pushes in.",
         "commonSpecies": ["sand bass", "yellowtail", "rockfish"]
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-117.55, 32.67] },
+      "geometry": { "type": "Point", "coordinates": [-117.9972, 33.4] },
       "properties": {
         "id": "fourteen-mile-bank",
         "name": "14 Mile Bank",
         "shortName": "14 Mile",
         "class": "bank",
-        "minDepthFt": 240,
-        "minDepthM": 73,
+        "minDepthFt": 330,
+        "minDepthM": 100,
         "importanceTier": "major",
-        "source": "NOAA-ENC",
-        "description": "About 14 nmi off Pt. Loma. Reliable summer-fall yellowtail and tuna ground.",
+        "source": "BD chart + GMRT",
+        "positionSource": "BD Outdoors SoCal chart; GMRT top ~100 m",
+        "description": "In the San Pedro Channel about 14 mi SSW of Newport Harbor, toward Catalina's east end. Reliable summer-fall yellowtail and tuna ground.",
         "commonSpecies": ["yellowtail", "bluefin tuna", "yellowfin tuna"]
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-117.65, 32.62] },
+      "geometry": { "type": "Point", "coordinates": [-117.9736, 32.6555] },
       "properties": {
         "id": "spot-43",
         "name": "The 43 Spot",
@@ -608,15 +596,16 @@
         "minDepthFt": 258,
         "minDepthM": 79,
         "importanceTier": "major",
-        "source": "community-curated",
+        "source": "BD chart + GMRT",
+        "positionSource": "BD Outdoors SoCal chart; GMRT ~80-86 m, matching its 43-fathom name",
         "verifyLocally": true,
-        "description": "About 43-fathom plateau past 14 Mile Bank.",
+        "description": "Named for its 43-fathom chart sounding, about 37 nmi west of Point Loma.",
         "commonSpecies": ["yellowtail", "bluefin tuna"]
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-117.27, 32.67] },
+      "geometry": { "type": "Point", "coordinates": [-117.264, 32.69] },
       "properties": {
         "id": "pt-loma-kelp",
         "name": "Pt. Loma Kelp",
@@ -626,6 +615,7 @@
         "minDepthM": 18,
         "importanceTier": "major",
         "source": "NOAA-ENC",
+        "positionSource": "Inside the Point Loma kelp bed (GMRT ~11 m)",
         "divable": true,
         "description": "Inshore kelp forest off Pt. Loma. Classic yellowtail / calico spot. Partly inside the Cabrillo SMR — see MPAs.",
         "commonSpecies": ["yellowtail", "calico bass", "halibut"]
@@ -633,272 +623,201 @@
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-117.55, 32.55] },
+      "geometry": { "type": "Point", "coordinates": [-117.8722, 33.1056] },
       "properties": {
         "id": "spot-209",
         "name": "The 209",
         "shortName": "209",
         "class": "community-spot",
-        "minDepthFt": 209,
-        "minDepthM": 64,
+        "minDepthFt": 1254,
+        "minDepthM": 382,
         "importanceTier": "minor",
-        "source": "community-curated",
+        "source": "BD chart + GMRT",
+        "positionSource": "BD Outdoors SoCal chart; GMRT high ~381 m = 209 fathoms",
         "verifyLocally": true,
-        "description": "Numbered SD spot — depth-band cluster, not a pinpoint. Verify locally.",
+        "description": "Named for its 209-fathom chart sounding, about 25 nmi WSW of Oceanside.",
         "commonSpecies": ["rockfish", "yellowtail"]
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-117.62, 32.57] },
-      "properties": {
-        "id": "spot-230",
-        "name": "The 230",
-        "shortName": "230",
-        "class": "community-spot",
-        "minDepthFt": 230,
-        "minDepthM": 70,
-        "importanceTier": "minor",
-        "source": "community-curated",
-        "verifyLocally": true,
-        "description": "Numbered SD spot. Depth-band cluster."
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-117.70, 32.58] },
+      "geometry": { "type": "Point", "coordinates": [-117.8192, 33.2967] },
       "properties": {
         "id": "spot-267",
         "name": "The 267",
         "shortName": "267",
         "class": "community-spot",
-        "minDepthFt": 267,
-        "minDepthM": 81,
+        "minDepthFt": 1602,
+        "minDepthM": 488,
         "importanceTier": "minor",
-        "source": "community-curated",
+        "source": "BD chart + GMRT",
+        "positionSource": "BD Outdoors SoCal chart; GMRT ~540 m (267 fathoms = 488 m)",
         "verifyLocally": true,
-        "description": "Numbered SD spot ~10 mi off Pt. Loma. Hardpan plateau — productive rockfish drift in winter; bluefin in summer when the temp break aligns.",
-        "commonSpecies": ["rockfish", "bluefin tuna"]
+        "description": "Named for its 267-fathom chart sounding, about 22 nmi west of Oceanside.",
+        "commonSpecies": ["bluefin tuna"]
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-117.77, 32.64] },
+      "geometry": { "type": "Point", "coordinates": [-118.0889, 33.2] },
       "properties": {
         "id": "spot-277",
         "name": "The 277",
         "shortName": "277",
         "class": "community-spot",
-        "minDepthFt": 277,
-        "minDepthM": 84,
+        "minDepthFt": 1662,
+        "minDepthM": 507,
         "importanceTier": "minor",
-        "source": "community-curated",
+        "source": "BD chart + GMRT",
+        "positionSource": "BD Outdoors SoCal chart; GMRT high ~456-507 m, matching 277 fathoms",
         "verifyLocally": true,
-        "description": "The famous one. Bluefin and rockfish ~12 mi off Pt. Loma. Best on south swell with a clean temp break overhead.",
-        "commonSpecies": ["bluefin tuna", "rockfish", "yellowtail"]
+        "description": "Named for its 277-fathom chart sounding, between Catalina and Oceanside about 15 nmi southeast of Avalon.",
+        "commonSpecies": ["bluefin tuna", "yellowtail"]
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-117.80, 32.65] },
+      "geometry": { "type": "Point", "coordinates": [-117.5833, 32.4472] },
       "properties": {
         "id": "spot-302",
         "name": "The 302",
         "shortName": "302",
         "class": "community-spot",
-        "minDepthFt": 302,
-        "minDepthM": 92,
+        "minDepthFt": 1812,
+        "minDepthM": 552,
         "importanceTier": "minor",
-        "source": "community-curated",
+        "source": "BD chart + GMRT",
+        "positionSource": "BD Outdoors SoCal chart; GMRT ~557-675 m (302 fathoms = 552 m)",
         "verifyLocally": true,
-        "description": "Numbered SD spot. Depth-band cluster."
+        "description": "Named for its 302-fathom chart sounding, about 22 nmi southwest of Point Loma."
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-117.90, 32.66] },
+      "geometry": { "type": "Point", "coordinates": [-117.8083, 33.0236] },
       "properties": {
         "id": "spot-312",
         "name": "The 312",
         "shortName": "312",
         "class": "community-spot",
-        "minDepthFt": 312,
-        "minDepthM": 95,
+        "minDepthFt": 1872,
+        "minDepthM": 571,
         "importanceTier": "minor",
-        "source": "community-curated",
+        "source": "BD chart + GMRT",
+        "positionSource": "BD Outdoors SoCal chart; GMRT high ~569 m = 312 fathoms",
         "verifyLocally": true,
-        "description": "Drop along the Coronado Escarpment ~20 mi WSW of Pt. Loma. Late-summer tuna spot.",
-        "commonSpecies": ["bluefin tuna", "yellowfin tuna"]
+        "description": "Named for its 312-fathom chart sounding, about 24 nmi southwest of Oceanside.",
+        "commonSpecies": ["bluefin tuna"]
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-117.62, 32.50] },
+      "geometry": { "type": "Point", "coordinates": [-117.7333, 31.7639] },
       "properties": {
         "id": "trench-1010",
         "name": "The 1010 Trench",
         "shortName": "1010",
         "class": "trough",
-        "minDepthFt": 1010,
-        "minDepthM": 308,
         "importanceTier": "major",
-        "source": "GEBCO-UFN",
-        "description": "Deep canyon SW of Pt. Loma. Summer bluefin when the temp break aligns over it."
+        "source": "BD chart + GMRT",
+        "positionSource": "BD Outdoors SoCal chart; GMRT ~1,845 m = 1,010 fathoms",
+        "description": "Deep trench off northern Baja about 60 nmi south-southwest of Point Loma, named for its 1,010-fathom sounding. Summer bluefin when the temp break aligns over it."
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-118.20, 32.40] },
+      "geometry": { "type": "Point", "coordinates": [-118.2472, 32.0667] },
       "properties": {
         "id": "sixty-mile-bank",
         "name": "60 Mile Bank",
         "shortName": "60 Mile",
         "class": "bank",
-        "minDepthFt": 200,
-        "minDepthM": 61,
+        "minDepthFt": 318,
+        "minDepthM": 97,
         "importanceTier": "marquee",
-        "source": "NOAA-ENC",
-        "description": "About 60 nmi off San Diego. Premier offshore for yellowfin, bluefin, and yellowtail.",
+        "source": "BD chart + CP7",
+        "positionSource": "BD Outdoors SoCal chart (GMRT ~90-140 m); CP7: 62 mi from Point Loma, least depth 53 fathoms",
+        "description": "About 62 nmi southwest of Point Loma; least depth 53 fathoms. Premier offshore ground for yellowfin, bluefin, and yellowtail.",
         "commonSpecies": ["yellowfin tuna", "bluefin tuna", "yellowtail", "dorado"]
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-118.18, 32.40] },
+      "geometry": { "type": "Point", "coordinates": [-118.5, 32.0667] },
       "properties": {
         "id": "mushroom-60mile",
-        "name": "The Mushroom (60 Mile)",
+        "name": "The Mushroom",
         "shortName": "Mushroom",
         "class": "community-spot",
-        "minDepthFt": 220,
-        "minDepthM": 67,
-        "importanceTier": "major",
+        "importanceTier": "minor",
         "source": "community-curated",
+        "positionSource": "BD Outdoors SoCal chart only (GMRT ~320-460 m); not independently confirmed",
         "verifyLocally": true,
-        "description": "Iconic high spot on 60 Mile Bank.",
+        "description": "Deep high spot about 13 nmi west of 60 Mile Bank, as placed on the BD Outdoors chart. Verify locally.",
         "commonSpecies": ["yellowfin tuna", "yellowtail"]
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-118.30, 32.42] },
-      "properties": {
-        "id": "boomerang",
-        "name": "Boomerang",
-        "shortName": "Boomerang",
-        "class": "community-spot",
-        "minDepthFt": 340,
-        "minDepthM": 104,
-        "importanceTier": "major",
-        "source": "community-curated",
-        "verifyLocally": true,
-        "description": "Curved bottom feature near 60 Mile Bank.",
-        "commonSpecies": ["yellowtail", "white seabass", "bluefin tuna"]
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-118.00, 32.45] },
+      "geometry": { "type": "Point", "coordinates": [-117.5, 31.9] },
       "properties": {
         "id": "hidden-bank",
         "name": "The Hidden Bank",
         "shortName": "Hidden",
         "class": "bank",
-        "minDepthFt": 200,
-        "minDepthM": 61,
-        "importanceTier": "major",
+        "importanceTier": "minor",
         "source": "NOAA-ENC",
-        "description": "About 30 nmi off San Diego. Upper and lower sections; white seabass and yellowtail.",
-        "commonSpecies": ["yellowtail", "white seabass", "albacore"]
+        "positionSource": "BD Outdoors SoCal chart label position only; GMRT shows no shallow top nearby",
+        "description": "Offshore northern Baja, as placed on the BD Outdoors chart. Position approximate; verify locally.",
+        "commonSpecies": ["yellowtail", "white seabass", "albacore"],
+        "verifyLocally": true
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-117.95, 32.70] },
+      "geometry": { "type": "Point", "coordinates": [-119.64, 32.3467] },
       "properties": {
         "id": "northeast-bank",
         "name": "Northeast Bank",
         "shortName": "NE Bank",
         "class": "bank",
-        "minDepthFt": 210,
-        "minDepthM": 64,
-        "importanceTier": "major",
+        "importanceTier": "minor",
         "source": "NOAA-ENC",
-        "description": "About 30 nmi off San Diego. Yellowtail boil when warm water pushes through.",
-        "commonSpecies": ["yellowtail", "bonito"]
+        "positionSource": "BD Outdoors SoCal chart only (GMRT top ~360 m); not independently confirmed",
+        "description": "Deep bank west of Cortes Bank, as placed on the BD Outdoors chart. Verify locally.",
+        "commonSpecies": [],
+        "verifyLocally": true
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-117.78, 32.62] },
+      "geometry": { "type": "Point", "coordinates": [-118.3933, 33.0367] },
       "properties": {
         "id": "mackerel-bank",
         "name": "Mackerel Bank",
         "shortName": "Mackerel",
         "class": "bank",
-        "importanceTier": "major",
-        "source": "NOAA-ENC",
-        "description": "SD-area bank. Reliable yellowtail boil spot.",
-        "commonSpecies": ["yellowtail", "bonito"]
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-117.65, 32.45] },
-      "properties": {
-        "id": "knuckle",
-        "name": "The Knuckle",
-        "shortName": "Knuckle",
-        "class": "community-spot",
-        "importanceTier": "major",
-        "source": "community-curated",
-        "verifyLocally": true,
-        "description": "Deep San Diego community spot."
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-117.72, 32.55] },
-      "properties": {
-        "id": "pistol",
-        "name": "Pistol",
-        "shortName": "Pistol",
-        "class": "community-spot",
         "importanceTier": "minor",
-        "source": "community-curated",
-        "verifyLocally": true,
-        "description": "San Diego community spot. Verify locally."
+        "source": "NOAA-ENC",
+        "positionSource": "BD Outdoors SoCal chart only (GMRT top ~630 m); not independently confirmed",
+        "description": "Deep bank east of the north end of San Clemente Island, as placed on the BD Outdoors chart. Verify locally.",
+        "commonSpecies": [],
+        "verifyLocally": true
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-117.255, 32.66] },
+      "geometry": { "type": "Point", "coordinates": [-117.247, 32.668] },
       "properties": {
         "id": "cabrillo-pt-loma-north",
-        "name": "Cabrillo / Pt. Loma North Side",
+        "name": "Cabrillo SMR (Pt. Loma tip)",
         "shortName": "Cabrillo",
         "class": "reef",
         "importanceTier": "major",
         "source": "NOAA-ENC",
+        "positionSource": "CDFW Cabrillo SMR boundary (public/data/mpa-boundaries.geojson)",
         "divable": true,
-        "description": "Pt. Loma north side. Inside the Cabrillo SMR — no take, see MPAs layer."
-      }
-    },
-
-    {
-      "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-117.40, 32.45] },
-      "properties": {
-        "id": "coronado-bank",
-        "name": "Coronado Bank",
-        "shortName": "The Bank",
-        "class": "bank",
-        "minDepthFt": 60,
-        "minDepthM": 18,
-        "importanceTier": "marquee",
-        "source": "NOAA-ENC",
-        "description": "South of San Diego. Yellowtail anchor for SD long-range — closer than Cortes. Mexican waters apply for Mexican-flagged effort; verify rules.",
-        "commonSpecies": ["yellowtail", "bonito", "bluefin tuna"]
+        "description": "Southern tip of Point Loma. Inside the Cabrillo SMR: no take, see the MPAs layer."
       }
     },
     {
@@ -918,7 +837,7 @@
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-117.05, 32.05] },
+      "geometry": { "type": "Point", "coordinates": [-116.787, 31.974] },
       "properties": {
         "id": "salsipuedes",
         "name": "Salsipuedes",
@@ -926,25 +845,13 @@
         "class": "reef",
         "importanceTier": "major",
         "source": "NOAA-ENC",
-        "description": "Reef south of the Coronados. Bottom-fishing destination. Mexican waters."
+        "positionSource": "Bahía Salsipuedes; same point as the Salsipuedes spot in src/lib/mapData.js",
+        "description": "Kelp coast and reefs at Bahía Salsipuedes, north of Ensenada. Bottom fishing and white seabass. Mexican waters."
       }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-117.00, 31.92] },
-      "properties": {
-        "id": "soledad-bank",
-        "name": "Soledad Bank",
-        "shortName": "Soledad",
-        "class": "bank",
-        "importanceTier": "major",
-        "source": "NOAA-ENC",
-        "description": "Off Ensenada. Mexican waters."
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-116.85, 31.82] },
+      "geometry": { "type": "Point", "coordinates": [-116.8, 31.805] },
       "properties": {
         "id": "todos-santos-islands",
         "name": "Todos Santos Islands",
@@ -952,6 +859,7 @@
         "class": "islands",
         "importanceTier": "major",
         "source": "NOAA-ENC",
+        "positionSource": "Islas de Todos Santos, 31°48'N 116°48'W",
         "description": "Off Ensenada. Killers reef — famous big-wave break. Mexican waters."
       }
     }
