@@ -1,6 +1,6 @@
-# Validation watchdog — 2026-10-20T15:04Z
+# Validation watchdog — 2026-10-20T18:24Z
 
-**4 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
+**2 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
@@ -10,38 +10,26 @@ Multiple scrapers may be silently broken.
 
 **Suggested action:** Open the latest hourly ingest workflow run; look for `FAILED` lines per scraper.
 
-### 🔴 2. 1 critical external feed(s) are red
+### ⚠️ 2. 4 non-critical external feed(s) are red
 
-A required upstream data source failed the latest feed-health probe.
-
-**Suggested action:** Inspect `pipeline/validation/data/feed_health.json`, then retry the affected fetch workflow after confirming the upstream feed recovered.
-
-### ⚠️ 3. 3 non-critical external feed(s) are red
-
-Red feeds: chl_climo_modis_pfeg, cdip, osm_overpass_main. Fallbacks may keep the model running, but redundancy is degraded.
+Red feeds: chl_dineof_nrt_4km, chl_dineof_sci_9km, kd490_dineof_9km, osm_overpass_main. Fallbacks may keep the model running, but redundancy is degraded.
 
 **Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
-
-### 🔴 4. Published-data freshness gate found 1 issue(s)
-
-Freshness/completeness failures: swell5d:summary_day_sparse.
-
-**Suggested action:** Open `pipeline/validation/data/freshness_health.json`; fix the failing fetcher or rerun the matching workflow before trusting the deploy.
 
 ## Per-zone metrics
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_nearshore` | 4 | 9.37 | -9.02 | 0% | — |
-| `central_nearshore` | 1 | 4.33 | -4.33 | 0% | — |
+| `bight_nearshore` | 4 | 5.89 | -4.75 | 75% | — |
+| `central_nearshore` | 1 | 2.44 | -2.44 | 100% | — |
 
 ## Per-source bias (informational)
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `cencoos` | 1 | -4.33 ft |
-| `dive-shop-diveviz` | 1 | -7.69 ft |
-| `dive-shop-justgetwet` | 3 | -9.47 ft |
+| `cencoos` | 1 | -2.44 ft |
+| `dive-shop-diveviz` | 1 | -2.96 ft |
+| `dive-shop-justgetwet` | 3 | -5.35 ft |
 
 ## How to act on this issue
 
