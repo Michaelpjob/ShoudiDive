@@ -162,6 +162,23 @@ def bilinear_sample(src_arr, src_w, src_h, lng_grid, lat_grid):
     return _bilinear_sample(src_arr, src_w, src_h, lng_grid, lat_grid, bbox=BBOX)
 
 
+def resample_age(age_src, value_grid, lng_grid, lat_grid):
+    """Resample a decoded age-days sidecar onto the prediction grid.
+
+    decode_age_png marks "no data" as 999.0, which is FINITE, so the
+    NaN-aware bilinear_sample used to average it with real ages at every
+    coast/cloud edge: a 1-day-old chl cell next to land came out ~250 days
+    old. On the 2026-10-19 CA run that was 540 chl cells (mean age 30.06 d
+    vs a true 1.04 d) and 1,800 kd490 cells (102.43 d vs 11.00 d), all
+    along the coast, so persistence_with_decay sent those nearshore cells
+    to climatology. Map the sentinel to NaN so only real ages are averaged,
+    then restore 999 wherever the age or the observation itself is missing.
+    """
+    src = np.where(age_src >= 999.0, np.nan, age_src)
+    out = bilinear_sample(src, src.shape[1], src.shape[0], lng_grid, lat_grid)
+    return np.where(np.isnan(value_grid) | np.isnan(out), 999.0, out)
+
+
 # ---- Static fields from land.geojson --------------------------------------
 
 # Major CA river mouths within the bbox. Coordinates are approximate but
@@ -782,14 +799,11 @@ def main():
     # carries the older fallback for persistence_with_decay.
     chl_age_path = OUT_DIR / "chl_1d_age_days.png"
     if chl_age_path.exists():
-        age_grid = decode_age_png(chl_age_path)
-        age_resampled = bilinear_sample(
-            age_grid, age_grid.shape[1], age_grid.shape[0], lng_grid, lat_grid
+        # resample_age forces 999 wherever today's chl itself is NaN so we
+        # never claim a finite age for a cell with no observation at all.
+        age_resampled = resample_age(
+            decode_age_png(chl_age_path), chl_today, lng_grid, lat_grid
         )
-        # Bilinear can interpolate an age across a NaN boundary; force
-        # 999 wherever today's chl itself is NaN so we never claim a
-        # finite age for a cell with no observation at all.
-        age_resampled = np.where(np.isnan(chl_today), 999.0, age_resampled)
         valid_age = age_resampled < 999
         n_total = int(valid_age.sum())
         n_stale = int(((age_resampled > 0) & valid_age).sum())
@@ -865,13 +879,10 @@ def main():
     if kd490_path.exists() and kd490_age_path.exists():
         kd_src = decode_log10_png(kd490_path, 0.02, 10.0)
         kd_grid = bilinear_sample(kd_src, kd_src.shape[1], kd_src.shape[0], lng_grid, lat_grid)
-        kd_age_src = decode_age_png(kd490_age_path)
-        kd_age_grid = bilinear_sample(
-            kd_age_src, kd_age_src.shape[1], kd_age_src.shape[0], lng_grid, lat_grid
+        # Same sentinel-safe resample as chl; 999 wherever Kd itself is NaN.
+        kd_age_grid = resample_age(
+            decode_age_png(kd490_age_path), kd_grid, lng_grid, lat_grid
         )
-        # Same defensive clamp as chl: bilinear can interpolate an age
-        # across a NaN boundary; force 999 wherever Kd itself is NaN.
-        kd_age_grid = np.where(np.isnan(kd_grid), 999.0, kd_age_grid)
         valid_kd = kd_age_grid < 999
         n_kd_valid = int(valid_kd.sum())
         if n_kd_valid:
