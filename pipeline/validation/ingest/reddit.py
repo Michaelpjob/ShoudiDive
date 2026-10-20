@@ -39,7 +39,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 
 from . import _llm_cache, _llm_extract
-from ._base import BaseScraper
+from ._base import FEED_FAILED, FEED_OK, BaseScraper
 
 
 SUBREDDITS = [
@@ -79,6 +79,11 @@ class RedditCAScraper(BaseScraper):
     source_confidence = 0.80
     source_root_url = "https://www.reddit.com"
 
+    # Sparse like the forum feeds; same 14-day (56-run) silence limit as
+    # bdoutdoors. Reddit has yielded 4 observations since 2026-05, with
+    # gaps of 15, 36 and (so far) 89 days, so expect this to flag.
+    max_zero_runs = 56
+
     def __init__(self):
         super().__init__()
         self._spot_lookup = _load_spot_lookup()
@@ -110,10 +115,13 @@ class RedditCAScraper(BaseScraper):
             except Exception as exc:  # noqa: BLE001
                 print(f"  {self.source_id}: r/{sr['sub']} fetch failed: "
                       f"{exc.__class__.__name__}: {exc}")
+                self.report_feed(f"r/{sr['sub']}", FEED_FAILED,
+                                 detail=f"{exc.__class__.__name__}: {exc}")
                 continue
 
             kept = 0
             ca_relevant = 0
+            sub_obs = 0
             for item in items[:MAX_ITEMS_PER_SUB]:
                 # Pre-filter happens here so we can count CA-relevant
                 # vs total in the log line.
@@ -127,11 +135,20 @@ class RedditCAScraper(BaseScraper):
                 obs = self._parse_item(item, source_tag=sr["tag"])
                 _llm_cache.mark(cache, cache_key)
                 out.extend(obs)
+                sub_obs += len(obs)
                 if obs:
                     kept += 1
             print(f"  {self.source_id}: r/{sr['sub']} → "
                   f"{len(items)} fresh posts, {ca_relevant} CA-relevant, "
                   f"{kept} produced obs")
+            # Reachable but no CA reports = ok; only fetch errors count
+            # against the feed (a 429 from Reddit lands in the except).
+            self.report_feed(
+                f"r/{sr['sub']}", FEED_OK, observation_count=sub_obs,
+                last_data_utc=items[0]["pubdate"] if items else None,
+                detail=(f"{len(items)} posts < {MAX_AGE_HOURS} h old, "
+                        f"{ca_relevant} CA-relevant, {kept} produced obs"),
+            )
         if cache_skips:
             print(f"  {self.source_id}: cache-skipped {cache_skips} posts (already LLM'd)")
         _llm_cache.save(_llm_cache.prune(cache))
@@ -145,8 +162,9 @@ class RedditCAScraper(BaseScraper):
         try:
             root = ET.fromstring(r.content)
         except ET.ParseError as exc:
-            print(f"  {self.source_id}: r/{sub} XML parse: {exc}")
-            return []
+            # Raise so fetch() records the feed as failed, not as a
+            # quiet subreddit.
+            raise ValueError(f"XML parse failed: {exc}") from exc
 
         out: list[dict] = []
         for entry in root.findall("atom:entry", _NS):

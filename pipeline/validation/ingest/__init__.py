@@ -14,8 +14,10 @@ from __future__ import annotations
 import json
 import pathlib
 import sys
+from collections import Counter
 from datetime import datetime, timezone
 
+from ._base import DEFAULT_MAX_ZERO_RUNS, FEED_OK
 from .bdoutdoors import BdOutdoorsScraper
 from .beachcitiescuba import BeachCitiesCubaScraper
 from .cdip import CDIPScraper
@@ -118,31 +120,41 @@ def run_all() -> list[dict]:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     started = datetime.now(timezone.utc)
+    run_at = started.isoformat(timespec="seconds").replace("+00:00", "Z")
     print(f"ingest run start: {started.isoformat(timespec='seconds')}")
     print(f"  out: {OBS_PATH}")
+
+    # Last run's health, so per-source zero-observation streaks carry
+    # across runs (the workflow commits ingest_health.json every run).
+    previous = _previous_health_by_source()
 
     new_obs: list[dict] = []
     source_status: list[dict] = []
     for scraper in SCRAPERS:
         sid = getattr(scraper, "source_id", scraper.__class__.__name__)
+        scraper.feed_status = []
         try:
             obs = scraper.fetch()
             print(f"  {sid}: {len(obs)} observations")
             new_obs.extend(obs)
-            source_status.append({
+            entry = {
                 "source_id": sid,
                 "status": "ok",
                 "observation_count": len(obs),
                 "error": None,
-            })
+            }
         except Exception as exc:  # noqa: BLE001
-            source_status.append({
+            entry = {
                 "source_id": sid,
                 "status": "failed",
                 "observation_count": 0,
                 "error": f"{exc.__class__.__name__}: {exc}",
-            })
+            }
             print(f"  {sid}: FAILED — {exc.__class__.__name__}: {exc}")
+        entry["max_zero_runs"] = int(getattr(scraper, "max_zero_runs", DEFAULT_MAX_ZERO_RUNS))
+        if scraper.feed_status:
+            entry["feeds"] = list(scraper.feed_status)
+        source_status.append(entry)
 
     # Dedup: load existing obs_ids, drop any duplicates from this run.
     existing_ids = _existing_obs_ids()
@@ -153,8 +165,13 @@ def run_all() -> list[dict]:
         for o in fresh:
             f.write(json.dumps(o) + "\n")
 
+    added_by_source = Counter(o.get("source") for o in fresh)
+    for entry in source_status:
+        entry["observations_added"] = added_by_source.get(entry["source_id"], 0)
+        carry_streaks(entry, previous.get(entry["source_id"]), run_at)
+
     health = {
-        "computed_at": started.isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "computed_at": run_at,
         "total_sources": len(source_status),
         "ok": sum(1 for s in source_status if s["status"] == "ok"),
         "failed": sum(1 for s in source_status if s["status"] == "failed"),
@@ -167,6 +184,55 @@ def run_all() -> list[dict]:
 
     print(f"ingest run done: {len(fresh)} new (of {len(new_obs)} fetched)")
     return fresh
+
+
+def carry_streaks(entry: dict, prev: dict | None, run_at: str) -> dict:
+    """Fold the previous run's counters into this run's health entry.
+
+    Source level: ``zero_obs_streak`` counts consecutive runs that
+    returned no observations (a failed run counts, it returned nothing)
+    and ``last_obs_run_utc`` is the last run that returned any.
+
+    Feed level: ``bad_run_streak`` counts consecutive runs whose status
+    was not ok. The scraper decides what ok means for its feeds: an
+    ERDDAP station is ok only when it produced observations, an RSS
+    feed is ok whenever it fetched and parsed, since a quiet forum is
+    not a broken pipe.
+    """
+    prev = prev or {}
+    prev_streak = prev.get("zero_obs_streak")
+    if prev_streak is None:
+        # Health files written before streaks existed still say whether
+        # that run returned anything; count it.
+        prev_streak = 1 if prev and prev.get("observation_count") == 0 else 0
+    if entry.get("observation_count", 0) > 0:
+        entry["zero_obs_streak"] = 0
+        entry["last_obs_run_utc"] = run_at
+    else:
+        entry["zero_obs_streak"] = int(prev_streak) + 1
+        entry["last_obs_run_utc"] = prev.get("last_obs_run_utc")
+
+    prev_feeds = {f.get("feed_id"): f for f in prev.get("feeds") or []}
+    for feed in entry.get("feeds") or []:
+        pf = prev_feeds.get(feed.get("feed_id")) or {}
+        feed["max_bad_runs"] = DEFAULT_MAX_ZERO_RUNS
+        if feed.get("status") == FEED_OK:
+            feed["bad_run_streak"] = 0
+            feed["last_ok_run_utc"] = run_at
+        else:
+            feed["bad_run_streak"] = int(pf.get("bad_run_streak") or 0) + 1
+            feed["last_ok_run_utc"] = pf.get("last_ok_run_utc")
+    return entry
+
+
+def _previous_health_by_source() -> dict[str, dict]:
+    if not HEALTH_PATH.exists():
+        return {}
+    try:
+        prev = json.loads(HEALTH_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return {s.get("source_id"): s for s in prev.get("sources") or [] if s.get("source_id")}
 
 
 def _existing_obs_ids() -> set[str]:

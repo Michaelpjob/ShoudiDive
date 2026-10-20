@@ -128,7 +128,8 @@ emit turbidity + chlorophyll and need no auth. **Top 3 to integrate first:**
    **and** gives *observed* NTU to correct the interpolated-chl "reads clear when it's not" bias.
 2. **CeNCOOS ERDDAP** — turbidity + chl at Monterey / Santa Cruz / Morro / Cal Poly, 15 min, no
    auth — **and the MBARI M1 offshore mooring lives on the same host**, so one integration covers
-   Central-CA nearshore + offshore. `https://erddap.cencoos.org/erddap/tabledap/mlml_monterey.csv`.
+   Central-CA nearshore + offshore. `https://erddap.cencoos.org/erddap/tabledap/monterey-wharf-real-time-samplin.csv`
+   (the older `mlml_monterey` id ended 2019-11-29).
 3. **Reef Check California** — diver-recorded transect **visibility** spanning CA + Baja + **PNW**
    (~190 surveys/yr, ~1,900 since 2006). The only source touching every current and planned zone.
    Request-gated (`rcinfo@reefcheck.org`) — **send the request now**; turnaround, not code, is the

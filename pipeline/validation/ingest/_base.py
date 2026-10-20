@@ -7,6 +7,8 @@ normalized observation dicts. The base handles:
 * a real User-Agent identifying the project + a contact URL
 * a request timeout so a hung source can't stall the whole run
 * a stable ``obs_id`` factory so dedup across days is trivial
+* per-feed status (``report_feed``) + a silence threshold
+  (``max_zero_runs``) that ``check_ingest_health`` reads
 
 The orchestrator (``ingest/__init__.py``) catches any exception from
 ``fetch()`` and continues — one broken source must never take down
@@ -41,6 +43,20 @@ DEFAULT_RATE_LIMIT_S = 300
 # ingest cron.
 HTTP_TIMEOUT_S = 30
 
+# Consecutive cron runs a source (or one of its feeds) may return zero
+# observations before check_ingest_health calls it silent. The cron runs
+# every 6 h, so 4 runs ~= 24 h. Sized from the 39 runs 2026-10-10..20:
+# cdip-buoy returned 0 on 5 of them, never twice in a row, so a one-run
+# blip stays green and a day of silence goes red. Sparse sources (forums)
+# raise this on their class.
+DEFAULT_MAX_ZERO_RUNS = 4
+
+# Per-feed status values a scraper reports through ``report_feed``.
+FEED_OK = "ok"          # fetched and produced observations
+FEED_EMPTY = "empty"    # reachable, nothing usable in the window
+FEED_ENDED = "ended"    # upstream says the dataset stopped (retired)
+FEED_FAILED = "failed"  # request or parse error
+
 
 class BaseScraper(ABC):
     """Common machinery for every scraper.
@@ -70,10 +86,42 @@ class BaseScraper(ABC):
     # lower cadence so a single fetch() can walk multiple URLs.
     host_rate_limit_s: float = float(DEFAULT_RATE_LIMIT_S)
 
+    # Zero-observation runs tolerated before the health check flags this
+    # source as silent. See DEFAULT_MAX_ZERO_RUNS.
+    max_zero_runs: int = DEFAULT_MAX_ZERO_RUNS
+
     def __init__(self):
         # Per-host last-fetch time so even multi-URL scrapers respect
         # the polite cadence on each domain they touch.
         self._last_fetch: dict[str, float] = {}
+        # Per-feed outcomes for scrapers that walk several upstream
+        # feeds (stations, RSS feeds, subreddits) and swallow per-feed
+        # errors so one bad feed doesn't sink the rest. The orchestrator
+        # clears this before each fetch() and copies it into
+        # ingest_health.json, so a dead feed inside an "ok" source is
+        # still visible.
+        self.feed_status: list[dict] = []
+
+    def report_feed(
+        self,
+        feed_id: str,
+        status: str,
+        *,
+        observation_count: int = 0,
+        last_data_utc: datetime | None = None,
+        detail: str | None = None,
+    ) -> None:
+        """Record one feed's outcome for this run (FEED_* status)."""
+        self.feed_status.append({
+            "feed_id": feed_id,
+            "status": status,
+            "observation_count": int(observation_count),
+            "last_data_utc": (
+                last_data_utc.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                if last_data_utc else None
+            ),
+            "detail": detail,
+        })
 
     # ---- HTTP -----------------------------------------------------
 

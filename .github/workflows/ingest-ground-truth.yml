@@ -49,10 +49,13 @@ jobs:
         # ANTHROPIC_API_KEY is consumed by validation.ingest._llm_extract
         # for prose sources; if unset, those scrapers gracefully no-op
         # (the regex-extracted sources keep working regardless).
+        # -u: unbuffered, so each scraper's lines carry their own log
+        # timestamp and slow sources are visible (buffered output landed
+        # in one burst at the end of a ~32 min run).
         continue-on-error: true
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: python -m pipeline.validation.ingest
+        run: python -u -m pipeline.validation.ingest
 
       - name: Commit new observations
         run: |
@@ -72,7 +75,9 @@ jobs:
 
       - name: Assert ingest scraper health
         # Per-scraper exceptions are isolated inside the orchestrator so one
-        # broken source does not block the rest. This final check turns any
-        # scraper failure into an immediate red workflow, while the committed
-        # ingest_health.json gives the daily watchdog the same signal.
+        # broken source does not block the rest. This final check turns a
+        # scraper failure, a retired upstream dataset, or a source that has
+        # returned 0 observations for its max_zero_runs consecutive runs into
+        # a red workflow, while the committed ingest_health.json gives the
+        # daily watchdog the same signal.
         run: python -m pipeline.validation.check_ingest_health

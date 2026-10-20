@@ -43,7 +43,7 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 
 from . import _llm_cache, _llm_extract
-from ._base import BaseScraper
+from ._base import FEED_FAILED, FEED_OK, BaseScraper
 
 
 FEEDS = [
@@ -104,6 +104,11 @@ class BdOutdoorsScraper(BaseScraper):
     # URL per feed (the RSS itself) so the floor is irrelevant in
     # practice. Keep the default.
 
+    # Forum yield is sparse by nature: since 2026-05 the longest run of
+    # days with no bdoutdoors observation was 11. 56 runs = 14 days at
+    # the 6-hourly cron, so ordinary quiet stretches stay green.
+    max_zero_runs = 56
+
     def __init__(self):
         super().__init__()
         self._spot_lookup = _load_spot_lookup()
@@ -135,9 +140,12 @@ class BdOutdoorsScraper(BaseScraper):
             except Exception as exc:  # noqa: BLE001
                 print(f"  {self.source_id}: {feed['id']} feed fetch: "
                       f"{exc.__class__.__name__}: {exc}")
+                self.report_feed(feed["id"], FEED_FAILED,
+                                 detail=f"{exc.__class__.__name__}: {exc}")
                 continue
 
             kept = 0
+            feed_obs = 0
             for item in items[:MAX_ITEMS_PER_FEED]:
                 cache_key = f"bdoutdoors:{item.get('guid') or item['link']}"
                 if _llm_cache.seen(cache, cache_key):
@@ -149,10 +157,19 @@ class BdOutdoorsScraper(BaseScraper):
                 # zero-obs (a no-quantitative-data post stays no-data).
                 _llm_cache.mark(cache, cache_key)
                 out.extend(obs)
+                feed_obs += len(obs)
                 if obs:
                     kept += 1
             print(f"  {self.source_id}: {feed['id']} → "
                   f"{len(items)} fresh items, {kept} produced obs")
+            # A reachable feed with no fresh posts is a quiet forum, not
+            # a broken pipe, so it reports ok; only fetch errors count
+            # against the feed.
+            self.report_feed(
+                feed["id"], FEED_OK, observation_count=feed_obs,
+                last_data_utc=items[0]["pubdate"] if items else None,
+                detail=f"{len(items)} items < {MAX_AGE_HOURS} h old, {kept} produced obs",
+            )
         if cache_skips:
             print(f"  {self.source_id}: cache-skipped {cache_skips} posts (already LLM'd)")
         _llm_cache.save(_llm_cache.prune(cache))
@@ -166,12 +183,14 @@ class BdOutdoorsScraper(BaseScraper):
         try:
             root = ET.fromstring(r.content)
         except ET.ParseError as exc:
-            print(f"  {self.source_id}: XML parse failed: {exc}")
-            return []
+            # Raise rather than return [] so fetch() records the feed as
+            # failed (a Cloudflare challenge page lands here) instead of
+            # as a quiet forum.
+            raise ValueError(f"XML parse failed: {exc}") from exc
 
         channel = root.find("channel")
         if channel is None:
-            return []
+            raise ValueError("no <channel> in RSS response")
 
         items: list[dict] = []
         for el in channel.findall("item"):
