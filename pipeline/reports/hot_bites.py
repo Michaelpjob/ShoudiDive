@@ -164,3 +164,15 @@ def dock_week(dock: list[dict], today: date, days: int = WEEK) -> dict:
                 for k, n in (r.get("catch") or {}).items():
                     out[k][d["port"]] = out[k].get(d["port"], 0) + n
     return {k: v for k, v in out.items()}
+
+
+def dock_since(dock: list[dict]) -> dict:
+    """The earliest day each port's counts reach back to, so a week-over-week
+    comparison only uses ports whose posts cover both weeks."""
+    out: dict[str, str] = {}
+    for d in dock or []:
+        dates = [r["date"] for r in (d.get("days") or []) + (d.get("trips") or [])]
+        if dates:
+            first = min(dates)
+            out[d["port"]] = min(out.get(d["port"], first), first)
+    return out

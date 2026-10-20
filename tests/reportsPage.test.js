@@ -76,7 +76,7 @@ test("the brief is the default, carries no verdicts, and the full report is one 
   // Brief unless a link asks for the full report (#...&full) or the reader chose it before.
   assert.match(app, /function initialDepth\(\)/);
   assert.match(app, /return "brief";\s*\}/);
-  assert.match(app, /if \(depth === "brief"\) return view === "diving" \? briefDiving\(\) : briefFishing\(\);/);
+  assert.match(app, /if \(depth === "brief"\) return view === "diving" \? diveStory\(\) \+ briefDiving\(\) : fishStory\(\) \+ briefFishing\(\);/);
   assert.match(app, /data-depth="full">Full report<\/button>/);
   // The brief shows numbers, never a go/no-go call.
   const brief = app.slice(app.indexOf("function briefFishing"), app.indexOf("// --- The short version"));

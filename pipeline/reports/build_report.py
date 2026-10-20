@@ -534,11 +534,19 @@ def assemble(S: dict[str, dict], now: datetime) -> dict:
     hb = hot_bites.fleet_hot_bites(fleet, today, dock_counts.trips_since(dock, today - timedelta(days=hot_bites.DAYS - 1)))
     facts["hot_bites"] = {"days": hot_bites.DAYS, "fleet": hb["fleet"], "landed": hb["landed"],
                           "dock_week": hot_bites.dock_week(dock, today),
+                          "dock_prev_week": hot_bites.dock_week(dock, today - timedelta(days=hot_bites.WEEK)),
+                          "dock_since": hot_bites.dock_since(dock),
                           "dock_sources": [{"landing": d["landing"], "port": d["port"], "url": d["url"]} for d in dock]}
     # Regions by home port, and each landing's week from AIS + its own counts (fleets.json).
     facts["regions"] = regions.REGIONS
     fl = fleets.build(fleet, sources.DATA.parent / "fleet" / "trips", dock, today)
-    facts["fleet_week"] = {"days": fl["days"], "regions": fl["regions"]}
+    # Last week too, when the live AIS log covers all of it (it starts 2026-10-05).
+    prev_day = today - timedelta(days=fleets.DAYS)
+    live = set(((fleet or {}).get("meta") or {}).get("live_days") or [])
+    prev_days = {(prev_day - timedelta(days=i)).isoformat() for i in range(fleets.DAYS)}
+    prev = fleets.build(fleet, sources.DATA.parent / "fleet" / "trips", dock, prev_day)["regions"] if live and prev_days <= live else None
+    facts["fleet_week"] = {"days": fl["days"], "regions": fl["regions"],
+                           "prev": [{k: r[k] for k in ("id", "n_trips", "n_heard", "n_boats")} for r in prev] if prev else None}
     facts["fleets_file"] = fl
     facts["highlights"] = story.highlights(facts)
     facts["archive_snapshot"] = zones.snapshot(cards)

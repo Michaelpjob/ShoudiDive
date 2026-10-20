@@ -174,11 +174,19 @@ def build(fleet: dict | None, track_dir: Path, dock: list[dict] | None, today: d
         catch: dict[str, int] = {}
         for L in Ls:
             hot_bites._add(catch, L["catch"])
+        pl: dict[str, dict] = defaultdict(lambda: {"minutes": 0, "trips": 0, "lat": 0.0, "lng": 0.0})
+        for _, tr in heard:
+            for p in tr["places"]:
+                acc = pl[p["place"]]
+                acc["minutes"] += p["minutes"]
+                acc["trips"] += 1
+                acc["lat"], acc["lng"] = p["lat"], p["lng"]
+        top_places = sorted(({"place": k, **v} for k, v in pl.items()), key=lambda p: (-p["minutes"], -p["trips"]))[:3]
         summary.append({"id": r["id"], "name": r["name"], "box": r["box"], "fleet_only": bool(r.get("fleet_only")), "n_landings": len(Ls), "n_active": sum(1 for L in Ls if L["n_trips"]),
                         "n_trips": sum(L["n_trips"] for L in Ls), "n_heard": len(heard),
                         "n_boats": len({(L["name"], b["name"]) for L in Ls for b in L["boats"] if b["trips"]}),
                         "offshore_min": round(sum(p["minutes"] for _, tr in heard for p in tr["places"])),
-                        "catch": catch,
+                        "catch": catch, "top_places": top_places,
                         "farthest": {"boat": far[0], "nm": far[1]["max_nm"], "date": far[1]["date"]} if far and far[1]["max_nm"] else None})
     return {"days": days, "since": since, "until": until, "live_through": (fleet.get("meta") or {}).get("live_through"),
             "regions": summary, "landings": out}
