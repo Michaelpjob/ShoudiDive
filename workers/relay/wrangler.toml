@@ -1,0 +1,12 @@
+# shouldidive-relay: fixed-route fetch relay for upstreams that 403 GitHub
+# Actions egress (see worker.js). Used by pipeline/fetch_sci_closures.py.
+# Deploy:  npx wrangler deploy   (from workers/relay/)
+# Verify:  GET https://shouldidive-relay.<subdomain>.workers.dev/scisland/data.js
+name = "shouldidive-relay"
+main = "worker.js"
+compatibility_date = "2026-07-01"
+workers_dev = true
+preview_urls = false
+
+[observability]
+enabled = true

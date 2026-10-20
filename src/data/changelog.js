@@ -15,6 +15,23 @@
 
 export const CHANGELOG = [
   {
+    id: "2026-10-20",
+    date: "October 20, 2026",
+    title: "Navy closures are current again",
+    items: [
+      {
+        type: "fixed",
+        text:
+          "The San Clemente Island closure strip had been showing a June " +
+          "schedule since the Navy's site changed how it publishes. It now " +
+          "reads the current schedule again, including the offshore training " +
+          "areas (SHOBA, TA-1 to TA-6, SOAR and others) on the days they are " +
+          "active. If the schedule ever can't be refreshed, the strip says so " +
+          "and links to scisland.org instead of showing an old day as today.",
+      },
+    ],
+  },
+  {
     id: "2026-10-07-2",
     date: "October 7, 2026",
     title: "Offshore banks and reefs are now where they really are",

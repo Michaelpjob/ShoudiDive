@@ -1,10 +1,12 @@
 """Parser + assembly tests for pipeline/fetch_sci_closures.py.
 
-Network-free: inline HTML fixtures mirror the real scisland.org day-page
-markup (verified live 2026-06-18), and build_closures is exercised with a
-monkeypatched per-day fetch. Guards the parse contract that the whole
-feature rests on: zone polygons, per-day safety-zone status (row color),
-SOAR operation windows with PT->UTC conversion, and the published window.
+Network-free: the inline fixture mirrors the real scisland.org
+assets/js/data.js (verified live 2026-10-19): a regeneration-stamp comment,
+then `const data = {dates, events, points, areas}` with per-day safety-zone
+event indexes, the full-day `sched` list, "AREA, start, end, alt" event
+strings in local Pacific time, and [lat, lng] string polygons. Guards the
+contract the whole layer rests on: zone polygons, per-day status (open /
+scheduled / restricted / unknown), PT->UTC windows, and the published window.
 """
 from __future__ import annotations
 
@@ -13,129 +15,122 @@ import sys
 from datetime import date
 from pathlib import Path
 
-import pytest  # noqa: F401  (monkeypatch fixture)
-
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import fetch_sci_closures as sci  # noqa: E402
 
+_SQUARE = [["33.00", "-118.60"], ["33.05", "-118.60"], ["33.05", "-118.55"], ["33.00", "-118.55"]]
 
-# A faithful (trimmed) closure-day page: published-window + "Updated" strings,
-# two areaGEO pushes (one safety zone, one SOAR), the safety-zone status rows
-# (row color = status), and a SOAR ops row with a 1200->1600 PT window.
-CLOSURE_DAY_HTML = """
-<html><body>
-<script>
-var begin_date = new Date('03 Jun 2026');
-var end_date = new Date('01 Jul 2026');
-var mapLabels = {"SZALFA":{"label":"A","offset":[0,0]},"SOAR S1":{"label":"S1","offset":[0,0]}};
-areaGEO.push({"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-118.59778,33.03417],[-118.61694,33.08222],[-118.51056,33.04667],[-118.59778,33.03417]]]},"properties":{"NAME":"SZALFA"},"centerpt":[-118.5,33.05]}]});
-areaGEO.push({"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-119.04972,32.99444],[-118.93389,32.88278],[-119.08972,32.76306],[-119.04972,32.99444]]]},"properties":{"NAME":"SOAR S1"},"centerpt":[-119.066665,32.87875]}]});
-areaGEO.push({"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[-118.36,33.2]},"properties":{"NAME":"spot"}}]});
-</script>
-<h2>SCI Safety Zone Exclusion Schedule for 18-Jun-2026</h2>
-<table>
-<tr style='background-color: lightgreen;'><td id='SZALFA' onclick='toggleDisp("SZALFA");'> A</td><td colspan='4' class='bordered'>Available - no scheduled operations</td></tr>
-<tr style='background-color: red;'><td id='SZGOLF' onclick='toggleDisp("SZGOLF");'> G</td><td colspan='4' class='bordered'>Always restricted</td></tr>
-</table>
-<h2>SCI Hazardous Operations Area Schedule for 18-Jun-2026</h2>
-<table>
-<tr><td id='SOAR S1' class='bordered' rowspan='1' onclick='toggleDisp("SOAR S1");'>SOAR S1</td>
-<td class='bordered'>18-JUN-26 1200</td><td class='bordered'>18-JUN-26 1600</td><td class='bordered'>FLR:7000</td></tr>
-</table>
-<p>Updated Jun 3, 2026, 15:22</p>
-</body></html>
-"""
-
-# An all-open day: same zones/geometry, but the ops table says no ops.
-OPEN_DAY_HTML = CLOSURE_DAY_HTML.replace(
-    "<h2>SCI Hazardous Operations Area Schedule for 18-Jun-2026</h2>",
-    "<h2>SCI Hazardous Operations Area Schedule for 19-Jun-2026</h2>",
-).replace(
-    "<tr><td id='SOAR S1' class='bordered' rowspan='1' onclick='toggleDisp(\"SOAR S1\");'>SOAR S1</td>\n"
-    "<td class='bordered'>18-JUN-26 1200</td><td class='bordered'>18-JUN-26 1600</td><td class='bordered'>FLR:7000</td></tr>",
-    "<tr><td colspan='4'>No operations scheduled today</td></tr>",
-).replace("Exclusion Schedule for 18-Jun-2026", "Exclusion Schedule for 19-Jun-2026")
+DATA = {
+    "dates": {
+        # Day 0: zone A clear, zone B has a 3 h op, SOAR S1 has a window.
+        "19-Oct-26": {"sz": {"A": [], "B": [1], "C": [], "D": [], "E": [], "F": [], "W": [0]},
+                      "sched": [0, 1, 2]},
+        # Day 1: zone C closed for a full 24 h.
+        "20-Oct-26": {"sz": {"A": [], "B": [], "C": [3], "D": [], "E": [], "F": [], "W": []},
+                      "sched": [3]},
+        # Day 2 intentionally absent -> unknown.
+        # A typo'd year the real file carries; must not stretch the window.
+        "18-Nov-20": {"sz": {}, "sched": []},
+        "18-Nov-26": {"sz": {}, "sched": []},
+    },
+    "events": [
+        "W, 19-Oct-26 0000, 19-Oct-26 2400, 0:0",
+        "TA-2, 19-Oct-26 1300, 19-Oct-26 1600, 0:5000",
+        "SOAR S1, 19-Oct-26 0800, 19-Oct-26 1100, -90000:50000",
+        "TAR-14, 20-Oct-26 0000, 21-Oct-26 0000, 0:0",
+    ],
+    "points": {k: _SQUARE for k in ("A", "B", "C", "D", "E", "F", "G", "W", "SOAR S1", "TA-2", "TAR-14")},
+    "areas": [],
+}
+DATA_JS = "//2026-Oct-19 20:49:18\r\n\r\n\tconst data= " + json.dumps(DATA) + ";\r\n"
+TODAY = date(2026, 10, 19)
 
 
-def test_parse_geometry_keeps_polygons_skips_points():
-    geo = sci.parse_geometry(CLOSURE_DAY_HTML)
-    assert set(geo) == {"SZALFA", "SOAR S1"}  # Point "spot" dropped
-    assert geo["SOAR S1"]["geometry"]["type"] == "Polygon"
-    assert geo["SOAR S1"]["centroid"] == [-119.066665, 32.87875]
+def _feature(fc, fid):
+    return next(f for f in fc["features"] if f["properties"]["id"] == fid)
 
 
-def test_parse_safety_zone_status_from_row_color():
-    st = sci.parse_safety_zone_status(CLOSURE_DAY_HTML)
-    assert st["SZALFA"] == "open"        # lightgreen
-    assert st["SZGOLF"] == "restricted"  # red
+def test_parse_data_js_object_and_stamp():
+    data, stamp = sci.parse_data_js(DATA_JS)
+    assert set(data) == {"dates", "events", "points", "areas"}
+    assert stamp == "Oct 19, 2026, 20:49"
 
 
-def test_parse_operations_window_pt_to_utc():
-    ops = sci.parse_operations(CLOSURE_DAY_HTML)
-    assert list(ops) == ["SOAR S1"]
-    w = ops["SOAR S1"][0]
-    assert w["start_local"] == "2026-06-18 12:00 PT"
-    assert w["start_utc"] == "2026-06-18T19:00Z"  # PDT -7h
-    assert w["end_utc"] == "2026-06-18T23:00Z"
-    assert w["altitude"] == "FLR:7000"
+def test_parse_data_js_rejects_html():
+    try:
+        sci.parse_data_js("<html>Access Denied</html>")
+    except ValueError:
+        return
+    raise AssertionError("expected ValueError for a non-data.js body")
 
 
-def test_parse_operations_empty_on_open_day():
-    assert sci.parse_operations(OPEN_DAY_HTML) == {}
+def test_parse_event_pt_to_utc_and_altitude():
+    w = sci.parse_event("SOAR S1, 19-Oct-26 0800, 19-Oct-26 1100, -90000:50000")
+    assert w["area"] == "SOAR S1"
+    assert w["start_local"] == "2026-10-19 08:00 PT"
+    assert w["start_utc"] == "2026-10-19T15:00Z"   # PDT -7h
+    assert w["end_utc"] == "2026-10-19T18:00Z"
+    assert w["hours"] == 3
+    assert w["altitude"] == "FLOOR:50K"
 
 
-def test_parse_page_date_and_window():
-    p = sci.parse_closure_page(CLOSURE_DAY_HTML)
-    assert p["date"] == "2026-06-18"
-    assert p["window"] == {
-        "start": "2026-06-03", "end": "2026-07-01",
-        "source_updated": "Jun 3, 2026, 15:22",
-    }
-    assert p["labels"]["SZALFA"] == "A"
+def test_parse_event_2400_rolls_to_next_day():
+    w = sci.parse_event("W, 19-Oct-26 0000, 19-Oct-26 2400, 0:0")
+    assert w["end_local"] == "2026-10-20 00:00 PT"
+    assert w["hours"] == 24
+    assert w["altitude"] == "SFC:SFC"
 
 
-def test_parse_unrecognized_color_degrades_to_scheduled():
-    html = CLOSURE_DAY_HTML.replace("background-color: lightgreen;", "background-color: orange;")
-    assert sci.parse_safety_zone_status(html)["SZALFA"] == "scheduled"
+def test_friendly_altitude_matches_site():
+    assert sci.friendly_altitude("0:5000") == "SFC:5000"
+    assert sci.friendly_altitude("0:30000") == "SFC:30K"
+    assert sci.friendly_altitude("-90000:8000") == "FLOOR:8000"
 
 
-def test_build_closures_assembles_forecast(monkeypatch):
-    # Day 0 = closure day; days 1..6 = open. Verify union of geometry, per-date
-    # status, and that an ops area reads restricted only on the closure day.
-    closure = sci.parse_closure_page(CLOSURE_DAY_HTML)
-    open_pages = {date(2026, 6, 19) + __import__("datetime").timedelta(days=i): None for i in range(6)}
-
-    def fake_fetch(target):
-        if target == date(2026, 6, 18):
-            return closure
-        # build a parsed "open" page stamped with this date
-        p = sci.parse_closure_page(OPEN_DAY_HTML)
-        p["date"] = target.isoformat()
-        return p
-
-    monkeypatch.setattr(sci, "_fetch_day", fake_fetch)
-    fc = sci.build_closures(today=date(2026, 6, 18))
-
+def test_build_closures_statuses():
+    data, stamp = sci.parse_data_js(DATA_JS)
+    fc = sci.build_closures(data, stamp, TODAY)
     assert fc["type"] == "FeatureCollection"
-    assert len(fc["dates"]) == 7 and fc["dates"][0] == "2026-06-18"
-    ids = {f["properties"]["id"] for f in fc["features"]}
-    assert {"SZALFA", "SOAR S1"} <= ids
-    soar = next(f for f in fc["features"] if f["properties"]["id"] == "SOAR S1")
-    sbd = soar["properties"]["statusByDate"]
-    assert sbd["2026-06-18"]["status"] == "restricted"
-    assert sbd["2026-06-18"]["windows"][0]["altitude"] == "FLR:7000"
-    assert sbd["2026-06-19"]["status"] == "open"
-    assert soar["properties"]["kind"] == "operations_area"
-    # published metadata propagated
-    assert fc["published_window"]["end"] == "2026-07-01"
+    assert fc["dates"][0] == "2026-10-19" and len(fc["dates"]) == 7
+
+    a = _feature(fc, "SZALFA")["properties"]["statusByDate"]
+    b = _feature(fc, "SZBRAVO")["properties"]["statusByDate"]
+    c = _feature(fc, "SZCHARLIE")["properties"]["statusByDate"]
+    g = _feature(fc, "SZGOLF")["properties"]["statusByDate"]
+    w = _feature(fc, "SZWILCOVE")["properties"]
+    assert a["2026-10-19"]["status"] == "open"
+    assert b["2026-10-19"]["status"] == "scheduled"           # 3 h op
+    assert b["2026-10-19"]["windows"][0]["area"] == "TA-2"
+    assert c["2026-10-20"]["status"] == "restricted"          # 24 h op
+    assert a["2026-10-21"]["status"] == "unknown"             # date not published
+    assert g["2026-10-21"]["status"] == "restricted"          # standing restriction
+    assert w["label"] == "W/C" and w["statusByDate"]["2026-10-19"]["status"] == "restricted"
+
+
+def test_build_closures_ops_areas_only_when_scheduled():
+    data, stamp = sci.parse_data_js(DATA_JS)
+    fc = sci.build_closures(data, stamp, TODAY)
+    ops = {f["properties"]["id"] for f in fc["features"]
+           if f["properties"]["kind"] == "operations_area"}
+    assert ops == {"SOAR S1", "TA-2", "TAR-14"}
+    soar = _feature(fc, "SOAR S1")["properties"]["statusByDate"]
+    assert soar["2026-10-19"]["status"] == "scheduled"
+    assert soar["2026-10-20"]["status"] == "open"
+    assert soar["2026-10-21"]["status"] == "unknown"
+    assert _feature(fc, "TAR-14")["properties"]["statusByDate"]["2026-10-20"]["status"] == "restricted"
+
+
+def test_build_closures_geometry_and_metadata():
+    data, stamp = sci.parse_data_js(DATA_JS)
+    fc = sci.build_closures(data, stamp, TODAY)
+    geom = _feature(fc, "SZALFA")["geometry"]
+    ring = geom["coordinates"][0]
+    assert geom["type"] == "Polygon"
+    assert ring[0] == [-118.60, 33.00] and ring[0] == ring[-1]   # [lng, lat], closed
+    assert _feature(fc, "SZALFA")["properties"]["centroid"] == [-118.575, 33.025]
+    assert fc["published_window"] == {"start": "2026-10-19", "end": "2026-11-18"}
+    assert fc["source_updated"] == "Oct 19, 2026, 20:49"
     assert fc["source"] == "scisland.org"
-
-
-def test_build_closures_skips_wrong_date_pages(monkeypatch):
-    # A page whose rendered date != requested (month rollover) must be dropped.
-    monkeypatch.setattr(sci, "_fetch_day", lambda target: None)
-    fc = sci.build_closures(today=date(2026, 6, 18))
-    assert fc["features"] == [] and len(fc["dates"]) == 7

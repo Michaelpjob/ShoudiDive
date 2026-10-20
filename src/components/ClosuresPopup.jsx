@@ -70,14 +70,21 @@ export default function ClosuresPopup({ data, onClose }) {
           </span>
         </div>
 
-        <div className="closures-popup-date">{fmtDate(date)}</div>
+        <div className="closures-popup-date">
+          {meta?.stale ? "No current schedule on file" : fmtDate(date)}
+        </div>
 
         {windows.length > 0 ? (
           <ul className="closures-windows">
             {windows.map((w, i) => (
               <li key={i} className="closures-window">
                 <span className="cw-time">{w.start_local} → {w.end_local}</span>
-                {w.altitude && <span className="cw-alt">{w.altitude}</span>}
+                {(w.altitude || w.area) && (
+                  <span className="cw-alt">
+                    {[w.area !== zone.id && w.area !== zone.label ? w.area : null, w.altitude]
+                      .filter(Boolean).join(" · ")}
+                  </span>
+                )}
               </li>
             ))}
           </ul>
