@@ -15,6 +15,32 @@
 
 export const CHANGELOG = [
   {
+    id: "2026-10-07",
+    date: "October 7, 2026",
+    title: "Track a paddy: easier to start, finish, and do again",
+    items: [
+      {
+        type: "improved",
+        text:
+          "Tracking a paddy is now three clear steps. Tap the paddy on the " +
+          "map, use your phone's GPS, or type the plotter position, and the " +
+          "panel tells you what it read before you run it. The forecast opens " +
+          "on tomorrow morning, with Day and Time picked by calendar date " +
+          "and clock hour. When you are finished, Done (or the ×) clears the " +
+          "map, and Track another paddy starts a fresh one in one tap. On a " +
+          "phone the panel folds down to a single line so you can see the map.",
+      },
+      {
+        type: "fixed",
+        text:
+          "The shaded search area now follows the paddy's track instead of " +
+          "drawing odd wedges and slivers when the water is slow and the " +
+          "paddy turns, and the map no longer jumps every time you move the " +
+          "time slider.",
+      },
+    ],
+  },
+  {
     id: "2026-10-05",
     date: "October 5, 2026",
     title: "Fleet Tracks: where the sportfishing fleet actually stops",
