@@ -9,13 +9,14 @@ Secchi-depth-equivalent for the visibility validation harness:
                              — Moss Landing Marine Labs, Monterey
                                Commercial Wharf, lat 36.605 °N,
                                lng -121.889 °W, ~20-min cadence.
-                               Same MLML sensor package as the retired
+                               Same MLML wharf station as the retired
                                `mlml_monterey` dataset (ERDDAP
                                time_coverage_end 2019-11-29, so every
                                windowed query 404'd); MLML republished
                                the wharf under this id from 2023-03-09.
-                               Gappy: no samples ~2025-10-22..2026-01-27
-                               or 2026-09-15..10-06.
+                               Gappy: no samples 2025-10-28..2026-01-27
+                               or 2026-09-15..10-06, plus several 5-9 d
+                               gaps in 2026.
 
     edu_calpoly_marine_morro — Cal Poly Marine Studies Pier (Morro Bay)
                                lat ~35.336 °N, lng ~-120.866 °W
