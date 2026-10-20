@@ -41,6 +41,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 import requests
 from PIL import Image
@@ -635,7 +636,10 @@ def _probe_5d_summary(layer_id: str, info: dict, layer_stats: list[dict]) -> lis
         return findings
 
     days = summary.get("days") if isinstance(summary, dict) else None
-    expected_days = 5
+    # rtofs5d publishes one frame per lead in `leads_day_offsets` ([1,3,5,7]
+    # = 4 days), not 5; the fixed 5 flagged it HIGH on every healthy run.
+    leads = info.get("leads_day_offsets")
+    expected_days = len(leads) if isinstance(leads, list) and leads else 5
     layer_stats.append({
         "layer":  layer_id,
         "window": "summary",
@@ -659,6 +663,54 @@ def _probe_5d_summary(layer_id: str, info: dict, layer_stats: list[dict]) -> lis
     return findings
 
 
+# ---- Navy closures ---------------------------------------------------
+#
+# navy-closures.geojson lives outside the manifest, and its fetch step is
+# continue-on-error that keeps the previous file on any failure. That combo
+# froze it at 2026-06-29 for 3.5 months with nothing red anywhere. The UI now
+# says "No current schedule" once the file stops covering today; this makes
+# the same condition open the health issue.
+CLOSURES_URL = f"{REMOTE_BASE}/data/navy-closures.geojson"
+CLOSURES_STALE_HOURS = 48   # twice-daily refresh; 48h = 4 missed runs
+
+
+def check_closures() -> list[Finding]:
+    try:
+        r = _http_get(CLOSURES_URL)
+    except (requests.exceptions.RequestException, socket.gaierror) as exc:
+        return [Finding(
+            severity="medium", code="closures_unreachable",
+            title="Navy closures file unreachable",
+            detail=f"GET {CLOSURES_URL}\n  → {exc.__class__.__name__}: {exc}",
+            url=CLOSURES_URL,
+        )]
+    try:
+        fc = r.json() if r.status_code == 200 else None
+    except json.JSONDecodeError:
+        fc = None
+    if not isinstance(fc, dict):
+        return [Finding(
+            severity="medium", code="closures_unreadable",
+            title=f"Navy closures file unreadable (HTTP {r.status_code})",
+            url=CLOSURES_URL,
+        )]
+    gen = _parse_iso(str(fc.get("generated_at") or ""))
+    age_h = (datetime.now(timezone.utc) - gen).total_seconds() / 3600 if gen else None
+    today = datetime.now(ZoneInfo("America/Los_Angeles")).date().isoformat()
+    if age_h is None or age_h > CLOSURES_STALE_HOURS or today not in (fc.get("dates") or []):
+        return [Finding(
+            severity="high", code="closures_stale",
+            title=(f"Navy closures last pulled {age_h / 24:.1f} days ago"
+                   if age_h is not None else "Navy closures has no generated_at"),
+            detail=(f"generated_at={fc.get('generated_at')}, dates="
+                    f"{(fc.get('dates') or ['?'])[0]}..{(fc.get('dates') or ['?'])[-1]}, "
+                    f"today (PT)={today}. The site shows 'No current schedule'. "
+                    f"Check the 'Fetch SCI Navy closures' step in refresh-ca-data."),
+            url=CLOSURES_URL,
+        )]
+    return []
+
+
 # ---- Main ------------------------------------------------------------
 
 def main() -> int:
@@ -675,6 +727,7 @@ def main() -> int:
         findings.extend(check_sst_health(manifest))
         layer_findings, layer_stats = check_layers(manifest)
         findings.extend(layer_findings)
+    findings.extend(check_closures())
 
     # Print summary
     by_severity = {"critical": 0, "high": 0, "medium": 0}
