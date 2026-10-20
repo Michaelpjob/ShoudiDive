@@ -1,4 +1,4 @@
-"""Scrape San Clemente Island military closure schedules from scisland.org.
+"""Fetch San Clemente Island military closure schedules from scisland.org.
 
 scisland.org is the U.S. Navy's public-outreach site for SCI; boaters/divers
 check it before a trip because SCI waters close for live-fire + air/surface
@@ -6,23 +6,39 @@ training. This builds a self-contained GeoJSON the web app renders directly
 (like public/data/mpa-boundaries.geojson) — zone polygons + per-day status +
 closure windows for a rolling 7-day forecast.
 
-Two kinds of closed areas (both rendered):
-  * Safety Zones (SZALFA..SZGOLF, SZWILCOVE) — the nearshore 3 nm ring. Mostly
-    standing status (most "available", Golf/Wilson Cove "always restricted"),
-    but can go time-restricted during exercises. Status = the row color.
-  * SOAR Operations Areas (SOAR S1..S4) — offshore boxes that carry the actual
-    timed daily closures (start/end + altitude). Polygons only appear on the
-    day pages that have ops, so geometry is unioned across the fetched days.
+Source format (since mid-2026): the schedule page (schedule.html) is rendered
+client-side from ONE data file, ``assets/js/data.js``:
 
-Source quirks (see also the parser tests):
-  * Pages are on S3/CloudFront: 403 a bare request, 200 with a browser UA +
-    Referer; a 403 can also just mean "that day index doesn't exist".
-  * The day page is days/<N>.html where N = the target date's day-of-month
-    (wraps across month boundaries) — so we VERIFY the rendered "Schedule for
-    DD-Mon-YYYY" matches the date we asked for.
-  * Schedule times are local Pacific (no TZ suffix) — converted to UTC here.
-  * The site is a periodically-regenerated static snapshot; its published
-    window + "Updated" stamp are recorded so the UI can show an honest as-of.
+    //2026-Oct-19 20:49:18                      <- regeneration stamp
+    const data = {
+      "dates":  {"19-Oct-26": {"sz": {"A": [0], "B": [13, 393], ...},
+                               "sched": [0, 13, ...]}, ...},
+      "events": ["LEEWARD-1, 19-Oct-26 1300, 19-Oct-26 1700, 0:0", ...],
+      "points": {"A": [["33.03417", "-118.59778"], ...], "SOAR S1": [...]},
+      "areas":  []
+    }
+
+  * ``dates[d].sz[zone]`` lists the event indexes that affect nearshore safety
+    zone A..F (plus G / W, which are always restricted). ``dates[d].sched``
+    lists every event that day, across all offshore operations areas.
+  * ``events[i]`` = "AREA, start, end, altitudes" with local-Pacific times.
+  * ``points[name]`` = the polygon for every zone/area as [lat, lng] strings.
+
+The pre-2026 per-day pages (schedules/safetyZoneUse/days/<N>.html) still
+resolve but are a frozen June 2026 snapshot — reading them is what froze this
+layer at 2026-06-29. Status rules mirror the site's own schedule.js:
+
+  * safety zone with no events that day          -> open
+  * any event covering >= 24 h                   -> restricted
+  * shorter timed events                         -> scheduled
+  * G (Golf) + W (Wilson Cove)                   -> always restricted
+  * a date the source does not list              -> unknown (the site makes
+    no availability claim for it, so neither do we)
+
+GitHub runner egress IPs get HTTP 403 from scisland.org (a local fetch with
+the same headers gets 200). When the direct fetch is refused, this falls back
+to the shouldidive-relay Cloudflare Worker (workers/relay/), which fetches
+this one file and nothing else.
 
 Run:
     python pipeline/fetch_sci_closures.py
@@ -32,9 +48,9 @@ Output:
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
-import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -48,272 +64,304 @@ except ModuleNotFoundError:  # invoked as `python pipeline/fetch_sci_closures.py
     from lib.http import http_get
     from regions import active_region
 
-SCI_BASE = "https://www.scisland.org/schedules/safetyZoneUse/days"
+SCI_DATA_URL = "https://www.scisland.org/assets/js/data.js"
+RELAY_URL = os.environ.get(
+    "SCI_RELAY_URL",
+    "https://shouldidive-relay.michael-job-gb.workers.dev/scisland/data.js",
+)
 SCI_HEADERS = {
     # The site 403s the pipeline's default UA; a browser UA + referer get 200.
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/126.0 Safari/537.36"
     ),
-    "Referer": "https://www.scisland.org/",
+    "Referer": "https://www.scisland.org/schedule.html",
 }
 PACIFIC = ZoneInfo("America/Los_Angeles")
 FORECAST_DAYS = 7
-INTRA_PAUSE_S = 1.0  # polite gap between page fetches
 
-# Map the site's row background-color to a status. The legend also defines
-# striped/black-outline states for sub-24h/scheduled ops; map any unknown
-# color to "scheduled" so a future format change degrades safely rather than
-# silently reporting "open".
-_COLOR_STATUS = {"lightgreen": "open", "green": "open", "red": "restricted"}
+# Nearshore safety zones: source key -> (stable feature id, map label). The ids
+# predate the data.js format and are kept so saved UI state + tests stay valid.
+SAFETY_ZONES = {
+    "A": ("SZALFA", "A"),
+    "B": ("SZBRAVO", "B"),
+    "C": ("SZCHARLIE", "C"),
+    "D": ("SZDELTA", "D"),
+    "E": ("SZECHO", "E"),
+    "F": ("SZFOXTROT", "F"),
+    "G": ("SZGOLF", "G"),
+    "W": ("SZWILCOVE", "W/C"),
+}
+ALWAYS_RESTRICTED = {"G", "W"}  # schedule.js drawAlwaysRed()
 
-_GEO_RE = re.compile(r"areaGEO\.push\((\{.*?\})\);", re.S)
-_MAPLABELS_RE = re.compile(r"var\s+mapLabels\s*=\s*(\{.*?\})\s*;", re.S)
-_SZ_STATUS_RE = re.compile(r"background-color:\s*([a-zA-Z]+);?'?\s*><td id='(SZ[A-Z]+|WCNAA)'")
-_PAGE_DATE_RE = re.compile(r"Schedule for (\d{2}-[A-Za-z]{3}-\d{4})")
-_BEGIN_RE = re.compile(r"begin_date\s*=\s*new Date\('([^']+)'\)")
-_END_RE = re.compile(r"end_date\s*=\s*new Date\('([^']+)'\)")
-_UPDATED_RE = re.compile(r"Updated ([A-Za-z]+ \d{1,2}, \d{4}, \d{1,2}:\d{2})")
-_NO_OPS_RE = re.compile(r"No operations scheduled", re.I)
-# A SOAR operations row: the area cell (with rowspan) then start/end/altitude.
-_OPS_AREA_RE = re.compile(r"id='(SOAR S\d+)'[^>]*rowspan='(\d+)'")
-_OPS_WINDOW_RE = re.compile(
-    r"<td class='bordered'>(\d{2}-[A-Z]{3}-\d{2} \d{3,4})</td>\s*"
-    r"<td class='bordered'>(\d{2}-[A-Z]{3}-\d{2} \d{3,4})</td>\s*"
-    r"<td class='bordered'>([^<]+)</td>"
-)
+_DATA_RE = re.compile(r"(?:const|var|let)\s+data\s*=\s*(\{.*\})\s*;?\s*$", re.S)
+_STAMP_RE = re.compile(r"^\s*//\s*(\d{4}-[A-Za-z]{3}-\d{1,2}\s+\d{1,2}:\d{2}(?::\d{2})?)")
 
 
 # ---- pure parsers (network-free; unit-tested) --------------------------
 
-def parse_geometry(html: str) -> dict[str, dict]:
-    """Extract every named polygon from the page's areaGEO pushes.
-    Returns {name: {"geometry": <GeoJSON geom>, "centroid": [lon,lat]}}.
-    Skips Point markers and empty geometries (e.g. WCNAA)."""
-    out: dict[str, dict] = {}
-    for blob in _GEO_RE.findall(html):
-        try:
-            fc = json.loads(blob)
-        except json.JSONDecodeError:
-            continue
-        for feat in fc.get("features", []):
-            geom = feat.get("geometry") or {}
-            name = (feat.get("properties") or {}).get("NAME")
-            if not name or geom.get("type") not in ("Polygon", "MultiPolygon"):
-                continue
-            if not geom.get("coordinates"):
-                continue
-            out[name] = {"geometry": geom, "centroid": feat.get("centerpt")}
-    return out
-
-
-def parse_labels(html: str) -> dict[str, str]:
-    m = _MAPLABELS_RE.search(html)
+def parse_data_js(text: str) -> tuple[dict, str | None]:
+    """Split data.js into (data dict, regeneration stamp or None).
+    Raises ValueError when the `data` object is missing or not JSON."""
+    m = _DATA_RE.search(text)
     if not m:
-        return {}
+        raise ValueError("no `data = {...}` object in data.js")
+    data = json.loads(m.group(1))
+    if not isinstance(data, dict) or "dates" not in data or "events" not in data:
+        raise ValueError("data.js object is missing dates/events")
+    s = _STAMP_RE.match(text)
+    stamp = None
+    if s:
+        for fmt in ("%Y-%b-%d %H:%M:%S", "%Y-%b-%d %H:%M"):
+            try:
+                dt = datetime.strptime(s.group(1).title(), fmt)
+            except ValueError:
+                continue
+            # Same shape as the old pages' "Updated Jun 3, 2026, 15:22".
+            stamp = f"{dt:%b} {dt.day}, {dt.year}, {dt:%H:%M}"
+            break
+    return data, stamp
+
+
+def parse_sci_date(key: str) -> date | None:
+    """'19-Oct-26' -> date(2026, 10, 19); None if unparseable."""
     try:
-        raw = json.loads(m.group(1))
-    except json.JSONDecodeError:
-        return {}
-    return {k: (v.get("label") or k) for k, v in raw.items() if isinstance(v, dict)}
-
-
-def parse_safety_zone_status(html: str) -> dict[str, str]:
-    """{zone_name: status} from the safety-zone table row colors."""
-    out: dict[str, str] = {}
-    for color, name in _SZ_STATUS_RE.findall(html):
-        out[name] = _COLOR_STATUS.get(color.lower(), "scheduled")
-    return out
-
-
-def _parse_pt(stamp: str) -> datetime:
-    """'18-JUN-26 1200' (local Pacific) -> aware datetime in PT."""
-    dt = datetime.strptime(stamp.strip().title(), "%d-%b-%y %H%M")
-    return dt.replace(tzinfo=PACIFIC)
-
-
-def parse_operations(html: str) -> dict[str, list[dict]]:
-    """{area_name: [window,...]} from the Hazardous Operations table.
-    Each window: start/end as both local PT display + UTC ISO, plus altitude.
-    Empty dict on an all-open day."""
-    if _NO_OPS_RE.search(html) and not _OPS_AREA_RE.search(html):
-        return {}
-    # Position each window under the most recent area marker so a rowspan>1
-    # area (multiple windows) is captured, not just the first row.
-    areas = [(m.start(), m.group(1)) for m in _OPS_AREA_RE.finditer(html)]
-    if not areas:
-        return {}
-    out: dict[str, list[dict]] = {}
-    for m in _OPS_WINDOW_RE.finditer(html):
-        owner = None
-        for pos, name in areas:
-            if pos < m.start():
-                owner = name
-            else:
-                break
-        if owner is None:
-            continue
-        try:
-            start_pt, end_pt = _parse_pt(m.group(1)), _parse_pt(m.group(2))
-        except ValueError:
-            continue
-        out.setdefault(owner, []).append({
-            "start_local": f"{start_pt:%Y-%m-%d %H:%M} PT",
-            "end_local": f"{end_pt:%Y-%m-%d %H:%M} PT",
-            "start_utc": start_pt.astimezone(timezone.utc)
-                .isoformat(timespec="minutes").replace("+00:00", "Z"),
-            "end_utc": end_pt.astimezone(timezone.utc)
-                .isoformat(timespec="minutes").replace("+00:00", "Z"),
-            "altitude": m.group(3).strip(),
-        })
-    return out
-
-
-def parse_page_date(html: str) -> date | None:
-    m = _PAGE_DATE_RE.search(html)
-    if not m:
-        return None
-    try:
-        return datetime.strptime(m.group(1).title(), "%d-%b-%Y").date()
+        return datetime.strptime(key.strip().title(), "%d-%b-%y").date()
     except ValueError:
         return None
 
 
-def parse_published_window(html: str) -> dict:
-    def _iso(rx):
-        m = rx.search(html)
-        if not m:
-            return None
+def _parse_pt(stamp: str) -> datetime:
+    """'19-Oct-26 1300' (local Pacific) -> aware datetime in PT. '2400' rolls
+    to 00:00 the next day."""
+    day, hhmm = stamp.strip().split()
+    hhmm = hhmm.zfill(4)
+    d = datetime.strptime(day.title(), "%d-%b-%y")
+    hours, minutes = int(hhmm[:2]), int(hhmm[2:])
+    return (d + timedelta(hours=hours, minutes=minutes)).replace(tzinfo=PACIFIC)
+
+
+def friendly_altitude(raw: str) -> str:
+    """'0:50000' -> 'SFC:50K', '-90000:8000' -> 'FLOOR:8000' (schedule.js
+    makeFriendlyAltitudes), so the popup matches what scisland.org shows."""
+    if ":" not in raw:
+        return raw.strip()
+    out = []
+    for part in raw.split(":"):
         try:
-            return datetime.strptime(m.group(1), "%d %b %Y").date().isoformat()
+            v = int(part.strip())
         except ValueError:
-            return None
-    upd = _UPDATED_RE.search(html)
-    return {
-        "start": _iso(_BEGIN_RE),
-        "end": _iso(_END_RE),
-        "source_updated": upd.group(1) if upd else None,
-    }
-
-
-def parse_closure_page(html: str) -> dict | None:
-    """Parse one day page into {date, safety_zones, operations, geometry,
-    labels, window}. None if the page has no recognizable schedule date."""
-    page_date = parse_page_date(html)
-    if page_date is None:
-        return None
-    return {
-        "date": page_date.isoformat(),
-        "safety_zones": parse_safety_zone_status(html),
-        "operations": parse_operations(html),
-        "geometry": parse_geometry(html),
-        "labels": parse_labels(html),
-        "window": parse_published_window(html),
-    }
-
-
-# ---- network + assembly -------------------------------------------------
-
-def _fetch_day(target: date) -> dict | None:
-    """Fetch + parse one forecast day; verify the rendered date matches."""
-    url = f"{SCI_BASE}/{target.day}.html"
-    r = http_get(url, headers=SCI_HEADERS, timeout=30, retries=3)
-    if r is None or r.status_code != 200:
-        print(f"  [closures] {target} -> {getattr(r, 'status_code', 'no-response')}, skipping", flush=True)
-        return None
-    parsed = parse_closure_page(r.text)
-    if parsed is None:
-        print(f"  [closures] {target} -> unparseable page, skipping", flush=True)
-        return None
-    if parsed["date"] != target.isoformat():
-        # Day-of-month index resolved to the wrong month (rollover) — drop it
-        # rather than mislabel a closure.
-        print(f"  [closures] {target} -> page shows {parsed['date']}, skipping", flush=True)
-        return None
-    return parsed
-
-
-def build_closures(today: date | None = None) -> dict:
-    """Fetch the rolling FORECAST_DAYS window and assemble the GeoJSON."""
-    today = today or datetime.now(PACIFIC).date()
-    dates = [today + timedelta(days=i) for i in range(FORECAST_DAYS)]
-
-    geometry: dict[str, dict] = {}   # name -> {geometry, centroid} (unioned)
-    labels: dict[str, str] = {}
-    status_by_date: dict[str, dict] = {}  # name -> {date_iso -> {status, windows}}
-    window_meta: dict = {}
-
-    for i, target in enumerate(dates):
-        if i:
-            time.sleep(INTRA_PAUSE_S)
-        page = _fetch_day(target)
-        if page is None:
+            out.append(part.strip())
             continue
-        geometry.update(page["geometry"])     # SZ on every day, SOAR on ops days
-        labels.update(page["labels"])
-        window_meta = window_meta or page["window"]
-        d = page["date"]
-        # Safety zones: status from row color.
-        for name, status in page["safety_zones"].items():
-            status_by_date.setdefault(name, {})[d] = {"status": status, "windows": []}
-        # Operations areas: closed (with windows) on ops days, else open.
-        for name in [n for n in geometry if n.startswith("SOAR")]:
-            wins = page["operations"].get(name, [])
-            status_by_date.setdefault(name, {})[d] = {
-                "status": "restricted" if wins else "open",
-                "windows": wins,
-            }
+        if v == 0:
+            out.append("SFC")
+        elif v == -90000:
+            out.append("FLOOR")
+        elif v > 10000:
+            out.append(f"{v // 1000}K" if v % 1000 == 0 else f"{v / 1000:g}K")
+        else:
+            out.append(str(v))
+    return ":".join(out)
 
+
+def parse_event(raw: str) -> dict | None:
+    """'AREA, 19-Oct-26 1300, 19-Oct-26 1700, 0:0' -> window dict, or None."""
+    parts = [p.strip() for p in raw.split(",")]
+    if len(parts) < 4:
+        return None
+    try:
+        start, end = _parse_pt(parts[1]), _parse_pt(parts[2])
+    except (ValueError, IndexError):
+        return None
+    return {
+        "area": parts[0],
+        "start_local": f"{start:%Y-%m-%d %H:%M} PT",
+        "end_local": f"{end:%Y-%m-%d %H:%M} PT",
+        "start_utc": start.astimezone(timezone.utc)
+            .isoformat(timespec="minutes").replace("+00:00", "Z"),
+        "end_utc": end.astimezone(timezone.utc)
+            .isoformat(timespec="minutes").replace("+00:00", "Z"),
+        "hours": round((end - start).total_seconds() / 3600, 2),
+        "altitude": friendly_altitude(parts[3]),
+    }
+
+
+def status_for(windows: list[dict], always_restricted: bool = False) -> str:
+    if always_restricted:
+        return "restricted"
+    if not windows:
+        return "open"
+    if any(w["hours"] >= 24 for w in windows):
+        return "restricted"
+    return "scheduled"
+
+
+def polygon_from_points(rows) -> tuple[dict, list[float]] | None:
+    """[["lat","lng"], ...] -> (GeoJSON Polygon, [lon, lat] centroid)."""
+    ring = []
+    for row in rows or []:
+        try:
+            lat, lng = float(row[0]), float(row[1])
+        except (TypeError, ValueError, IndexError):
+            continue
+        ring.append([lng, lat])
+    if len(ring) < 3:
+        return None
+    verts = ring[:-1] if ring[0] == ring[-1] else ring
+    centroid = [
+        round(sum(p[0] for p in verts) / len(verts), 5),
+        round(sum(p[1] for p in verts) / len(verts), 5),
+    ]
+    if ring[0] != ring[-1]:
+        ring.append(list(ring[0]))
+    return {"type": "Polygon", "coordinates": [ring]}, centroid
+
+
+def build_closures(data: dict, stamp: str | None, today: date) -> dict:
+    """Assemble the rolling FORECAST_DAYS GeoJSON from a parsed data.js."""
+    dates = [today + timedelta(days=i) for i in range(FORECAST_DAYS)]
     date_isos = [d.isoformat() for d in dates]
+    events = data.get("events") or []
+    points = data.get("points") or {}
+
+    # Index the source's day keys by real date. The file carries the odd typo
+    # (e.g. '18-Nov-20' beside '18-Nov-26'), so keep only dates within a year
+    # of today when computing the published window.
+    by_date: dict[str, dict] = {}
+    for key, day in (data.get("dates") or {}).items():
+        d = parse_sci_date(key)
+        if d is not None and isinstance(day, dict):
+            by_date[d.isoformat()] = day
+    sane = sorted(k for k in by_date if abs((date.fromisoformat(k) - today).days) <= 366)
+
+    def windows_for(indexes) -> list[dict]:
+        out = []
+        for i in indexes or []:
+            if isinstance(i, int) and 0 <= i < len(events):
+                w = parse_event(events[i])
+                if w:
+                    out.append(w)
+        out.sort(key=lambda w: w["start_utc"])
+        return out
+
     features = []
-    for name, geo in geometry.items():
-        kind = "operations_area" if name.startswith("SOAR") else "safety_zone"
-        per_date = status_by_date.get(name, {})
-        # Fill any missing day with "unknown" so the UI never silently implies open.
-        full = {di: per_date.get(di, {"status": "unknown", "windows": []}) for di in date_isos}
+
+    # Nearshore safety zones: every zone, every day.
+    for key, (fid, label) in SAFETY_ZONES.items():
+        poly = polygon_from_points(points.get(key))
+        if poly is None:
+            continue
+        geom, centroid = poly
+        per_date = {}
+        for di in date_isos:
+            day = by_date.get(di)
+            if day is None:
+                status = "restricted" if key in ALWAYS_RESTRICTED else "unknown"
+                per_date[di] = {"status": status, "windows": []}
+                continue
+            wins = windows_for((day.get("sz") or {}).get(key))
+            per_date[di] = {"status": status_for(wins, key in ALWAYS_RESTRICTED), "windows": wins}
         features.append({
             "type": "Feature",
-            "geometry": geo["geometry"],
+            "geometry": geom,
             "properties": {
-                "id": name,
-                "label": labels.get(name, name),
-                "kind": kind,
-                "centroid": geo.get("centroid"),
-                "statusByDate": full,
+                "id": fid, "label": label, "kind": "safety_zone",
+                "centroid": centroid, "statusByDate": per_date,
             },
         })
-    features.sort(key=lambda f: (f["properties"]["kind"], f["properties"]["id"]))
 
+    # Offshore operations areas: only the ones with ops in the forecast window
+    # (the old day pages drew an area only on days it was scheduled).
+    ops_by_area: dict[str, dict[str, list]] = {}
+    for di in date_isos:
+        day = by_date.get(di)
+        if day is None:
+            continue
+        for w in windows_for(day.get("sched")):
+            if w["area"] in SAFETY_ZONES:
+                continue
+            ops_by_area.setdefault(w["area"], {}).setdefault(di, []).append(w)
+    for name, days in ops_by_area.items():
+        poly = polygon_from_points(points.get(name))
+        if poly is None:
+            continue
+        geom, centroid = poly
+        per_date = {}
+        for di in date_isos:
+            if di not in by_date:
+                per_date[di] = {"status": "unknown", "windows": []}
+            else:
+                wins = days.get(di, [])
+                per_date[di] = {"status": status_for(wins), "windows": wins}
+        features.append({
+            "type": "Feature",
+            "geometry": geom,
+            "properties": {
+                "id": name, "label": name, "kind": "operations_area",
+                "centroid": centroid, "statusByDate": per_date,
+            },
+        })
+
+    features.sort(key=lambda f: (f["properties"]["kind"], f["properties"]["id"]))
     return {
         "type": "FeatureCollection",
         "generated_at": datetime.now(timezone.utc)
             .isoformat(timespec="seconds").replace("+00:00", "Z"),
         "source": "scisland.org",
-        "source_updated": window_meta.get("source_updated"),
-        "published_window": {"start": window_meta.get("start"), "end": window_meta.get("end")},
+        "source_url": SCI_DATA_URL,
+        "source_updated": stamp,
+        "published_window": {
+            "start": sane[0] if sane else None,
+            "end": sane[-1] if sane else None,
+        },
         "tz": "America/Los_Angeles",
         "dates": date_isos,
         "features": features,
     }
 
 
+# ---- network ------------------------------------------------------------
+
+def fetch_data_js() -> str | None:
+    """data.js text, direct first and then via the relay Worker."""
+    for label, url in (("direct", SCI_DATA_URL), ("relay", RELAY_URL)):
+        if not url:
+            continue
+        r = http_get(url, headers=SCI_HEADERS, timeout=30, retries=3, use_breaker=False)
+        code = getattr(r, "status_code", "no-response")
+        if r is not None and r.status_code == 200 and "data" in r.text:
+            print(f"  [closures] {label}: 200 ({len(r.text)} B)", flush=True)
+            return r.text
+        print(f"  [closures] {label}: {code}", flush=True)
+    return None
+
+
 def main() -> int:
     region = active_region()
     out_dir = region.data_output_dir(ROOT)
-    fc = build_closures()
-    n_feat = len(fc["features"])
-    n_geo = sum(1 for f in fc["features"] if f["geometry"].get("coordinates"))
+    text = fetch_data_js()
+    if text is None:
+        print("[closures] could not fetch data.js — leaving previous file untouched", flush=True)
+        return 1
+    try:
+        data, stamp = parse_data_js(text)
+    except (ValueError, json.JSONDecodeError) as e:
+        print(f"[closures] data.js unparseable ({e}) — leaving previous file untouched", flush=True)
+        return 1
+    fc = build_closures(data, stamp, datetime.now(PACIFIC).date())
+    n_sz = sum(1 for f in fc["features"] if f["properties"]["kind"] == "safety_zone")
+    n_ops = len(fc["features"]) - n_sz
+    today = fc["dates"][0]
     closed_today = [
-        f["properties"]["id"]
-        for f in fc["features"]
-        if fc["dates"] and f["properties"]["statusByDate"]
-        .get(fc["dates"][0], {}).get("status") == "restricted"
+        f["properties"]["id"] for f in fc["features"]
+        if f["properties"]["statusByDate"][today]["status"] in ("restricted", "scheduled")
     ]
-    print(f"[closures] {n_feat} zones ({n_geo} with geometry); "
-          f"closed today ({fc['dates'][0] if fc['dates'] else '?'}): "
-          f"{closed_today or 'none'}", flush=True)
-    if n_feat == 0:
-        print("[closures] no zones parsed — leaving previous file untouched", flush=True)
+    print(f"[closures] source updated {stamp}; window "
+          f"{fc['published_window']['start']} -> {fc['published_window']['end']}; "
+          f"{n_sz} safety zones + {n_ops} ops areas; closed/scheduled today "
+          f"({today}): {closed_today or 'none'}", flush=True)
+    if n_sz == 0:
+        print("[closures] no safety-zone geometry parsed — leaving previous file untouched", flush=True)
         return 1
     out_path = out_dir / "navy-closures.geojson"
     out_path.write_text(json.dumps(fc, indent=2) + "\n", encoding="utf-8")

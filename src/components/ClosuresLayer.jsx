@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { project } from "../lib/mapData.js";
 import { dataPath } from "../lib/region.js";
+import { normalizeClosures } from "../lib/closures.js";
 
 // Status -> color. open = clear, scheduled = timed ops (dashed amber),
 // restricted = closed (solid red), unknown = no data for that day (grey).
@@ -29,6 +30,7 @@ export function loadClosures() {
   if (closuresPromise) return closuresPromise;
   closuresPromise = fetch(dataPath("/data/navy-closures.geojson"))
     .then((r) => (r.ok ? r.json() : null))
+    .then(normalizeClosures)
     .catch(() => null);
   return closuresPromise;
 }
@@ -68,8 +70,8 @@ export default function ClosuresLayer({ width, height, active, selectedDay = 0, 
     return () => { cancelled = true; };
   }, [active]);
 
-  const dates = fc?.dates || [];
-  const selectedDate = dates[selectedDay] ?? dates[0];
+  const dates = fc?.stale ? [] : fc?.dates || [];
+  const selectedDate = dates[selectedDay] ?? dates[0] ?? null;
 
   // Project geometry once per (features, size) — it's day-invariant. The fill
   // recomputes per render from selectedDate, which is cheap (a dict lookup).
@@ -82,12 +84,12 @@ export default function ClosuresLayer({ width, height, active, selectedDay = 0, 
     }));
   }, [fc, width, height]);
 
-  if (!active || !geom.length || !selectedDate) return null;
+  if (!active || !geom.length) return null;
 
   return (
     <g className="closures-layer">
       {geom.map((g) => {
-        const status = g.props.statusByDate?.[selectedDate]?.status || "unknown";
+        const status = (selectedDate && g.props.statusByDate?.[selectedDate]?.status) || "unknown";
         const style = styleForStatus(status);
         const closed = isClosed(status);
         return (
@@ -113,6 +115,7 @@ export default function ClosuresLayer({ width, height, active, selectedDay = 0, 
                   generated_at: fc.generated_at,
                   source_updated: fc.source_updated,
                   published_window: fc.published_window,
+                  stale: fc.stale,
                 },
               });
             }}
