@@ -1,30 +1,24 @@
-# Validation watchdog — 2026-10-21T18:20Z
+# Validation watchdog — 2026-10-22T06:23Z
 
-**4 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
+**3 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
-### 🔴 1. Only 20 observations in the last 24h (floor: 50)
+### 🔴 1. Only 25 observations in the last 24h (floor: 50)
 
 Multiple scrapers may be silently broken.
 
 **Suggested action:** Open the latest hourly ingest workflow run; look for `FAILED` lines per scraper.
 
-### 🔴 2. 1 critical external feed(s) are red
+### ⚠️ 2. 6 non-critical external feed(s) are red
 
-A required upstream data source failed the latest feed-health probe.
-
-**Suggested action:** Inspect `pipeline/validation/data/feed_health.json`, then retry the affected fetch workflow after confirming the upstream feed recovered.
-
-### ⚠️ 3. 5 non-critical external feed(s) are red
-
-Red feeds: chl_dineof_nrt_4km, chl_dineof_sci_9km, kd490_dineof_9km, chl_climo_modis_pfeg, osm_overpass_main. Fallbacks may keep the model running, but redundancy is degraded.
+Red feeds: chl_dineof_nrt_4km, chl_dineof_sci_9km, kd490_dineof_9km, cdip, cpc_precip_psl, osm_overpass_main. Fallbacks may keep the model running, but redundancy is degraded.
 
 **Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
 
-### 🔴 4. Published-data freshness gate found 2 issue(s)
+### 🔴 3. Published-data freshness gate found 2 issue(s)
 
-Freshness/completeness failures: swell5d:summary_day_sparse, sst:sst_source_query_failed.
+Freshness/completeness failures: precip:layer_date_stale, swell5d:summary_day_sparse.
 
 **Suggested action:** Open `pipeline/validation/data/freshness_health.json`; fix the failing fetcher or rerun the matching workflow before trusting the deploy.
 
@@ -32,16 +26,16 @@ Freshness/completeness failures: swell5d:summary_day_sparse, sst:sst_source_quer
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_nearshore` | 4 | 6.69 | -6.13 | 25% | — |
-| `central_nearshore` | 1 | 1.36 | -1.36 | 100% | — |
+| `bight_nearshore` | 4 | 8.00 | -6.61 | 25% | 0.57 |
+| `central_nearshore` | 1 | 2.54 | -2.54 | 100% | — |
 
 ## Per-source bias (informational)
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `cencoos` | 1 | -1.36 ft |
-| `dive-shop-diveviz` | 1 | -3.83 ft |
-| `dive-shop-justgetwet` | 3 | -6.90 ft |
+| `cencoos` | 1 | -2.54 ft |
+| `dive-shop-diveviz` | 1 | -6.96 ft |
+| `dive-shop-justgetwet` | 3 | -6.49 ft |
 
 ## How to act on this issue
 
