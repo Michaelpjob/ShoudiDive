@@ -1,10 +1,10 @@
-# Validation watchdog — 2026-10-23T06:23Z
+# Validation watchdog — 2026-10-23T18:17Z
 
 **4 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
-### 🔴 1. Only 19 observations in the last 24h (floor: 50)
+### 🔴 1. Only 17 observations in the last 24h (floor: 50)
 
 Multiple scrapers may be silently broken.
 
@@ -16,15 +16,15 @@ Expected `cdip-buoy` to contribute at least one observation per cron. None seen 
 
 **Suggested action:** Inspect `pipeline/validation/ingest/cdip.py` and the latest ingest cron's log.
 
-### ⚠️ 3. 5 non-critical external feed(s) are red
+### ⚠️ 3. 2 non-critical external feed(s) are red
 
-Red feeds: chl_dineof_nrt_4km, chl_dineof_sci_9km, kd490_dineof_9km, cdip, osm_overpass_main. Fallbacks may keep the model running, but redundancy is degraded.
+Red feeds: cdip, osm_overpass_main. Fallbacks may keep the model running, but redundancy is degraded.
 
 **Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
 
-### 🔴 4. Published-data freshness gate found 2 issue(s)
+### 🔴 4. Published-data freshness gate found 1 issue(s)
 
-Freshness/completeness failures: kd490:layer_date_stale, swell5d:summary_day_sparse.
+Freshness/completeness failures: kd490:layer_date_stale.
 
 **Suggested action:** Open `pipeline/validation/data/freshness_health.json`; fix the failing fetcher or rerun the matching workflow before trusting the deploy.
 
@@ -32,16 +32,16 @@ Freshness/completeness failures: kd490:layer_date_stale, swell5d:summary_day_spa
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_nearshore` | 4 | 8.36 | -4.18 | 0% | 0.18 |
-| `central_nearshore` | 1 | 0.14 | -0.14 | 100% | — |
+| `bight_nearshore` | 4 | 5.97 | -4.77 | 25% | 0.82 |
+| `central_nearshore` | 1 | 2.52 | +2.52 | 100% | — |
 
 ## Per-source bias (informational)
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `cencoos` | 1 | -0.14 ft |
-| `dive-shop-diveviz` | 1 | -10.12 ft |
-| `dive-shop-justgetwet` | 3 | -2.20 ft |
+| `cencoos` | 1 | +2.52 ft |
+| `dive-shop-diveviz` | 1 | -7.22 ft |
+| `dive-shop-justgetwet` | 3 | -3.95 ft |
 
 ## How to act on this issue
 
