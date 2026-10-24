@@ -45,6 +45,7 @@ export default [
       // descending into it — so the exclusion has to be this specific.
       "public/paddies/leaflet.js", // vendored third-party
       "public/fleet/leaflet.js",   // same vendored copy, Fleet Tracks bundle
+      "public/fleet-species/leaflet.js", // same vendored copy, Species Hotspots (dev)
       "public/sw.js",              // service worker, its own global scope
       "**/*.min.js",
       "scripts/**",               // bash + node setup scripts
@@ -154,7 +155,7 @@ export default [
   // meaningful, rather than drowning in false positives.
   // ---------------------------------------------------------------------
   {
-    files: ["public/paddies/{app,track,trackui}.js", "public/fleet/app.js"],
+    files: ["public/paddies/{app,track,trackui}.js", "public/fleet/app.js", "public/fleet-species/app.js"],
     languageOptions: {
       ecmaVersion: 2020,          // the bundle targets older mobile Safari
       sourceType: "script",
