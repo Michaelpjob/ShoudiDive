@@ -77,6 +77,7 @@ import {
   shouldPinMapTap,
 } from "../lib/mapInteractionGuards.js";
 import { track } from "../lib/analytics.js";
+import { initialSpotId } from "../lib/deepLink.js";
 
 // Reactive viewport hook for the bottom-sheet mobile UI.
 //
@@ -180,7 +181,7 @@ export default function MapShell({ layer, setLayer, composite, setComposite, sst
     zoomLevel,
   } = useMapViewport();
   const [hover, setHover] = useState(null);
-  const [activeSpot, setActiveSpotRaw] = useState("lajolla");
+  const [activeSpot, setActiveSpotRaw] = useState(initialSpotId);
   // Wrap setActiveSpot so every saved-spot click — desktop list or
   // mobile sheet — fires one analytics event. Answers "which spots
   // do users actually look at, and is it the same on mobile vs
