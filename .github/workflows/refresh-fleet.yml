@@ -1,8 +1,11 @@
 name: Refresh fleet tracks (AIS, on demand)
 
 # Rebuilds the Fleet Tracks tool data (public/fleet/data.json) from the public
-# NOAA/USCG daily AIS archive for a date window, plus the landings' posted dock
-# counts, and commits the result to the branch it was dispatched on.
+# NOAA/USCG daily AIS archive for a date window and commits the result to the
+# branch it was dispatched on. The landings' posted dock counts (catch.py,
+# sportfishingreport.com) are paused: that site's terms (updated 2026-09-01)
+# bar automated access without a written license, so the scrape only runs when
+# the repo variable SFR_COUNTS_ENABLED is 'true' (unset = off).
 #
 # On demand only: the archive is published about two months in arrears and a
 # season window is ~40 GB of national day files (streamed, filtered to SoCal,
@@ -86,11 +89,15 @@ jobs:
             echo "no fleet-live branch yet"
           fi
 
-      - name: Roster, dock counts, model
-        run: |
-          python fleet-model/roster.py --start "$WIN_START" --end "$WIN_END"
-          python fleet-model/catch.py --start "$WIN_START" --end "$WIN_END"
-          python fleet-model/build_site.py public/fleet --start "$WIN_START" --end "$WIN_END"
+      - name: Roster
+        run: python fleet-model/roster.py --start "$WIN_START" --end "$WIN_END"
+
+      - name: Dock counts (off unless SFR_COUNTS_ENABLED)
+        if: vars.SFR_COUNTS_ENABLED == 'true'
+        run: python fleet-model/catch.py --start "$WIN_START" --end "$WIN_END"
+
+      - name: Model
+        run: python fleet-model/build_site.py public/fleet --start "$WIN_START" --end "$WIN_END"
 
       - name: Commit refreshed data.json + roster
         run: |
