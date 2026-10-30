@@ -6,7 +6,7 @@ import {
   windCardinal,
 } from "../lib/dataSource.js";
 import { pinnedCurrent } from "../lib/pinSample.js";
-import { findTodayDay } from "../lib/today.js";
+import { todaySelection } from "../lib/today.js";
 
 const BUCKET_LABELS = {
   predawn: "Pre-dawn",
@@ -262,12 +262,11 @@ export default function CurrentTimeline({ sel, setSel, hover }) {
 
 export function defaultCurrentSelection(summary) {
   // Prefer today (matched in summary's tz) so the app always opens
-  // on the user's current day. best_window is the fallback when the
-  // dataset doesn't include today.
-  const todayDay = findTodayDay(summary);
-  if (todayDay?.buckets?.length) {
-    return { day: todayDay.day, bucket: todayDay.buckets[0].bucket };
-  }
+  // on the user's current day, at the bucket that contains the current
+  // local hour. best_window is the fallback when the dataset doesn't
+  // include today.
+  const today = todaySelection(summary);
+  if (today) return today;
   const best = summary?.best_window;
   if (best?.bucket != null && best?.day != null) {
     return { day: best.day, bucket: best.bucket };
