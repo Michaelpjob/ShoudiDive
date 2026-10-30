@@ -76,6 +76,18 @@ export function useTimelineSelections(dataState) {
   // forecast choice survives subsequent data refreshes.
   const userToggledRef = useRef(false);
 
+  // Which summaries have been seen at least once. The placeholder
+  // useState values above ({slot:"f0"}, {day:0,…}) are VALID selections
+  // the moment a summary lands (f0 / day 0 always exist), so the
+  // reconcile pass below never replaced them and the app opened on the
+  // OLDEST day of each window — for sst5d that is the anchor three days
+  // back, not today (2026-10-30 bug: "stuck on the beginning of the
+  // week"). The first time each summary is seen its selection is set
+  // from default*Selection (today, at the current time of day); after
+  // that the reconcile pass only steps in when a selection no longer
+  // exists in the data, so a user's scrub survives data refreshes.
+  const openedRef = useRef({});
+
   // PUBLIC setter — flips the ref so this counts as a user choice.
   const setSstMode = useCallback((next) => {
     userToggledRef.current = true;
@@ -88,24 +100,30 @@ export function useTimelineSelections(dataState) {
   // auto-pick pass handles the MUR-lag case by switching mode to
   // wherever wall-clock today actually lives.
   useEffect(() => {
+    // True exactly once per summary key: the first load.
+    const firstLoad = (key, summary) => {
+      if (!summary || openedRef.current[key]) return false;
+      openedRef.current[key] = true;
+      return true;
+    };
     const tSummary = getSstHistorySummary();
-    if (tSummary && !sstSelectionHasData(tSummary, sstSel)) {
+    if (tSummary && (firstLoad("sstHistory", tSummary) || !sstSelectionHasData(tSummary, sstSel))) {
       setSstSel(defaultSstSelection(tSummary));
     }
     const tfSummary = getSstForecastSummary();
-    if (tfSummary && !sstSelectionHasData(tfSummary, sstForecastSel)) {
+    if (tfSummary && (firstLoad("sstForecast", tfSummary) || !sstSelectionHasData(tfSummary, sstForecastSel))) {
       setSstForecastSel(defaultSstSelection(tfSummary));
     }
     const wSummary = getWind5dSummary();
-    if (wSummary && !selectionHasData(wSummary, windSel)) {
+    if (wSummary && (firstLoad("wind", wSummary) || !selectionHasData(wSummary, windSel))) {
       setWindSel(defaultWindSelection(wSummary));
     }
     const sSummary = getSwell5dSummary();
-    if (sSummary && !selectionHasData(sSummary, swellSel)) {
+    if (sSummary && (firstLoad("swell", sSummary) || !selectionHasData(sSummary, swellSel))) {
       setSwellSel(defaultWindSelection(sSummary));
     }
     const cSummary = getCurrent5dSummary();
-    if (cSummary && !currentSelectionHasData(cSummary, currentSel)) {
+    if (cSummary && (firstLoad("current", cSummary) || !currentSelectionHasData(cSummary, currentSel))) {
       setCurrentSel(defaultCurrentSelection(cSummary));
     }
 
