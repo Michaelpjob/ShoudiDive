@@ -1,53 +1,35 @@
-# Validation watchdog — 2026-10-30T06:18Z
+# Validation watchdog — 2026-10-30T18:12Z
 
-**5 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
+**2 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
-### 🔴 1. Only 15 observations in the last 24h (floor: 50)
+### 🔴 1. Only 19 observations in the last 24h (floor: 50)
 
 Multiple scrapers may be silently broken.
 
 **Suggested action:** Open the latest hourly ingest workflow run; look for `FAILED` lines per scraper.
 
-### 🔴 2. Required source `cdip-buoy` has been silent for >24h
+### ⚠️ 2. 1 non-critical external feed(s) are red
 
-Expected `cdip-buoy` to contribute at least one observation per cron. None seen in the recent window.
-
-**Suggested action:** Inspect `pipeline/validation/ingest/cdip.py` and the latest ingest cron's log.
-
-### 🔴 3. 1 critical external feed(s) are red
-
-A required upstream data source failed the latest feed-health probe.
-
-**Suggested action:** Inspect `pipeline/validation/data/feed_health.json`, then retry the affected fetch workflow after confirming the upstream feed recovered.
-
-### ⚠️ 4. 3 non-critical external feed(s) are red
-
-Red feeds: chl_climo_modis_pfeg, osm_overpass_main, cdfw_mpa. Fallbacks may keep the model running, but redundancy is degraded.
+Red feeds: osm_overpass_main. Fallbacks may keep the model running, but redundancy is degraded.
 
 **Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
-
-### 🔴 5. Published-data freshness gate found 2 issue(s)
-
-Freshness/completeness failures: swell5d:summary_day_sparse, sst:sst_source_query_failed.
-
-**Suggested action:** Open `pipeline/validation/data/freshness_health.json`; fix the failing fetcher or rerun the matching workflow before trusting the deploy.
 
 ## Per-zone metrics
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_nearshore` | 3 | 4.62 | -3.19 | 33% | 0.50 |
-| `central_nearshore` | 1 | 5.73 | +5.73 | 0% | — |
+| `bight_nearshore` | 3 | 4.25 | +2.56 | 67% | 0.50 |
+| `central_nearshore` | 1 | 7.54 | +7.54 | 0% | — |
 
 ## Per-source bias (informational)
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `cencoos` | 1 | +5.73 ft |
-| `dive-shop-diveviz` | 1 | -5.07 ft |
-| `dive-shop-justgetwet` | 2 | -2.26 ft |
+| `cencoos` | 1 | +7.54 ft |
+| `dive-shop-diveviz` | 1 | +0.48 ft |
+| `dive-shop-justgetwet` | 2 | +3.60 ft |
 
 ## How to act on this issue
 
