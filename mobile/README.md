@@ -29,18 +29,23 @@ better runtime.
 * Push notifications.
 * MPA + Bathy overlays.
 
-## Run it on your iPhone today
+## Run it on your iPhone
 
-1. Install **Expo Go** from the iOS App Store (free).
-2. From the repo root:
-   ```bash
-   cd mobile
-   npm install              # one-time
-   npm start                # starts the dev server + shows a QR code
-   ```
-3. Open the Camera app on your iPhone and point it at the QR code in
-   the terminal. Tap the notification to open Expo Go. The app loads.
-4. Edits to `mobile/src/...` hot-reload over Wi-Fi.
+> **Expo Go does NOT work for this app.** It uses `@shopify/react-native-skia`,
+> which isn't in the Expo Go runtime — that's the "grey box" symptom. The app runs
+> as a **development build** (custom dev client), built in the cloud by EAS so your
+> Windows machine never needs a Mac.
+
+Full step-by-step (one-time setup + daily loop): **[`RUNBOOK.md`](RUNBOOK.md)**.
+
+Once the one-time setup in the runbook is done, the daily loop is:
+
+```bash
+cd mobile
+npx expo start --dev-client --tunnel   # open the dev build on your iPhone, scan the QR
+```
+
+Pure JS/UI edits hot-reload instantly; you only rebuild when a native dependency changes.
 
 ## Repo layout
 
@@ -154,17 +159,16 @@ you can import them in tests without booting a device.
 
 `npm run test:watch` reruns tests on save while you're iterating.
 
-## Shipping to App Store (later)
+## Shipping to TestFlight / App Store
 
-Workflow when we're ready to graduate from Expo Go:
+EAS is now configured (`eas.json` + `expo-dev-client`). Builds run in the cloud:
 
 ```bash
-npm install -g eas-cli
-eas login
-eas build --platform ios     # produces a .ipa, upload to TestFlight
-eas build --platform android # produces a .aab, upload to Play Console
+eas build --profile preview --platform ios     # internal/TestFlight build
+eas build --profile production --platform ios  # store build
+eas submit --platform ios                       # upload to App Store Connect
 ```
 
-Apple Developer account ($99/year) required for TestFlight + App
-Store. Google Play Console ($25 one-time) for Play Store. Neither
-is needed for Expo Go iteration — only when we publish.
+Apple Developer account ($99/year) is required for any iPhone install (dev build
+included) and for TestFlight/App Store. Google Play Console ($25 one-time) is for
+the Play Store when we add Android. See **[`RUNBOOK.md`](RUNBOOK.md)** for the full flow.
