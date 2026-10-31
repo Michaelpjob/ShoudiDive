@@ -1,0 +1,86 @@
+name: Morning report (daily facts)
+
+# Builds the Morning Report (pipeline/reports/build_report.py) from the NWS
+# coastal-waters and surf-zone forecasts, NHC's Mexico offshore forecast, NWS
+# alerts, NDBC/CDIP buoys, CO-OPS water temperature, the KSAN rain gauge,
+# CPC's ENSO discussion and our own published layers, then commits
+# public/data/reports/<date>.json + latest.json + index.json.
+#
+# PREVIEW PHASE, built and served from `dev` only (dev.shouldidive.pages.dev/
+# reports/). Scheduled workflows run only from the default branch, so on dev the
+# trigger is a push to dev: the hourly main->dev sync and the wind refreshes
+# push several times an hour, and build_report's --min-interval-min guard turns
+# that into a rebuild about every two hours between 4 AM and 9 PM Pacific. Our
+# own data commit re-triggers the workflow, which then skips (fresh).
+# To promote later: build against main on the schedule and deploy-prod.
+
+on:
+  push:
+    branches: [dev]
+  schedule:
+    - cron: "20 12 * * *"   # 05:20 PDT / 04:20 PST: after the overnight CWF + SRF issuances
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to build the report on (default: dev)"
+        required: false
+        default: "dev"
+
+concurrency:
+  group: refresh-reports
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: write   # gh workflow run deploy-dev.yml
+    env:
+      PYTHONIOENCODING: utf-8
+      TARGET: ${{ inputs.branch || 'dev' }}
+      # Pushes rebuild only when the last report is 110+ min old; manual runs always build.
+      GUARD: ${{ github.event_name == 'workflow_dispatch' && '0' || '110' }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ env.TARGET }}
+          token: ${{ secrets.BOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests numpy pillow
+
+      - name: Build the report
+        working-directory: pipeline
+        run: python -m reports.build_report --min-interval-min "$GUARD" --active-hours 4-21
+
+      - name: Commit the report
+        id: commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/data/reports
+          if git diff --staged --quiet; then
+            echo "No change in the report."
+            exit 0
+          fi
+          # Sentinel: a new report must be today's (Pacific).
+          python -c "import json,datetime,zoneinfo; d=json.load(open('public/data/reports/latest.json')); t=datetime.datetime.now(zoneinfo.ZoneInfo('America/Los_Angeles')).date().isoformat(); assert d['date']==t, (d['date'], t); print('ok', d['date'])"
+          git commit -m "data(reports): $(python -c "import json;print(json.load(open('public/data/reports/latest.json'))['date'])")"
+          for attempt in 1 2 3; do
+            if git push origin "HEAD:${TARGET}"; then break; fi
+            echo "push failed (attempt $attempt), rebasing"
+            git pull --rebase --autostash origin "${TARGET}"
+          done
+          echo "committed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy the preview
+        if: success() && env.TARGET == 'dev' && steps.commit.outputs.committed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run deploy-dev.yml --ref dev
