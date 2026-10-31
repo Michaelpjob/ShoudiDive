@@ -14,10 +14,70 @@
     <meta name="theme-color" content="#0369a1" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)" />
     <meta name="color-scheme" content="light dark" />
+
+    <!-- Search + social. The static guide and spot pages that link back here
+         are generated at build time by scripts/build-seo-pages.mjs. -->
+    <title>ShouldIDive: live ocean conditions map for California and Baja</title>
     <meta
       name="description"
-      content="Live ocean conditions for the California coast: sea temp, water clarity, wind, swell, and a predicted-visibility model. Built for divers, freedivers, surfers, and anglers."
+      content="Free map of California and Baja ocean conditions, updated daily: sea temperature, swell, wind, currents, tides, kelp, temperature breaks, and modeled dive visibility."
     />
+    <!-- Canonical is a crawler hint, not a fetched resource, so SRI does not
+         apply. It must stay absolute: a relative "/" on www.shouldidive.com
+         would resolve to www and defeat the duplicate-host consolidation. -->
+    <link rel="canonical" href="https://shouldidive.com/" /><!-- nosemgrep: html.security.audit.missing-integrity.missing-integrity -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="ShouldIDive" />
+    <meta property="og:title" content="ShouldIDive: live ocean conditions for California and Baja" />
+    <meta
+      property="og:description"
+      content="Sea temperature, swell, wind, currents, tides, kelp, temperature breaks, and modeled visibility on one free map. Built for divers, spearfishers, anglers, and boaters."
+    />
+    <meta property="og:url" content="https://shouldidive.com/" />
+    <meta property="og:image" content="https://shouldidive.com/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="ShouldIDive map of sea surface temperature along the California and Baja coast" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://shouldidive.com/#website",
+            "name": "ShouldIDive",
+            "alternateName": "Should I Dive",
+            "url": "https://shouldidive.com/",
+            "inLanguage": "en-US",
+            "description": "Free ocean-conditions map for California and Baja."
+          },
+          {
+            "@type": "WebApplication",
+            "name": "ShouldIDive",
+            "url": "https://shouldidive.com/",
+            "applicationCategory": "SportsApplication",
+            "operatingSystem": "Any (web browser, installable as a PWA)",
+            "isAccessibleForFree": true,
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+            "audience": { "@type": "Audience", "audienceType": "Scuba divers, freedivers, spearfishers, anglers, sailors, boaters, ocean researchers" },
+            "spatialCoverage": { "@type": "Place", "name": "California and Baja California coast" },
+            "featureList": [
+              "Satellite sea surface temperature with 7-day history and forecast",
+              "Swell height, period, and direction forecast",
+              "Wind forecast by time of day",
+              "Surface currents from HF radar and ocean models",
+              "Tide predictions",
+              "Satellite chlorophyll (water color)",
+              "Modeled dive visibility with published error",
+              "Sea temperature breaks with GPS waypoints",
+              "Kelp canopy and marine protected area boundaries",
+              "Detailed bathymetry charts for named dive spots"
+            ]
+          }
+        ]
+      }
+    </script>
 
     <!-- PWA -->
     <link rel="manifest" href="/manifest.webmanifest" />
@@ -33,17 +93,48 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="format-detection" content="telephone=no" />
 
-    <title>ShouldIDive — CA Coast Conditions</title>
-
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
+    <!-- Pre-mount block styling. React replaces #root's children on first
+         render, so this only shows while the bundle loads and to crawlers
+         that do not run JavaScript. -->
+    <style>
+      .seo-shell{max-width:640px;margin:0 auto;padding:18vh 16px 40px;font:16px/1.6 Inter,system-ui,sans-serif;color:#1e293b}
+      .seo-shell h1{font-size:26px;line-height:1.2;margin:0 0 10px;letter-spacing:-0.01em}
+      .seo-shell p{margin:0 0 12px;color:#475569}
+      .seo-shell .seo-load{font-size:14px;color:#64748b}
+      .seo-shell nav{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:14px;margin:16px 0 8px}
+      .seo-shell a{color:#0369a1}
+      .seo-shell details{font-size:14px;color:#64748b}
+      .seo-shell summary{cursor:pointer}
+    </style>
   </head>
   <body data-theme="light">
-    <div id="root"></div>
+    <div id="root">
+      <div class="seo-shell">
+        <h1>ShouldIDive: ocean conditions for California and Baja</h1>
+        <p>
+          Sea temperature, swell, wind, currents, tides, kelp, temperature breaks, and a modeled
+          visibility estimate on one map, refreshed from NOAA and NASA data several times a day.
+          Free, with no account.
+        </p>
+        <p class="seo-load">Loading the live map&hellip;</p>
+        <nav aria-label="Guides">
+          <a href="/spots/">All spots</a>
+          <a href="/diving/">Diving</a>
+          <a href="/spearfishing/">Spearfishing</a>
+          <a href="/fishing/">Fishing</a>
+          <a href="/sailing/">Sailing</a>
+          <a href="/science/">Science</a>
+          <a href="/about/">About</a>
+        </nav>
+        <!--seo:spots-->
+      </div>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
