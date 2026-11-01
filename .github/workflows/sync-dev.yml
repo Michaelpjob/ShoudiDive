@@ -148,12 +148,30 @@ jobs:
           #               (beta regions refresh on dev; main's copies
           #               LAG — resetting them from main would clobber
           #               fresh beta data with weeks-stale copies)
+          #   curated:    public/data/bathy-features.geojson (hand-edited
+          #               layer that no cron writes; see CURATED_FILES)
           DEV_OWNED_SUBDIRS="pnw tropical"
+          # Hand-curated layers live under public/data/ too, but NO refresh
+          # workflow regenerates them (`git grep <name> -- .github pipeline`
+          # finds readers only). They are code, not cron output: a feature
+          # branch merged into dev for preview edits them by hand, and the
+          # wholesale reset below silently un-merges that edit while the
+          # branch's tests stay on dev. That is how PR #423's corrected reef
+          # positions vanished from dev on every sync and
+          # tests/reefLocations.test.js went red on every dev-checks run from
+          # 2026-10-30. For these, keep the merge result (HEAD, which the
+          # merge step above already resolved against main).
+          CURATED_FILES="public/data/bathy-features.geojson"
 
           git checkout origin/main -- public/data/
           for sub in $DEV_OWNED_SUBDIRS; do
             if git rev-parse -q --verify "${{ steps.check.outputs.pre_sha }}:public/data/$sub" >/dev/null; then
               git checkout "${{ steps.check.outputs.pre_sha }}" -- "public/data/$sub/"
+            fi
+          done
+          for f in $CURATED_FILES; do
+            if git rev-parse -q --verify "HEAD:$f" >/dev/null; then
+              git checkout HEAD -- "$f"
             fi
           done
           if git diff --cached --quiet; then
