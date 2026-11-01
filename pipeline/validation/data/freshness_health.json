@@ -1,5 +1,5 @@
 {
-  "computed_at": "2026-10-31T18:12:56Z",
+  "computed_at": "2026-11-01T06:15:57Z",
   "manifest": "public/data/manifest.json",
   "layers_checked": [
     "sst",
@@ -14,8 +14,23 @@
     "current5d"
   ],
   "summary": {
-    "total_findings": 0,
-    "healthy": true
+    "total_findings": 2,
+    "healthy": false
   },
-  "findings": []
+  "findings": [
+    {
+      "severity": "high",
+      "code": "layer_date_stale",
+      "title": "Layer sst is 4.3d old",
+      "layer": "sst",
+      "detail": "threshold=4d window=1d"
+    },
+    {
+      "severity": "high",
+      "code": "summary_day_sparse",
+      "title": "Layer swell5d has sparse day summaries",
+      "layer": "swell5d",
+      "detail": "d0 buckets=2, d2 buckets=0, d3 buckets=0, d4 buckets=0"
+    }
+  ]
 }
