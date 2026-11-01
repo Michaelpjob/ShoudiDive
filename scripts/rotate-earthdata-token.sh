@@ -113,16 +113,42 @@ size=0
 [ -f "$out" ] && size="$(wc -c < "$out" | tr -d ' ')"
 magic="$(od -An -tx1 -N4 "$out" 2>/dev/null | tr -d ' \n')"
 
+# On failure, say WHICH kind: is the token itself dead (EDL rejects it), or
+# is the token fine but OB.DAAC not authorized for this account? The two look
+# identical from the download (both hand back the login page) and need
+# different fixes.
+diagnose() {
+  local edl
+  edl="$(curl -sS -m 30 -o /dev/null -w '%{http_code}' \
+    -H "Authorization: Bearer $token" "https://urs.earthdata.nasa.gov/api/users/user" || echo "000")"
+  case "$edl" in
+    200) say "  Diagnosis: Earthdata Login ACCEPTS this token (EDL API 200), so the token is fine."
+         say "  OB.DAAC still refused it, which means the 'OB.DAAC Data Access' application is not"
+         say "  authorized for this account. Fix: in Chrome, Earthdata profile -> Applications ->"
+         say "  Authorized Apps -> APPROVE MORE APPLICATIONS -> approve 'OB.DAAC Data Access'. Or just"
+         say "  open https://oceandata.sci.gsfc.nasa.gov/ob/getfile/$filename while signed in, click"
+         say "  Approve once, then run this script again with the same token." ;;
+    401|403) say "  Diagnosis: Earthdata Login REJECTS this token (EDL API $edl). The pasted value is not"
+         say "  a live token: wrong clipboard contents, truncated paste, or a revoked token. Copy it"
+         say "  again from https://urs.earthdata.nasa.gov/users/<you>/user_tokens (Show Token, copy)." ;;
+    *)   say "  Diagnosis: could not reach the Earthdata Login API (http $edl); try again in a minute." ;;
+  esac
+}
+
 case "$final_url" in
   *urs.earthdata.nasa.gov*)
-    die "NASA redirected to the Earthdata login page (HTTP $code). The token was REJECTED. Nothing changed. Generate a fresh token at https://urs.earthdata.nasa.gov/profile and run this again." ;;
+    say "NASA redirected to the Earthdata login page (HTTP $code). The token was REJECTED. Nothing changed."
+    diagnose
+    exit 1 ;;
 esac
 if [ "$code" != "200" ]; then
   die "unexpected HTTP $code from $GETFILE_URL/$filename (content-type ${ctype:-?}, $size bytes). Nothing changed."
 fi
 case "$magic" in
   89484446|434446*) ;;  # \x89HDF (netCDF-4) or CDF (classic netCDF)
-  *) die "download is not a netCDF (first bytes: ${magic:-none}, content-type ${ctype:-?}, $size bytes). Looks like an auth failure. Nothing changed." ;;
+  *) say "download is not a netCDF (first bytes: ${magic:-none}, content-type ${ctype:-?}, $size bytes). Nothing changed."
+     diagnose
+     exit 1 ;;
 esac
 say "  OK: $size bytes of netCDF came back. The token works."
 
