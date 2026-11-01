@@ -11,7 +11,8 @@ name the owner action when one exists. Status words: `open`, `fix-ready`
 
 | # | Item | Status | Owner | Next action | Links |
 |---|------|--------|-------|-------------|-------|
-| 1 | `EARTHDATA_TOKEN` expired 2026-08-23; NASA chl (sources 1-3) dead; chl map blank in the app since then | open | Michael | Generate a new token at urs.earthdata.nasa.gov, then run `bash scripts/rotate-earthdata-token.sh` (validates, sets the secret, dispatches the CA refresh) | [#444](https://github.com/Michaelpjob/ShoudiDive/pull/444) |
+| 1 | `EARTHDATA_TOKEN` expired 2026-08-23; NASA chl (sources 1-3) dead; chl map blank in the app since then | fixed 2026-11-01 | Michael | Rotated 21:32Z; refresh run 41352491458 logged 3 frames from each NASA sensor; live overlay paints 246 direct cells at 21:44Z. Next rotation due 2026-12-31 | [#444](https://github.com/Michaelpjob/ShoudiDive/pull/444) |
+| 6 | Data PNGs reach browsers up to 4 h late: the zone's Cloudflare "Browser Cache TTL" (default 4 hours) raises `/data/*.png` from the 300 s set in `public/_headers` to `max-age=14400`; JSON is unaffected (not edge-cached) | open | Michael | Cloudflare dashboard, zone shouldidive.com, Caching, Configuration, Browser Cache TTL: set "Respect Existing Headers". No code change needed | observed 2026-11-01 21:41Z |
 | 2 | Timelines opened on the oldest day of the window (sst5d anchor, 3 days back) instead of today | fix-ready | Michael | Merge [#443](https://github.com/Michaelpjob/ShoudiDive/pull/443) (verified on dev 2026-10-30) | [#443](https://github.com/Michaelpjob/ShoudiDive/pull/443) |
 | 3 | Token expiry was invisible: refresh green, feed probe green, manifest healthy-looking | fix-ready | Michael | Merge [#444](https://github.com/Michaelpjob/ShoudiDive/pull/444) (login-page detection, authenticated feed probe, data-health findings) | [#444](https://github.com/Michaelpjob/ShoudiDive/pull/444) |
 | 4 | `dev-checks` red on `dev` all of 2026-10-30 (`tests/reefLocations.test.js`, 13 failures); auto `deploy-dev` blocked, previews dispatched by hand | open | agent | Diff the reef-location data files between `main` and `dev`; fix the drifted side | run 41136424417 |
@@ -21,11 +22,19 @@ name the owner action when one exists. Status words: `open`, `fix-ready`
 
 | What | Cadence | Last done | Next due | How |
 |------|---------|-----------|----------|-----|
-| `EARTHDATA_TOKEN` (NASA Earthdata Login user token, powers chl sources 1-3) | every 60 days (token lifetime) | 2026-06-23 (expired 2026-08-23) | now, then 60 days after the next rotation | `bash scripts/rotate-earthdata-token.sh`; the script prints the next due date |
+| `EARTHDATA_TOKEN` (NASA Earthdata Login user token, powers chl sources 1-3) | every 60 days (token lifetime) | 2026-11-01 (previous 2026-06-23, expired 2026-08-23) | 2026-12-31 16:15 EST (calendar reminder 2026-12-26) | `bash scripts/rotate-earthdata-token.sh`; the script prints the next due date |
 | `COPERNICUSMARINE_SERVICE_*` (CMEMS GlobColour chl backstop) | no known expiry | 2026-06-19 | n/a | `gh secret set` if CMEMS ever starts rejecting |
 | GitHub PAT used by workflows (`BOT_PUSH_TOKEN`) | depends on how it was created | unknown | verify in repo settings | repo Settings, Secrets and variables |
 
 ## Log
+
+### 2026-11-01, Earthdata token rotated
+
+- Michael generated a new token (expires 2026-12-31 16:15 EST) and ran `scripts/rotate-earthdata-token.sh`. First paste was refused with the login page although "OB.DAAC Flask getfile" is an approved application in the Earthdata profile; a re-copy from the token page worked (bad paste). Validation downloaded a 7.6 MB AQUA NRT netCDF; secret set 21:32Z; `refresh-ca-data` run 41352491458 dispatched on main.
+- The script now diagnoses a failed download by asking the Earthdata Login user API whether the token itself is live (401 = bad paste or revoked token; 200 = OB.DAAC not authorized for the account).
+- Note for next time: `bash` is not on the PowerShell PATH on the dev box; launch with `& "C:\Program Files\Git\bin\bash.exe" <script>`.
+- **Verified:** run 41352491458 (success, 21:38Z) logged `[aqua_modis_nrt] 3 frames, ages: 1, 3, 4d`, `[snpp_viirs_nrt] 3 frames`, `[s3a_olci_nrt] 3 frames`, `blended 1d: ... sources used [1, 3, 4, 5, 6]`. Live manifest 21:34:51Z: aqua owns 179 cells (age 1 d), s3a 67. Decoded sidecars: 246 cells pass the observed-only gate (direct source, age 1-3 d), all offshore (nearest at 118.1 W off San Diego; coast cloud-blank today). The live overlay image carries exactly 246 opaque pixels at 21:44Z.
+- **Found on the way (item 6):** for ~5 minutes after the deploy the edge still served the previous PNGs (origin propagation), which is self-healing; the lasting problem is the zone's Browser Cache TTL rewriting data PNGs to `max-age=14400`, so a browser that loaded the site keeps old layers for up to 4 h after every refresh.
 
 ### 2026-10-30, chl blank since 2026-08-23: expired Earthdata token
 
