@@ -12,10 +12,10 @@ name the owner action when one exists. Status words: `open`, `fix-ready`
 | # | Item | Status | Owner | Next action | Links |
 |---|------|--------|-------|-------------|-------|
 | 1 | `EARTHDATA_TOKEN` expired 2026-08-23; NASA chl (sources 1-3) dead; chl map blank in the app since then | fixed 2026-11-01 | Michael | Rotated 21:32Z; refresh run 41352491458 logged 3 frames from each NASA sensor; live overlay paints 246 direct cells at 21:44Z. Next rotation due 2026-12-31 | [#444](https://github.com/Michaelpjob/ShoudiDive/pull/444) |
-| 6 | Data PNGs reach browsers up to 4 h late: the zone's Cloudflare "Browser Cache TTL" (default 4 hours) raises `/data/*.png` from the 300 s set in `public/_headers` to `max-age=14400`; JSON is unaffected (not edge-cached) | open | Michael | Cloudflare dashboard, zone shouldidive.com, Caching, Configuration, Browser Cache TTL: set "Respect Existing Headers". No code change needed | observed 2026-11-01 21:41Z |
+| 6 | Data PNGs reached browsers up to 4 h late: the zone's Cloudflare "Browser Cache TTL" (default 4 hours) raised `/data/*.png` from the 300 s set in `public/_headers` to `max-age=14400`; JSON was unaffected (not edge-cached) | fixed 2026-11-02 | Michael | Zone setting changed to "Respect Existing Headers" (`browser_cache_ttl` = 0) at 03:35Z through the Cloudflare API; live `/data/chl_1d.png` and `sst_1d.png` now answer `max-age=300`. Nothing to merge | observed 2026-11-01 21:41Z |
 | 2 | Timelines opened on the oldest day of the window (sst5d anchor, 3 days back) instead of today | fix-ready | Michael | Merge [#443](https://github.com/Michaelpjob/ShoudiDive/pull/443) (verified on dev 2026-10-30) | [#443](https://github.com/Michaelpjob/ShoudiDive/pull/443) |
 | 3 | Token expiry was invisible: refresh green, feed probe green, manifest healthy-looking | fix-ready | Michael | Merge [#444](https://github.com/Michaelpjob/ShoudiDive/pull/444) (login-page detection, authenticated feed probe, data-health findings) | [#444](https://github.com/Michaelpjob/ShoudiDive/pull/444) |
-| 4 | `dev-checks` red on `dev` all of 2026-10-30 (`tests/reefLocations.test.js`, 13 failures); auto `deploy-dev` blocked, previews dispatched by hand | open | agent | Diff the reef-location data files between `main` and `dev`; fix the drifted side | run 41136424417 |
+| 4 | `dev-checks` red on `dev` all of 2026-10-30 (`tests/reefLocations.test.js`, 13 failures); auto `deploy-dev` blocked, previews dispatched by hand | fixed 2026-11-01 | agent | [#446](https://github.com/Michaelpjob/ShoudiDive/pull/446) (sync-dev keeps the hand-curated layers) and [#448](https://github.com/Michaelpjob/ShoudiDive/pull/448) (reef locations re-cut) merged 20:47Z and 21:02Z; `dev-checks` green on `dev` on every run since 20:52Z (run 41349070294 onward) | run 41136424417 |
 | 5 | `osm_overpass_main` feed probe red (HTTP 502) in the 2026-10-30 18Z health check | watching | agent | Re-check on the next health run; static feed, no user-facing effect seen | run 41103952478 |
 
 ## Recurring deadlines
@@ -27,6 +27,12 @@ name the owner action when one exists. Status words: `open`, `fix-ready`
 | GitHub PAT used by workflows (`BOT_PUSH_TOKEN`) | depends on how it was created | unknown | verify in repo settings | repo Settings, Secrets and variables |
 
 ## Log
+
+### 2026-11-02, Browser Cache TTL now respects origin headers (item 6)
+
+- The zone `shouldidive.com` lives in the `Michael.job.gb@gmail.com` Cloudflare account (Free plan), not in the litus.com accounts that Michael's Chrome is signed in to, so the dashboard route was a dead end; the `CLOUDFLARE_API_TOKEN` the local wrangler uses has zone-settings access, and `PATCH /zones/<zone>/settings/browser_cache_ttl {"value": 0}` succeeded at 03:35:10Z (previous value 14400).
+- **Verified live** right after: `/data/chl_1d.png`, `sst_1d.png` and `chl_1d.sources.png` answer `Cache-Control: public, max-age=300, must-revalidate`; `/apple-touch-icon.png` keeps its 86400, so origin values are honoured in both directions. A browser now picks up a refreshed layer within 5 minutes of the deploy instead of up to 4 hours.
+- Noted, not changed: `/data/manifest.json` carries two `Cache-Control` values (`max-age=60` from its own rule plus `max-age=300` from `/data/*.json`, because Pages merges every matching `_headers` rule). Harmless today because the clients fetch the manifest with `cache: "no-cache"`; tidy up if that rule is ever touched.
 
 ### 2026-11-01, Earthdata token rotated
 
@@ -54,7 +60,7 @@ name the owner action when one exists. Status words: `open`, `fix-ready`
 ### 2026-10-30, dev previews need a manual dispatch
 
 - `dev-checks` failed on every `dev` push that day in `web-tests` (`tests/reefLocations.test.js`, 13 failures) while the same tests pass on `main` and on PRs. `deploy-dev` only auto-runs after green checks, so previews were dispatched with `gh workflow run deploy-dev.yml --ref dev`.
-- **Status:** open (item 4).
+- **Status:** fixed 2026-11-01 by #446 + #448 (item 4); `dev-checks` green on `dev` since 20:52Z.
 
 ### Backfill from session notes (before this log existed)
 
