@@ -2,8 +2,8 @@
  "schema": "shoudidive.report/v2",
  "date": "2026-11-03",
  "date_label": "Tuesday, November 3, 2026",
- "generated_utc": "2026-11-03T21:11Z",
- "generated_local": "1:11 PM PST",
+ "generated_utc": "2026-11-03T23:08Z",
+ "generated_local": "3:08 PM PST",
  "days": [
   {
    "key": "today",
@@ -27,9 +27,9 @@
     "depth_m": 10,
     "days": {
      "today": {
-      "level": "marginal",
-      "exposure": "lee",
-      "swell_from_deg": 210,
+      "level": "outside",
+      "exposure": "oblique",
+      "swell_from_deg": 280,
       "factors": [
        {
         "key": "headlines",
@@ -44,8 +44,8 @@
        {
         "key": "rip",
         "label": "Rip current risk",
-        "level": "marginal",
-        "value": "High (county forecast); lowered one level because the entry is in the swell's lee",
+        "level": "outside",
+        "value": "High (county forecast)",
         "rule": "Low is within, moderate marginal, high outside (NWS Surf Zone Forecast).",
         "source": "srf_sgx",
         "tag": "Rule",
@@ -54,10 +54,10 @@
        {
         "key": "surf",
         "label": "Surf at the entry",
-        "level": "within",
-        "value": "county sets to 5 ft from 210°; the entry in the swell's lee, so about 2 ft here",
-        "rule": "County sets scaled by how the entry faces the swell (1.0 facing, 0.6 at an angle, 0.35 in the lee); under 2.5 ft within, under 4.5 ft marginal, otherwise outside; long-period swell (13 s+) raises it one level where the entry faces the swell.",
-        "source": "srf_sgx",
+        "level": "marginal",
+        "value": "CDIP MOP at this entry's 10 m line: 2.4 ft at 14 s from 337°, so sets about 3.0 ft",
+        "rule": "Set height (1.27 x the modeled significant height, the mean of the highest tenth of waves): under 2.5 ft within, under 4.5 ft marginal, otherwise outside.",
+        "source": "mop_D0482",
         "tag": "Modeled",
         "required": true
        },
@@ -92,31 +92,172 @@
         "required": false
        }
       ],
-      "label": "Marginal",
-      "why": "Rip current risk: High (county forecast); lowered one level because the entry is in the swell's lee.",
-      "period": "TODAY",
+      "label": "Outside our thresholds",
+      "why": "Rip current risk: High (county forecast). Surf at the entry: CDIP MOP at this entry's 10 m line: 2.4 ft at 14 s from 337°, so sets about 3.0 ft.",
+      "period": "THIS AFTERNOON THROUGH WEDNESDAY",
       "period_fallback": false,
       "evidence": [
+       {
+        "kind": "series",
+        "label": "CDIP MOP waves at this entry's 10 m line (D0482)",
+        "tag": "Modeled",
+        "source": "mop_D0482",
+        "rows": [
+         {
+          "time": "4 PM",
+          "text": "2.3 ft at 17 s from 331°"
+         },
+         {
+          "time": "7 PM",
+          "text": "2.4 ft at 14 s from 337°"
+         }
+        ]
+       },
        {
         "kind": "text",
         "label": "NWS surf zone forecast for the county",
         "tag": "Rule",
         "source": "srf_sgx",
-        "text": "Surf 3 to 5 feet; rip current risk High; swell from 210°."
+        "text": "Surf 3 to 6 feet; rip current risk High; swell from 280°."
        },
        {
         "kind": "obs",
-        "label": "Buoy 46254 Scripps Nearshore (La Jolla), 12:26 PM",
+        "label": "Buoy 46254 Scripps Nearshore (La Jolla), 2:26 PM",
         "tag": "Observed",
         "source": "buoy_46254",
-        "text": "waves 2.3 ft, swell 1.6 ft at 14 s W, wind waves 1.6 ft at 7 s, water 76.1°F"
+        "text": "waves 2.3 ft, swell 1.6 ft at 17 s NW, wind waves 1.3 ft at 6 s, water 76.3°F"
        }
       ]
      },
      "tomorrow": {
+      "level": "outside",
+      "exposure": "oblique",
+      "swell_from_deg": 280,
+      "factors": [
+       {
+        "key": "headlines",
+        "label": "NWS beach headlines",
+        "level": "within",
+        "value": "none in effect",
+        "rule": "Any High Surf Advisory or Warning is outside; a Beach Hazards or Rip Current Statement is outside at a site facing the swell, marginal in its lee.",
+        "source": "alerts",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "rip",
+        "label": "Rip current risk",
+        "level": "outside",
+        "value": "High (county forecast)",
+        "rule": "Low is within, moderate marginal, high outside (NWS Surf Zone Forecast).",
+        "source": "srf_sgx",
+        "tag": "Rule",
+        "required": true
+       },
+       {
+        "key": "surf",
+        "label": "Surf at the entry",
+        "level": "marginal",
+        "value": "CDIP MOP at this entry's 10 m line: 2.7 ft at 14 s from 337°, so sets about 3.5 ft",
+        "rule": "Set height (1.27 x the modeled significant height, the mean of the highest tenth of waves): under 2.5 ft within, under 4.5 ft marginal, otherwise outside.",
+        "source": "mop_D0482",
+        "tag": "Modeled",
+        "required": true
+       },
+       {
+        "key": "onshore_wind",
+        "label": "Wind into the entry",
+        "level": "within",
+        "value": "N/W up to 10 kt (onshore here)",
+        "rule": "Wind from within 60° of the entry's facing: 15 kt marginal, 20 kt outside.",
+        "source": "cwf_sgx",
+        "tag": "Rule",
+        "required": false
+       },
+       {
+        "key": "thunder",
+        "label": "Thunderstorms",
+        "level": "within",
+        "value": "None expected",
+        "rule": "Any thunder is outside.",
+        "source": "srf_sgx",
+        "tag": "Rule",
+        "required": false
+       },
+       {
+        "key": "rain",
+        "label": "Rain in the last 72 hours",
+        "level": "within",
+        "value": "0.11 in at the gauge",
+        "rule": "San Diego County: avoid ocean contact for 72 hours after rain (0.2 in or more).",
+        "source": "rain",
+        "tag": "Observed",
+        "required": false
+       }
+      ],
+      "label": "Outside our thresholds",
+      "why": "Rip current risk: High (county forecast). Surf at the entry: CDIP MOP at this entry's 10 m line: 2.7 ft at 14 s from 337°, so sets about 3.5 ft.",
+      "period": "THIS AFTERNOON THROUGH WEDNESDAY",
+      "period_fallback": false,
+      "evidence": [
+       {
+        "kind": "series",
+        "label": "CDIP MOP waves at this entry's 10 m line (D0482)",
+        "tag": "Modeled",
+        "source": "mop_D0482",
+        "rows": [
+         {
+          "time": "7 AM",
+          "text": "2.7 ft at 14 s from 337°"
+         },
+         {
+          "time": "10 AM",
+          "text": "2.6 ft at 14 s from 337°"
+         },
+         {
+          "time": "1 PM",
+          "text": "2.6 ft at 14 s from 336°"
+         },
+         {
+          "time": "4 PM",
+          "text": "2.5 ft at 14 s from 335°"
+         },
+         {
+          "time": "7 PM",
+          "text": "2.5 ft at 14 s from 335°"
+         }
+        ]
+       },
+       {
+        "kind": "text",
+        "label": "NWS surf zone forecast for the county",
+        "tag": "Rule",
+        "source": "srf_sgx",
+        "text": "Surf 3 to 6 feet; rip current risk High; swell from 280°."
+       },
+       {
+        "kind": "obs",
+        "label": "Buoy 46254 Scripps Nearshore (La Jolla), 2:26 PM",
+        "tag": "Observed",
+        "source": "buoy_46254",
+        "text": "waves 2.3 ft, swell 1.6 ft at 17 s NW, wind waves 1.3 ft at 6 s, water 76.3°F"
+       }
+      ]
+     }
+    }
+   },
+   {
+    "id": "la-jolla-shores",
+    "name": "La Jolla Shores (Vallecitos, Marine Room)",
+    "short": "La Jolla Shores",
+    "note": "West-northwest-facing beach entry, partly sheltered from south swell.",
+    "faces_deg": 299,
+    "depth_m": 12,
+    "days": {
+     "today": {
       "level": "marginal",
       "exposure": "lee",
-      "swell_from_deg": 210,
+      "swell_from_deg": 280,
       "factors": [
        {
         "key": "headlines",
@@ -142,106 +283,9 @@
         "key": "surf",
         "label": "Surf at the entry",
         "level": "within",
-        "value": "county sets to 5 ft from 210°; the entry in the swell's lee, so about 2 ft here",
-        "rule": "County sets scaled by how the entry faces the swell (1.0 facing, 0.6 at an angle, 0.35 in the lee); under 2.5 ft within, under 4.5 ft marginal, otherwise outside; long-period swell (13 s+) raises it one level where the entry faces the swell.",
-        "source": "srf_sgx",
-        "tag": "Modeled",
-        "required": true
-       },
-       {
-        "key": "onshore_wind",
-        "label": "Wind into the entry",
-        "level": "within",
-        "value": "N/W up to 10 kt (onshore here)",
-        "rule": "Wind from within 60° of the entry's facing: 15 kt marginal, 20 kt outside.",
-        "source": "cwf_sgx",
-        "tag": "Rule",
-        "required": false
-       },
-       {
-        "key": "thunder",
-        "label": "Thunderstorms",
-        "level": "within",
-        "value": "None expected",
-        "rule": "Any thunder is outside.",
-        "source": "srf_sgx",
-        "tag": "Rule",
-        "required": false
-       },
-       {
-        "key": "rain",
-        "label": "Rain in the last 72 hours",
-        "level": "within",
-        "value": "0.11 in at the gauge",
-        "rule": "San Diego County: avoid ocean contact for 72 hours after rain (0.2 in or more).",
-        "source": "rain",
-        "tag": "Observed",
-        "required": false
-       }
-      ],
-      "label": "Marginal",
-      "why": "Rip current risk: High (county forecast); lowered one level because the entry is in the swell's lee.",
-      "period": "WEDNESDAY",
-      "period_fallback": false,
-      "evidence": [
-       {
-        "kind": "text",
-        "label": "NWS surf zone forecast for the county",
-        "tag": "Rule",
-        "source": "srf_sgx",
-        "text": "Surf 3 to 5 feet; rip current risk High; swell from 210°."
-       },
-       {
-        "kind": "obs",
-        "label": "Buoy 46254 Scripps Nearshore (La Jolla), 12:26 PM",
-        "tag": "Observed",
-        "source": "buoy_46254",
-        "text": "waves 2.3 ft, swell 1.6 ft at 14 s W, wind waves 1.6 ft at 7 s, water 76.1°F"
-       }
-      ]
-     }
-    }
-   },
-   {
-    "id": "la-jolla-shores",
-    "name": "La Jolla Shores (Vallecitos, Marine Room)",
-    "short": "La Jolla Shores",
-    "note": "West-northwest-facing beach entry, partly sheltered from south swell.",
-    "faces_deg": 299,
-    "depth_m": 12,
-    "days": {
-     "today": {
-      "level": "outside",
-      "exposure": "oblique",
-      "swell_from_deg": 210,
-      "factors": [
-       {
-        "key": "headlines",
-        "label": "NWS beach headlines",
-        "level": "within",
-        "value": "none in effect",
-        "rule": "Any High Surf Advisory or Warning is outside; a Beach Hazards or Rip Current Statement is outside at a site facing the swell, marginal in its lee.",
-        "source": "alerts",
-        "tag": "Rule",
-        "required": true
-       },
-       {
-        "key": "rip",
-        "label": "Rip current risk",
-        "level": "outside",
-        "value": "High (county forecast)",
-        "rule": "Low is within, moderate marginal, high outside (NWS Surf Zone Forecast).",
-        "source": "srf_sgx",
-        "tag": "Rule",
-        "required": true
-       },
-       {
-        "key": "surf",
-        "label": "Surf at the entry",
-        "level": "marginal",
-        "value": "county sets to 5 ft from 210°; the entry takes the swell at an angle, so about 3 ft here",
-        "rule": "County sets scaled by how the entry faces the swell (1.0 facing, 0.6 at an angle, 0.35 in the lee); under 2.5 ft within, under 4.5 ft marginal, otherwise outside; long-period swell (13 s+) raises it one level where the entry faces the swell.",
-        "source": "srf_sgx",
+        "value": "CDIP MOP at this entry's 10 m line: 1.1 ft at 4 s from 276°, so sets about 1.4 ft",
+        "rule": "Set height (1.27 x the modeled significant height, the mean of the highest tenth of waves): under 2.5 ft within, under 4.5 ft marginal, otherwise outside.",
+        "source": "mop_D0500",
         "tag": "Modeled",
         "required": true
        },
@@ -276,31 +320,47 @@
         "required": false
        }
       ],
-      "label": "Outside our thresholds",
-      "why": "Rip current risk: High (county forecast). Surf at the entry: county sets to 5 ft from 210°; the entry takes the swell at an angle, so about 3 ft here. Wind into the entry: NW up to 15 kt (onshore here).",
-      "period": "TODAY",
+      "label": "Marginal",
+      "why": "Rip current risk: High (county forecast); lowered one level because the entry is in the swell's lee. Wind into the entry: NW up to 15 kt (onshore here).",
+      "period": "THIS AFTERNOON THROUGH WEDNESDAY",
       "period_fallback": false,
       "evidence": [
+       {
+        "kind": "series",
+        "label": "CDIP MOP waves at this entry's 10 m line (D0500)",
+        "tag": "Modeled",
+        "source": "mop_D0500",
+        "rows": [
+         {
+          "time": "4 PM",
+          "text": "0.6 ft at 12 s from 267°"
+         },
+         {
+          "time": "7 PM",
+          "text": "1.1 ft at 4 s from 276°"
+         }
+        ]
+       },
        {
         "kind": "text",
         "label": "NWS surf zone forecast for the county",
         "tag": "Rule",
         "source": "srf_sgx",
-        "text": "Surf 3 to 5 feet; rip current risk High; swell from 210°."
+        "text": "Surf 3 to 6 feet; rip current risk High; swell from 280°."
        },
        {
         "kind": "obs",
-        "label": "Buoy 46254 Scripps Nearshore (La Jolla), 12:26 PM",
+        "label": "Buoy 46254 Scripps Nearshore (La Jolla), 2:26 PM",
         "tag": "Observed",
         "source": "buoy_46254",
-        "text": "waves 2.3 ft, swell 1.6 ft at 14 s W, wind waves 1.6 ft at 7 s, water 76.1°F"
+        "text": "waves 2.3 ft, swell 1.6 ft at 17 s NW, wind waves 1.3 ft at 6 s, water 76.3°F"
        }
       ]
      },
      "tomorrow": {
       "level": "outside",
-      "exposure": "oblique",
-      "swell_from_deg": 210,
+      "exposure": "into",
+      "swell_from_deg": 280,
       "factors": [
        {
         "key": "headlines",
@@ -326,9 +386,9 @@
         "key": "surf",
         "label": "Surf at the entry",
         "level": "marginal",
-        "value": "county sets to 5 ft from 210°; the entry takes the swell at an angle, so about 3 ft here",
-        "rule": "County sets scaled by how the entry faces the swell (1.0 facing, 0.6 at an angle, 0.35 in the lee); under 2.5 ft within, under 4.5 ft marginal, otherwise outside; long-period swell (13 s+) raises it one level where the entry faces the swell.",
-        "source": "srf_sgx",
+        "value": "CDIP MOP at this entry's 10 m line: 2.0 ft at 6 s from 284°, so sets about 2.6 ft",
+        "rule": "Set height (1.27 x the modeled significant height, the mean of the highest tenth of waves): under 2.5 ft within, under 4.5 ft marginal, otherwise outside.",
+        "source": "mop_D0500",
         "tag": "Modeled",
         "required": true
        },
@@ -364,23 +424,51 @@
        }
       ],
       "label": "Outside our thresholds",
-      "why": "Rip current risk: High (county forecast). Surf at the entry: county sets to 5 ft from 210°; the entry takes the swell at an angle, so about 3 ft here.",
-      "period": "WEDNESDAY",
+      "why": "Rip current risk: High (county forecast). Surf at the entry: CDIP MOP at this entry's 10 m line: 2.0 ft at 6 s from 284°, so sets about 2.6 ft.",
+      "period": "THIS AFTERNOON THROUGH WEDNESDAY",
       "period_fallback": false,
       "evidence": [
+       {
+        "kind": "series",
+        "label": "CDIP MOP waves at this entry's 10 m line (D0500)",
+        "tag": "Modeled",
+        "source": "mop_D0500",
+        "rows": [
+         {
+          "time": "7 AM",
+          "text": "2.0 ft at 6 s from 284°"
+         },
+         {
+          "time": "10 AM",
+          "text": "1.8 ft at 6 s from 285°"
+         },
+         {
+          "time": "1 PM",
+          "text": "1.8 ft at 6 s from 284°"
+         },
+         {
+          "time": "4 PM",
+          "text": "1.7 ft at 6 s from 282°"
+         },
+         {
+          "time": "7 PM",
+          "text": "1.6 ft at 7 s from 277°"
+         }
+        ]
+       },
        {
         "kind": "text",
         "label": "NWS surf zone forecast for the county",
         "tag": "Rule",
         "source": "srf_sgx",
-        "text": "Surf 3 to 5 feet; rip current risk High; swell from 210°."
+        "text": "Surf 3 to 6 feet; rip current risk High; swell from 280°."
        },
        {
         "kind": "obs",
-        "label": "Buoy 46254 Scripps Nearshore (La Jolla), 12:26 PM",
+        "label": "Buoy 46254 Scripps Nearshore (La Jolla), 2:26 PM",
         "tag": "Observed",
         "source": "buoy_46254",
-        "text": "waves 2.3 ft, swell 1.6 ft at 14 s W, wind waves 1.6 ft at 7 s, water 76.1°F"
+        "text": "waves 2.3 ft, swell 1.6 ft at 17 s NW, wind waves 1.3 ft at 6 s, water 76.3°F"
        }
       ]
      }
@@ -396,8 +484,8 @@
     "days": {
      "today": {
       "level": "marginal",
-      "exposure": "oblique",
-      "swell_from_deg": 210,
+      "exposure": "into",
+      "swell_from_deg": 280,
       "factors": [
        {
         "key": "headlines",
@@ -413,9 +501,9 @@
         "key": "surf",
         "label": "Surf at the entry",
         "level": "marginal",
-        "value": "county sets to 5 ft from 210°; the entry takes the swell at an angle, so about 3 ft here",
-        "rule": "County sets scaled by how the entry faces the swell (1.0 facing, 0.6 at an angle, 0.35 in the lee); under 2.5 ft within, under 4.5 ft marginal, otherwise outside; long-period swell (13 s+) raises it one level where the entry faces the swell.",
-        "source": "srf_sgx",
+        "value": "CDIP MOP at this entry's 10 m line: 2.9 ft at 17 s from 267°, so sets about 3.7 ft",
+        "rule": "Set height (1.27 x the modeled significant height, the mean of the highest tenth of waves): under 2.5 ft within, under 4.5 ft marginal, otherwise outside.",
+        "source": "mop_D0324",
         "tag": "Modeled",
         "required": true
        },
@@ -451,30 +539,46 @@
        }
       ],
       "label": "Marginal",
-      "why": "Surf at the entry: county sets to 5 ft from 210°; the entry takes the swell at an angle, so about 3 ft here. Wind into the entry: NW up to 15 kt (onshore here).",
-      "period": "TODAY",
+      "why": "Surf at the entry: CDIP MOP at this entry's 10 m line: 2.9 ft at 17 s from 267°, so sets about 3.7 ft. Wind into the entry: NW up to 15 kt (onshore here).",
+      "period": "THIS AFTERNOON THROUGH WEDNESDAY",
       "period_fallback": false,
       "evidence": [
+       {
+        "kind": "series",
+        "label": "CDIP MOP waves at this entry's 10 m line (D0324)",
+        "tag": "Modeled",
+        "source": "mop_D0324",
+        "rows": [
+         {
+          "time": "4 PM",
+          "text": "2.8 ft at 17 s from 267°"
+         },
+         {
+          "time": "7 PM",
+          "text": "2.9 ft at 17 s from 267°"
+         }
+        ]
+       },
        {
         "kind": "text",
         "label": "NWS surf zone forecast for the county",
         "tag": "Rule",
         "source": "srf_sgx",
-        "text": "Surf 3 to 5 feet; rip current risk High; swell from 210°."
+        "text": "Surf 3 to 6 feet; rip current risk High; swell from 280°."
        },
        {
         "kind": "obs",
-        "label": "Buoy 46232 Point Loma South, 12:26 PM",
+        "label": "Buoy 46232 Point Loma South, 2:26 PM",
         "tag": "Observed",
         "source": "buoy_46232",
-        "text": "waves 4.3 ft, swell 3.6 ft at 18 s W, wind waves 2.3 ft at 10 s, water 74.8°F"
+        "text": "waves 4.9 ft, swell 3.9 ft at 18 s W, wind waves 2.6 ft at 9 s, water 75.0°F"
        }
       ]
      },
      "tomorrow": {
       "level": "marginal",
-      "exposure": "oblique",
-      "swell_from_deg": 210,
+      "exposure": "into",
+      "swell_from_deg": 280,
       "factors": [
        {
         "key": "headlines",
@@ -490,9 +594,9 @@
         "key": "surf",
         "label": "Surf at the entry",
         "level": "marginal",
-        "value": "county sets to 5 ft from 210°; the entry takes the swell at an angle, so about 3 ft here",
-        "rule": "County sets scaled by how the entry faces the swell (1.0 facing, 0.6 at an angle, 0.35 in the lee); under 2.5 ft within, under 4.5 ft marginal, otherwise outside; long-period swell (13 s+) raises it one level where the entry faces the swell.",
-        "source": "srf_sgx",
+        "value": "CDIP MOP at this entry's 10 m line: 3.4 ft at 14 s from 257°, so sets about 4.4 ft",
+        "rule": "Set height (1.27 x the modeled significant height, the mean of the highest tenth of waves): under 2.5 ft within, under 4.5 ft marginal, otherwise outside.",
+        "source": "mop_D0324",
         "tag": "Modeled",
         "required": true
        },
@@ -528,23 +632,51 @@
        }
       ],
       "label": "Marginal",
-      "why": "Surf at the entry: county sets to 5 ft from 210°; the entry takes the swell at an angle, so about 3 ft here.",
-      "period": "WEDNESDAY",
+      "why": "Surf at the entry: CDIP MOP at this entry's 10 m line: 3.4 ft at 14 s from 257°, so sets about 4.4 ft.",
+      "period": "THIS AFTERNOON THROUGH WEDNESDAY",
       "period_fallback": false,
       "evidence": [
+       {
+        "kind": "series",
+        "label": "CDIP MOP waves at this entry's 10 m line (D0324)",
+        "tag": "Modeled",
+        "source": "mop_D0324",
+        "rows": [
+         {
+          "time": "7 AM",
+          "text": "3.4 ft at 14 s from 257°"
+         },
+         {
+          "time": "10 AM",
+          "text": "3.3 ft at 14 s from 258°"
+         },
+         {
+          "time": "1 PM",
+          "text": "3.3 ft at 14 s from 259°"
+         },
+         {
+          "time": "4 PM",
+          "text": "3.2 ft at 14 s from 260°"
+         },
+         {
+          "time": "7 PM",
+          "text": "3.2 ft at 14 s from 262°"
+         }
+        ]
+       },
        {
         "kind": "text",
         "label": "NWS surf zone forecast for the county",
         "tag": "Rule",
         "source": "srf_sgx",
-        "text": "Surf 3 to 5 feet; rip current risk High; swell from 210°."
+        "text": "Surf 3 to 6 feet; rip current risk High; swell from 280°."
        },
        {
         "kind": "obs",
-        "label": "Buoy 46232 Point Loma South, 12:26 PM",
+        "label": "Buoy 46232 Point Loma South, 2:26 PM",
         "tag": "Observed",
         "source": "buoy_46232",
-        "text": "waves 4.3 ft, swell 3.6 ft at 18 s W, wind waves 2.3 ft at 10 s, water 74.8°F"
+        "text": "waves 4.9 ft, swell 3.9 ft at 18 s W, wind waves 2.6 ft at 9 s, water 75.0°F"
        }
       ]
      }
@@ -560,8 +692,8 @@
     "days": {
      "today": {
       "level": "outside",
-      "exposure": "into",
-      "swell_from_deg": 200,
+      "exposure": "oblique",
+      "swell_from_deg": 280,
       "factors": [
        {
         "key": "headlines",
@@ -586,10 +718,10 @@
        {
         "key": "surf",
         "label": "Surf at the entry",
-        "level": "outside",
-        "value": "county sets to 6 ft from 200°; the entry faces the swell, so about 6 ft here; raised one level for 15-second swell",
-        "rule": "County sets scaled by how the entry faces the swell (1.0 facing, 0.6 at an angle, 0.35 in the lee); under 2.5 ft within, under 4.5 ft marginal, otherwise outside; long-period swell (13 s+) raises it one level where the entry faces the swell.",
-        "source": "srf_sgx",
+        "level": "marginal",
+        "value": "CDIP MOP at this entry's 10 m line: 2.8 ft at 14 s from 202°, so sets about 3.6 ft",
+        "rule": "Set height (1.27 x the modeled significant height, the mean of the highest tenth of waves): under 2.5 ft within, under 4.5 ft marginal, otherwise outside.",
+        "source": "mop_OC283",
         "tag": "Modeled",
         "required": true
        },
@@ -597,7 +729,7 @@
         "key": "onshore_wind",
         "label": "Wind into the entry",
         "level": "within",
-        "value": "NW/W up to 20 kt (not onshore here)",
+        "value": "W/NW up to 20 kt (not onshore here)",
         "rule": "Wind from within 60° of the entry's facing: 15 kt marginal, 20 kt outside.",
         "source": "cwf_lox",
         "tag": "Rule",
@@ -625,30 +757,46 @@
        }
       ],
       "label": "Outside our thresholds",
-      "why": "Rip current risk: High (county forecast). Surf at the entry: county sets to 6 ft from 200°; the entry faces the swell, so about 6 ft here; raised one level for 15-second swell.",
-      "period": "TODAY",
+      "why": "Rip current risk: High (county forecast). Surf at the entry: CDIP MOP at this entry's 10 m line: 2.8 ft at 14 s from 202°, so sets about 3.6 ft.",
+      "period": "THIS AFTERNOON THROUGH WEDNESDAY",
       "period_fallback": false,
       "evidence": [
+       {
+        "kind": "series",
+        "label": "CDIP MOP waves at this entry's 10 m line (OC283)",
+        "tag": "Modeled",
+        "source": "mop_OC283",
+        "rows": [
+         {
+          "time": "4 PM",
+          "text": "2.7 ft at 14 s from 202°"
+         },
+         {
+          "time": "7 PM",
+          "text": "2.8 ft at 14 s from 202°"
+         }
+        ]
+       },
        {
         "kind": "text",
         "label": "NWS surf zone forecast for the county",
         "tag": "Rule",
         "source": "srf_sgx",
-        "text": "Surf 3 to 6 feet; rip current risk High; swell from 200°."
+        "text": "Surf 3 to 6 feet; rip current risk High; swell from 280°."
        },
        {
         "kind": "obs",
-        "label": "Buoy 46253 San Pedro South, 12:26 PM",
+        "label": "Buoy 46253 San Pedro South, 2:26 PM",
         "tag": "Observed",
         "source": "buoy_46253",
-        "text": "waves 3.0 ft, swell 2.3 ft at 14 s S, wind waves 2.0 ft at 4 s, water 74.3°F"
+        "text": "waves 3.3 ft, swell 2.3 ft at 15 s SSW, wind waves 2.3 ft at 4 s, water 74.3°F"
        }
       ]
      },
      "tomorrow": {
       "level": "outside",
-      "exposure": "into",
-      "swell_from_deg": 190,
+      "exposure": "oblique",
+      "swell_from_deg": 280,
       "factors": [
        {
         "key": "headlines",
@@ -673,10 +821,10 @@
        {
         "key": "surf",
         "label": "Surf at the entry",
-        "level": "outside",
-        "value": "county sets to 6 ft from 190°; the entry faces the swell, so about 6 ft here; raised one level for 14-second swell",
-        "rule": "County sets scaled by how the entry faces the swell (1.0 facing, 0.6 at an angle, 0.35 in the lee); under 2.5 ft within, under 4.5 ft marginal, otherwise outside; long-period swell (13 s+) raises it one level where the entry faces the swell.",
-        "source": "srf_sgx",
+        "level": "marginal",
+        "value": "CDIP MOP at this entry's 10 m line: 2.8 ft at 14 s from 202°, so sets about 3.6 ft",
+        "rule": "Set height (1.27 x the modeled significant height, the mean of the highest tenth of waves): under 2.5 ft within, under 4.5 ft marginal, otherwise outside.",
+        "source": "mop_OC283",
         "tag": "Modeled",
         "required": true
        },
@@ -684,7 +832,7 @@
         "key": "onshore_wind",
         "label": "Wind into the entry",
         "level": "within",
-        "value": "N/NW up to 15 kt (not onshore here)",
+        "value": "NW/W up to 15 kt (not onshore here)",
         "rule": "Wind from within 60° of the entry's facing: 15 kt marginal, 20 kt outside.",
         "source": "cwf_lox",
         "tag": "Rule",
@@ -712,23 +860,51 @@
        }
       ],
       "label": "Outside our thresholds",
-      "why": "Rip current risk: High (county forecast). Surf at the entry: county sets to 6 ft from 190°; the entry faces the swell, so about 6 ft here; raised one level for 14-second swell.",
-      "period": "WEDNESDAY",
+      "why": "Rip current risk: High (county forecast). Surf at the entry: CDIP MOP at this entry's 10 m line: 2.8 ft at 14 s from 202°, so sets about 3.6 ft.",
+      "period": "THIS AFTERNOON THROUGH WEDNESDAY",
       "period_fallback": false,
       "evidence": [
+       {
+        "kind": "series",
+        "label": "CDIP MOP waves at this entry's 10 m line (OC283)",
+        "tag": "Modeled",
+        "source": "mop_OC283",
+        "rows": [
+         {
+          "time": "7 AM",
+          "text": "2.8 ft at 14 s from 202°"
+         },
+         {
+          "time": "10 AM",
+          "text": "2.7 ft at 14 s from 202°"
+         },
+         {
+          "time": "1 PM",
+          "text": "2.6 ft at 14 s from 202°"
+         },
+         {
+          "time": "4 PM",
+          "text": "2.5 ft at 13 s from 201°"
+         },
+         {
+          "time": "7 PM",
+          "text": "2.4 ft at 13 s from 202°"
+         }
+        ]
+       },
        {
         "kind": "text",
         "label": "NWS surf zone forecast for the county",
         "tag": "Rule",
         "source": "srf_sgx",
-        "text": "Surf 3 to 6 feet; rip current risk High; swell from 190°."
+        "text": "Surf 3 to 6 feet; rip current risk High; swell from 280°."
        },
        {
         "kind": "obs",
-        "label": "Buoy 46253 San Pedro South, 12:26 PM",
+        "label": "Buoy 46253 San Pedro South, 2:26 PM",
         "tag": "Observed",
         "source": "buoy_46253",
-        "text": "waves 3.0 ft, swell 2.3 ft at 14 s S, wind waves 2.0 ft at 4 s, water 74.3°F"
+        "text": "waves 3.3 ft, swell 2.3 ft at 15 s SSW, wind waves 2.3 ft at 4 s, water 74.3°F"
        }
       ]
      }
@@ -761,7 +937,7 @@
         "key": "wind",
         "label": "Wind",
         "level": "within",
-        "value": "NW up to 15 kt",
+        "value": "NW up to 15 kt, gusts 20 kt",
         "rule": "Sustained 15 kt or less within, up to 20 kt marginal; gusts 30 kt+ outside.",
         "source": "cwf_sgx",
         "tag": "Rule",
@@ -770,8 +946,8 @@
        {
         "key": "seas",
         "label": "Seas",
-        "level": "within",
-        "value": "3 to 4 ft",
+        "level": "marginal",
+        "value": "5 to 6 ft",
         "rule": "Combined seas 5 ft or less within, up to 7 ft marginal.",
         "source": "cwf_sgx",
         "tag": "Rule",
@@ -781,7 +957,7 @@
         "key": "steepness",
         "label": "Wave steepness",
         "level": "marginal",
-        "value": "NW 3 ft at 4 s, W 2 ft at 7 s, SW 3 ft at 15 s (steepest: 3 ft at 4 s)",
+        "value": "NW 4 ft at 5 s, S 3 ft at 15 s (steepest: 4 ft at 5 s)",
         "rule": "NWS San Diego steepness rule: seas of 6-10 ft with height (ft) at or above period (s), or 11 ft+, is outside; any train with period under twice its height is marginal (short, steep chop).",
         "source": "cwf_sgx",
         "tag": "Rule",
@@ -791,10 +967,10 @@
       "zones": [
        "PZZ740"
       ],
-      "period": "TODAY",
-      "period_fallback": false,
+      "period": "TONIGHT",
+      "period_fallback": true,
       "label": "Marginal",
-      "why": "Wave steepness: NW 3 ft at 4 s, W 2 ft at 7 s, SW 3 ft at 15 s (steepest: 3 ft at 4 s).",
+      "why": "Seas: 5 to 6 ft. Wave steepness: NW 4 ft at 5 s, S 3 ft at 15 s (steepest: 4 ft at 5 s).",
       "evidence": [
        {
         "kind": "series",
@@ -885,19 +1061,19 @@
         "label": "NWS forecaster's synopsis",
         "tag": "Rule",
         "source": "cwf_sgx",
-        "text": "At 12 AM, a 1022 mb high was 600 miles southwest of San Diego and a 1003 mb low was 300 miles west of Cape Mendocino. Weak offshore flow in the mornings will alternate with afternoon onshore flow through Saturday. Gusty northwest winds will increase this afternoon and continue into Wednesday morning, with gusts of 20 to 25 kt in the outer coastal waters. A Small Craft Advisory is in effect for the outer coastal waters through this period."
+        "text": "At 1 PM, a 1023 mb high was 500 miles southwest of San Diego and a 1009 mb low was 200 miles northwest of San Fransisco. Weak offshore flow in the mornings will alternate with afternoon onshore flow through Saturday. Gusty northwest winds this afternoon will continue into Wednesday morning, with gusts of 20 to 25 kt in the outer coastal waters. A Small Craft Advisory is in effect for the outer coastal waters through this period."
        },
        {
         "kind": "obs",
-        "label": "Buoy 46232 Point Loma South, 12:26 PM",
+        "label": "Buoy 46232 Point Loma South, 2:26 PM",
         "tag": "Observed",
         "source": "buoy_46232",
-        "text": "waves 4.3 ft, swell 3.6 ft at 18 s W, wind waves 2.3 ft at 10 s, water 74.8°F"
+        "text": "waves 4.9 ft, swell 3.9 ft at 18 s W, wind waves 2.6 ft at 9 s, water 75.0°F"
        }
       ]
      },
      "tomorrow": {
-      "level": "within",
+      "level": "marginal",
       "factors": [
        {
         "key": "headlines",
@@ -922,8 +1098,8 @@
        {
         "key": "seas",
         "label": "Seas",
-        "level": "within",
-        "value": "4 ft",
+        "level": "marginal",
+        "value": "4 to 6 ft",
         "rule": "Combined seas 5 ft or less within, up to 7 ft marginal.",
         "source": "cwf_sgx",
         "tag": "Rule",
@@ -932,8 +1108,8 @@
        {
         "key": "steepness",
         "label": "Wave steepness",
-        "level": "within",
-        "value": "E 1 ft at 4 s, W 3 ft at 7 s, SW 3 ft at 15 s",
+        "level": "marginal",
+        "value": "NW 5 ft at 5 s, S 3 ft at 14 s (steepest: 5 ft at 5 s)",
         "rule": "NWS San Diego steepness rule: seas of 6-10 ft with height (ft) at or above period (s), or 11 ft+, is outside; any train with period under twice its height is marginal (short, steep chop).",
         "source": "cwf_sgx",
         "tag": "Rule",
@@ -945,8 +1121,8 @@
       ],
       "period": "WED",
       "period_fallback": false,
-      "label": "Within our thresholds",
-      "why": "Every factor we rate is within our thresholds.",
+      "label": "Marginal",
+      "why": "Seas: 4 to 6 ft. Wave steepness: NW 5 ft at 5 s, S 3 ft at 14 s (steepest: 5 ft at 5 s).",
       "evidence": [
        {
         "kind": "series",
@@ -1033,11 +1209,18 @@
         ]
        },
        {
+        "kind": "text",
+        "label": "NWS forecaster's synopsis",
+        "tag": "Rule",
+        "source": "cwf_sgx",
+        "text": "At 1 PM, a 1023 mb high was 500 miles southwest of San Diego and a 1009 mb low was 200 miles northwest of San Fransisco. Weak offshore flow in the mornings will alternate with afternoon onshore flow through Saturday. Gusty northwest winds this afternoon will continue into Wednesday morning, with gusts of 20 to 25 kt in the outer coastal waters. A Small Craft Advisory is in effect for the outer coastal waters through this period."
+       },
+       {
         "kind": "obs",
-        "label": "Buoy 46232 Point Loma South, 12:26 PM",
+        "label": "Buoy 46232 Point Loma South, 2:26 PM",
         "tag": "Observed",
         "source": "buoy_46232",
-        "text": "waves 4.3 ft, swell 3.6 ft at 18 s W, wind waves 2.3 ft at 10 s, water 74.8°F"
+        "text": "waves 4.9 ft, swell 3.9 ft at 18 s W, wind waves 2.6 ft at 9 s, water 75.0°F"
        }
       ]
      }
@@ -1195,14 +1378,14 @@
         "label": "NWS forecaster's synopsis",
         "tag": "Rule",
         "source": "cwf_sgx",
-        "text": "At 12 AM, a 1022 mb high was 600 miles southwest of San Diego and a 1003 mb low was 300 miles west of Cape Mendocino. Weak offshore flow in the mornings will alternate with afternoon onshore flow through Saturday. Gusty northwest winds will increase this afternoon and continue into Wednesday morning, with gusts of 20 to 25 kt in the outer coastal waters. A Small Craft Advisory is in effect for the outer coastal waters through this period."
+        "text": "At 1 PM, a 1023 mb high was 500 miles southwest of San Diego and a 1009 mb low was 200 miles northwest of San Fransisco. Weak offshore flow in the mornings will alternate with afternoon onshore flow through Saturday. Gusty northwest winds this afternoon will continue into Wednesday morning, with gusts of 20 to 25 kt in the outer coastal waters. A Small Craft Advisory is in effect for the outer coastal waters through this period."
        },
        {
         "kind": "obs",
-        "label": "Buoy 46232 Point Loma South, 12:26 PM",
+        "label": "Buoy 46232 Point Loma South, 2:26 PM",
         "tag": "Observed",
         "source": "buoy_46232",
-        "text": "waves 4.3 ft, swell 3.6 ft at 18 s W, wind waves 2.3 ft at 10 s, water 74.8°F"
+        "text": "waves 4.9 ft, swell 3.9 ft at 18 s W, wind waves 2.6 ft at 9 s, water 75.0°F"
        }
       ]
      },
@@ -1348,14 +1531,14 @@
         "label": "NWS forecaster's synopsis",
         "tag": "Rule",
         "source": "cwf_sgx",
-        "text": "At 12 AM, a 1022 mb high was 600 miles southwest of San Diego and a 1003 mb low was 300 miles west of Cape Mendocino. Weak offshore flow in the mornings will alternate with afternoon onshore flow through Saturday. Gusty northwest winds will increase this afternoon and continue into Wednesday morning, with gusts of 20 to 25 kt in the outer coastal waters. A Small Craft Advisory is in effect for the outer coastal waters through this period."
+        "text": "At 1 PM, a 1023 mb high was 500 miles southwest of San Diego and a 1009 mb low was 200 miles northwest of San Fransisco. Weak offshore flow in the mornings will alternate with afternoon onshore flow through Saturday. Gusty northwest winds this afternoon will continue into Wednesday morning, with gusts of 20 to 25 kt in the outer coastal waters. A Small Craft Advisory is in effect for the outer coastal waters through this period."
        },
        {
         "kind": "obs",
-        "label": "Buoy 46232 Point Loma South, 12:26 PM",
+        "label": "Buoy 46232 Point Loma South, 2:26 PM",
         "tag": "Observed",
         "source": "buoy_46232",
-        "text": "waves 4.3 ft, swell 3.6 ft at 18 s W, wind waves 2.3 ft at 10 s, water 74.8°F"
+        "text": "waves 4.9 ft, swell 3.9 ft at 18 s W, wind waves 2.6 ft at 9 s, water 75.0°F"
        }
       ]
      }
@@ -1387,8 +1570,8 @@
        {
         "key": "wind",
         "label": "Wind",
-        "level": "within",
-        "value": "NW up to 15 kt",
+        "level": "outside",
+        "value": "NW up to 20 kt, gusts 25 kt",
         "rule": "Sustained 15 kt or less within, up to 20 kt marginal; gusts 25 kt+ outside.",
         "source": "cwf_sgx",
         "tag": "Rule",
@@ -1397,8 +1580,8 @@
        {
         "key": "seas",
         "label": "Seas",
-        "level": "marginal",
-        "value": "4 to 6 ft",
+        "level": "outside",
+        "value": "6 to 8 ft",
         "rule": "Combined seas 4 ft or less within, up to 7 ft marginal.",
         "source": "cwf_sgx",
         "tag": "Rule",
@@ -1407,8 +1590,8 @@
        {
         "key": "steepness",
         "label": "Wave steepness",
-        "level": "marginal",
-        "value": "NW 4 ft at 6 s, S 3 ft at 15 s (steepest: 4 ft at 6 s)",
+        "level": "outside",
+        "value": "NW 6 ft at 6 s, S 3 ft at 15 s (steepest: 6 ft at 6 s)",
         "rule": "NWS San Diego steepness rule: seas of 6-10 ft with height (ft) at or above period (s), or 11 ft+, is outside; any train with period under twice its height is marginal (short, steep chop).",
         "source": "cwf_sgx",
         "tag": "Rule",
@@ -1419,10 +1602,10 @@
        "PZZ745",
        "PZZ740"
       ],
-      "period": "TODAY",
-      "period_fallback": false,
+      "period": "TONIGHT",
+      "period_fallback": true,
       "label": "Outside our thresholds",
-      "why": "NWS marine headlines: Small Craft Advisory. Seas: 4 to 6 ft. Wave steepness: NW 4 ft at 6 s, S 3 ft at 15 s (steepest: 4 ft at 6 s).",
+      "why": "NWS marine headlines: Small Craft Advisory. Wind: NW up to 20 kt, gusts 25 kt. Seas: 6 to 8 ft.",
       "evidence": [
        {
         "kind": "series",
@@ -1513,7 +1696,7 @@
         "label": "NWS forecaster's synopsis",
         "tag": "Rule",
         "source": "cwf_sgx",
-        "text": "At 12 AM, a 1022 mb high was 600 miles southwest of San Diego and a 1003 mb low was 300 miles west of Cape Mendocino. Weak offshore flow in the mornings will alternate with afternoon onshore flow through Saturday. Gusty northwest winds will increase this afternoon and continue into Wednesday morning, with gusts of 20 to 25 kt in the outer coastal waters. A Small Craft Advisory is in effect for the outer coastal waters through this period."
+        "text": "At 1 PM, a 1023 mb high was 500 miles southwest of San Diego and a 1009 mb low was 200 miles northwest of San Fransisco. Weak offshore flow in the mornings will alternate with afternoon onshore flow through Saturday. Gusty northwest winds this afternoon will continue into Wednesday morning, with gusts of 20 to 25 kt in the outer coastal waters. A Small Craft Advisory is in effect for the outer coastal waters through this period."
        },
        {
         "kind": "text",
@@ -1524,22 +1707,22 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46258 Mission Bay West, 12:26 PM",
+        "label": "Buoy 46258 Mission Bay West, 2:26 PM",
         "tag": "Observed",
         "source": "buoy_46258",
-        "text": "waves 5.2 ft, swell 4.6 ft at 17 s WNW, wind waves 2.3 ft at 10 s, water 75.4°F"
+        "text": "waves 4.9 ft, swell 4.6 ft at 15 s W, wind waves 2.3 ft at 4 s, water 75.4°F"
        },
        {
         "kind": "obs",
-        "label": "Buoy 46086 San Clemente Basin, 11:50 AM",
+        "label": "Buoy 46086 San Clemente Basin, 1:40 PM",
         "tag": "Observed",
         "source": "buoy_46086",
-        "text": "wind 14 kt from WNW, gusts 17"
+        "text": "wind 14 kt from WNW, gusts 16"
        }
       ]
      },
      "tomorrow": {
-      "level": "marginal",
+      "level": "outside",
       "factors": [
        {
         "key": "headlines",
@@ -1554,8 +1737,8 @@
        {
         "key": "wind",
         "label": "Wind",
-        "level": "within",
-        "value": "NW up to 15 kt, gusts 20 kt",
+        "level": "marginal",
+        "value": "NW up to 20 kt",
         "rule": "Sustained 15 kt or less within, up to 20 kt marginal; gusts 25 kt+ outside.",
         "source": "cwf_sgx",
         "tag": "Rule",
@@ -1564,8 +1747,8 @@
        {
         "key": "seas",
         "label": "Seas",
-        "level": "marginal",
-        "value": "5 to 7 ft",
+        "level": "outside",
+        "value": "5 to 8 ft",
         "rule": "Combined seas 4 ft or less within, up to 7 ft marginal.",
         "source": "cwf_sgx",
         "tag": "Rule",
@@ -1574,8 +1757,8 @@
        {
         "key": "steepness",
         "label": "Wave steepness",
-        "level": "marginal",
-        "value": "NW 4 ft at 4 s, W 4 ft at 7 s, S 3 ft at 15 s (steepest: 4 ft at 7 s)",
+        "level": "outside",
+        "value": "NW 6 ft at 6 s, S 3 ft at 14 s (steepest: 6 ft at 6 s)",
         "rule": "NWS San Diego steepness rule: seas of 6-10 ft with height (ft) at or above period (s), or 11 ft+, is outside; any train with period under twice its height is marginal (short, steep chop).",
         "source": "cwf_sgx",
         "tag": "Rule",
@@ -1588,8 +1771,8 @@
       ],
       "period": "WED",
       "period_fallback": false,
-      "label": "Marginal",
-      "why": "Seas: 5 to 7 ft. Wave steepness: NW 4 ft at 4 s, W 4 ft at 7 s, S 3 ft at 15 s (steepest: 4 ft at 7 s).",
+      "label": "Outside our thresholds",
+      "why": "Seas: 5 to 8 ft. Wave steepness: NW 6 ft at 6 s, S 3 ft at 14 s (steepest: 6 ft at 6 s). Wind: NW up to 20 kt.",
       "evidence": [
        {
         "kind": "series",
@@ -1680,21 +1863,21 @@
         "label": "NWS forecaster's synopsis",
         "tag": "Rule",
         "source": "cwf_sgx",
-        "text": "At 12 AM, a 1022 mb high was 600 miles southwest of San Diego and a 1003 mb low was 300 miles west of Cape Mendocino. Weak offshore flow in the mornings will alternate with afternoon onshore flow through Saturday. Gusty northwest winds will increase this afternoon and continue into Wednesday morning, with gusts of 20 to 25 kt in the outer coastal waters. A Small Craft Advisory is in effect for the outer coastal waters through this period."
+        "text": "At 1 PM, a 1023 mb high was 500 miles southwest of San Diego and a 1009 mb low was 200 miles northwest of San Fransisco. Weak offshore flow in the mornings will alternate with afternoon onshore flow through Saturday. Gusty northwest winds this afternoon will continue into Wednesday morning, with gusts of 20 to 25 kt in the outer coastal waters. A Small Craft Advisory is in effect for the outer coastal waters through this period."
        },
        {
         "kind": "obs",
-        "label": "Buoy 46258 Mission Bay West, 12:26 PM",
+        "label": "Buoy 46258 Mission Bay West, 2:26 PM",
         "tag": "Observed",
         "source": "buoy_46258",
-        "text": "waves 5.2 ft, swell 4.6 ft at 17 s WNW, wind waves 2.3 ft at 10 s, water 75.4°F"
+        "text": "waves 4.9 ft, swell 4.6 ft at 15 s W, wind waves 2.3 ft at 4 s, water 75.4°F"
        },
        {
         "kind": "obs",
-        "label": "Buoy 46086 San Clemente Basin, 11:50 AM",
+        "label": "Buoy 46086 San Clemente Basin, 1:40 PM",
         "tag": "Observed",
         "source": "buoy_46086",
-        "text": "wind 14 kt from WNW, gusts 17"
+        "text": "wind 14 kt from WNW, gusts 16"
        }
       ]
      }
@@ -1725,7 +1908,7 @@
         "key": "wind",
         "label": "Wind",
         "level": "outside",
-        "value": "NW/W up to 20 kt, gusts 25 kt",
+        "value": "W/NW up to 20 kt, gusts 25 kt",
         "rule": "Sustained 15 kt or less within, up to 20 kt marginal; gusts 25 kt+ outside.",
         "source": "cwf_lox",
         "tag": "Rule",
@@ -1735,7 +1918,7 @@
         "key": "seas",
         "label": "Seas",
         "level": "marginal",
-        "value": "3 to 5 ft",
+        "value": "4 to 6 ft",
         "rule": "Combined seas 4 ft or less within, up to 7 ft marginal.",
         "source": "cwf_lox",
         "tag": "Rule",
@@ -1745,7 +1928,7 @@
         "key": "steepness",
         "label": "Wave steepness",
         "level": "marginal",
-        "value": "W 4 ft at 5 s, S 3 ft at 15 s (steepest: 4 ft at 5 s)",
+        "value": "NW 5 ft at 7 s, W 2 ft at 15 s, S 2 ft at 15 s (steepest: 5 ft at 7 s)",
         "rule": "NWS San Diego steepness rule: seas of 6-10 ft with height (ft) at or above period (s), or 11 ft+, is outside; any train with period under twice its height is marginal (short, steep chop).",
         "source": "cwf_lox",
         "tag": "Rule",
@@ -1755,10 +1938,10 @@
       "zones": [
        "PZZ655"
       ],
-      "period": "TODAY",
-      "period_fallback": false,
+      "period": "TONIGHT",
+      "period_fallback": true,
       "label": "Outside our thresholds",
-      "why": "NWS marine headlines: Small Craft Advisory. Wind: NW/W up to 20 kt, gusts 25 kt. Seas: 3 to 5 ft.",
+      "why": "NWS marine headlines: Small Craft Advisory. Wind: W/NW up to 20 kt, gusts 25 kt. Seas: 4 to 6 ft.",
       "evidence": [
        {
         "kind": "series",
@@ -1849,21 +2032,21 @@
         "label": "NWS forecaster's synopsis",
         "tag": "Rule",
         "source": "cwf_lox",
-        "text": "At 15Z or 7 AM PST, a 1003 mb low was 800 NM NW of Los Angeles while a 1022 mb high was 700 NM SW of Los Angeles. Widespread gusty west winds and choppy seas are expected today."
+        "text": "At 21Z or 1 PM PST, a 1026 mb high was 1200 NM west of Point Conception. Widespread gusty west winds and choppy seas are expected today."
        },
        {
         "kind": "text",
         "label": "NWS Small Craft Advisory, in the agency's words",
         "tag": "Rule",
         "source": "alerts",
-        "text": "* WHAT...Hazardous sea conditions.  * WHERE...East Santa Barbara Channel from Pt. Conception to Pt. Mugu CA including Santa Cruz Island and Inner waters from Point Mugu to San Mateo Pt. CA including Santa Catalina and Anacapa Islands.  * WHEN...From 1 PM this afternoon to 4 AM PST Wednesday.  * IMPACTS...Conditions will be hazardous to small craft.  * ADDITIONAL DETAILS...See the Coastal Waters Forecast (CWFLOX) for more."
+        "text": "* WHAT...Hazardous sea conditions.  * WHERE...East Santa Barbara Channel from Pt. Conception to Pt. Mugu CA including Santa Cruz Island and Inner waters from Point Mugu to San Mateo Pt. CA including Santa Catalina and Anacapa Islands.  * WHEN...Until 3 AM PST Wednesday.  * IMPACTS...Conditions will be hazardous to small craft.  * ADDITIONAL DETAILS...See the Coastal Waters Forecast (CWFLOX) for more."
        },
        {
         "kind": "obs",
-        "label": "Buoy 46253 San Pedro South, 12:26 PM",
+        "label": "Buoy 46253 San Pedro South, 2:26 PM",
         "tag": "Observed",
         "source": "buoy_46253",
-        "text": "waves 3.0 ft, swell 2.3 ft at 14 s S, wind waves 2.0 ft at 4 s, water 74.3°F"
+        "text": "waves 3.3 ft, swell 2.3 ft at 15 s SSW, wind waves 2.3 ft at 4 s, water 74.3°F"
        }
       ]
      },
@@ -1884,7 +2067,7 @@
         "key": "wind",
         "label": "Wind",
         "level": "within",
-        "value": "N/NW up to 15 kt",
+        "value": "NW/W up to 15 kt",
         "rule": "Sustained 15 kt or less within, up to 20 kt marginal; gusts 25 kt+ outside.",
         "source": "cwf_lox",
         "tag": "Rule",
@@ -1894,7 +2077,7 @@
         "key": "seas",
         "label": "Seas",
         "level": "marginal",
-        "value": "4 to 6 ft",
+        "value": "3 to 5 ft",
         "rule": "Combined seas 4 ft or less within, up to 7 ft marginal.",
         "source": "cwf_lox",
         "tag": "Rule",
@@ -1904,7 +2087,7 @@
         "key": "steepness",
         "label": "Wave steepness",
         "level": "within",
-        "value": "NW 3 ft at 8 s, W 4 ft at 11 s, S 2 ft at 14 s",
+        "value": "NW 4 ft at 8 s, S 2 ft at 14 s",
         "rule": "NWS San Diego steepness rule: seas of 6-10 ft with height (ft) at or above period (s), or 11 ft+, is outside; any train with period under twice its height is marginal (short, steep chop).",
         "source": "cwf_lox",
         "tag": "Rule",
@@ -1917,7 +2100,7 @@
       "period": "WED",
       "period_fallback": false,
       "label": "Marginal",
-      "why": "Seas: 4 to 6 ft.",
+      "why": "Seas: 3 to 5 ft.",
       "evidence": [
        {
         "kind": "series",
@@ -2008,14 +2191,14 @@
         "label": "NWS forecaster's synopsis",
         "tag": "Rule",
         "source": "cwf_lox",
-        "text": "At 15Z or 7 AM PST, a 1003 mb low was 800 NM NW of Los Angeles while a 1022 mb high was 700 NM SW of Los Angeles. Widespread gusty west winds and choppy seas are expected today."
+        "text": "At 21Z or 1 PM PST, a 1026 mb high was 1200 NM west of Point Conception. Widespread gusty west winds and choppy seas are expected today."
        },
        {
         "kind": "obs",
-        "label": "Buoy 46253 San Pedro South, 12:26 PM",
+        "label": "Buoy 46253 San Pedro South, 2:26 PM",
         "tag": "Observed",
         "source": "buoy_46253",
-        "text": "waves 3.0 ft, swell 2.3 ft at 14 s S, wind waves 2.0 ft at 4 s, water 74.3°F"
+        "text": "waves 3.3 ft, swell 2.3 ft at 15 s SSW, wind waves 2.3 ft at 4 s, water 74.3°F"
        }
       ]
      }
@@ -2048,7 +2231,7 @@
         "key": "wind",
         "label": "Wind",
         "level": "outside",
-        "value": "NW up to 20 kt, gusts 25 kt",
+        "value": "NW up to 25 kt, gusts 30 kt",
         "rule": "Sustained 15 kt or less within, up to 20 kt marginal; gusts 25 kt+ outside.",
         "source": "cwf_lox",
         "tag": "Rule",
@@ -2058,7 +2241,7 @@
         "key": "seas",
         "label": "Seas",
         "level": "outside",
-        "value": "6 to 8 ft",
+        "value": "6 to 9 ft",
         "rule": "Combined seas 4 ft or less within, up to 7 ft marginal.",
         "source": "cwf_lox",
         "tag": "Rule",
@@ -2067,8 +2250,8 @@
        {
         "key": "steepness",
         "label": "Wave steepness",
-        "level": "marginal",
-        "value": "NW 5 ft at 5 s, S 3 ft at 15 s, NW 5 ft at 17 s (steepest: 5 ft at 5 s)",
+        "level": "outside",
+        "value": "NW 6 ft at 6 s, S 3 ft at 15 s, NW 5 ft at 16 s (steepest: 6 ft at 6 s)",
         "rule": "NWS San Diego steepness rule: seas of 6-10 ft with height (ft) at or above period (s), or 11 ft+, is outside; any train with period under twice its height is marginal (short, steep chop).",
         "source": "cwf_lox",
         "tag": "Rule",
@@ -2079,10 +2262,10 @@
        "PZZ676",
        "PZZ745"
       ],
-      "period": "TODAY",
-      "period_fallback": false,
+      "period": "TONIGHT",
+      "period_fallback": true,
       "label": "Outside our thresholds",
-      "why": "NWS marine headlines: Small Craft Advisory. Wind: NW up to 20 kt, gusts 25 kt. Seas: 6 to 8 ft.",
+      "why": "NWS marine headlines: Small Craft Advisory. Wind: NW up to 25 kt, gusts 30 kt. Seas: 6 to 9 ft.",
       "evidence": [
        {
         "kind": "series",
@@ -2173,14 +2356,7 @@
         "label": "NWS forecaster's synopsis",
         "tag": "Rule",
         "source": "cwf_lox",
-        "text": "At 15Z or 7 AM PST, a 1003 mb low was 800 NM NW of Los Angeles while a 1022 mb high was 700 NM SW of Los Angeles. Widespread gusty west winds and choppy seas are expected today."
-       },
-       {
-        "kind": "text",
-        "label": "NWS Small Craft Advisory, in the agency's words",
-        "tag": "Rule",
-        "source": "alerts",
-        "text": "* WHAT...Northwest winds 12 to 18 kt with gusts 20 to 25 kt and choppy seas.  * WHERE...Waters from San Mateo Point to the Mexican Border Extending 10 to 60 nm out including San Clemente Island.  * WHEN...From 1 PM Tuesday to 4 AM PST Wednesday.  * IMPACTS...Conditions will be hazardous to small craft.  * ADDITIONAL DETAILS...Strongest winds will be near San Clemente Island."
+        "text": "At 21Z or 1 PM PST, a 1026 mb high was 1200 NM west of Point Conception. Widespread gusty west winds and choppy seas are expected today."
        },
        {
         "kind": "text",
@@ -2190,18 +2366,25 @@
         "text": "* WHAT...Hazardous sea conditions.  * WHERE...Waters from Pt. Sal to Santa Cruz Island CA and westward 60 nm including San Miguel and Santa Rosa Islands and Outer waters from Santa Cruz Island to San Clemente Island to 60 NM offshore including San Nicolas and Santa Barbara Islands.  * WHEN...From 1 PM this afternoon to 8 AM PST Thursday.  * IMPACTS...Conditions will be hazardous to small craft.  * ADDITIONAL DETAILS...See the Coastal Waters Forecast (CWFLOX) for more."
        },
        {
-        "kind": "obs",
-        "label": "Buoy 46086 San Clemente Basin, 11:50 AM",
-        "tag": "Observed",
-        "source": "buoy_46086",
-        "text": "wind 14 kt from WNW, gusts 17"
+        "kind": "text",
+        "label": "NWS Small Craft Advisory, in the agency's words",
+        "tag": "Rule",
+        "source": "alerts",
+        "text": "* WHAT...Northwest winds 12 to 18 kt with gusts 20 to 25 kt and choppy seas.  * WHERE...Waters from San Mateo Point to the Mexican Border Extending 10 to 60 nm out including San Clemente Island.  * WHEN...From 1 PM Tuesday to 4 AM PST Wednesday.  * IMPACTS...Conditions will be hazardous to small craft.  * ADDITIONAL DETAILS...Strongest winds will be near San Clemente Island."
        },
        {
         "kind": "obs",
-        "label": "Buoy 46047 Tanner Bank, 11:40 AM",
+        "label": "Buoy 46086 San Clemente Basin, 1:40 PM",
+        "tag": "Observed",
+        "source": "buoy_46086",
+        "text": "wind 14 kt from WNW, gusts 16"
+       },
+       {
+        "kind": "obs",
+        "label": "Buoy 46047 Tanner Bank, 1:30 PM",
         "tag": "Observed",
         "source": "buoy_46047",
-        "text": "waves 6.9 ft, swell 6.6 ft at 17 s NW, wind waves 3.0 ft at 4 s, wind 14 kt from WNW, gusts 16, water 66.4°F"
+        "text": "wind 16 kt from WNW, gusts 17, water 66.6°F"
        }
       ]
      },
@@ -2222,7 +2405,7 @@
         "key": "wind",
         "label": "Wind",
         "level": "outside",
-        "value": "NW up to 30 kt",
+        "value": "NW up to 25 kt, gusts 30 kt",
         "rule": "Sustained 15 kt or less within, up to 20 kt marginal; gusts 25 kt+ outside.",
         "source": "cwf_lox",
         "tag": "Rule",
@@ -2242,7 +2425,7 @@
         "key": "steepness",
         "label": "Wave steepness",
         "level": "outside",
-        "value": "NW 8 ft at 8 s, NW 7 ft at 14 s, S 2 ft at 14 s (steepest: 8 ft at 8 s)",
+        "value": "NW 7 ft at 7 s, S 3 ft at 14 s, NW 8 ft at 15 s (steepest: 7 ft at 7 s)",
         "rule": "NWS San Diego steepness rule: seas of 6-10 ft with height (ft) at or above period (s), or 11 ft+, is outside; any train with period under twice its height is marginal (short, steep chop).",
         "source": "cwf_lox",
         "tag": "Rule",
@@ -2256,7 +2439,7 @@
       "period": "WED",
       "period_fallback": false,
       "label": "Outside our thresholds",
-      "why": "NWS marine headlines: Small Craft Advisory. Wind: NW up to 30 kt. Seas: 7 to 10 ft.",
+      "why": "NWS marine headlines: Small Craft Advisory. Wind: NW up to 25 kt, gusts 30 kt. Seas: 7 to 10 ft.",
       "evidence": [
        {
         "kind": "series",
@@ -2343,18 +2526,11 @@
         ]
        },
        {
-        "kind": "note",
-        "tag": "Modeled",
-        "source": "model_frames",
-        "label": "NWS and our model disagree on wind",
-        "text": "NWS forecasts up to 30 kt in this zone; our model at one point peaks at 20 kt. NWS is higher. NWS covers the whole zone, our point does not, and the verdict follows NWS."
-       },
-       {
         "kind": "text",
         "label": "NWS forecaster's synopsis",
         "tag": "Rule",
         "source": "cwf_lox",
-        "text": "At 15Z or 7 AM PST, a 1003 mb low was 800 NM NW of Los Angeles while a 1022 mb high was 700 NM SW of Los Angeles. Widespread gusty west winds and choppy seas are expected today."
+        "text": "At 21Z or 1 PM PST, a 1026 mb high was 1200 NM west of Point Conception. Widespread gusty west winds and choppy seas are expected today."
        },
        {
         "kind": "text",
@@ -2365,17 +2541,17 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46086 San Clemente Basin, 11:50 AM",
+        "label": "Buoy 46086 San Clemente Basin, 1:40 PM",
         "tag": "Observed",
         "source": "buoy_46086",
-        "text": "wind 14 kt from WNW, gusts 17"
+        "text": "wind 14 kt from WNW, gusts 16"
        },
        {
         "kind": "obs",
-        "label": "Buoy 46047 Tanner Bank, 11:40 AM",
+        "label": "Buoy 46047 Tanner Bank, 1:30 PM",
         "tag": "Observed",
         "source": "buoy_46047",
-        "text": "waves 6.9 ft, swell 6.6 ft at 17 s NW, wind waves 3.0 ft at 4 s, wind 14 kt from WNW, gusts 16, water 66.4°F"
+        "text": "wind 16 kt from WNW, gusts 17, water 66.6°F"
        }
       ]
      }
@@ -2388,7 +2564,7 @@
     "today": {
      "level": "marginal",
      "label": "Marginal",
-     "why": "Surface conditions follow San Diego inshore. Wave steepness: NW 3 ft at 4 s, W 2 ft at 7 s, SW 3 ft at 15 s (steepest: 3 ft at 4 s).",
+     "why": "Surface conditions follow San Diego inshore. Seas: 5 to 6 ft. Wave steepness: NW 4 ft at 5 s, S 3 ft at 15 s (steepest: 4 ft at 5 s).",
      "evidence": [
       {
        "kind": "series",
@@ -2479,21 +2655,21 @@
        "label": "NWS forecaster's synopsis",
        "tag": "Rule",
        "source": "cwf_sgx",
-       "text": "At 12 AM, a 1022 mb high was 600 miles southwest of San Diego and a 1003 mb low was 300 miles west of Cape Mendocino. Weak offshore flow in the mornings will alternate with afternoon onshore flow through Saturday. Gusty northwest winds will increase this afternoon and continue into Wednesday morning, with gusts of 20 to 25 kt in the outer coastal waters. A Small Craft Advisory is in effect for the outer coastal waters through this period."
+       "text": "At 1 PM, a 1023 mb high was 500 miles southwest of San Diego and a 1009 mb low was 200 miles northwest of San Fransisco. Weak offshore flow in the mornings will alternate with afternoon onshore flow through Saturday. Gusty northwest winds this afternoon will continue into Wednesday morning, with gusts of 20 to 25 kt in the outer coastal waters. A Small Craft Advisory is in effect for the outer coastal waters through this period."
       },
       {
        "kind": "obs",
-       "label": "Buoy 46232 Point Loma South, 12:26 PM",
+       "label": "Buoy 46232 Point Loma South, 2:26 PM",
        "tag": "Observed",
        "source": "buoy_46232",
-       "text": "waves 4.3 ft, swell 3.6 ft at 18 s W, wind waves 2.3 ft at 10 s, water 74.8°F"
+       "text": "waves 4.9 ft, swell 3.9 ft at 18 s W, wind waves 2.6 ft at 9 s, water 75.0°F"
       }
      ]
     },
     "tomorrow": {
-     "level": "within",
-     "label": "Within our thresholds",
-     "why": "Surface conditions follow San Diego inshore. Every factor we rate is within our thresholds.",
+     "level": "marginal",
+     "label": "Marginal",
+     "why": "Surface conditions follow San Diego inshore. Seas: 4 to 6 ft. Wave steepness: NW 5 ft at 5 s, S 3 ft at 14 s (steepest: 5 ft at 5 s).",
      "evidence": [
       {
        "kind": "series",
@@ -2580,11 +2756,18 @@
        ]
       },
       {
+       "kind": "text",
+       "label": "NWS forecaster's synopsis",
+       "tag": "Rule",
+       "source": "cwf_sgx",
+       "text": "At 1 PM, a 1023 mb high was 500 miles southwest of San Diego and a 1009 mb low was 200 miles northwest of San Fransisco. Weak offshore flow in the mornings will alternate with afternoon onshore flow through Saturday. Gusty northwest winds this afternoon will continue into Wednesday morning, with gusts of 20 to 25 kt in the outer coastal waters. A Small Craft Advisory is in effect for the outer coastal waters through this period."
+      },
+      {
        "kind": "obs",
-       "label": "Buoy 46232 Point Loma South, 12:26 PM",
+       "label": "Buoy 46232 Point Loma South, 2:26 PM",
        "tag": "Observed",
        "source": "buoy_46232",
-       "text": "waves 4.3 ft, swell 3.6 ft at 18 s W, wind waves 2.3 ft at 10 s, water 74.8°F"
+       "text": "waves 4.9 ft, swell 3.9 ft at 18 s W, wind waves 2.6 ft at 9 s, water 75.0°F"
       }
      ]
     }
@@ -2593,6 +2776,34 @@
   },
   "freedive": "Solo freediving is outside our thresholds in any conditions: one up, one down. Never hyperventilate. Size exposure protection for the bottom temperature, not the surface.",
   "headlines": [
+   {
+    "event": "Small Craft Advisory",
+    "area": "Waters from Pt. Sal to Santa Cruz Island CA and westward 60 nm including San Miguel and Santa Rosa Islands; Outer waters from Santa Cruz Island to San Clemente Island to 60 NM offshore including San Nicolas and Santa Barbara Islands",
+    "zones": [
+     "PZZ673",
+     "PZZ676"
+    ],
+    "from": "1:20 PM Nov 3",
+    "until": "8:00 AM Nov 5",
+    "headline": "Small Craft Advisory issued November 3 at 1:20PM PST until November 5 at 8:00AM PST by NWS Los Angeles/Oxnard CA",
+    "description": "* WHAT...Hazardous sea conditions.\n\n* WHERE...Waters from Pt. Sal to Santa Cruz Island CA and\nwestward 60 nm including San Miguel and Santa Rosa Islands and\nOuter waters from Santa Cruz Island to San Clemente Island to\n60 NM offshore including San Nicolas and Santa Barbara Islands.\n\n* WHEN...From 1 PM this afternoon to 8 AM PST Thursday.\n\n* IMPACTS...Conditions will be hazardous to small craft.\n\n* ADDITIONAL DETAILS...See the Coastal Waters Forecast (CWFLOX)\nfor more.",
+    "instruction": "Inexperienced mariners, especially those operating smaller\nvessels, should avoid navigating in hazardous conditions.",
+    "where": "western Santa Barbara Channel and outer waters to San Clemente Island"
+   },
+   {
+    "event": "Small Craft Advisory",
+    "area": "East Santa Barbara Channel from Pt. Conception to Pt. Mugu CA including Santa Cruz Island; Inner waters from Point Mugu to San Mateo Pt. CA including Santa Catalina and Anacapa Islands",
+    "zones": [
+     "PZZ650",
+     "PZZ655"
+    ],
+    "from": "1:20 PM Nov 3",
+    "until": "3:00 AM Nov 4",
+    "headline": "Small Craft Advisory issued November 3 at 1:20PM PST until November 4 at 3:00AM PST by NWS Los Angeles/Oxnard CA",
+    "description": "* WHAT...Hazardous sea conditions.\n\n* WHERE...East Santa Barbara Channel from Pt. Conception to Pt.\nMugu CA including Santa Cruz Island and Inner waters from\nPoint Mugu to San Mateo Pt. CA including Santa Catalina and\nAnacapa Islands.\n\n* WHEN...Until 3 AM PST Wednesday.\n\n* IMPACTS...Conditions will be hazardous to small craft.\n\n* ADDITIONAL DETAILS...See the Coastal Waters Forecast (CWFLOX)\nfor more.",
+    "instruction": "Inexperienced mariners, especially those operating smaller\nvessels, should avoid navigating in hazardous conditions.",
+    "where": "East Santa Barbara Channel and LA inner waters and Catalina"
+   },
    {
     "event": "Small Craft Advisory",
     "area": "Waters from San Mateo point to the Mexican Border Extending 10 to 60 nm out including San Clemente Island",
@@ -2605,34 +2816,6 @@
     "description": "* WHAT...Northwest winds 12 to 18 kt with gusts 20 to 25 kt and\nchoppy seas.\n\n* WHERE...Waters from San Mateo Point to the Mexican Border\nExtending 10 to 60 nm out including San Clemente Island.\n\n* WHEN...From 1 PM Tuesday to 4 AM PST Wednesday.\n\n* IMPACTS...Conditions will be hazardous to small craft.\n\n* ADDITIONAL DETAILS...Strongest winds will be near San Clemente\nIsland.",
     "instruction": "Inexperienced mariners, especially those operating smaller\nvessels, should avoid navigating in hazardous conditions.",
     "where": "San Diego offshore waters"
-   },
-   {
-    "event": "Small Craft Advisory",
-    "area": "Waters from Pt. Sal to Santa Cruz Island CA and westward 60 nm including San Miguel and Santa Rosa Islands; Outer waters from Santa Cruz Island to San Clemente Island to 60 NM offshore including San Nicolas and Santa Barbara Islands",
-    "zones": [
-     "PZZ673",
-     "PZZ676"
-    ],
-    "from": "1:00 PM Nov 3",
-    "until": "8:00 AM Nov 5",
-    "headline": "Small Craft Advisory issued November 3 at 7:20AM PST until November 5 at 8:00AM PST by NWS Los Angeles/Oxnard CA",
-    "description": "* WHAT...Hazardous sea conditions.\n\n* WHERE...Waters from Pt. Sal to Santa Cruz Island CA and\nwestward 60 nm including San Miguel and Santa Rosa Islands and\nOuter waters from Santa Cruz Island to San Clemente Island to\n60 NM offshore including San Nicolas and Santa Barbara Islands.\n\n* WHEN...From 1 PM this afternoon to 8 AM PST Thursday.\n\n* IMPACTS...Conditions will be hazardous to small craft.\n\n* ADDITIONAL DETAILS...See the Coastal Waters Forecast (CWFLOX)\nfor more.",
-    "instruction": "Inexperienced mariners, especially those operating smaller\nvessels, should avoid navigating in hazardous conditions.",
-    "where": "western Santa Barbara Channel and outer waters to San Clemente Island"
-   },
-   {
-    "event": "Small Craft Advisory",
-    "area": "East Santa Barbara Channel from Pt. Conception to Pt. Mugu CA including Santa Cruz Island; Inner waters from Point Mugu to San Mateo Pt. CA including Santa Catalina and Anacapa Islands",
-    "zones": [
-     "PZZ650",
-     "PZZ655"
-    ],
-    "from": "1:00 PM Nov 3",
-    "until": "4:00 AM Nov 4",
-    "headline": "Small Craft Advisory issued November 3 at 7:20AM PST until November 4 at 4:00AM PST by NWS Los Angeles/Oxnard CA",
-    "description": "* WHAT...Hazardous sea conditions.\n\n* WHERE...East Santa Barbara Channel from Pt. Conception to Pt.\nMugu CA including Santa Cruz Island and Inner waters from\nPoint Mugu to San Mateo Pt. CA including Santa Catalina and\nAnacapa Islands.\n\n* WHEN...From 1 PM this afternoon to 4 AM PST Wednesday.\n\n* IMPACTS...Conditions will be hazardous to small craft.\n\n* ADDITIONAL DETAILS...See the Coastal Waters Forecast (CWFLOX)\nfor more.",
-    "instruction": "Inexperienced mariners, especially those operating smaller\nvessels, should avoid navigating in hazardous conditions.",
-    "where": "East Santa Barbara Channel and LA inner waters and Catalina"
    }
   ],
   "levels": {
@@ -2648,19 +2831,19 @@
     "id": "46254",
     "name": "Scripps Nearshore (La Jolla)",
     "status": "ok",
-    "observed": "12:26 PM",
-    "age_h": 0.8,
+    "observed": "2:26 PM",
+    "age_h": 0.7,
     "nearshore": true,
     "wave_ft": 2.3,
-    "temp_f": 76.1,
+    "temp_f": 76.3,
     "swell": {
      "ft": 1.6,
-     "s": 14.3,
-     "dir": "W"
+     "s": 16.7,
+     "dir": "NW"
     },
     "wind_waves": {
-     "ft": 1.6,
-     "s": 6.7,
+     "ft": 1.3,
+     "s": 6.2,
      "dir": "W"
     }
    },
@@ -2668,94 +2851,94 @@
     "id": "46232",
     "name": "Point Loma South",
     "status": "ok",
-    "observed": "12:26 PM",
-    "age_h": 0.8,
+    "observed": "2:26 PM",
+    "age_h": 0.7,
     "nearshore": true,
-    "wave_ft": 4.3,
-    "temp_f": 74.8,
+    "wave_ft": 4.9,
+    "temp_f": 75.0,
     "swell": {
-     "ft": 3.6,
+     "ft": 3.9,
      "s": 18.2,
      "dir": "W"
     },
     "wind_waves": {
-     "ft": 2.3,
-     "s": 9.9,
-     "dir": "SSW"
+     "ft": 2.6,
+     "s": 9.1,
+     "dir": "SW"
     }
    },
    {
     "id": "46258",
     "name": "Mission Bay West",
     "status": "ok",
-    "observed": "12:26 PM",
-    "age_h": 0.8,
+    "observed": "2:26 PM",
+    "age_h": 0.7,
     "nearshore": true,
-    "wave_ft": 5.2,
+    "wave_ft": 4.9,
     "temp_f": 75.4,
     "swell": {
      "ft": 4.6,
-     "s": 16.7,
-     "dir": "WNW"
+     "s": 15.4,
+     "dir": "W"
     },
     "wind_waves": {
      "ft": 2.3,
-     "s": 9.9,
-     "dir": "SSW"
+     "s": 4.2,
+     "dir": "WNW"
     }
    },
    {
     "id": "46225",
     "name": "Torrey Pines Outer",
     "status": "ok",
-    "observed": "12:56 PM",
-    "age_h": 0.3,
+    "observed": "2:26 PM",
+    "age_h": 0.7,
     "nearshore": true,
-    "wave_ft": 4.3,
-    "temp_f": 77.7,
+    "wave_ft": 3.9,
+    "temp_f": 77.5,
     "swell": {
-     "ft": 3.6,
-     "s": 15.4,
+     "ft": 3.3,
+     "s": 14.3,
      "dir": "SSW"
     },
     "wind_waves": {
-     "ft": 1.6,
-     "s": 6.2,
-     "dir": "W"
+     "ft": 2.0,
+     "s": 9.9,
+     "dir": "SW"
     }
    },
    {
     "id": "46253",
     "name": "San Pedro South",
     "status": "ok",
-    "observed": "12:26 PM",
-    "age_h": 0.8,
+    "observed": "2:26 PM",
+    "age_h": 0.7,
     "nearshore": true,
-    "wave_ft": 3.0,
+    "wave_ft": 3.3,
     "temp_f": 74.3,
     "swell": {
      "ft": 2.3,
-     "s": 14.3,
-     "dir": "S"
+     "s": 15.4,
+     "dir": "SSW"
     },
     "wind_waves": {
-     "ft": 2.0,
-     "s": 3.5,
-     "dir": "W"
+     "ft": 2.3,
+     "s": 4.0,
+     "dir": "WNW"
     }
    },
    {
     "id": "46086",
     "name": "San Clemente Basin",
     "status": "ok",
-    "observed": "11:50 AM",
-    "age_h": 1.4,
+    "observed": "1:40 PM",
+    "age_h": 1.5,
     "nearshore": false,
     "wave_ft": null,
     "temp_f": null,
     "wind": {
      "kt": 14,
-     "gust_kt": 17,
+     "gust_kt": 16,
      "from_deg": 290.0
     }
    },
@@ -2763,58 +2946,48 @@
     "id": "46047",
     "name": "Tanner Bank",
     "status": "ok",
-    "observed": "11:40 AM",
-    "age_h": 1.5,
+    "observed": "1:30 PM",
+    "age_h": 1.6,
     "nearshore": false,
-    "wave_ft": 6.9,
-    "temp_f": 66.4,
-    "swell": {
-     "ft": 6.6,
-     "s": 17.4,
-     "dir": "NW"
-    },
-    "wind_waves": {
-     "ft": 3.0,
-     "s": 4.5,
-     "dir": "WNW"
-    },
+    "wave_ft": null,
+    "temp_f": 66.6,
     "wind": {
-     "kt": 14,
-     "gust_kt": 16,
-     "from_deg": 290.0
+     "kt": 16,
+     "gust_kt": 17,
+     "from_deg": 300.0
     }
    }
   ],
   "piers": [
    {
     "name": "Scripps Pier, La Jolla",
-    "temp_f": 75.7,
-    "observed": "1:06 PM"
+    "temp_f": 75.9,
+    "observed": "3:00 PM"
    },
    {
     "name": "San Diego Bay (Broadway Pier)",
-    "temp_f": 72.9,
-    "observed": "1:06 PM"
+    "temp_f": 73.0,
+    "observed": "3:00 PM"
    }
   ],
   "surf": {
    "today": {
     "rip_risk": "High",
-    "surf_text": "3 to 5 feet",
-    "sets_ft": 5,
-    "swell_from_deg": 210,
+    "surf_text": "3 to 6 feet",
+    "sets_ft": 6,
+    "swell_from_deg": 280,
     "thunder": "None expected",
-    "water_temp_lo_f": 67,
+    "water_temp_lo_f": 69,
     "water_temp_hi_f": 75
    },
    "tomorrow": {
     "rip_risk": "High",
-    "surf_text": "3 to 5 feet",
-    "sets_ft": 5,
-    "swell_from_deg": 210,
+    "surf_text": "3 to 6 feet",
+    "sets_ft": 6,
+    "swell_from_deg": 280,
     "thunder": "None expected",
-    "water_temp_lo_f": null,
-    "water_temp_hi_f": null
+    "water_temp_lo_f": 69,
+    "water_temp_hi_f": 75
    },
    "county": "San Diego County",
    "headlines": [
@@ -2826,23 +2999,23 @@
     "zone": "PZZ740",
     "name": "San Diego coastal waters, to 10 nm",
     "status": "ok",
-    "issued": "1236 AM PST Tue Nov 3 2026",
-    "url": "https://api.weather.gov/products/89f2e7a6-56a5-4be7-ac4a-076f6dfc2d0f",
+    "issued": "125 PM PST Tue Nov 3 2026",
+    "url": "https://api.weather.gov/products/4c4cb3f8-6bd9-4e17-9887-2193cff1d071",
     "headlines": [],
-    "today": "Wind NW 10 to 15 kt. Seas 3 to 4 ft. Wave Detail: NW 3 ft at 4 seconds, W 2 ft at 7 seconds and SW 3 ft at 15 seconds.",
-    "tomorrow": "Wind N 10 kt...becoming W in the afternoon. Seas 4 ft. Wave Detail: E 1 foot at 4 seconds, W 3 ft at 7 seconds and SW 3 ft at 15 seconds."
+    "today": "Wind NW 10 to 15 kt with gusts to 20 kt. Seas 5 to 6 ft. Wave Detail: NW 4 ft at 5 seconds and S 3 ft at 15 seconds.",
+    "tomorrow": "Wind N 10 kt...becoming W in the afternoon. Seas 4 to 6 ft. Wave Detail: NW 5 ft at 5 seconds and S 3 ft at 14 seconds."
    },
    {
     "zone": "PZZ745",
     "name": "San Diego waters 10-60 nm, incl. San Clemente Island",
     "status": "ok",
-    "issued": "1236 AM PST Tue Nov 3 2026",
-    "url": "https://api.weather.gov/products/89f2e7a6-56a5-4be7-ac4a-076f6dfc2d0f",
+    "issued": "125 PM PST Tue Nov 3 2026",
+    "url": "https://api.weather.gov/products/4c4cb3f8-6bd9-4e17-9887-2193cff1d071",
     "headlines": [
-     "SMALL CRAFT ADVISORY IN EFFECT FROM THIS AFTERNOON THROUGH LATE TONIGHT"
+     "SMALL CRAFT ADVISORY IN EFFECT THROUGH LATE TONIGHT"
     ],
-    "today": "Wind NW 10 to 15 kt. Seas 4 to 6 ft. Wave Detail: NW 4 ft at 6 seconds and S 3 ft at 15 seconds.",
-    "tomorrow": "Wind NW 10 to 15 kt with gusts to 20 kt. Seas 5 to 7 ft. Wave Detail: NW 4 ft at 4 seconds, W 4 ft at 7 seconds and S 3 ft at 15 seconds."
+    "today": "Wind NW 15 to 20 kt with gusts to 25 kt. Seas 6 to 8 ft. Wave Detail: NW 6 ft at 6 seconds and S 3 ft at 15 seconds.",
+    "tomorrow": "Wind NW 15 to 20 kt...becoming 10 to 15 kt in the afternoon. Seas 5 to 8 ft. Wave Detail: NW 6 ft at 6 seconds and S 3 ft at 14 seconds."
    },
    {
     "zone": "PMZ009",
@@ -2858,25 +3031,25 @@
     "zone": "PZZ655",
     "name": "Inner waters incl. Catalina",
     "status": "ok",
-    "issued": "720 AM PST Tue Nov 3 2026",
-    "url": "https://api.weather.gov/products/44f66541-5f60-45e8-850e-82dd8c3fb90c",
+    "issued": "120 PM PST Tue Nov 3 2026",
+    "url": "https://api.weather.gov/products/fcfa3c15-1512-4eb6-9c92-a88dda01bec6",
     "headlines": [
-     "SMALL CRAFT ADVISORY IN EFFECT FROM 1 PM PST THIS AFTERNOON THROUGH LATE TONIGHT"
+     "SMALL CRAFT ADVISORY IN EFFECT THROUGH LATE TONIGHT"
     ],
-    "today": "NW wind 5 to 10 kt, becoming W 10 to 20 kt with gusts to 25 kt this afternoon. Strongest western portion. Seas 3 to 5 ft. Wave Detail: W 4 ft at 5 seconds and S 3 ft at 15 seconds.",
-    "tomorrow": "N wind 5 to 10 kt, becoming NW 10 to 15 kt in the afternoon. Seas 4 to 6 ft. Wave Detail: NW 3 ft at 8 seconds, W 4 ft at 11 seconds and S 2 ft at 14 seconds."
+    "today": "W to NW wind 15 to 20 kt with gusts to 25 kt. Seas 4 to 6 ft. Wave Detail: NW 5 ft at 7 seconds, W 2 ft at 15 seconds and S 2 ft at 15 seconds.",
+    "tomorrow": "NW wind 5 to 10 kt, becoming W 10 to 15 kt in the afternoon. Seas 3 to 5 ft. Wave Detail: NW 4 ft at 8 seconds and S 2 ft at 14 seconds."
    },
    {
     "zone": "PZZ676",
     "name": "Outer waters, Santa Cruz Island to San Clemente Island",
     "status": "ok",
-    "issued": "720 AM PST Tue Nov 3 2026",
-    "url": "https://api.weather.gov/products/44f66541-5f60-45e8-850e-82dd8c3fb90c",
+    "issued": "120 PM PST Tue Nov 3 2026",
+    "url": "https://api.weather.gov/products/fcfa3c15-1512-4eb6-9c92-a88dda01bec6",
     "headlines": [
-     "SMALL CRAFT ADVISORY IN EFFECT FROM 1 PM PST THIS AFTERNOON THROUGH THURSDAY MORNING"
+     "SMALL CRAFT ADVISORY IN EFFECT THROUGH THURSDAY MORNING"
     ],
-    "today": "NW wind 10 to 15 kt with gusts to 20 kt, becoming 15 to 20 kt with gusts to 25 kt this afternoon. Seas 6 to 8 ft. Wave Detail: NW 5 ft at 5 seconds, S 3 ft at 15 seconds and NW 5 ft at 17 seconds.",
-    "tomorrow": "NW wind 20 to 30 kt. Seas 7 to 10 ft. Wave Detail: NW 8 ft at 8 seconds, NW 7 ft at 14 seconds and S 2 ft at 14 seconds."
+    "today": "NW wind 15 to 25 kt with gusts to 30 kt. Seas 6 to 9 ft. Wave Detail: NW 6 ft at 6 seconds, S 3 ft at 15 seconds and NW 5 ft at 16 seconds.",
+    "tomorrow": "NW wind 15 to 25 kt with gusts to 30 kt. Seas 7 to 10 ft. Wave Detail: NW 7 ft at 7 seconds, S 3 ft at 14 seconds and NW 8 ft at 15 seconds."
    }
   ],
   "sst_field": {
@@ -2912,7 +3085,23 @@
     }
    ],
    "tag": "Modeled",
-   "method": "ShoudiDive water-column heuristic (seasonal mixed layer shoaled by upwelling); not yet checked against an observed profile."
+   "method": "ShoudiDive water-column heuristic (seasonal mixed layer shoaled by upwelling); not yet checked against an observed profile.",
+   "observed": {
+    "glider": "sp207",
+    "lat": 33.3348,
+    "lng": -117.98365,
+    "nm_from_sd": 53,
+    "time": "4:43 AM Nov 3",
+    "surface_f": 75.9,
+    "thermocline_ft": 194,
+    "t30_f": 75.8,
+    "t60_f": 75.7,
+    "t100_f": 75.8,
+    "drop_f_per_10ft": 2.2,
+    "url": "https://gliders.ioos.us/erddap/tabledap/sp207-20260923T1722.html",
+    "tag": "Observed",
+    "note": "A glider profile offshore, not at the kelp: internal tides move the thermocline 15-65 ft within hours at San Diego kelp moorings."
+   }
   },
   "tide": {
    "station": "La Jolla",
@@ -2971,7 +3160,7 @@
      "site": "La Jolla Cove",
      "depth_ft": 33,
      "buoy": "46254",
-     "u_m_s": 0.29,
+     "u_m_s": 0.27,
      "u_ft_s": 0.9,
      "level": "strong"
     },
@@ -2980,30 +3169,30 @@
      "depth_ft": 66,
      "buoy": "46254",
      "u_m_s": 0.17,
-     "u_ft_s": 0.6,
+     "u_ft_s": 0.5,
      "level": "moderate"
     },
     {
      "site": "Point Loma kelp",
      "depth_ft": 49,
      "buoy": "46232",
-     "u_m_s": 0.47,
-     "u_ft_s": 1.6,
+     "u_m_s": 0.52,
+     "u_ft_s": 1.7,
      "level": "strong"
     },
     {
      "site": "Wreck Alley",
      "depth_ft": 66,
      "buoy": "46258",
-     "u_m_s": 0.48,
-     "u_ft_s": 1.6,
+     "u_m_s": 0.43,
+     "u_ft_s": 1.4,
      "level": "strong"
     },
     {
      "site": "Laguna Beach coves",
      "depth_ft": 33,
      "buoy": "46253",
-     "u_m_s": 0.33,
+     "u_m_s": 0.34,
      "u_ft_s": 1.1,
      "level": "strong"
     }
@@ -3041,14 +3230,14 @@
   ],
   "freedive": "Solo freediving is outside our thresholds in any conditions: one up, one down. Never hyperventilate. Size exposure protection for the bottom temperature, not the surface.",
   "suit": {
-   "text": "Suit: 3-5 mm for most divers, sized for 76°F at the surface. Kelp-bed bottoms can run colder when internal tides push cold water in.",
+   "text": "Suit: 3-5 mm for most divers, sized for 76°F at 60 ft in the nearest glider profile. Kelp-bed bottoms can run colder when internal tides push cold water in.",
    "tag": "Guide",
    "ref_f": 75.7
   },
   "best_bet": {
-   "site": "La Jolla Cove",
+   "site": "La Jolla Shores",
    "level": "marginal",
-   "text": "Best bet from shore: La Jolla Cove (marginal)."
+   "text": "Best bet from shore: La Jolla Shores (marginal, with sets around 1 ft at the entry in the CDIP model)."
   },
   "hunting_vis": {
    "level": "within",
@@ -3069,7 +3258,7 @@
    "id": "alerts",
    "label": "NWS active alerts",
    "url": "https://api.weather.gov/alerts/active?zone=CAZ043,CAZ552,PZZ655,PZZ676,PZZ740,PZZ745",
-   "time_utc": "2026-11-03T21:11Z",
+   "time_utc": "2026-11-03T23:08Z",
    "age_h": 0.0,
    "error": null,
    "status": "ok"
@@ -3077,27 +3266,27 @@
   {
    "id": "cwf_sgx",
    "label": "NWS Coastal Waters Forecast (SGX)",
-   "url": "https://api.weather.gov/products/89f2e7a6-56a5-4be7-ac4a-076f6dfc2d0f",
-   "time_utc": "2026-11-03T08:36Z",
-   "age_h": 12.6,
+   "url": "https://api.weather.gov/products/4c4cb3f8-6bd9-4e17-9887-2193cff1d071",
+   "time_utc": "2026-11-03T21:25Z",
+   "age_h": 1.7,
    "error": null,
    "status": "ok"
   },
   {
    "id": "cwf_lox",
    "label": "NWS Coastal Waters Forecast (LOX)",
-   "url": "https://api.weather.gov/products/44f66541-5f60-45e8-850e-82dd8c3fb90c",
-   "time_utc": "2026-11-03T15:20Z",
-   "age_h": 5.9,
+   "url": "https://api.weather.gov/products/fcfa3c15-1512-4eb6-9c92-a88dda01bec6",
+   "time_utc": "2026-11-03T21:20Z",
+   "age_h": 1.8,
    "error": null,
    "status": "ok"
   },
   {
    "id": "srf_sgx",
    "label": "NWS Surf Zone Forecast (SGX)",
-   "url": "https://api.weather.gov/products/ee91f51f-3354-43e6-a76c-01a94e0f4ebf",
-   "time_utc": "2026-11-03T08:17Z",
-   "age_h": 12.9,
+   "url": "https://api.weather.gov/products/81a22f33-f671-47f9-8ce0-d142981997b6",
+   "time_utc": "2026-11-03T21:12Z",
+   "age_h": 1.9,
    "error": null,
    "status": "ok"
   },
@@ -3106,7 +3295,7 @@
    "label": "NHC Offshore Waters Forecast (Mexico, OFFPZ7)",
    "url": "https://www.nhc.noaa.gov/text/MIAOFFPZ7.shtml",
    "time_utc": "2026-11-03T20:48Z",
-   "age_h": 0.4,
+   "age_h": 2.3,
    "error": null,
    "status": "ok"
   },
@@ -3114,8 +3303,8 @@
    "id": "buoy_46254",
    "label": "Buoy 46254 Scripps Nearshore (La Jolla)",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46254",
-   "time_utc": "2026-11-03T20:26Z",
-   "age_h": 0.8,
+   "time_utc": "2026-11-03T22:26Z",
+   "age_h": 0.7,
    "error": null,
    "status": "ok"
   },
@@ -3123,8 +3312,8 @@
    "id": "buoy_46232",
    "label": "Buoy 46232 Point Loma South",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46232",
-   "time_utc": "2026-11-03T20:26Z",
-   "age_h": 0.8,
+   "time_utc": "2026-11-03T22:26Z",
+   "age_h": 0.7,
    "error": null,
    "status": "ok"
   },
@@ -3132,8 +3321,8 @@
    "id": "buoy_46258",
    "label": "Buoy 46258 Mission Bay West",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46258",
-   "time_utc": "2026-11-03T20:26Z",
-   "age_h": 0.8,
+   "time_utc": "2026-11-03T22:26Z",
+   "age_h": 0.7,
    "error": null,
    "status": "ok"
   },
@@ -3141,8 +3330,8 @@
    "id": "buoy_46225",
    "label": "Buoy 46225 Torrey Pines Outer",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46225",
-   "time_utc": "2026-11-03T20:56Z",
-   "age_h": 0.3,
+   "time_utc": "2026-11-03T22:26Z",
+   "age_h": 0.7,
    "error": null,
    "status": "ok"
   },
@@ -3150,8 +3339,8 @@
    "id": "buoy_46253",
    "label": "Buoy 46253 San Pedro South",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46253",
-   "time_utc": "2026-11-03T20:26Z",
-   "age_h": 0.8,
+   "time_utc": "2026-11-03T22:26Z",
+   "age_h": 0.7,
    "error": null,
    "status": "ok"
   },
@@ -3159,8 +3348,8 @@
    "id": "buoy_46086",
    "label": "Buoy 46086 San Clemente Basin",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46086",
-   "time_utc": "2026-11-03T19:50Z",
-   "age_h": 1.4,
+   "time_utc": "2026-11-03T21:40Z",
+   "age_h": 1.5,
    "error": null,
    "status": "ok"
   },
@@ -3168,8 +3357,8 @@
    "id": "buoy_46047",
    "label": "Buoy 46047 Tanner Bank",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46047",
-   "time_utc": "2026-11-03T19:40Z",
-   "age_h": 1.5,
+   "time_utc": "2026-11-03T21:30Z",
+   "age_h": 1.6,
    "error": null,
    "status": "ok"
   },
@@ -3177,7 +3366,7 @@
    "id": "coops_9410230",
    "label": "NOAA CO-OPS Scripps Pier, La Jolla",
    "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=9410230",
-   "time_utc": "2026-11-03T21:06Z",
+   "time_utc": "2026-11-03T23:00Z",
    "age_h": 0.1,
    "error": null,
    "status": "ok"
@@ -3186,7 +3375,7 @@
    "id": "coops_9410170",
    "label": "NOAA CO-OPS San Diego Bay (Broadway Pier)",
    "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=9410170",
-   "time_utc": "2026-11-03T21:06Z",
+   "time_utc": "2026-11-03T23:00Z",
    "age_h": 0.1,
    "error": null,
    "status": "ok"
@@ -3195,7 +3384,7 @@
    "id": "rain",
    "label": "Rain gauge, San Diego airport (KSAN) (IEM daily climate)",
    "url": "https://mesonet.agron.iastate.edu/sites/site.php?station=SAN&network=CA_ASOS",
-   "time_utc": "2026-11-03T21:11Z",
+   "time_utc": "2026-11-03T23:08Z",
    "age_h": 0.0,
    "error": null,
    "status": "ok"
@@ -3205,7 +3394,7 @@
    "label": "NOAA CPC ENSO diagnostic discussion",
    "url": "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso_advisory/ensodisc.shtml",
    "time_utc": "2026-10-08T00:00Z",
-   "age_h": 645.2,
+   "age_h": 647.1,
    "error": null,
    "status": "ok"
   },
@@ -3214,7 +3403,7 @@
    "label": "ShoudiDive layer manifest",
    "url": "/data/manifest.json",
    "time_utc": "2026-11-03T18:10Z",
-   "age_h": 3.0,
+   "age_h": 5.0,
    "error": null,
    "status": "ok"
   },
@@ -3223,7 +3412,7 @@
    "label": "NOAA CO-OPS tide predictions (ShoudiDive tides.json)",
    "url": "/data/tides.json",
    "time_utc": "2026-11-03T18:10Z",
-   "age_h": 3.0,
+   "age_h": 5.0,
    "error": null,
    "status": "ok"
   },
@@ -3232,7 +3421,7 @@
    "label": "ShoudiDive water-column heuristic",
    "url": "/data/viz_column_spots.json",
    "time_utc": "2026-11-03T18:13Z",
-   "age_h": 3.0,
+   "age_h": 4.9,
    "error": null,
    "status": "ok"
   },
@@ -3241,60 +3430,60 @@
    "label": "Dive-shop condition posts (ShoudiDive ground-truth ingest)",
    "url": "/pipeline/validation/data/observations.jsonl",
    "time_utc": "2026-11-03T10:49Z",
-   "age_h": 10.4,
+   "age_h": 12.3,
    "error": null,
    "status": "ok"
   },
   {
    "id": "mop_D0482",
    "label": "CDIP MOP nearshore wave model, point D0482",
-   "url": "https://thredds.cdip.ucsd.edu/thredds/dodsC/cdip/model/MOP_alongshore/D0482_forecast.nc",
-   "time_utc": null,
-   "age_h": null,
-   "error": "RuntimeError: HTTP 403",
-   "status": "missing"
+   "url": "https://thredds.cdip.ucsd.edu/thredds/dodsC/cdip/model/MOP_alongshore/D0482_forecast.nc.html",
+   "time_utc": "2026-11-03T19:03Z",
+   "age_h": 4.1,
+   "error": null,
+   "status": "ok"
   },
   {
    "id": "mop_D0500",
    "label": "CDIP MOP nearshore wave model, point D0500",
-   "url": "https://thredds.cdip.ucsd.edu/thredds/dodsC/cdip/model/MOP_alongshore/D0500_forecast.nc",
-   "time_utc": null,
-   "age_h": null,
-   "error": "RuntimeError: HTTP 403",
-   "status": "missing"
+   "url": "https://thredds.cdip.ucsd.edu/thredds/dodsC/cdip/model/MOP_alongshore/D0500_forecast.nc.html",
+   "time_utc": "2026-11-03T19:03Z",
+   "age_h": 4.1,
+   "error": null,
+   "status": "ok"
   },
   {
    "id": "mop_D0324",
    "label": "CDIP MOP nearshore wave model, point D0324",
-   "url": "https://thredds.cdip.ucsd.edu/thredds/dodsC/cdip/model/MOP_alongshore/D0324_forecast.nc",
-   "time_utc": null,
-   "age_h": null,
-   "error": "RuntimeError: HTTP 403",
-   "status": "missing"
+   "url": "https://thredds.cdip.ucsd.edu/thredds/dodsC/cdip/model/MOP_alongshore/D0324_forecast.nc.html",
+   "time_utc": "2026-11-03T19:02Z",
+   "age_h": 4.1,
+   "error": null,
+   "status": "ok"
   },
   {
    "id": "mop_OC283",
    "label": "CDIP MOP nearshore wave model, point OC283",
-   "url": "https://thredds.cdip.ucsd.edu/thredds/dodsC/cdip/model/MOP_alongshore/OC283_forecast.nc",
-   "time_utc": null,
-   "age_h": null,
-   "error": "RuntimeError: HTTP 403",
-   "status": "missing"
+   "url": "https://thredds.cdip.ucsd.edu/thredds/dodsC/cdip/model/MOP_alongshore/OC283_forecast.nc.html",
+   "time_utc": "2026-11-03T19:08Z",
+   "age_h": 4.0,
+   "error": null,
+   "status": "ok"
   },
   {
    "id": "glider",
    "label": "Spray glider temperature profile (Scripps CUGN via IOOS Glider DAC)",
-   "url": "https://gliders.ioos.us/erddap/tabledap/allDatasets.csv",
-   "time_utc": null,
-   "age_h": null,
-   "error": "RuntimeError: profile too shallow or sparse",
-   "status": "missing"
+   "url": "https://gliders.ioos.us/erddap/tabledap/sp207-20260923T1722.html",
+   "time_utc": "2026-11-03T12:43Z",
+   "age_h": 10.4,
+   "error": null,
+   "status": "ok"
   },
   {
    "id": "fleet_now",
    "label": "Fleet Tracks live AIS positions (fleet-live branch)",
    "url": "https://shouldidive.com/fleet/#view=live",
-   "time_utc": "2026-11-03T21:05Z",
+   "time_utc": "2026-11-03T23:04Z",
    "age_h": 0.1,
    "error": null,
    "status": "ok"
@@ -3304,7 +3493,7 @@
    "label": "Buoy 46254 Scripps Nearshore (La Jolla), last 45 days",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46254",
    "time_utc": "2026-11-03T00:00Z",
-   "age_h": 21.2,
+   "age_h": 23.1,
    "error": null,
    "status": "ok"
   },
@@ -3313,7 +3502,7 @@
    "label": "Buoy 46232 Point Loma South, last 45 days",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46232",
    "time_utc": "2026-11-03T00:00Z",
-   "age_h": 21.2,
+   "age_h": 23.1,
    "error": null,
    "status": "ok"
   },
@@ -3322,7 +3511,7 @@
    "label": "Buoy 46086 San Clemente Basin, last 45 days",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46086",
    "time_utc": "2026-11-03T00:00Z",
-   "age_h": 21.2,
+   "age_h": 23.1,
    "error": null,
    "status": "ok"
   },
@@ -3331,7 +3520,7 @@
    "label": "Buoy 46047 Tanner Bank, last 45 days",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46047",
    "time_utc": "2026-11-03T00:00Z",
-   "age_h": 21.2,
+   "age_h": 23.1,
    "error": null,
    "status": "ok"
   },
@@ -3340,7 +3529,7 @@
    "label": "Buoy 46253 San Pedro South, last 45 days",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46253",
    "time_utc": "2026-11-03T00:00Z",
-   "age_h": 21.2,
+   "age_h": 23.1,
    "error": null,
    "status": "ok"
   },
@@ -3349,7 +3538,7 @@
    "label": "Spray glider profiles, one a day for 10 days",
    "url": "https://gliders.ioos.us/erddap/",
    "time_utc": "2026-11-03T00:00Z",
-   "age_h": 21.2,
+   "age_h": 23.1,
    "error": null,
    "status": "ok"
   },
@@ -3358,7 +3547,7 @@
    "label": "NOAA CPC weekly Nino-3.4 anomaly (OISST, 1991-2020 base)",
    "url": "https://www.cpc.ncep.noaa.gov/data/indices/wksst9120.for",
    "time_utc": "2026-10-28T00:00Z",
-   "age_h": 165.2,
+   "age_h": 167.1,
    "error": null,
    "status": "ok"
   },
@@ -3366,7 +3555,7 @@
    "id": "season_curves",
    "label": "NDBC buoy history: this year, last year and the 10 years before",
    "url": "https://www.ndbc.noaa.gov/historical_data.shtml",
-   "time_utc": "2026-11-03T21:11Z",
+   "time_utc": "2026-11-03T23:08Z",
    "age_h": 0.0,
    "error": null,
    "status": "ok"
@@ -3375,7 +3564,7 @@
    "id": "field_reports",
    "label": "Field reports sent in from the water (approved)",
    "url": null,
-   "time_utc": "2026-11-03T21:11Z",
+   "time_utc": "2026-11-03T23:08Z",
    "age_h": 0.0,
    "error": null,
    "status": "ok"
@@ -3385,7 +3574,7 @@
    "label": "Dana Wharf fish counts",
    "url": "https://danawharf.com/fish-counts/",
    "time_utc": "2026-11-02T23:00Z",
-   "age_h": 22.2,
+   "age_h": 24.1,
    "error": null,
    "status": "ok"
   },
@@ -3394,7 +3583,7 @@
    "label": "Davey's Locker fish counts",
    "url": "https://daveyslocker.com/fish-count/",
    "time_utc": "2026-11-02T23:00Z",
-   "age_h": 22.2,
+   "age_h": 24.1,
    "error": null,
    "status": "ok"
   },
@@ -3403,7 +3592,7 @@
    "label": "Everingham Bros bait report (San Diego Bay, Mission Bay, Dana Point)",
    "url": "https://baitbarge.com/bait-report",
    "time_utc": "2026-11-03T16:45Z",
-   "age_h": 4.4,
+   "age_h": 6.4,
    "error": null,
    "status": "ok"
   },
@@ -3411,8 +3600,8 @@
    "id": "model_frames",
    "label": "ShoudiDive hourly wind frames (HRRR/GFS/ECMWF blend)",
    "url": "/",
-   "time_utc": "2026-11-03T20:20Z",
-   "age_h": 0.9,
+   "time_utc": "2026-11-03T22:20Z",
+   "age_h": 0.8,
    "error": null,
    "status": "ok"
   },
@@ -3421,7 +3610,7 @@
    "label": "ShoudiDive hourly wave frames (NOAA WaveWatch III)",
    "url": "/",
    "time_utc": "2026-11-03T18:15Z",
-   "age_h": 2.9,
+   "age_h": 4.9,
    "error": null,
    "status": "ok"
   }
@@ -4434,40 +4623,40 @@
      "lng": -117.153,
      "spot": "Point Loma kelp",
      "nm_from_sd": 4,
-     "t": "2026-11-03T21:03:12Z"
+     "t": "2026-11-03T23:00:09Z"
+    },
+    {
+     "name": "Legacy",
+     "sog": 3.1,
+     "stopped": false,
+     "lat": 32.747,
+     "lng": -117.314,
+     "spot": "Point Loma kelp",
+     "nm_from_sd": 5,
+     "t": "2026-11-03T22:55:05Z"
+    },
+    {
+     "name": "Victory",
+     "sog": 9.4,
+     "stopped": false,
+     "lat": 33.61,
+     "lng": -118.181,
+     "spot": "Avalon Bank",
+     "nm_from_sd": 72,
+     "t": "2026-11-03T22:51:45Z"
     },
     {
      "name": "Independence",
-     "sog": 0,
-     "stopped": true,
-     "lat": 33.788,
-     "lng": -118.952,
-     "spot": null,
-     "nm_from_sd": 108,
-     "t": "2026-11-03T20:52:50Z"
-    },
-    {
-     "name": "Triumphant",
-     "sog": 24,
+     "sog": 12.2,
      "stopped": false,
-     "lat": 33.606,
-     "lng": -118.05,
-     "spot": "14 Mile Bank",
-     "nm_from_sd": 67,
-     "t": "2026-11-03T20:49:36Z"
-    },
-    {
-     "name": "Ava Foss",
-     "sog": 18.7,
-     "stopped": false,
-     "lat": 33.905,
-     "lng": -118.44,
+     "lat": 33.813,
+     "lng": -118.997,
      "spot": null,
-     "nm_from_sd": 94,
-     "t": "2026-11-03T20:58:04Z"
+     "nm_from_sd": 111,
+     "t": "2026-11-03T22:07:14Z"
     }
    ],
-   "fresh": "2026-11-03T21:05:14Z",
+   "fresh": "2026-11-03T23:04:10Z",
    "max_age_h": 3.0
   },
   "inshore": [
@@ -4489,7 +4678,7 @@
     "drivers": "Spawning Mar-Jul (peak May); tagged fish spent half their time at 55-61°F, tracking the thermocline.",
     "look": "Kelp near squid grounds, at dusk; near the surface Apr-Oct, deeper Dec-Feb.",
     "evidence": "Thermal niche from one tagging study (Aalbers & Sepulveda 2015).",
-    "today": "Surface water is 76°F, above the 55-61°F the tagged fish used; the cooler water they favored sits below the thermocline."
+    "today": "Surface water is 76°F, above the 55-61°F the tagged fish used; offshore, the nearest glider puts the thermocline about 194 ft down, and the cooler water they favored sits below it."
    },
    {
     "key": "calico",
@@ -4543,26 +4732,26 @@
   "counts_note": "No dock counts: the network that publishes SoCal landing counts now forbids automated collection and republishing without a license."
  },
  "bottom_line": [
-  "Shore diving today: outside our thresholds at La Jolla Shores and Laguna Beach; marginal at La Jolla Cove and Point Loma and Sunset Cliffs. The San Diego County surf forecast is 3 to 5 feet from 210°, with a high rip current risk.",
+  "Shore diving today: outside our thresholds at La Jolla Cove and Laguna Beach; marginal at La Jolla Shores and Point Loma and Sunset Cliffs. The San Diego County surf forecast is 3 to 6 feet from 280°, with a high rip current risk.",
   "By boat today: outside our thresholds for the Coronados, the offshore banks, Catalina and the San Pedro Channel, and the outer islands; marginal for San Diego inshore.",
-  "Nearshore buoys read 74-78°F as of 12:56 PM; the latest satellite temperature map is from Oct 31."
+  "Nearshore buoys read 74-78°F as of 2:26 PM; the latest satellite temperature map is from Oct 31."
  ],
  "views": {
   "fishing": [
    "By boat today: outside our thresholds for the Coronados, the offshore banks, Catalina and the San Pedro Channel, and the outer islands; marginal for San Diego inshore.",
    "Water at the named spots runs 68-75°F on the Oct 31 satellite map; the strongest break is near 43, 1.6°F over 4.3 nm, warm side to the NE.",
    "Season and water both match today for bluefin tuna, yellowfin tuna, dorado, yellowtail, striped marlin and wahoo. That says the water is right, not that fish are there.",
-   "AIS shows 4 boats at sea in the last 3 hours, 2 of them stopped. Over the last three days the fleet stopped longest at Point Loma kelp."
+   "AIS shows 4 boats at sea in the last 3 hours, 1 of them stopped. Over the last three days the fleet stopped longest at Point Loma kelp."
   ],
   "diving": [
-   "Shore diving today: outside our thresholds at La Jolla Shores and Laguna Beach; marginal at La Jolla Cove and Point Loma and Sunset Cliffs. The San Diego County surf forecast is 3 to 5 feet from 210°, with a high rip current risk.",
-   "Best bet from shore: La Jolla Cove (marginal). Just Get Wet (La Jolla dive shop) reported 10-15 ft at La Jolla on Nov 1.",
-   "Suit: 3-5 mm for most divers, sized for 76°F at the surface. Kelp-bed bottoms can run colder when internal tides push cold water in."
+   "Shore diving today: outside our thresholds at La Jolla Cove and Laguna Beach; marginal at La Jolla Shores and Point Loma and Sunset Cliffs. The San Diego County surf forecast is 3 to 6 feet from 280°, with a high rip current risk.",
+   "Best bet from shore: La Jolla Shores (marginal, with sets around 1 ft at the entry in the CDIP model). Just Get Wet (La Jolla dive shop) reported 10-15 ft at La Jolla on Nov 1.",
+   "Suit: 3-5 mm for most divers, sized for 76°F at 60 ft in the nearest glider profile. Kelp-bed bottoms can run colder when internal tides push cold water in. A glider 53 nm from San Diego measured 76°F at the surface and 76°F at 100 ft, with the sharpest drop near 194 ft (4:43 AM Nov 3)."
   ],
   "spearfishing": [
-   "Entries today: outside our thresholds at La Jolla Shores and Laguna Beach; marginal at La Jolla Cove and Point Loma and Sunset Cliffs. The San Diego County surf forecast is 3 to 5 feet from 210°, with a high rip current risk.",
+   "Entries today: outside our thresholds at La Jolla Cove and Laguna Beach; marginal at La Jolla Shores and Point Loma and Sunset Cliffs. The San Diego County surf forecast is 3 to 6 feet from 280°, with a high rip current risk.",
    "Just Get Wet (La Jolla dive shop) reported 10-15 ft at La Jolla on Nov 1: enough to hunt pelagics (15 ft or more).",
-   "White seabass: Surface water is 76°F, above the 55-61°F the tagged fish used; the cooler water they favored sits below the thermocline. Open now: spiny lobster (by hand only)."
+   "A glider 53 nm from San Diego measured 76°F at the surface and 76°F at 100 ft, with the sharpest drop near 194 ft (4:43 AM Nov 3). White seabass: Surface water is 76°F, above the 55-61°F the tagged fish used; offshore, the nearest glider puts the thermocline about 194 ft down, and the cooler water they favored sits below it. Open now: spiny lobster (by hand only)."
   ]
  },
  "season_curves": {
@@ -8865,8 +9054,8 @@
     {
      "date": "2026-11-05",
      "label": "Thu",
-     "wind_max_kt": 5,
-     "wind_dir": "SW",
+     "wind_max_kt": 6,
+     "wind_dir": "W",
      "hs_max_ft": 1.7,
      "tp_s": 13
     }
@@ -9100,8 +9289,8 @@
     {
      "date": "2026-11-05",
      "label": "Thu",
-     "wind_max_kt": 5,
-     "wind_dir": "WSW",
+     "wind_max_kt": 6,
+     "wind_dir": "W",
      "hs_max_ft": 1.4,
      "tp_s": 13
     }
@@ -9831,7 +10020,7 @@
     {
      "date": "2026-11-05",
      "label": "Thu",
-     "wind_max_kt": 7,
+     "wind_max_kt": 10,
      "wind_dir": "WNW",
      "hs_max_ft": 2.3,
      "tp_s": 13
@@ -10086,8 +10275,8 @@
     {
      "date": "2026-11-05",
      "label": "Thu",
-     "wind_max_kt": 5,
-     "wind_dir": "E",
+     "wind_max_kt": 7,
+     "wind_dir": "NW",
      "hs_max_ft": 3.7,
      "tp_s": 13
     }
@@ -10567,7 +10756,7 @@
      "date": "2026-11-05",
      "label": "Thu",
      "wind_max_kt": 6,
-     "wind_dir": "NW",
+     "wind_dir": "WNW",
      "hs_max_ft": 2.5,
      "tp_s": 13
     }
@@ -10800,7 +10989,7 @@
     {
      "date": "2026-11-05",
      "label": "Thu",
-     "wind_max_kt": 5,
+     "wind_max_kt": 7,
      "wind_dir": "WNW",
      "hs_max_ft": 2.2,
      "tp_s": 13
@@ -11888,10 +12077,10 @@
      },
      {
       "date": "2026-11-03",
-      "temp_f": 75.4,
+      "temp_f": 75.5,
       "wave_ft": 2.4,
       "wave_max_ft": 3.0,
-      "period_s": 14
+      "period_s": 15
      }
     ]
    },
@@ -13256,7 +13445,7 @@
      },
      {
       "date": "2026-11-03",
-      "temp_f": 74.8,
+      "temp_f": 74.7,
       "wave_ft": 3.2,
       "wave_max_ft": 3.9,
       "period_s": 15
@@ -13265,6 +13454,16 @@
    }
   ],
   "glider": [
+   {
+    "date": "2026-10-24",
+    "glider": "sp058",
+    "km": 104,
+    "thermocline_ft": 144,
+    "mixed_layer_ft": 154,
+    "surface_f": 73.6,
+    "t60_f": 73.4,
+    "t100_f": 73.2
+   },
    {
     "date": "2026-10-28",
     "glider": "calanus",
@@ -14575,14 +14774,42 @@
   "synopsis": [
    {
     "office": "San Diego (NWS)",
-    "text": "At 12 AM, a 1022 mb high was 600 miles southwest of San Diego and a 1003 mb low was 300 miles west of Cape Mendocino. Weak offshore flow in the mornings will alternate with afternoon onshore flow through Saturday. Gusty northwest winds will increase this afternoon and continue into Wednesday morning, with gusts of 20 to 25 kt in the outer coastal waters. A Small Craft Advisory is in effect for the outer coastal waters through this period."
+    "text": "At 1 PM, a 1023 mb high was 500 miles southwest of San Diego and a 1009 mb low was 200 miles northwest of San Fransisco. Weak offshore flow in the mornings will alternate with afternoon onshore flow through Saturday. Gusty northwest winds this afternoon will continue into Wednesday morning, with gusts of 20 to 25 kt in the outer coastal waters. A Small Craft Advisory is in effect for the outer coastal waters through this period."
    },
    {
     "office": "Los Angeles / Channel Islands (NWS)",
-    "text": "At 15Z or 7 AM PST, a 1003 mb low was 800 NM NW of Los Angeles while a 1022 mb high was 700 NM SW of Los Angeles. Widespread gusty west winds and choppy seas are expected today."
+    "text": "At 21Z or 1 PM PST, a 1026 mb high was 1200 NM west of Point Conception. Widespread gusty west winds and choppy seas are expected today."
    }
   ],
   "headlines": [
+   {
+    "event": "Small Craft Advisory",
+    "area": "Waters from Pt. Sal to Santa Cruz Island CA and westward 60 nm including San Miguel and Santa Rosa Islands; Outer waters from Santa Cruz Island to San Clemente Island to 60 NM offshore including San Nicolas and Santa Barbara Islands",
+    "zones": [
+     "PZZ673",
+     "PZZ676"
+    ],
+    "from": "1:20 PM Nov 3",
+    "until": "8:00 AM Nov 5",
+    "headline": "Small Craft Advisory issued November 3 at 1:20PM PST until November 5 at 8:00AM PST by NWS Los Angeles/Oxnard CA",
+    "description": "* WHAT...Hazardous sea conditions.\n\n* WHERE...Waters from Pt. Sal to Santa Cruz Island CA and\nwestward 60 nm including San Miguel and Santa Rosa Islands and\nOuter waters from Santa Cruz Island to San Clemente Island to\n60 NM offshore including San Nicolas and Santa Barbara Islands.\n\n* WHEN...From 1 PM this afternoon to 8 AM PST Thursday.\n\n* IMPACTS...Conditions will be hazardous to small craft.\n\n* ADDITIONAL DETAILS...See the Coastal Waters Forecast (CWFLOX)\nfor more.",
+    "instruction": "Inexperienced mariners, especially those operating smaller\nvessels, should avoid navigating in hazardous conditions.",
+    "where": "western Santa Barbara Channel and outer waters to San Clemente Island"
+   },
+   {
+    "event": "Small Craft Advisory",
+    "area": "East Santa Barbara Channel from Pt. Conception to Pt. Mugu CA including Santa Cruz Island; Inner waters from Point Mugu to San Mateo Pt. CA including Santa Catalina and Anacapa Islands",
+    "zones": [
+     "PZZ650",
+     "PZZ655"
+    ],
+    "from": "1:20 PM Nov 3",
+    "until": "3:00 AM Nov 4",
+    "headline": "Small Craft Advisory issued November 3 at 1:20PM PST until November 4 at 3:00AM PST by NWS Los Angeles/Oxnard CA",
+    "description": "* WHAT...Hazardous sea conditions.\n\n* WHERE...East Santa Barbara Channel from Pt. Conception to Pt.\nMugu CA including Santa Cruz Island and Inner waters from\nPoint Mugu to San Mateo Pt. CA including Santa Catalina and\nAnacapa Islands.\n\n* WHEN...Until 3 AM PST Wednesday.\n\n* IMPACTS...Conditions will be hazardous to small craft.\n\n* ADDITIONAL DETAILS...See the Coastal Waters Forecast (CWFLOX)\nfor more.",
+    "instruction": "Inexperienced mariners, especially those operating smaller\nvessels, should avoid navigating in hazardous conditions.",
+    "where": "East Santa Barbara Channel and LA inner waters and Catalina"
+   },
    {
     "event": "Small Craft Advisory",
     "area": "Waters from San Mateo point to the Mexican Border Extending 10 to 60 nm out including San Clemente Island",
@@ -14595,34 +14822,6 @@
     "description": "* WHAT...Northwest winds 12 to 18 kt with gusts 20 to 25 kt and\nchoppy seas.\n\n* WHERE...Waters from San Mateo Point to the Mexican Border\nExtending 10 to 60 nm out including San Clemente Island.\n\n* WHEN...From 1 PM Tuesday to 4 AM PST Wednesday.\n\n* IMPACTS...Conditions will be hazardous to small craft.\n\n* ADDITIONAL DETAILS...Strongest winds will be near San Clemente\nIsland.",
     "instruction": "Inexperienced mariners, especially those operating smaller\nvessels, should avoid navigating in hazardous conditions.",
     "where": "San Diego offshore waters"
-   },
-   {
-    "event": "Small Craft Advisory",
-    "area": "Waters from Pt. Sal to Santa Cruz Island CA and westward 60 nm including San Miguel and Santa Rosa Islands; Outer waters from Santa Cruz Island to San Clemente Island to 60 NM offshore including San Nicolas and Santa Barbara Islands",
-    "zones": [
-     "PZZ673",
-     "PZZ676"
-    ],
-    "from": "1:00 PM Nov 3",
-    "until": "8:00 AM Nov 5",
-    "headline": "Small Craft Advisory issued November 3 at 7:20AM PST until November 5 at 8:00AM PST by NWS Los Angeles/Oxnard CA",
-    "description": "* WHAT...Hazardous sea conditions.\n\n* WHERE...Waters from Pt. Sal to Santa Cruz Island CA and\nwestward 60 nm including San Miguel and Santa Rosa Islands and\nOuter waters from Santa Cruz Island to San Clemente Island to\n60 NM offshore including San Nicolas and Santa Barbara Islands.\n\n* WHEN...From 1 PM this afternoon to 8 AM PST Thursday.\n\n* IMPACTS...Conditions will be hazardous to small craft.\n\n* ADDITIONAL DETAILS...See the Coastal Waters Forecast (CWFLOX)\nfor more.",
-    "instruction": "Inexperienced mariners, especially those operating smaller\nvessels, should avoid navigating in hazardous conditions.",
-    "where": "western Santa Barbara Channel and outer waters to San Clemente Island"
-   },
-   {
-    "event": "Small Craft Advisory",
-    "area": "East Santa Barbara Channel from Pt. Conception to Pt. Mugu CA including Santa Cruz Island; Inner waters from Point Mugu to San Mateo Pt. CA including Santa Catalina and Anacapa Islands",
-    "zones": [
-     "PZZ650",
-     "PZZ655"
-    ],
-    "from": "1:00 PM Nov 3",
-    "until": "4:00 AM Nov 4",
-    "headline": "Small Craft Advisory issued November 3 at 7:20AM PST until November 4 at 4:00AM PST by NWS Los Angeles/Oxnard CA",
-    "description": "* WHAT...Hazardous sea conditions.\n\n* WHERE...East Santa Barbara Channel from Pt. Conception to Pt.\nMugu CA including Santa Cruz Island and Inner waters from\nPoint Mugu to San Mateo Pt. CA including Santa Catalina and\nAnacapa Islands.\n\n* WHEN...From 1 PM this afternoon to 4 AM PST Wednesday.\n\n* IMPACTS...Conditions will be hazardous to small craft.\n\n* ADDITIONAL DETAILS...See the Coastal Waters Forecast (CWFLOX)\nfor more.",
-    "instruction": "Inexperienced mariners, especially those operating smaller\nvessels, should avoid navigating in hazardous conditions.",
-    "where": "East Santa Barbara Channel and LA inner waters and Catalina"
    }
   ],
   "outlook": [
@@ -14648,8 +14847,8 @@
      {
       "date": "2026-11-05",
       "label": "Thu",
-      "wind_max_kt": 5,
-      "wind_dir": "SW",
+      "wind_max_kt": 6,
+      "wind_dir": "W",
       "hs_max_ft": 1.7,
       "tp_s": 13
      }
@@ -14764,7 +14963,7 @@
      {
       "date": "2026-11-05",
       "label": "Thu",
-      "wind_max_kt": 5,
+      "wind_max_kt": 7,
       "wind_dir": "WNW",
       "hs_max_ft": 2.2,
       "tp_s": 13
@@ -14793,8 +14992,8 @@
      {
       "date": "2026-11-05",
       "label": "Thu",
-      "wind_max_kt": 5,
-      "wind_dir": "E",
+      "wind_max_kt": 7,
+      "wind_dir": "NW",
       "hs_max_ft": 3.7,
       "tp_s": 13
      }
@@ -14834,14 +15033,14 @@
    {
     "name": "San Clemente Basin",
     "kt": 14,
-    "gust_kt": 17,
-    "observed": "11:50 AM"
+    "gust_kt": 16,
+    "observed": "1:40 PM"
    },
    {
     "name": "Tanner Bank",
-    "kt": 14,
-    "gust_kt": 16,
-    "observed": "11:40 AM"
+    "kt": 16,
+    "gust_kt": 17,
+    "observed": "1:30 PM"
    }
   ]
  },
@@ -14853,7 +15052,40 @@
    "buoy": "46254",
    "lat": 32.8505,
    "lng": -117.2726,
-   "surf": [],
+   "surf": [
+    {
+     "date": "2026-11-03",
+     "label": "Tue",
+     "hs_ft": 2.4,
+     "sets_ft": 3.0,
+     "tp_s": 14,
+     "dp_deg": 337
+    },
+    {
+     "date": "2026-11-04",
+     "label": "Wed",
+     "hs_ft": 2.7,
+     "sets_ft": 3.5,
+     "tp_s": 14,
+     "dp_deg": 337
+    },
+    {
+     "date": "2026-11-05",
+     "label": "Thu",
+     "hs_ft": 2.7,
+     "sets_ft": 3.4,
+     "tp_s": 12,
+     "dp_deg": 327
+    },
+    {
+     "date": "2026-11-06",
+     "label": "Fri",
+     "hs_ft": 2.0,
+     "sets_ft": 2.6,
+     "tp_s": 13,
+     "dp_deg": 331
+    }
+   ],
    "vis": [
     {
      "source": "dive-shop-justgetwet",
@@ -15038,14 +15270,14 @@
     },
     {
      "date": "2026-11-03",
-     "temp_f": 75.4
+     "temp_f": 75.5
     }
    ],
    "surge": {
     "site": "La Jolla Cove",
     "depth_ft": 33,
     "buoy": "46254",
-    "u_m_s": 0.29,
+    "u_m_s": 0.27,
     "u_ft_s": 0.9,
     "level": "strong"
    },
@@ -15065,7 +15297,40 @@
    "buoy": "46254",
    "lat": 32.8575,
    "lng": -117.257,
-   "surf": [],
+   "surf": [
+    {
+     "date": "2026-11-03",
+     "label": "Tue",
+     "hs_ft": 1.1,
+     "sets_ft": 1.4,
+     "tp_s": 4,
+     "dp_deg": 276
+    },
+    {
+     "date": "2026-11-04",
+     "label": "Wed",
+     "hs_ft": 2.0,
+     "sets_ft": 2.6,
+     "tp_s": 6,
+     "dp_deg": 284
+    },
+    {
+     "date": "2026-11-05",
+     "label": "Thu",
+     "hs_ft": 1.4,
+     "sets_ft": 1.7,
+     "tp_s": 12,
+     "dp_deg": 271
+    },
+    {
+     "date": "2026-11-06",
+     "label": "Fri",
+     "hs_ft": 1.1,
+     "sets_ft": 1.3,
+     "tp_s": 8,
+     "dp_deg": 274
+    }
+   ],
    "vis": [
     {
      "source": "dive-shop-justgetwet",
@@ -15250,14 +15515,14 @@
     },
     {
      "date": "2026-11-03",
-     "temp_f": 75.4
+     "temp_f": 75.5
     }
    ],
    "surge": {
     "site": "La Jolla Cove",
     "depth_ft": 33,
     "buoy": "46254",
-    "u_m_s": 0.29,
+    "u_m_s": 0.27,
     "u_ft_s": 0.9,
     "level": "strong"
    },
@@ -15277,7 +15542,40 @@
    "buoy": "46232",
    "lat": 32.725,
    "lng": -117.256,
-   "surf": [],
+   "surf": [
+    {
+     "date": "2026-11-03",
+     "label": "Tue",
+     "hs_ft": 2.9,
+     "sets_ft": 3.7,
+     "tp_s": 17,
+     "dp_deg": 267
+    },
+    {
+     "date": "2026-11-04",
+     "label": "Wed",
+     "hs_ft": 3.4,
+     "sets_ft": 4.4,
+     "tp_s": 14,
+     "dp_deg": 257
+    },
+    {
+     "date": "2026-11-05",
+     "label": "Thu",
+     "hs_ft": 3.5,
+     "sets_ft": 4.4,
+     "tp_s": 12,
+     "dp_deg": 275
+    },
+    {
+     "date": "2026-11-06",
+     "label": "Fri",
+     "hs_ft": 2.5,
+     "sets_ft": 3.2,
+     "tp_s": 14,
+     "dp_deg": 267
+    }
+   ],
    "vis": [],
    "vis_source": null,
    "temp_series": [
@@ -15370,8 +15668,8 @@
     "site": "Point Loma kelp",
     "depth_ft": 49,
     "buoy": "46232",
-    "u_m_s": 0.47,
-    "u_ft_s": 1.6,
+    "u_m_s": 0.52,
+    "u_ft_s": 1.7,
     "level": "strong"
    },
    "vis_pred": {
@@ -15390,7 +15688,40 @@
    "buoy": "46253",
    "lat": 33.5445,
    "lng": -117.7993,
-   "surf": [],
+   "surf": [
+    {
+     "date": "2026-11-03",
+     "label": "Tue",
+     "hs_ft": 2.9,
+     "sets_ft": 3.7,
+     "tp_s": 15,
+     "dp_deg": 203
+    },
+    {
+     "date": "2026-11-04",
+     "label": "Wed",
+     "hs_ft": 2.8,
+     "sets_ft": 3.6,
+     "tp_s": 14,
+     "dp_deg": 202
+    },
+    {
+     "date": "2026-11-05",
+     "label": "Thu",
+     "hs_ft": 2.2,
+     "sets_ft": 2.8,
+     "tp_s": 13,
+     "dp_deg": 204
+    },
+    {
+     "date": "2026-11-06",
+     "label": "Fri",
+     "hs_ft": 1.8,
+     "sets_ft": 2.3,
+     "tp_s": 15,
+     "dp_deg": 203
+    }
+   ],
    "vis": [],
    "vis_source": null,
    "temp_series": [
@@ -15476,14 +15807,14 @@
     },
     {
      "date": "2026-11-03",
-     "temp_f": 74.8
+     "temp_f": 74.7
     }
    ],
    "surge": {
     "site": "Laguna Beach coves",
     "depth_ft": 33,
     "buoy": "46253",
-    "u_m_s": 0.33,
+    "u_m_s": 0.34,
     "u_ft_s": 1.1,
     "level": "strong"
    },
@@ -18441,21 +18772,13 @@
    }
   ],
   "dock_week": {
-   "dorado": {
-    "Dana Point": 12,
-    "Newport Beach": 13
+   "yellowfin": {
+    "Dana Point": 645,
+    "Newport Beach": 621
    },
    "skipjack": {
     "Dana Point": 238,
     "Newport Beach": 269
-   },
-   "calico bass": {
-    "Dana Point": 266,
-    "Newport Beach": 238
-   },
-   "yellowfin": {
-    "Dana Point": 645,
-    "Newport Beach": 621
    },
    "bullet tuna": {
     "Dana Point": 182,
@@ -18465,13 +18788,9 @@
     "Dana Point": 157,
     "Newport Beach": 142
    },
-   "sand bass": {
-    "Dana Point": 74,
-    "Newport Beach": 50
-   },
-   "sheephead": {
-    "Dana Point": 40,
-    "Newport Beach": 28
+   "calico bass": {
+    "Dana Point": 266,
+    "Newport Beach": 238
    },
    "sculpin": {
     "Dana Point": 29,
@@ -18480,6 +18799,18 @@
    "whitefish": {
     "Dana Point": 119,
     "Newport Beach": 269
+   },
+   "sheephead": {
+    "Dana Point": 40,
+    "Newport Beach": 28
+   },
+   "dorado": {
+    "Dana Point": 12,
+    "Newport Beach": 13
+   },
+   "sand bass": {
+    "Dana Point": 74,
+    "Newport Beach": 50
    },
    "wahoo": {
     "Dana Point": 2
@@ -18592,7 +18923,7 @@
    }
   },
   "dock_since": {
-   "Dana Point": "2026-10-02",
+   "Dana Point": "2026-10-03",
    "Newport Beach": "2026-07-16"
   },
   "dock_sources": [
@@ -19009,18 +19340,19 @@
    "Strongest offshore break: 9 Mile / 43, 1.6°F over 4.3 nm at 32 45 x 117 59, warm side NE. It has softened over the last three map days.",
    "The paddy drift model's core regions sit in San Clemente Is. and Tanner / Cortes.",
    "AIS heard no offshore stops in the last three days (most boats under 65 ft never broadcast). The same weeks last year, the fleet's stops concentrated at Tanner / Cortes (165 h), 14 Mile / Avalon Bank (30 h) and Catalina (19 h).",
-   "NWS: Small Craft Advisory (San Diego offshore waters) until 4:00 AM Nov 4; Small Craft Advisory (western Santa Barbara Channel and outer waters to San Clemente Island) until 8:00 AM Nov 5; Small Craft Advisory (East Santa Barbara Channel and LA inner waters and Catalina) until 4:00 AM Nov 4.",
+   "NWS: Small Craft Advisory (western Santa Barbara Channel and outer waters to San Clemente Island) until 8:00 AM Nov 5; Small Craft Advisory (East Santa Barbara Channel and LA inner waters and Catalina) until 3:00 AM Nov 4; Small Craft Advisory (San Diego offshore waters) until 4:00 AM Nov 4.",
    "Our model's windiest daytime spot in the next days: San Clemente Is., NW 21 kt on Wed.",
    "El Niño: weekly Niño-3.4 anomaly +3.4°C, from +3.2°C four weeks earlier."
   ],
   "diving": [
    "Predicted visibility today: La Jolla Cove about 6 ft (4-11); La Jolla Shores about 6 ft (4-11); Point Loma and Sunset Cliffs about 7 ft (4-12); Laguna Beach about 6 ft (3-12). Our model's number, scaled to where recent shop reports landed: La Jolla x0.54 from 46 reports; Laguna Beach x0.24 from 23 reports.",
    "Just Get Wet (La Jolla) visibility posts: 10-15 ft on Nov 1, against 15-20 ft on Oct 25.",
-   "Water at the La Jolla nearshore buoy: 75.4°F, +1.7°F over a week and +1.0°F since Sep 20.",
-   "Offshore water column (Spray gliders, nearest each day): the warm top layer reached 187 ft on Nov 3, against 200 ft on Oct 28; 75.7°F at 60 ft.",
-   "White seabass: Surface water is 76°F, above the 55-61°F the tagged fish used; the cooler water they favored sits below the thermocline.",
+   "Water at the La Jolla nearshore buoy: 75.5°F, +1.8°F over a week and +1.1°F since Sep 20.",
+   "Set height at the entries (CDIP model): La Jolla Cove Tue 3 ft, Wed 4 ft, Thu 3 ft; La Jolla Shores Tue 1 ft, Wed 3 ft, Thu 2 ft; Point Loma and Sunset Cliffs Tue 4 ft, Wed 4 ft, Thu 4 ft.",
+   "Offshore water column (Spray gliders, nearest each day): the warm top layer reached 187 ft on Nov 3, against 154 ft on Oct 24; 75.7°F at 60 ft.",
+   "White seabass: Surface water is 76°F, above the 55-61°F the tagged fish used; offshore, the nearest glider puts the thermocline about 194 ft down, and the cooler water they favored sits below it.",
    "Yellowtail (islands and kelp): Surface water is 76°F; San Diego catch rates have fallen above 69°F in fleet data.",
-   "NWS: Small Craft Advisory (San Diego offshore waters) until 4:00 AM Nov 4; Small Craft Advisory (western Santa Barbara Channel and outer waters to San Clemente Island) until 8:00 AM Nov 5; Small Craft Advisory (East Santa Barbara Channel and LA inner waters and Catalina) until 4:00 AM Nov 4."
+   "NWS: Small Craft Advisory (western Santa Barbara Channel and outer waters to San Clemente Island) until 8:00 AM Nov 5; Small Craft Advisory (East Santa Barbara Channel and LA inner waters and Catalina) until 3:00 AM Nov 4; Small Craft Advisory (San Diego offshore waters) until 4:00 AM Nov 4."
   ]
  }
 }
