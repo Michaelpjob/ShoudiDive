@@ -1,28 +1,22 @@
-# Validation watchdog — 2026-11-04T06:18Z
+# Validation watchdog — 2026-11-04T18:12Z
 
-**4 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
+**3 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
-### 🔴 1. Only 14 observations in the last 24h (floor: 50)
+### 🔴 1. Only 19 observations in the last 24h (floor: 50)
 
 Multiple scrapers may be silently broken.
 
 **Suggested action:** Open the latest hourly ingest workflow run; look for `FAILED` lines per scraper.
 
-### 🔴 2. Required source `ndbc-buoy` has been silent for >24h
+### ⚠️ 2. 1 non-critical external feed(s) are red
 
-Expected `ndbc-buoy` to contribute at least one observation per cron. None seen in the recent window.
-
-**Suggested action:** Inspect `pipeline/validation/ingest/ndbc.py` and the latest ingest cron's log.
-
-### ⚠️ 3. 3 non-critical external feed(s) are red
-
-Red feeds: chl_climo_modis_pfeg, cdip, osm_overpass_main. Fallbacks may keep the model running, but redundancy is degraded.
+Red feeds: osm_overpass_main. Fallbacks may keep the model running, but redundancy is degraded.
 
 **Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
 
-### 🔴 4. Published-data freshness gate found 1 issue(s)
+### 🔴 3. Published-data freshness gate found 1 issue(s)
 
 Freshness/completeness failures: swell5d:summary_day_sparse.
 
@@ -32,16 +26,16 @@ Freshness/completeness failures: swell5d:summary_day_sparse.
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_nearshore` | 3 | 8.73 | -5.70 | 0% | 0.80 |
-| `central_nearshore` | 1 | 2.66 | -2.66 | 100% | — |
+| `bight_nearshore` | 3 | 6.76 | -3.44 | 0% | 0.86 |
+| `central_nearshore` | 1 | 2.86 | -2.86 | 100% | — |
 
 ## Per-source bias (informational)
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `cencoos` | 1 | -2.66 ft |
-| `dive-shop-diveviz` | 1 | -9.45 ft |
-| `dive-shop-justgetwet` | 2 | -3.83 ft |
+| `cencoos` | 1 | -2.86 ft |
+| `dive-shop-diveviz` | 1 | -7.24 ft |
+| `dive-shop-justgetwet` | 2 | -1.54 ft |
 
 ## How to act on this issue
 
