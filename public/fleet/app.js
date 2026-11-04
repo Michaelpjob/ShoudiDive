@@ -21,7 +21,7 @@ var D,map,hexLayer,stopLayer,portLayer,borderLayer,structLayer,spotLayer,liveLay
 /* w0..w1 = inclusive week window (indices into D.weeks); both -1 = whole period.
    vessel = a 9-digit MMSI from Find (any boat with AIS, fleet or not), vhrs = its track window */
 var S={w0:-1,w1:-1,metric:'fish',boat:'all',kind:'all',nearshore:false,cell:null,trip:null,playing:null,pick:false,view:'',shadows:true,mon:'all',vessel:null,vhrs:48};
-var LAST_AGG={};
+var LAST_AGG={},LAST_VMAX=1;   // the ramp top from the last draw(), so legend refreshes keep its scale
 
 function isMobile(){return window.innerWidth<=760;}
 function fmtDate(s){var d=new Date(s+'T12:00:00Z');return d.toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'});}
@@ -123,6 +123,7 @@ function draw(){
  vals.sort(function(a,b){return a-b;});
  var vmax=vals.length?vals[Math.floor((vals.length-1)*0.97)]:1;  // clip the top 3% so one mega-cell doesn't flatten the ramp
  if(vmax<=0)vmax=1;
+ LAST_VMAX=vmax;
  var n=0;
  Object.keys(A).forEach(function(h){var c=A[h],v=metricOf(c,h);if(v<=0||!D.cells[h])return;n++;
   var t=S.metric==='fish'?Math.sqrt(v/vmax):v/vmax;
@@ -259,7 +260,7 @@ function drawLive(){if(!liveLayer)return;liveLayer.clearLayers();if(!LIVE||!LIVE
   m.bindTooltip(esc(boat.name)+(st.moving?' · '+(b.sog||0).toFixed(0)+' kt':''),{className:'lv-lbl'+(st.state==='dock'?' dock':''),direction:'right',offset:[12,0],permanent:showLbl,interactive:false});
   m.addTo(liveLayer);});}
 function fetchLive(){fetch(LIVE_URL,{cache:'no-cache'}).then(function(r){return r.ok?r.json():null;}).then(function(j){
-  if(!j)return;LIVE=j;drawLive();var lg=document.getElementById('legend');if(lg)lg.innerHTML=legendHtml(1,Object.keys(LAST_AGG).length);placeReadout();renderMe();if(S.view==='live')renderPanel(LAST_AGG,Object.keys(LAST_AGG).length);}).catch(function(){});}
+  if(!j)return;LIVE=j;drawLive();var lg=document.getElementById('legend');if(lg)lg.innerHTML=legendHtml(LAST_VMAX,Object.keys(LAST_AGG).length);placeReadout();renderMe();if(S.view==='live')renderPanel(LAST_AGG,Object.keys(LAST_AGG).length);}).catch(function(){});}
 function liveCounts(){var c={under:0,dock:0,sea:0,n:0,fresh:0,list:[]};if(!LIVE||!LIVE.boats)return c;
  LIVE.boats.forEach(function(b){var bi=MMSI_IDX[String(b.mmsi)];if(bi==null)return;var st=liveStatus(b);c.n++;if(st.fresh)c.fresh++;
   if(st.state==='underway')c.under++;else if(st.state==='dock')c.dock++;else c.sea++;c.list.push({b:b,bi:bi,st:st});});
@@ -376,7 +377,7 @@ function pickFind(o){if(!o)return;closeFind();stopPlay();
 function vesselData(){if(!S.vessel)return null;var key=S.vessel+'|'+S.vhrs;if(VESSEL[key]===undefined){VESSEL[key]=null;fetchVessel(S.vessel,S.vhrs);}return VESSEL[key];}
 function fetchVessel(m,h){var key=m+'|'+h;
  var done=function(j){VESSEL[key]=j||{mmsi:+m,info:null,pts:[],failed:true};if(S.vessel===m&&S.vhrs===h){drawVessel();renderPanel(LAST_AGG,Object.keys(LAST_AGG).length);
-  document.getElementById('legend').innerHTML=legendHtml(1,Object.keys(LAST_AGG).length);placeReadout();}};
+  document.getElementById('legend').innerHTML=legendHtml(LAST_VMAX,Object.keys(LAST_AGG).length);placeReadout();}};
  fetch(VESSEL_URL+'?mmsi='+m+'&hours='+h,{cache:'no-cache'}).then(function(r){return r.ok?r.json():null;}).then(done).catch(function(){done(null);});}
 function vesselTitle(){var j=S.vessel?VESSEL[S.vessel+'|'+S.vhrs]:null,bi=MMSI_IDX[S.vessel];
  return (j&&j.info&&j.info.name)||(bi!=null?D.boats[bi].name:'MMSI '+S.vessel);}
@@ -646,12 +647,12 @@ function boot(d){D=d;
  L.control.layers(null,{'Right now: live positions':liveLayer,'Structure: banks, seamounts, reefs':structLayer,'Dive spots':spotLayer,'Landings':portLayer},{position:'bottomright',collapsed:true}).addTo(map);
  fetchLive();setInterval(fetchLive,LIVE_EVERY_MS);
  setInterval(function(){if(S.view==='live')fetchTracks();if(S.vessel)fetchVessel(S.vessel,S.vhrs);},LIVE_EVERY_MS);
- map.on('overlayadd overlayremove',function(){document.getElementById('legend').innerHTML=legendHtml(1,Object.keys(LAST_AGG).length);placeReadout();});
+ map.on('overlayadd overlayremove',function(){document.getElementById('legend').innerHTML=legendHtml(LAST_VMAX,Object.keys(LAST_AGG).length);placeReadout();});
  map.on('overlayadd overlayremove',saveRefPrefs);
  Object.keys(D.landings).forEach(function(n){var p=D.landings[n];
   L.circleMarker([p[0],p[1]],{radius:3,weight:1,color:'#fbbf24',fillColor:'#b45309',fillOpacity:.8}).bindTooltip(n,{className:'lbl',permanent:map.getZoom()>=9,direction:'right'}).addTo(portLayer);});
  map.on('zoomend',function(){syncRefZoom();portLayer.eachLayer(function(l){var t=l.getTooltip();if(t){t.options.permanent=map.getZoom()>=9;l.unbindTooltip().bindTooltip(t.getContent(),t.options);}});drawStops();
-  document.getElementById('legend').innerHTML=legendHtml(1,Object.keys(LAST_AGG).length);placeReadout();});
+  document.getElementById('legend').innerHTML=legendHtml(LAST_VMAX,Object.keys(LAST_AGG).length);placeReadout();});
  window.addEventListener('resize',placeReadout);
  coordbox=document.getElementById('coordbox');setReadout(map.getCenter());
  map.on('mousemove',function(e){setReadout(e.latlng);});

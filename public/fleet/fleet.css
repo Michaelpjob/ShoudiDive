@@ -133,13 +133,15 @@ body.sheet-open .leaflet-bottom.leaflet-right{display:none}
 @media (max-width:760px){
  .bar{display:block;padding:6px 10px 8px}
  .bar .row{display:flex;width:100%;gap:6px 8px}
- .bar .row1{justify-content:space-between;flex-wrap:wrap}
- #findbtn{margin-left:auto}
+ .bar .row1{justify-content:space-between;flex-wrap:nowrap}
+ .bar.finding .row1{flex-wrap:wrap}
+ .brand{min-width:0;flex:0 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ #findbtn{margin-left:auto;display:inline-flex;align-items:center;justify-content:center;padding:6px 10px}
  .find{display:none}
  .bar.finding .find{display:flex;order:3;flex:1 1 100%;margin-top:6px}
  .bar.finding #findbtn{background:#0e7490;border-color:#22d3ee}
  #find{width:100%;font-size:16px;padding:7px 9px}
- .findres{position:fixed;left:8px;right:8px;width:auto;top:auto;max-height:50vh}
+ .findres{left:0;right:0;width:auto;max-height:50vh}
  .mob{display:inline-block}
  .bar .row2{margin-top:6px;flex-wrap:nowrap}
  .range{flex:1;min-width:0}
