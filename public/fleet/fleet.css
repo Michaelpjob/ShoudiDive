@@ -3,7 +3,7 @@ html,body{margin:0;height:100%;background:#0b1220;color:#e2e8f0;font:14px/1.4 sy
 .leaflet-container{background:#0b1220}
 .leaflet-container.pick{cursor:crosshair}
 .leaflet-top.leaflet-left{top:74px}
-.bar{position:absolute;top:0;left:0;right:0;z-index:1000;display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;padding:8px 12px;background:rgba(11,18,32,.94);border-bottom:1px solid #1e293b}
+.bar{position:absolute;top:0;left:0;right:0;z-index:1002;display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;padding:8px 12px;background:rgba(11,18,32,.94);border-bottom:1px solid #1e293b}
 .bar .row{display:inline-flex;flex-wrap:wrap;gap:6px 12px;align-items:center}
 .mob{display:none}
 .brand b{font-size:15px}
@@ -114,11 +114,34 @@ body.sheet-open .leaflet-bottom.leaflet-right{display:none}
 .sel-line{display:inline-block;width:18px;border-top:3px solid #fbbf24;vertical-align:middle;margin-right:4px}
 .panel a{color:#7dd3fc}
 .caveat{font-size:11px;color:#94a3b8;margin-top:8px;line-height:1.35}
+/* Find: any boat by name or MMSI */
+.find{position:relative;display:inline-flex;align-items:center}
+#find{background:#111827;color:#e2e8f0;border:1px solid #334155;border-radius:5px;padding:4px 8px;font-size:12px;width:220px}
+#find:focus{outline:none;border-color:#22d3ee}
+.findres{display:none;position:absolute;top:calc(100% + 4px);left:0;width:330px;max-height:60vh;overflow:auto;background:rgba(11,18,32,.98);border:1px solid #334155;border-radius:8px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.findres.open{display:block}
+.findres .fr{display:flex;flex-direction:column;gap:1px;padding:6px 8px;border-radius:5px;cursor:pointer;font-size:13px}
+.findres .fr:hover,.findres .fr.hi{background:#1e293b}
+.findres .fr .mut{color:#94a3b8;font-size:11px}
+.findres .fh{padding:8px;color:#94a3b8;font-size:12px;line-height:1.4}
+.vhrs{display:flex;gap:6px;margin:6px 0 8px}
+.legend .vln{display:inline-block;width:22px;border-top:3px solid #22d3ee;vertical-align:middle;margin-right:4px}
+.trk-tick.vs{border-color:#22d3ee}
+.leaflet-tooltip.trk-lbl.vs{background:rgba(8,51,68,.92);border-color:#22d3ee;color:#cffafe}
+.leaflet-tooltip.lv-lbl.vs{background:rgba(8,51,68,.9);border-color:#22d3ee;color:#cffafe}
 .toast{position:absolute;z-index:1300;left:50%;bottom:18px;transform:translateX(-50%);background:rgba(15,23,42,.97);border:1px solid #334155;color:#e2e8f0;padding:8px 14px;border-radius:8px;font-size:13px}
 @media (max-width:760px){
  .bar{display:block;padding:6px 10px 8px}
  .bar .row{display:flex;width:100%;gap:6px 8px}
- .bar .row1{justify-content:space-between}
+ .bar .row1{justify-content:space-between;flex-wrap:nowrap}
+ .bar.finding .row1{flex-wrap:wrap}
+ .brand{min-width:0;flex:0 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ #findbtn{margin-left:auto;display:inline-flex;align-items:center;justify-content:center;padding:6px 10px}
+ .find{display:none}
+ .bar.finding .find{display:flex;order:3;flex:1 1 100%;margin-top:6px}
+ .bar.finding #findbtn{background:#0e7490;border-color:#22d3ee}
+ #find{width:100%;font-size:16px;padding:7px 9px}
+ .findres{left:0;right:0;width:auto;max-height:50vh}
  .mob{display:inline-block}
  .bar .row2{margin-top:6px;flex-wrap:nowrap}
  .range{flex:1;min-width:0}
