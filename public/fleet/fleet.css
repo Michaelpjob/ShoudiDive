@@ -129,6 +129,26 @@ body.sheet-open .leaflet-bottom.leaflet-right{display:none}
 .trk-tick.vs{border-color:#22d3ee}
 .leaflet-tooltip.trk-lbl.vs{background:rgba(8,51,68,.92);border-color:#22d3ee;color:#cffafe}
 .leaflet-tooltip.lv-lbl.vs{background:rgba(8,51,68,.9);border-color:#22d3ee;color:#cffafe}
+/* Vessel groups: browse every boat heard, by what it is */
+.gsw{display:inline-block;width:12px;height:12px;vertical-align:-1px;margin-right:6px;flex:0 0 auto}
+.glist{display:flex;flex-wrap:wrap;gap:5px;margin:2px 0 8px}
+.gchip{display:inline-flex;align-items:center;background:#111827;color:#cbd5e1;border:1px solid #334155;border-radius:14px;padding:2px 9px;font-size:12px;cursor:pointer;line-height:1.5}
+.gchip b{margin-left:5px;color:#e2e8f0;font-variant-numeric:tabular-nums}
+.gchip:hover{border-color:#64748b}
+.gchip.on{border-color:#e2e8f0;background:#1e293b;color:#fff}
+.gline{display:flex;align-items:center;gap:6px;margin:6px 0;padding:6px 8px;background:#0f172a;border-radius:6px;font-size:12px}
+.gline>span{flex:1}
+.panel table.gtab td:first-child,.panel table.gtab th:first-child{width:50%}
+.panel table.gtab td:last-child,.panel table.gtab th:last-child{width:54px}
+.panel table.gtab td{overflow-wrap:anywhere}
+.gm{display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 0 1.5px #000)}
+.leaflet-tooltip.g-lbl{background:rgba(15,23,42,.85);border:1px solid #334155;border-radius:4px;color:#e2e8f0;font:500 11px/1.2 system-ui;padding:1px 5px;box-shadow:none;white-space:nowrap}
+.leaflet-tooltip.g-lbl::before{display:none}
+.findres .fr.fg{flex-direction:row;align-items:center;gap:0}
+.findres .fr.fg b{flex:1;font-weight:500}
+.findres .fr.fg .mut{font-size:12px;font-variant-numeric:tabular-nums}
+.legend .gsw{width:10px;height:10px;margin-right:3px}
+.banner code{font-size:11px;color:#e2e8f0}
 .toast{position:absolute;z-index:1300;left:50%;bottom:18px;transform:translateX(-50%);background:rgba(15,23,42,.97);border:1px solid #334155;color:#e2e8f0;padding:8px 14px;border-radius:8px;font-size:13px}
 @media (max-width:760px){
  .bar{display:block;padding:6px 10px 8px}
@@ -172,4 +192,6 @@ body.sheet-open .leaflet-bottom.leaflet-right{display:none}
  .leaflet-bottom.leaflet-right{bottom:58px}
  .leaflet-popup-content{margin:10px 12px}
  .copybtn{padding:7px 10px;font-size:12px}
+ .gchip{padding:5px 10px;font-size:13px}
+ .findres .fr.fg{padding:9px 8px}
 }
