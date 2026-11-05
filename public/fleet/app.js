@@ -17,10 +17,11 @@ var CONV_BOATS=3;          // "fleet piled in" = this many boats in one cell on 
    treaty), then OP-1..OP-4 of the 1978 Treaty on Maritime Boundaries (UN
    DOALOS text). Degrees from the treaty's D-M-S. */
 var MX_BORDER=[[32.5344,-117.1249],[32.58948,-117.46373],[32.62694,-117.82528],[31.13278,-118.60500],[30.54200,-121.86621]];
-var D,map,hexLayer,stopLayer,portLayer,borderLayer,structLayer,spotLayer,liveLayer,trackLayer,pathLayer,vesselLayer,wpMarker,coordbox,LIVE=null,TRACKS=null,PATHS={},STOPWEEK=[],WEEKIDX={},MMSI_IDX={};
+var D,map,hexLayer,stopLayer,portLayer,borderLayer,structLayer,spotLayer,liveLayer,trackLayer,pathLayer,vesselLayer,groupLayer,wpMarker,coordbox,LIVE=null,TRACKS=null,PATHS={},STOPWEEK=[],WEEKIDX={},MMSI_IDX={};
 /* w0..w1 = inclusive week window (indices into D.weeks); both -1 = whole period.
-   vessel = a 9-digit MMSI from Find (any boat with AIS, fleet or not), vhrs = its track window */
-var S={w0:-1,w1:-1,metric:'fish',boat:'all',kind:'all',nearshore:false,cell:null,trip:null,playing:null,pick:false,view:'',shadows:true,mon:'all',vessel:null,vhrs:48};
+   vessel = a 9-digit MMSI from Find (any boat with AIS, fleet or not), vhrs = its track window;
+   vgroup = a vessel group being browsed ('all', a group key, or 'review'), ghrs = heard within */
+var S={w0:-1,w1:-1,metric:'fish',boat:'all',kind:'all',nearshore:false,cell:null,trip:null,playing:null,pick:false,view:'',shadows:true,mon:'all',vessel:null,vhrs:48,vgroup:null,ghrs:24};
 var LAST_AGG={},LAST_VMAX=1;   // the ramp top from the last draw(), so legend refreshes keep its scale
 
 function isMobile(){return window.innerWidth<=760;}
@@ -31,7 +32,7 @@ function fmtDateY(s){return fmtDate(s)+(multiYear()?' ’'+s.slice(2,4):'');}
 function hrs(m){return m<60?Math.round(m)+' min':(m/60).toFixed(m<600?1:0)+' h';}
 function pct(x){return x==null?'—':Math.round(x*100)+'%';}
 function nm(km){return Math.round(km/1.852)+' nm';}
-function short(l){return String(l||'').replace(/ Sportfishing| Landing| Sea Center/g,'').replace("Davey's Locker","Davey's");}
+function short(l){var s=String(l||'').replace(/ Sportfishing| Landing| Sea Center/g,'').replace("Davey's Locker","Davey's");return s==='Sea'?'Sea Landing':s;}
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 function isSingleBoat(){return S.boat!=='all'&&S.boat.slice(0,2)!=='L:'&&S.boat.slice(0,2)!=='P:';}
 function boatIdx(){return isSingleBoat()?+S.boat:-1;}
@@ -58,6 +59,7 @@ function stateToHash(){var p=[];
  if(S.cell)p.push('cell='+S.cell);
  if(S.trip)p.push('trip='+D.boats[S.trip[0]].mmsi+'.'+S.trip[1]);
  if(S.view==='live')p.push('view=live');
+ if(S.vgroup){p.push('group='+S.vgroup);if(S.ghrs!==24)p.push('heard='+S.ghrs);}
  if(S.vessel){p.push('vessel='+S.vessel);if(S.vhrs!==48)p.push('hrs='+S.vhrs);}
  return p.length?'#'+p.join('&'):'';}
 function readHash(){var h=location.hash.replace(/^#/,''),q={};
@@ -75,6 +77,9 @@ function readHash(){var h=location.hash.replace(/^#/,''),q={};
  S.vessel=/^\d{9}$/.test(q.vessel||'')?q.vessel:null;
  S.vhrs=VHRS.some(function(o){return o[0]===+q.hrs;})?+q.hrs:48;
  if(S.vessel)S._fitVessel=true;
+ S.vgroup=GKEYS.indexOf(q.group)>=0&&(q.group!=='review'||REVIEW)?q.group:null;
+ S.ghrs=GHRS.some(function(o){return o[0]===+q.heard;})?+q.heard:24;
+ if(S.vgroup&&!S.vessel)S._fitGroup=true;
  S.trip=null;
  if(q.trip){var t=q.trip.split('.');if(MMSI_IDX[t[0]]!=null&&isSingleBoat()&&+S.boat===MMSI_IDX[t[0]])S.trip=[MMSI_IDX[t[0]],+t[1]];}}
 function commit(){var h=stateToHash();if(h!==location.hash&&!(h===''&&location.hash==='')){history.pushState(null,'',location.pathname+location.search+h);}
@@ -132,7 +137,7 @@ function draw(){
   poly.on('click',function(e){if(S.pick){dropWp(e.latlng);return;}S.cell=(S.cell===h)?null:h;if(isMobile())openSheet(!!S.cell);commit();});
   poly.on('contextmenu',function(e){dropWp(e.latlng);});
   poly.addTo(hexLayer);});
- drawStops();drawPaths();drawVessel();
+ drawStops();drawPaths();drawVessel();drawGroups();
  document.getElementById('legend').innerHTML=legendHtml(vmax,n);placeReadout();renderMe();
  if(S.cell&&!A[S.cell])S.cell=null;
  renderPanel(A,n);}
@@ -155,6 +160,7 @@ function legendHtml(vmax,n){var steps=[0,.25,.5,.75,1];var f=S.metric==='fish'?f
  else html+='<div class="mobhide">Dots are individual stops: white = drifting/anchored, blue = trolling. Bigger = longer.</div>';
  html+='<div class="mobhide"><span class="ln"></span>US / Mexico maritime boundary · AIS coverage ends well before it</div>';
  if(S.vessel)html+='<div><span class="vln"></span><b>'+esc(vesselTitle())+'</b>, last '+vhrsLabel()+' · dots = stops</div>';
+ if(S.vgroup)html+=groupLegend();
  if(map.hasLayer(liveLayer))html+=liveSummary();
  return html;}
 
@@ -349,7 +355,8 @@ function aisType(t){t=+t;if(!t)return '';
  if(t>=60&&t<70)return 'passenger';if(t>=70&&t<80)return 'cargo';if(t>=80&&t<90)return 'tanker';return 'other';}
 function ft(m){return Math.round(m*3.28084)+' ft';}
 function fetchIndex(){if(VINDEX_AT&&Date.now()-VINDEX_AT<300000)return;VINDEX_AT=Date.now();
- fetch(VESSELS_URL,{cache:'no-cache'}).then(function(r){return r.ok?r.json():null;}).then(function(j){if(j){VINDEX=j;renderFind();}}).catch(function(){VINDEX_AT=0;});}
+ fetch(VESSELS_URL,{cache:'no-cache'}).then(function(r){return r.ok?r.json():null;}).then(function(j){if(!j)return;VINDEX=j;renderFind();drawGroups();
+  if(S.vgroup||S.vessel||(!S.cell&&!isSingleBoat()&&S.view!=='live')){renderPanel(LAST_AGG,Object.keys(LAST_AGG).length);document.getElementById('legend').innerHTML=legendHtml(LAST_VMAX,Object.keys(LAST_AGG).length);placeReadout();}}).catch(function(){VINDEX_AT=0;});}
 function findMatches(q){q=q.trim().toLowerCase();if(!q)return [];
  var digits=/^\d+$/.test(q),fleet=[],heard=[],seen={};
  var hit=function(mmsi,name){return digits?String(mmsi).indexOf(q)===0:(name||'').toLowerCase().indexOf(q)>=0;};
@@ -363,13 +370,17 @@ function findMatches(q){q=q.trim().toLowerCase();if(!q)return [];
 function renderFind(){var fi=document.getElementById('find'),fr=document.getElementById('findres');if(!fi)return;
  if(document.activeElement!==fi){fr.classList.remove('open');return;}
  var q=fi.value.trim(),m=FIND_LAST=findMatches(q),html;
- if(!q)html='<div class="fh">Type a boat\'s name or its 9-digit MMSI. Fleet boats come first; any other boat with AIS that the SoCal receivers heard this week is searchable too.</div>';
+ if(!q){var c=gCounts(24);
+  html='<div class="fh">Type a boat\'s name or its 9-digit MMSI, or browse every boat the SoCal receivers heard in the last 24 h by what it is:</div>'
+   +(VINDEX?['all'].concat(VINDEX.groups.map(function(g){return g[0];})).map(function(k){var n=k==='all'?gRows('all',24).length:(c[k]||0);
+     return '<div class="fr fg" data-g="'+k+'">'+gSwatch(k)+'<b>'+esc(glabel(k))+'</b><span class="mut">'+n+'</span></div>';}).join('')
+    :'<div class="fh">Loading the list…</div>');}
  else if(!m.length)html='<div class="fh">'+(/^\d+$/.test(q)?'Keep typing: an MMSI has 9 digits.':'No boat by that name heard this week. Try its MMSI.')+(VINDEX?'':' Loading the list…')+'</div>';
  else html=m.map(function(o,i){return '<div class="fr'+(i===0?' hi':'')+'" data-i="'+i+'"><b>'+esc(o.name)+'</b><span class="mut">'+esc(o.sub)+' · '+o.mmsi+'</span></div>';}).join('');
  fr.innerHTML=html;fr.classList.add('open');}
 function closeFind(){var fi=document.getElementById('find');fi.value='';fi.blur();document.getElementById('findres').classList.remove('open');document.getElementById('bar').classList.remove('finding');}
 function pickFind(o){if(!o)return;closeFind();stopPlay();
- S.cell=null;S.trip=null;S.view='';S.mon='all';
+ S.cell=null;S.trip=null;S.view='';S.mon='all';S.vgroup=null;
  if(o.bi!=null){S.boat=String(o.bi);S.vessel=null;}   // fleet boats open their season history
  else{S.boat='all';S.vessel=o.mmsi;S._fitVessel=true;}
  if(isMobile())openSheet(true);
@@ -430,11 +441,13 @@ function drawVessel(){if(!vesselLayer)return;vesselLayer.clearLayers();if(!S.ves
  if(S._fitVessel){S._fitVessel=false;
   if(pts.length>1)map.fitBounds(pts.map(function(p){return [p[1],p[2]];}).concat(last?[[last.lat,last.lon]]:[]),Object.assign({maxZoom:12,animate:false},fitPad()));
   else if(last)map.setView([last.lat,last.lon],11,{animate:false});}}
-function vesselPanel(){var m=S.vessel,j=vesselData(),bi=MMSI_IDX[m],nav='<button class="chip" data-act="fleet">‹ Fleet</button>';
+function vesselPanel(){var m=S.vessel,j=vesselData(),bi=MMSI_IDX[m];
+ var nav=S.vgroup?'<button class="chip" data-act="vback">‹ '+esc(glabel(S.vgroup))+'</button>':'<button class="chip" data-act="fleet">‹ Fleet</button>';
  var chips='<div class="vhrs">'+VHRS.map(function(o){return '<button class="chip'+(S.vhrs===o[0]?' on':'')+'" data-act="vhrs" data-h="'+o[0]+'">'+o[1]+'</button>';}).join('')+'</div>';
  if(!j)return {nav:nav,title:'MMSI '+m,body:chips+'<div class="mut">Looking it up…</div>'};
- var inf=j.info||{},name=vesselTitle(),pts=j.pts||[],last=vesselLast(j),since=j.logging_since?fmtDate(j.logging_since)+' '+j.logging_since.slice(0,4):'';
+ var inf=j.info||{},name=vesselTitle(),pts=j.pts||[],last=vesselLast(j),since=j.logging_since?fmtDate(j.logging_since)+' '+j.logging_since.slice(0,4):'',row=gRow(m);
  var html='<div class="mut">MMSI '+m+(inf.type?' · '+esc(aisType(inf.type)):'')+(inf.len?' · '+ft(inf.len):'')+(inf.callsign?' · call sign '+esc(inf.callsign):'')+(inf.dest?' · bound for '+esc(inf.dest):'')+'</div>';
+ if(row)html+='<div class="gline">'+gSwatch(row[10])+'<span><b>'+esc(glabel(row[10]))+'</b> <span class="mut">· '+esc(row[11])+'</span></span><button class="chip" data-act="group" data-g="'+row[10]+'">See all</button></div>';
  if(bi!=null)html+='<div class="banner"><span>A fleet boat, with a season of trips on file.</span><button class="chip" data-act="boat" data-b="'+bi+'">Open its trips</button></div>';
  html+=chips;
  if(j.failed)html+='<div class="empty">The lookup failed. It retries every 3 minutes, or pick a window above to try now.</div>';
@@ -453,6 +466,70 @@ function vesselPanel(){var m=S.vessel,j=vesselData(),bi=MMSI_IDX[m],nav='<button
  html+='<div class="caveat"><b>Any boat with AIS.</b> Fleet or not, every vessel the SoCal shore receivers hear is logged'+(since?' (since '+since+')':'')+', thinned to a point every 2 minutes under way and every 30 minutes stopped. A faint dotted line means the boat went out of range (receivers fade 30 to 50 nm out), not that it sat still. Stops use the same rule as the fleet history. Refreshes every 3 minutes.</div>'
   +'<div class="caveat"><a href="https://www.marinetraffic.com/en/ais/details/ships/mmsi:'+m+'" target="_blank" rel="noopener">This MMSI on MarineTraffic</a></div>';
  return {nav:nav,title:esc(name)+(inf.type?' <span class="mut">· '+esc(aisType(inf.type))+'</span>':''),body:html};}
+
+/* ---------- vessel groups: every boat heard, by what it is ----------
+   /api/fleet/vessels sorts each hull into a group (functions/api/fleet/_groups.js)
+   and says why. Map colour: only three hues clear the colourblind check on
+   every pair against this navy, so they go to the fishing groups (sportfishing
+   green, commercial orange, dive and charter blue); research is a white
+   diamond, government a white square, the rest grey. Possible sportfishers
+   and not-yet-identified hulls are hollow. Off shouldidive.com (or with
+   ?review=1) a review queue lists the guesses. */
+var GCOL={fleet:'#199e70',sport:'#199e70',fish:'#d95926',dive:'#3987e5',research:'#e2e8f0',gov:'#e2e8f0',work:'#7c8798',ship:'#7c8798',private:'#5b6575',unknown:'#7c8798'};
+var GBIG={fleet:1,sport:1,fish:1,dive:1,research:1,gov:1};
+var GKEYS=['all','review'].concat(Object.keys(GCOL)),GHRS=[[1,'Last hour'],[24,'24 h'],[168,'7 days']],GMAX=150;
+var REVIEW=!/(^|\.)shouldidive\.com$/.test(location.hostname)||/(^|[?&])review=1(&|$)/.test(location.search);
+function glabel(k){if(k==='all')return 'Every boat heard';if(k==='review')return 'Needs a look';
+ var g=((VINDEX&&VINDEX.groups)||[]).filter(function(x){return x[0]===k;})[0];return g?g[1]:k;}
+/* rows of VINDEX.v: [mmsi, name, t, type, len, lat, lon, sog, cog, heading, group, why, review] */
+function gRows(k,hrs){if(!VINDEX||!VINDEX.v)return [];var cut=Date.now()/1000-hrs*3600;
+ return VINDEX.v.filter(function(r){return r[2]>=cut&&(k==='all'||(k==='review'?r[12]:r[10]===k));});}
+function gCounts(hrs){var c={};gRows('all',hrs).forEach(function(r){c[r[10]]=(c[r[10]]||0)+1;});return c;}
+function gRow(m){var hit=null;((VINDEX&&VINDEX.v)||[]).some(function(r){if(String(r[0])===String(m)){hit=r;return true;}return false;});return hit;}
+function gShape(k){var c=GCOL[k]||'#7c8798',hollow=k==='sport'||k==='unknown';
+ var paint=' fill="'+(hollow?'#0b1220':c)+'" stroke="'+(hollow?c:'#0b1220')+'" stroke-width="'+(hollow?2.2:1.5)+'"/>';
+ return (k==='research'?'<path d="M7 1 L13 7 L7 13 L1 7 Z"':k==='gov'?'<rect x="2" y="2" width="10" height="10" rx="1"':'<circle cx="7" cy="7" r="5.5"')+paint;}
+function gSwatch(k){if(!GCOL[k])return '<span class="gsw"></span>';return '<svg class="gsw" width="12" height="12" viewBox="0 0 14 14" aria-hidden="true">'+gShape(k)+'</svg>';}
+function gIcon(k,moving,rot,stale){var big=GBIG[k],hollow=k==='sport'||k==='unknown',c=GCOL[k]||'#7c8798',s,svg;
+ if(moving){s=big?22:15;svg='<svg width="'+s+'" height="'+s+'" viewBox="0 0 28 28" style="transform:rotate('+rot+'deg)"><path d="M14 2 L23 25 L14 19.5 L5 25 Z" fill="'+(hollow?'#0b1220':c)+'" stroke="'+(hollow?c:'#0b1220')+'" stroke-width="'+(hollow?3:2)+'"/></svg>';}
+ else{s=big?13:8;svg='<svg width="'+s+'" height="'+s+'" viewBox="0 0 14 14">'+gShape(k)+'</svg>';}
+ return L.divIcon({className:'',html:'<div class="gm" style="opacity:'+(stale?.45:1)+'">'+svg+'</div>',iconSize:[s,s],iconAnchor:[s/2,s/2]});}
+function gFix(r){return {lat:r[5],lon:r[6],sog:r[7],cog:r[8],heading:r[9]!=null&&r[9]<360?r[9]:null,t:new Date(r[2]*1000).toISOString()};}
+function drawGroups(){if(!groupLayer)return;groupLayer.clearLayers();if(!S.vgroup||!VINDEX)return;
+ var rows=gRows(S.vgroup,S.ghrs),lbl=rows.length<=40||map.getZoom()>=11,live=map.hasLayer(liveLayer),pts=[];
+ rows.forEach(function(r){var m=String(r[0]);if(r[5]==null||r[6]==null||m===S.vessel)return;   // the open boat draws its own marker
+  if(r[10]==='fleet'&&live&&MMSI_IDX[m]!=null)return;   // fleet boats already show as the live layer's green markers
+  var b=gFix(r),st=liveStatus(b);pts.push([b.lat,b.lon]);
+  L.marker([b.lat,b.lon],{icon:gIcon(r[10],st.moving,st.hdg||0,st.age>60),zIndexOffset:GBIG[r[10]]?600:400,opacity:S.vessel?.5:1})
+   .bindTooltip(esc(r[1]||'MMSI '+m)+(st.moving?' · '+(b.sog||0).toFixed(0)+' kt':''),{className:'g-lbl',direction:'right',offset:[8,0],permanent:lbl&&!!GBIG[r[10]],interactive:false})
+   .on('click',function(){openVessel(m);}).addTo(groupLayer);});
+ if(S._fitGroup&&pts.length){S._fitGroup=false;
+  if(pts.length===1)map.setView(pts[0],Math.max(map.getZoom(),11),{animate:false});else map.fitBounds(pts,Object.assign({maxZoom:11,animate:false},fitPad()));}}
+function openVessel(m){S.vessel=String(m);S._fitVessel=true;S.cell=null;S.view='';S.boat='all';S.trip=null;if(isMobile())openSheet(true);commit();}
+function pickGroup(k){closeFind();stopPlay();S.cell=null;S.trip=null;S.view='';S.boat='all';S.vessel=null;S.vgroup=k;S._fitGroup=true;if(isMobile())openSheet(true);commit();}
+function gChip(k,n){return '<button class="gchip'+(S.vgroup===k?' on':'')+'" data-act="group" data-g="'+k+'">'+gSwatch(k)+esc(glabel(k))+' <b>'+n+'</b></button>';}
+function groupLegend(){var k=S.vgroup,keys=k==='all'||k==='review'?['fleet','sport','fish','dive','research','gov','work','private','unknown']:[k];
+ var names={fleet:'fleet',sport:'possible sportfisher',fish:'commercial fishing',dive:'dive and charter',research:'research',gov:'government',work:'work boats and ships',private:'private',unknown:'not identified'};
+ return '<div><b>Boats</b>: '+esc(glabel(k))+', heard in the '+(S.ghrs===1?'last hour':'last '+GHRS.filter(function(o){return o[0]===S.ghrs;})[0][1])+' · arrows are under way, faded = over an hour old</div>'
+  +(keys.length>1?'<div style="margin:3px 0">'+keys.map(function(g){return gSwatch(g)+names[g];}).join(' &nbsp;')+'</div>':'');}
+function groupPanel(){var k=S.vgroup,nav='<button class="chip" data-act="fleet">‹ Fleet</button>';
+ var chips='<div class="vhrs">'+GHRS.map(function(o){return '<button class="chip'+(S.ghrs===o[0]?' on':'')+'" data-act="ghrs" data-h="'+o[0]+'">'+o[1]+'</button>';}).join('')+'</div>';
+ if(!VINDEX)return {nav:nav,title:esc(glabel(k)),body:chips+'<div class="mut">Loading the boats heard this week…</div>'};
+ var rows=gRows(k,S.ghrs),cnt=gCounts(S.ghrs),win=S.ghrs===1?'last hour':S.ghrs===24?'last 24 hours':'last 7 days';
+ var html=chips+'<div class="glist">'+gChip('all',gRows('all',S.ghrs).length)+VINDEX.groups.map(function(g){return gChip(g[0],cnt[g[0]]||0);}).join('')+(REVIEW?gChip('review',gRows('review',S.ghrs).length):'')+'</div>';
+ if(k==='review')html+='<div class="banner"><span>Boats whose group is a guess: a type code, a shared name, an odd code. Copy the list, note what each one really is, and the corrections go into <code>_vessel_groups.js</code> (confirmed sportfishers into the roster overrides too). Only shown off shouldidive.com.</span><button class="chip" data-act="gcopy">Copy the list</button></div>';
+ if(!rows.length)html+='<div class="empty">None heard in the '+win+'.'+(S.ghrs<168?' Try <button class="chip" data-act="ghrs" data-h="168">7 days</button>.':'')+'</div>';
+ else{var mixed=k==='all'||k==='review';
+  html+='<table class="gtab"><tr><th>Boat</th><th>Last heard doing</th><th class="n">When</th></tr>';
+  rows.slice(0,GMAX).forEach(function(r){var st=r[5]!=null?liveStatus(gFix(r)):null,age=Math.max(0,Math.round((Date.now()/1000-r[2])/60));
+   html+='<tr class="row" data-act="vopen" data-m="'+r[0]+'"><td>'+gSwatch(r[10])+'<b>'+esc(r[1]||'MMSI '+r[0])+'</b><br/><span class="mut">'+esc(mixed?glabel(r[10])+' · '+r[11]:r[11])+'</span></td>'
+    +'<td>'+(st?esc(st.txt)+(st.where?'<br/><span class="mut">'+esc(st.where)+'</span>':''):'<span class="mut">no position</span>')+'</td><td class="n">'+ageText(age).replace(' ago','')+'</td></tr>';});
+  html+='</table>';
+  if(rows.length>GMAX)html+='<div class="mut" style="margin-top:6px">'+(rows.length-GMAX)+' more not listed here; every one is on the map, and Find narrows by name.</div>';}
+ html+='<div class="caveat"><b>How boats are grouped.</b> In order: the fleet roster; hand-kept lists of research and government boats, checked against a year of AIS; the name (CG, FIREBOAT, BAYWATCH, US GOV and the like); US federal MMSI blocks and call signs; the landings\' fleet lists; then the type and length the boat broadcasts. Owners set their own AIS type, so some boats land in the wrong group, and each row says why it sits where it does. Positions are each boat\'s latest fix, refreshed every 3 minutes. Boats without AIS are not here at all.</div>';
+ return {nav:nav,title:esc(glabel(k))+' <span class="mut">· '+rows.length+'</span>',body:html};}
+function copyReview(){var rows=gRows('review',S.ghrs),tsv=['mmsi\tname\tais type\tlength m\tgroup\twhy'].concat(rows.map(function(r){return [r[0],r[1]||'',r[3]||'',r[4]||'',r[10],r[11]].join('\t');})).join('\n');
+ try{navigator.clipboard.writeText(tsv).then(function(){toast('Copied '+rows.length+' boats');},function(){toast('Copy failed');});}catch(e){toast('Copy failed');}}
 
 /* ---------- "Me": the user's own live position ---------- */
 var ME={watch:null,marker:null,ring:null,ll:null,acc:null,follow:true,t:0};
@@ -506,6 +583,7 @@ function renderPanel(A,n){var p=document.getElementById('panel');
  if(S.view==='live')r=livePanel();
  else if(S.cell&&A[S.cell])r=cellPanel(S.cell,A[S.cell]);
  else if(S.vessel)r=vesselPanel();
+ else if(S.vgroup)r=groupPanel();
  else if(isSingleBoat())r=boatPanel(boatIdx(),n);
  else r=fleetPanel(n);
  /* One shape for every view: a head (back button + title, plus a chevron on
@@ -518,11 +596,16 @@ function renderPanel(A,n){var p=document.getElementById('panel');
 function onPanelClick(e){var p=document.getElementById('panel');
  var el=e.target.closest('[data-act]');
  if(el){var act=el.getAttribute('data-act');
-  if(act==='fleet'){S.boat='all';S.cell=null;S.trip=null;S.view='';S.vessel=null;}
+  if(act==='fleet'){S.boat='all';S.cell=null;S.trip=null;S.view='';S.vessel=null;S.vgroup=null;}
   else if(act==='flyto'){var fb=D.boats[+el.getAttribute('data-b')],hit=null;(LIVE&&LIVE.boats||[]).forEach(function(b){if(b.mmsi===fb.mmsi)hit=b;});
    if(hit){if(!map.hasLayer(liveLayer))liveLayer.addTo(map);map.setView([hit.lat,hit.lon],Math.max(map.getZoom(),11),{animate:false});liveLayer.eachLayer(function(l){if(l.getLatLng&&l.getPopup&&l.getLatLng().lat===hit.lat&&l.getLatLng().lng===hit.lon)l.openPopup();});if(isMobile())openSheet(false);}
    return;}
-  else if(act==='boat'){S.boat=el.getAttribute('data-b');S.cell=null;S.trip=null;S.view='';S.mon='all';S.vessel=null;}
+  else if(act==='boat'){S.boat=el.getAttribute('data-b');S.cell=null;S.trip=null;S.view='';S.mon='all';S.vessel=null;S.vgroup=null;}
+  else if(act==='group'){S.vgroup=el.getAttribute('data-g');S.vessel=null;S.cell=null;S._fitGroup=true;}
+  else if(act==='ghrs'){S.ghrs=+el.getAttribute('data-h');}
+  else if(act==='vopen'){openVessel(el.getAttribute('data-m'));return;}
+  else if(act==='vback'){S.vessel=null;}
+  else if(act==='gcopy'){copyReview();return;}
   else if(act==='vhrs'){S.vhrs=+el.getAttribute('data-h');S._fitVessel=true;delete VESSEL[S.vessel+'|'+S.vhrs];}
   else if(act==='vfly'||act==='vstop'){var vj=vesselData(),to=null;if(!vj)return;
    if(act==='vfly'){var vl=vesselLast(vj);if(vl)to=[vl.lat,vl.lon];}
@@ -530,7 +613,7 @@ function onPanelClick(e){var p=document.getElementById('panel');
    if(to){map.setView(to,Math.max(map.getZoom(),12),{animate:false});if(isMobile())openSheet(false);}
    return;}
   else if(act==='uncell'){S.cell=null;}
-  else if(act==='live'){S.view='live';S.vessel=null;if(!map.hasLayer(liveLayer))liveLayer.addTo(map);}
+  else if(act==='live'){S.view='live';S.vessel=null;S.vgroup=null;if(!map.hasLayer(liveLayer))liveLayer.addTo(map);}
   else if(act==='trip'){var tid=+el.getAttribute('data-t'),bi=boatIdx();S.trip=(S.trip&&S.trip[1]===tid)?null:[bi,tid];S._fitTrip=!!S.trip;}
   else if(act==='alltrips'){S.trip=null;}
   else if(act==='weeks'){S.w0=S.w1=-1;}
@@ -546,7 +629,7 @@ function howTo(){var seen=isMobile();try{seen=seen||localStorage.getItem('sd:fle
   +'<li>Choose a window of weeks with the two week menus; <b>‹ ›</b> slide it, <b>Play</b> sweeps it through the season, <b>All weeks</b> brings back the whole period.</li>'
   +'<li>Tap any hexagon for who fished it and when. Zoom in to see individual stops. Purple and teal markers are named structure (banks, seamounts, reefs); the layers button at bottom right toggles them and the dive spots.</li>'
   +'<li><b>⌖ GPS</b> (or a right-click / long-press anywhere) drops a waypoint you can copy coordinates from. <b>● Me</b> shows your own live position with distance and bearing to the nearest fishing cell and boat.</li>'
-  +'<li><b>Find</b> (top bar) takes a boat\'s name or 9-digit MMSI. Fleet boats open their season of trips; any other boat with AIS that the SoCal receivers hear shows its track for the last day, two days or week.</li>'
+  +'<li><b>Find</b> (top bar) takes a boat\'s name or 9-digit MMSI. Fleet boats open their season of trips; any other boat with AIS that the SoCal receivers hear shows its track for the last day, two days or week. Leave it empty to browse every boat heard by what it is: research ships, government and rescue, dive and charter boats, commercial fishing and more.</li>'
   +'<li>The browser Back button undoes a selection.</li></ul></details>';}
 
 function fleetPanel(n){var m=D.meta,s=D.summary;
@@ -555,7 +638,8 @@ function fleetPanel(n){var m=D.meta,s=D.summary;
  var scope=S.boat==='all'?'The SoCal sportfishing fleet':S.boat.slice(2)+' boats';
  var nav=S.boat!=='all'?'<button class="chip" data-act="fleet">‹ Fleet</button>':'';
  var html='<div class="mut">'+m.n_boats+' boats · '+m.n_trips+' trips · '+m.n_stops+' fishing stops · '+fmtDate(m.start)+' – '+fmtDate(m.end)+' '+m.end.slice(0,4)+'</div>'
-  +(S.boat==='all'?'<div class="ans" style="border-left-color:#4ade80"><div class="q">Right now</div><div class="a">'+liveSummary().replace(/<\/?div>/g,'')+' <button class="chip live" data-act="live">Open the live fleet</button></div></div>':'')
+  +(S.boat==='all'?'<div class="ans" style="border-left-color:#4ade80"><div class="q">Right now</div><div class="a">'+liveSummary().replace(/<\/?div>/g,'')+' <button class="chip live" data-act="live">Open the live fleet</button>'
+   +(VINDEX?'<br/><b>Every boat with AIS</b>: '+gRows('all',1).length+' heard in the last hour, '+gRows('all',24).length+' in the last day. <button class="chip" data-act="group" data-g="all">Browse them by group</button>':'')+'</div></div>':'')
   +howTo();
  if(!n)html+='<div class="empty">No stops match this selection. Try <button class="chip" data-act="weeks">all weeks</button> or another boat.</div>';
  if(S.boat==='all')html+='<h4>Three questions, whole fleet</h4>'
@@ -638,7 +722,7 @@ function boot(d){D=d;
  L.marker(MX_BORDER[2],{interactive:false,icon:L.divIcon({className:'',html:'',iconSize:[0,0]})}).bindTooltip('US / Mexico maritime boundary',{permanent:true,direction:'right',offset:[8,0],className:'border-lbl'}).addTo(borderLayer);
  hexLayer=L.layerGroup().addTo(map);stopLayer=L.layerGroup().addTo(map);
  var prefs=refPrefs();
- structLayer=L.layerGroup();spotLayer=L.layerGroup();portLayer=L.layerGroup();liveLayer=L.layerGroup();pathLayer=L.layerGroup().addTo(map);trackLayer=L.layerGroup().addTo(map);vesselLayer=L.layerGroup().addTo(map);
+ structLayer=L.layerGroup();spotLayer=L.layerGroup();portLayer=L.layerGroup();liveLayer=L.layerGroup();pathLayer=L.layerGroup().addTo(map);trackLayer=L.layerGroup().addTo(map);groupLayer=L.layerGroup().addTo(map);vesselLayer=L.layerGroup().addTo(map);
  if(prefs.live!==false)liveLayer.addTo(map);
  if(prefs.structure!==false)structLayer.addTo(map);
  if(prefs.spots===true)spotLayer.addTo(map);
@@ -646,13 +730,14 @@ function boot(d){D=d;
  drawReference();syncRefZoom();
  L.control.layers(null,{'Right now: live positions':liveLayer,'Structure: banks, seamounts, reefs':structLayer,'Dive spots':spotLayer,'Landings':portLayer},{position:'bottomright',collapsed:true}).addTo(map);
  fetchLive();setInterval(fetchLive,LIVE_EVERY_MS);
- setInterval(function(){if(S.view==='live')fetchTracks();if(S.vessel)fetchVessel(S.vessel,S.vhrs);},LIVE_EVERY_MS);
- map.on('overlayadd overlayremove',function(){document.getElementById('legend').innerHTML=legendHtml(LAST_VMAX,Object.keys(LAST_AGG).length);placeReadout();});
+ fetchIndex();
+ setInterval(function(){if(S.view==='live')fetchTracks();if(S.vessel)fetchVessel(S.vessel,S.vhrs);if(S.vgroup){VINDEX_AT=0;fetchIndex();}},LIVE_EVERY_MS);
+ map.on('overlayadd overlayremove',function(){drawGroups();document.getElementById('legend').innerHTML=legendHtml(LAST_VMAX,Object.keys(LAST_AGG).length);placeReadout();});
  map.on('overlayadd overlayremove',saveRefPrefs);
  Object.keys(D.landings).forEach(function(n){var p=D.landings[n];
   L.circleMarker([p[0],p[1]],{radius:3,weight:1,color:'#fbbf24',fillColor:'#b45309',fillOpacity:.8}).bindTooltip(n,{className:'lbl',permanent:map.getZoom()>=9,direction:'right'}).addTo(portLayer);});
  map.on('zoomend',function(){syncRefZoom();portLayer.eachLayer(function(l){var t=l.getTooltip();if(t){t.options.permanent=map.getZoom()>=9;l.unbindTooltip().bindTooltip(t.getContent(),t.options);}});drawStops();
-  document.getElementById('legend').innerHTML=legendHtml(LAST_VMAX,Object.keys(LAST_AGG).length);placeReadout();});
+  drawGroups();document.getElementById('legend').innerHTML=legendHtml(LAST_VMAX,Object.keys(LAST_AGG).length);placeReadout();});
  window.addEventListener('resize',placeReadout);
  coordbox=document.getElementById('coordbox');setReadout(map.getCenter());
  map.on('mousemove',function(e){setReadout(e.latlng);});
@@ -664,7 +749,7 @@ function boot(d){D=d;
  fb.onclick=function(){var o=bar.classList.toggle('open');if(o)closeFind();fb.setAttribute('aria-expanded',o?'true':'false');fb.innerHTML=o?'Filters &#9652;':'Filters &#9662;';if(o&&isMobile())openSheet(false);};
  document.getElementById('gps').onclick=function(){togglePick();if(isMobile())closeFilters();};
  document.getElementById('me').onclick=function(){toggleMe();if(isMobile())closeFilters();};
- document.getElementById('livebtn').onclick=function(){S.view=S.view==='live'?'':'live';if(S.view==='live'){S.vessel=null;if(!map.hasLayer(liveLayer))liveLayer.addTo(map);}if(isMobile())openSheet(S.view==='live');commit();};
+ document.getElementById('livebtn').onclick=function(){S.view=S.view==='live'?'':'live';if(S.view==='live'){S.vessel=null;S.vgroup=null;if(!map.hasLayer(liveLayer))liveLayer.addTo(map);}if(isMobile())openSheet(S.view==='live');commit();};
  map.on('zoomend',drawLive);
  map.on('dragstart',function(){if(ME.watch!=null&&ME.follow){ME.follow=false;renderMe();}});
  /* week window: two selects (first / last week) */
@@ -687,7 +772,7 @@ function boot(d){D=d;
   Object.keys(ports[p]).sort().forEach(function(l){var o2=document.createElement('option');o2.value='L:'+l;o2.textContent='  '+short(l)+' (landing)';og.appendChild(o2);
    D.boats.forEach(function(b,i){if(b.landing===l&&b.trips>0){var o3=document.createElement('option');o3.value=String(i);o3.textContent='    '+b.name;og.appendChild(o3);}});});
   sel.appendChild(og);});
- sel.onchange=function(e){S.boat=e.target.value;S.cell=null;S.trip=null;S.mon='all';S.vessel=null;if(isMobile()){closeFilters();openSheet(isSingleBoat());}commit();};
+ sel.onchange=function(e){S.boat=e.target.value;S.cell=null;S.trip=null;S.mon='all';S.vessel=null;S.vgroup=null;if(isMobile()){closeFilters();openSheet(isSingleBoat());}commit();};
  /* Find: a dropdown under the box; Enter takes the top match. On phones the
     box hides behind a Find chip, like the filters. */
  var fi=document.getElementById('find'),fr=document.getElementById('findres');
@@ -696,11 +781,12 @@ function boot(d){D=d;
  fi.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();pickFind(findMatches(fi.value)[0]);}else if(e.key==='Escape')closeFind();});
  fi.addEventListener('blur',function(){setTimeout(function(){if(document.activeElement!==fi)fr.classList.remove('open');},200);});
  fr.addEventListener('mousedown',function(e){e.preventDefault();});   // keep focus so the click lands
- fr.addEventListener('click',function(e){var el=e.target.closest('[data-i]');if(el)pickFind(FIND_LAST[+el.getAttribute('data-i')]);});
+ fr.addEventListener('click',function(e){var el=e.target.closest('[data-i],[data-g]');if(!el)return;
+  if(el.hasAttribute('data-g'))pickGroup(el.getAttribute('data-g'));else pickFind(FIND_LAST[+el.getAttribute('data-i')]);});
  document.getElementById('findbtn').onclick=function(){if(bar.classList.toggle('finding')){closeFilters();fi.focus();}else closeFind();};
  window.addEventListener('popstate',function(){stopPlay();readHash();syncControls();draw();});
  readHash();
- openSheet(!isMobile()||!!(S.cell||isSingleBoat()));
+ openSheet(!isMobile()||!!(S.cell||isSingleBoat()||S.vessel||S.vgroup));
  syncControls();draw();
  window.__fleetMap=map;}
 
