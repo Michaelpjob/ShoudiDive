@@ -254,6 +254,38 @@ def predict_all(
         viz["category"] = label
         viz["color"]    = color
 
+    # ---- Offshore satellite-chl distrust --------------------------------
+    # Stop over-claiming clarity where ocean-color chl is least trustworthy
+    # for a diver: far offshore + gin-clear reading = the satellite is
+    # missing subsurface / sub-pixel green (Northeast Bank, 2026-07-06).
+    # The satellite chl is a lower bound there, so the derived clarity is
+    # an upper bound — pull p50 + p10 down toward a green-water floor,
+    # scaled by the distrust factor. p90 (optimistic bound) is left alone
+    # so the band widens honestly. Nearshore cells (d=0) are untouched.
+    # See config.py "Offshore satellite-chl distrust". Value-only; the
+    # calibrated chl→Secchi core is unchanged.
+    if config.APPLY_OFFSHORE_CHL_DISTRUST:
+        d = visibility.offshore_chl_distrust(viz["viz_p50_ft"], dist_to_shore_km)
+        if np.any(d > 0):
+            floor_m = config.OFFSHORE_GREEN_FLOOR_FT / 3.281
+            for key_m, key_ft, scale in (
+                ("viz_p10_m", "viz_p10_ft", 1.0),   # pessimistic bound: full pull
+                ("viz_p50_m", "viz_p50_ft", 0.75),  # median: gentler pull
+            ):
+                cur = viz[key_m]
+                target = np.minimum(cur, floor_m)   # only ever pull DOWN
+                frac = np.clip(config.OFFSHORE_DISTRUST_PULL * d * scale, 0.0, 1.0)
+                viz[key_m] = cur * (1.0 - frac) + target * frac
+                viz[key_ft] = viz[key_m] * 3.281
+            # Keep the band ordered (p90 untouched, so only re-clamp p10≤p50).
+            viz["viz_p10_m"] = np.minimum(viz["viz_p10_m"], viz["viz_p50_m"])
+            viz["viz_p10_ft"] = viz["viz_p10_m"] * 3.281
+            viz["score"]     = visibility.secchi_to_score(viz["viz_p50_m"])
+            viz["score_p10"] = visibility.secchi_to_score(viz["viz_p10_m"])
+            label, color = visibility.score_to_category(viz["score"])
+            viz["category"] = label
+            viz["color"]    = color
+
     return {
         "zone":         zone,
         "island_side":  isl_side,
