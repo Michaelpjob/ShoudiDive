@@ -15,6 +15,39 @@
 
 export const CHANGELOG = [
   {
+    id: "2026-11-04-2",
+    date: "November 4, 2026",
+    title: "Fleet Tracks: browse every boat by what it is",
+    items: [
+      {
+        type: "new",
+        text:
+          "Click into Fleet Tracks' Find box without typing to browse every " +
+          "boat the SoCal receivers heard, grouped by what it is: research " +
+          "ships, government and rescue boats, dive and charter boats, " +
+          "commercial fishing, possible sportfishers and more. Each group " +
+          "shows on the map where its boats are now, and every boat says why " +
+          "it sits in its group.",
+      },
+    ],
+  },
+  {
+    id: "2026-11-04",
+    date: "November 4, 2026",
+    title: "Fleet Tracks: find any boat by name or MMSI",
+    items: [
+      {
+        type: "new",
+        text:
+          "Fleet Tracks has a Find box. Type a boat's name or its 9-digit " +
+          "MMSI: fleet boats open their season of trips, and any other boat " +
+          "with AIS that the SoCal shore receivers hear (private boats, " +
+          "six-packs, commercial boats) shows where it has been over the last " +
+          "day, two days or week, where it stopped, and where it is now.",
+      },
+    ],
+  },
+  {
     id: "2026-10-20",
     date: "October 20, 2026",
     title: "Navy closures are current again",
