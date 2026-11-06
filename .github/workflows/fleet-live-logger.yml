@@ -1,12 +1,15 @@
 name: Fleet live AIS logger (aisstream.io)
 
 # Fills the ~2-month lag of the public AIS archive with a live feed. Each run
-# holds one aisstream.io WebSocket open for ~5 h 35 min, keeps only the roster
-# boats inside the SoCal box, and commits the day files to the `fleet-live`
-# data branch (never main). Runs every 6 h. aisstream allows ONE socket per
-# key, so runs must NOT overlap (a second socket kicks the first off): the
-# ~20 min gap between chunks is the price. One position per vessel per minute
-# when a day is rolled into parquet.
+# holds one aisstream.io WebSocket open for ~5 h 35 min, keeps the roster
+# boats inside the SoCal box at full rate, and commits the day files to the
+# `fleet-live` data branch (never main). Every other hull in the box is kept
+# thinned (fleet-model/any_log.py) on the `fleet-any` branch, which the tool's
+# find-a-boat search reads; that branch is one commit, replaced on each push,
+# so its churn never piles up as history. Runs every 6 h. aisstream allows
+# ONE socket per key, so runs must NOT overlap (a second socket kicks the
+# first off): the ~20 min gap between chunks is the price. One position per
+# vessel per minute when a day is rolled into parquet.
 #
 # Needs the repository secret AISSTREAM_API_KEY (free key: https://aisstream.io,
 # sign in with GitHub). Without it the job exits 0 and does nothing, so the
@@ -71,6 +74,19 @@ jobs:
           mkdir -p "$FLEET_DATA_DIR/live-branch/live"
           ln -s "$FLEET_DATA_DIR/live-branch/live" "$FLEET_DATA_DIR/live"
 
+      - name: Fetch the fleet-any data branch (if it exists)
+        if: steps.key.outputs.present == 'true'
+        run: |
+          if git ls-remote --exit-code --heads origin fleet-any >/dev/null 2>&1; then
+            git fetch --depth=1 origin fleet-any
+            git worktree add "$FLEET_DATA_DIR/any-branch" FETCH_HEAD
+          else
+            git worktree add --detach "$FLEET_DATA_DIR/any-branch"
+            (cd "$FLEET_DATA_DIR/any-branch" && git checkout --orphan fleet-any && git rm -rfq . && echo "every vessel in the SoCal box, thinned; one commit, replaced on each push" > README.md && git add README.md && git -c user.name=bot -c user.email=bot@local commit -qm "init fleet-any")
+          fi
+          mkdir -p "$FLEET_DATA_DIR/any-branch/any"
+          ln -s "$FLEET_DATA_DIR/any-branch/any" "$FLEET_DATA_DIR/any"
+
       - name: Log (default ~5 h 35 min), committing every 10 min
         if: steps.key.outputs.present == 'true'
         env:
@@ -82,7 +98,18 @@ jobs:
           cd "$FLEET_DATA_DIR/live-branch"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          any_push() {
+            # Best effort: the roster feed must not wait on this one.
+            (
+              cd "$FLEET_DATA_DIR/any-branch" || exit 0
+              git add -A any
+              if git diff --staged --quiet; then exit 0; fi
+              git commit -q --amend -m "any: $(date -u +%Y-%m-%dT%H:%MZ)"
+              git push -q --force origin HEAD:refs/heads/fleet-any || echo "fleet-any push failed"
+            ) || true
+          }
           commit_push() {
+            any_push
             git add live
             if git diff --staged --quiet; then return 0; fi
             git commit -qm "live: $(date -u +%Y-%m-%dT%H:%MZ)"

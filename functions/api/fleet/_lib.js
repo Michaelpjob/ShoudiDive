@@ -3,6 +3,9 @@
 // live/<UTC date>.jsonl; we read them straight from raw.githubusercontent.com
 // (public repo, no token) with a short edge cache.
 const RAW = "https://raw.githubusercontent.com/Michaelpjob/ShoudiDive/fleet-live/live/";
+// Every other hull in the box, thinned (fleet-model/any_log.py):
+// any/vessels.json + any/<UTC date>/<last two MMSI digits>.csv.
+export const ANY_RAW = "https://raw.githubusercontent.com/Michaelpjob/ShoudiDive/fleet-any/any/";
 
 export function day(d) { return d.toISOString().slice(0, 10); }
 
@@ -32,8 +35,20 @@ export async function readWindow(now, hours) {
   return { rows, files: uniq };
 }
 
-export function json(body, maxAge) {
+export async function readAny(path) {
+  const r = await fetch(ANY_RAW + path, { cf: { cacheTtl: 120, cacheEverything: true } });
+  return r.ok ? r.text() : null;
+}
+
+export async function readAnyIndex() {
+  const text = await readAny("vessels.json");
+  if (!text) return null;
+  try { return JSON.parse(text); } catch { return null; }
+}
+
+export function json(body, maxAge, status = 200) {
   return new Response(JSON.stringify(body), {
+    status,
     headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=" + maxAge },
   });
 }
