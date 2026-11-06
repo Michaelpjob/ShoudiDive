@@ -150,15 +150,13 @@ def test_full_sample_extracts_all_fields():
 # ---------------------------------------------------------------------------
 
 
-def test_scraper_is_in_orchestrator_roster():
+def test_scraper_is_not_in_orchestrator_roster():
+    """Retired 2026-10-15: the shop's terms forbid scraping. Re-adding it
+    needs the shop's permission first."""
     from validation.ingest import SCRAPERS  # noqa: WPS433
     from validation.ingest.beachcitiescuba import BeachCitiesCubaScraper
 
-    found = any(isinstance(s, BeachCitiesCubaScraper) for s in SCRAPERS)
-    assert found, (
-        "BeachCitiesCubaScraper is not registered in SCRAPERS — the cron will skip it. "
-        "Add it to the roster in pipeline/validation/ingest/__init__.py."
-    )
+    assert not any(isinstance(s, BeachCitiesCubaScraper) for s in SCRAPERS)
 
 
 def test_scraper_emits_secchi_under_realistic_input(monkeypatch):
