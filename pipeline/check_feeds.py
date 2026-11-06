@@ -29,9 +29,9 @@ import os
 import socket
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 import requests
 
@@ -74,6 +74,10 @@ class FeedSpec:
     skip_if_env_unset: Optional[str] = None  # e.g. "EARTHDATA_TOKEN"
     body_substring: Optional[str] = None     # if set, body must contain it
     notes: str = ""
+    # Custom prober for feeds a plain HEAD/GET can't judge (an authenticated
+    # download, say). Runs after the skip_if_env_unset check; the generic
+    # HTTP probe is bypassed entirely.
+    probe_fn: Optional[Callable[["FeedSpec"], "FeedResult"]] = None
 
 
 @dataclass
@@ -146,6 +150,18 @@ FEEDS: list[FeedSpec] = [
         critical=False,
         skip_if_env_unset="EARTHDATA_TOKEN",
         notes="NASA OB.DAAC. Bearer token required for actual download; we just check reachability.",
+    ),
+    FeedSpec(
+        feed_id="nasa_obdaac_getfile",
+        category="satellite",
+        consumer="chl_blend.py sources #1-3 (AQUA/SNPP/S3A_OLCI) — the only direct chl retrievals the app shows",
+        probe_url="https://oceandata.sci.gsfc.nasa.gov/ob/getfile/",
+        method="GET",
+        critical=False,
+        skip_if_env_unset="EARTHDATA_TOKEN",
+        probe_fn=lambda spec: _probe_nasa_getfile(spec),
+        notes="Authenticated download of the newest AQUA NRT chl file. "
+              "Red = EARTHDATA_TOKEN expired/revoked (60-day tokens).",
     ),
     FeedSpec(
         feed_id="chl_climo_modis_pfeg",
@@ -353,6 +369,87 @@ FEEDS: list[FeedSpec] = [
 # Probing
 # -----------------------------------------------------------------------
 
+# netCDF-4 files are HDF5 containers (\x89HDF); classic netCDF starts "CDF".
+NASA_NETCDF_MAGIC = (b"\x89HDF", b"CDF\x01", b"CDF\x02")
+EARTHDATA_LOGIN_HOST = "urs.earthdata.nasa.gov"
+EARTHDATA_TOKEN_HELP = (
+    "Earthdata Login user tokens expire 60 days after generation — "
+    "regenerate at https://urs.earthdata.nasa.gov (profile → Generate Token) "
+    "and run `gh secret set EARTHDATA_TOKEN`."
+)
+
+
+def _probe_nasa_getfile(spec: FeedSpec) -> FeedResult:
+    """Authenticated download probe for NASA OB.DAAC.
+
+    The reachability probe above (``nasa_obdaac_search``) stays green with
+    a dead token because the search endpoint doesn't need one — only
+    ``ob/getfile`` does, and an expired token gets a 302 to the Earthdata
+    login page (HTML, HTTP 200). That is how the 2026-08-23 token expiry
+    went unnoticed for 69 days while the chl map sat blank. This probe
+    finds the newest AQUA NRT chl file, streams its first 8 bytes with the
+    bearer token, and is green only when they are a netCDF signature.
+    """
+    started = time.monotonic()
+    try:
+        import chl_blend as cb  # same directory; lazy so this module stays light
+    except ImportError:  # pragma: no cover - package-style invocation
+        from pipeline import chl_blend as cb  # type: ignore[no-redef]
+
+    def _done(status: str, **kw) -> FeedResult:
+        return FeedResult(
+            feed_id=spec.feed_id, category=spec.category, status=status,
+            duration_ms=int((time.monotonic() - started) * 1000),
+            notes=spec.notes, **kw,
+        )
+
+    session = cb._earthdata_session()
+    if session is None:
+        return _done("skipped", notes="EARTHDATA_TOKEN unset")
+
+    filename = None
+    today = datetime.now(timezone.utc).date()
+    try:
+        # NRT publishes ~2 days behind; walk a little further for holidays.
+        for back in range(2, 12):
+            files = cb._nasa_search_files(session, "AQUA_MODIS", today - timedelta(days=back))
+            if files:
+                filename = files[0]
+                break
+    except Exception as exc:  # noqa: BLE001
+        return _done("red", error=f"search {exc.__class__.__name__}: {exc}")
+    if filename is None:
+        return _done("yellow", error="no AQUA NRT chl file listed in the last 11 days — token untested")
+
+    url = f"{cb.NASA_OBDAAC_GETFILE}/{filename}"
+    try:
+        r = session.get(url, headers={"User-Agent": USER_AGENT}, timeout=DEFAULT_TIMEOUT,
+                        allow_redirects=True, stream=True)
+        try:
+            head = r.raw.read(8, decode_content=True) or b""
+        finally:
+            r.close()
+    except (requests.exceptions.RequestException, socket.gaierror) as exc:
+        return _done("red", error=f"{exc.__class__.__name__}: {exc}")
+
+    from urllib.parse import urlparse
+    final_host = (urlparse(r.url or "").hostname or "").lower()
+    ctype = str(r.headers.get("Content-Type", "")).lower()
+    if r.status_code == 200 and head.startswith(NASA_NETCDF_MAGIC):
+        return _done("green", http_status=r.status_code, bytes_seen=len(head))
+    if final_host.endswith(EARTHDATA_LOGIN_HOST) or "text/html" in ctype:
+        return _done(
+            "red", http_status=r.status_code, bytes_seen=len(head),
+            error=f"EARTHDATA_TOKEN rejected: {filename} redirected to the Earthdata "
+                  f"login page. {EARTHDATA_TOKEN_HELP}",
+        )
+    return _done(
+        "red", http_status=r.status_code, bytes_seen=len(head),
+        error=f"unexpected getfile response http={r.status_code} "
+              f"content-type={ctype or '?'} first-bytes={head[:8]!r}",
+    )
+
+
 def _probe(spec: FeedSpec) -> FeedResult:
     if spec.skip_if_env_unset and not os.environ.get(spec.skip_if_env_unset):
         return FeedResult(
@@ -360,6 +457,8 @@ def _probe(spec: FeedSpec) -> FeedResult:
             status="skipped",
             notes=f"{spec.skip_if_env_unset} unset",
         )
+    if spec.probe_fn is not None:
+        return spec.probe_fn(spec)
 
     headers = {"User-Agent": USER_AGENT, "Accept": "*/*"}
     if spec.method == "GET" and spec.range_bytes:
