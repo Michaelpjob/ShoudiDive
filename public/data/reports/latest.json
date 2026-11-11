@@ -2,8 +2,8 @@
  "schema": "shoudidive.report/v2",
  "date": "2026-11-11",
  "date_label": "Wednesday, November 11, 2026",
- "generated_utc": "2026-11-11T18:09Z",
- "generated_local": "10:09 AM PST",
+ "generated_utc": "2026-11-11T20:08Z",
+ "generated_local": "12:08 PM PST",
  "days": [
   {
    "key": "today",
@@ -28,8 +28,8 @@
     "days": {
      "today": {
       "level": "marginal",
-      "exposure": "lee",
-      "swell_from_deg": 270.0,
+      "exposure": "into",
+      "swell_from_deg": 220,
       "factors": [
        {
         "key": "headlines",
@@ -45,7 +45,7 @@
         "key": "rip",
         "label": "Rip current risk",
         "level": "marginal",
-        "value": "High (county forecast); lowered one level because the entry is in the swell's lee",
+        "value": "Moderate (county forecast)",
         "rule": "Low is within, moderate marginal, high outside (NWS Surf Zone Forecast).",
         "source": "srf_sgx",
         "tag": "Rule",
@@ -55,7 +55,7 @@
         "key": "surf",
         "label": "Surf at the entry",
         "level": "marginal",
-        "value": "CDIP MOP at this entry's 10 m line: 2.4 ft at 12 s from 330°, so sets about 3.1 ft",
+        "value": "CDIP MOP at this entry's 10 m line: 2.5 ft at 12 s from 330°, so sets about 3.2 ft",
         "rule": "Set height (1.27 x the modeled significant height, the mean of the highest tenth of waves): under 2.5 ft within, under 4.5 ft marginal, otherwise outside.",
         "source": "mop_D0482",
         "tag": "Modeled",
@@ -93,8 +93,8 @@
        }
       ],
       "label": "Marginal",
-      "why": "Rip current risk: High (county forecast); lowered one level because the entry is in the swell's lee. Surf at the entry: CDIP MOP at this entry's 10 m line: 2.4 ft at 12 s from 330°, so sets about 3.1 ft.",
-      "period": "TODAY",
+      "why": "Rip current risk: Moderate (county forecast). Surf at the entry: CDIP MOP at this entry's 10 m line: 2.5 ft at 12 s from 330°, so sets about 3.2 ft.",
+      "period": "THIS AFTERNOON THROUGH THURSDAY",
       "period_fallback": false,
       "evidence": [
        {
@@ -105,11 +105,11 @@
         "rows": [
          {
           "time": "1 PM",
-          "text": "2.4 ft at 12 s from 330°"
+          "text": "2.5 ft at 12 s from 330°"
          },
          {
           "time": "4 PM",
-          "text": "2.4 ft at 12 s from 328°"
+          "text": "2.5 ft at 12 s from 328°"
          },
          {
           "time": "7 PM",
@@ -122,21 +122,21 @@
         "label": "NWS surf zone forecast for the county",
         "tag": "Rule",
         "source": "srf_sgx",
-        "text": "Surf 3 to 5 feet, sets to 6 feet; rip current risk High; swell from n/a°."
+        "text": "Surf 2 to 4 feet; rip current risk Moderate; swell from 220°."
        },
        {
         "kind": "obs",
-        "label": "Buoy 46254 Scripps Nearshore (La Jolla), 9:26 AM",
+        "label": "Buoy 46254 Scripps Nearshore (La Jolla), 11:26 AM",
         "tag": "Observed",
         "source": "buoy_46254",
-        "text": "waves 3.0 ft, swell 2.0 ft at 13 s WNW, wind waves 2.3 ft at 8 s, water 75.2°F"
+        "text": "waves 3.0 ft, swell 2.0 ft at 13 s WNW, wind waves 2.3 ft at 10 s, water 75.6°F"
        }
       ]
      },
      "tomorrow": {
       "level": "marginal",
       "exposure": "lee",
-      "swell_from_deg": 270.0,
+      "swell_from_deg": 220,
       "factors": [
        {
         "key": "headlines",
@@ -201,7 +201,7 @@
       ],
       "label": "Marginal",
       "why": "Surf at the entry: CDIP MOP at this entry's 10 m line: 2.3 ft at 12 s from 330°, so sets about 2.9 ft.",
-      "period": "THURSDAY",
+      "period": "THIS AFTERNOON THROUGH THURSDAY",
       "period_fallback": false,
       "evidence": [
        {
@@ -237,14 +237,14 @@
         "label": "NWS surf zone forecast for the county",
         "tag": "Rule",
         "source": "srf_sgx",
-        "text": "Surf 2 to 4 feet, sets to 5 feet; rip current risk Moderate; swell from n/a°."
+        "text": "Surf 2 to 4 feet; rip current risk Moderate; swell from 220°."
        },
        {
         "kind": "obs",
-        "label": "Buoy 46254 Scripps Nearshore (La Jolla), 9:26 AM",
+        "label": "Buoy 46254 Scripps Nearshore (La Jolla), 11:26 AM",
         "tag": "Observed",
         "source": "buoy_46254",
-        "text": "waves 3.0 ft, swell 2.0 ft at 13 s WNW, wind waves 2.3 ft at 8 s, water 75.2°F"
+        "text": "waves 3.0 ft, swell 2.0 ft at 13 s WNW, wind waves 2.3 ft at 10 s, water 75.6°F"
        }
       ]
      }
@@ -259,9 +259,9 @@
     "depth_m": 12,
     "days": {
      "today": {
-      "level": "marginal",
+      "level": "within",
       "exposure": "lee",
-      "swell_from_deg": 270.0,
+      "swell_from_deg": 220,
       "factors": [
        {
         "key": "headlines",
@@ -276,8 +276,8 @@
        {
         "key": "rip",
         "label": "Rip current risk",
-        "level": "marginal",
-        "value": "High (county forecast); lowered one level because the entry is in the swell's lee",
+        "level": "within",
+        "value": "Moderate (county forecast); lowered one level because the entry is in the swell's lee",
         "rule": "Low is within, moderate marginal, high outside (NWS Surf Zone Forecast).",
         "source": "srf_sgx",
         "tag": "Rule",
@@ -324,9 +324,9 @@
         "required": false
        }
       ],
-      "label": "Marginal",
-      "why": "Rip current risk: High (county forecast); lowered one level because the entry is in the swell's lee.",
-      "period": "TODAY",
+      "label": "Within our thresholds",
+      "why": "Every factor we rate is within our thresholds.",
+      "period": "THIS AFTERNOON THROUGH THURSDAY",
       "period_fallback": false,
       "evidence": [
        {
@@ -348,27 +348,13 @@
           "text": "0.8 ft at 12 s from 271°"
          }
         ]
-       },
-       {
-        "kind": "text",
-        "label": "NWS surf zone forecast for the county",
-        "tag": "Rule",
-        "source": "srf_sgx",
-        "text": "Surf 3 to 5 feet, sets to 6 feet; rip current risk High; swell from n/a°."
-       },
-       {
-        "kind": "obs",
-        "label": "Buoy 46254 Scripps Nearshore (La Jolla), 9:26 AM",
-        "tag": "Observed",
-        "source": "buoy_46254",
-        "text": "waves 3.0 ft, swell 2.0 ft at 13 s WNW, wind waves 2.3 ft at 8 s, water 75.2°F"
        }
       ]
      },
      "tomorrow": {
       "level": "within",
       "exposure": "lee",
-      "swell_from_deg": 270.0,
+      "swell_from_deg": 220,
       "factors": [
        {
         "key": "headlines",
@@ -433,7 +419,7 @@
       ],
       "label": "Within our thresholds",
       "why": "Every factor we rate is within our thresholds.",
-      "period": "THURSDAY",
+      "period": "THIS AFTERNOON THROUGH THURSDAY",
       "period_fallback": false,
       "evidence": [
        {
@@ -452,7 +438,7 @@
          },
          {
           "time": "1 PM",
-          "text": "0.6 ft at 12 s from 269°"
+          "text": "0.7 ft at 12 s from 269°"
          },
          {
           "time": "4 PM",
@@ -479,7 +465,7 @@
      "today": {
       "level": "marginal",
       "exposure": "into",
-      "swell_from_deg": 270.0,
+      "swell_from_deg": 220,
       "factors": [
        {
         "key": "headlines",
@@ -495,7 +481,7 @@
         "key": "surf",
         "label": "Surf at the entry",
         "level": "marginal",
-        "value": "CDIP MOP at this entry's 10 m line: 3.4 ft at 12 s from 276°, so sets about 4.3 ft",
+        "value": "CDIP MOP at this entry's 10 m line: 3.4 ft at 12 s from 276°, so sets about 4.4 ft",
         "rule": "Set height (1.27 x the modeled significant height, the mean of the highest tenth of waves): under 2.5 ft within, under 4.5 ft marginal, otherwise outside.",
         "source": "mop_D0324",
         "tag": "Modeled",
@@ -533,8 +519,8 @@
        }
       ],
       "label": "Marginal",
-      "why": "Surf at the entry: CDIP MOP at this entry's 10 m line: 3.4 ft at 12 s from 276°, so sets about 4.3 ft.",
-      "period": "TODAY",
+      "why": "Surf at the entry: CDIP MOP at this entry's 10 m line: 3.4 ft at 12 s from 276°, so sets about 4.4 ft.",
+      "period": "THIS AFTERNOON THROUGH THURSDAY",
       "period_fallback": false,
       "evidence": [
        {
@@ -549,11 +535,11 @@
          },
          {
           "time": "4 PM",
-          "text": "3.3 ft at 12 s from 275°"
+          "text": "3.4 ft at 12 s from 275°"
          },
          {
           "time": "7 PM",
-          "text": "3.2 ft at 12 s from 274°"
+          "text": "3.3 ft at 12 s from 274°"
          }
         ]
        },
@@ -562,21 +548,21 @@
         "label": "NWS surf zone forecast for the county",
         "tag": "Rule",
         "source": "srf_sgx",
-        "text": "Surf 3 to 5 feet, sets to 6 feet; rip current risk High; swell from n/a°."
+        "text": "Surf 2 to 4 feet; rip current risk Moderate; swell from 220°."
        },
        {
         "kind": "obs",
-        "label": "Buoy 46232 Point Loma South, 9:26 AM",
+        "label": "Buoy 46232 Point Loma South, 11:26 AM",
         "tag": "Observed",
         "source": "buoy_46232",
-        "text": "waves 4.3 ft, swell 3.6 ft at 13 s W, wind waves 2.6 ft at 10 s, water 75.4°F"
+        "text": "waves 5.2 ft, swell 4.3 ft at 13 s W, wind waves 2.6 ft at 10 s, water 75.9°F"
        }
       ]
      },
      "tomorrow": {
       "level": "marginal",
       "exposure": "into",
-      "swell_from_deg": 270.0,
+      "swell_from_deg": 220,
       "factors": [
        {
         "key": "headlines",
@@ -592,7 +578,7 @@
         "key": "surf",
         "label": "Surf at the entry",
         "level": "marginal",
-        "value": "CDIP MOP at this entry's 10 m line: 3.3 ft at 13 s from 272°, so sets about 4.2 ft",
+        "value": "CDIP MOP at this entry's 10 m line: 3.2 ft at 13 s from 271°, so sets about 4.1 ft",
         "rule": "Set height (1.27 x the modeled significant height, the mean of the highest tenth of waves): under 2.5 ft within, under 4.5 ft marginal, otherwise outside.",
         "source": "mop_D0324",
         "tag": "Modeled",
@@ -630,8 +616,8 @@
        }
       ],
       "label": "Marginal",
-      "why": "Surf at the entry: CDIP MOP at this entry's 10 m line: 3.3 ft at 13 s from 272°, so sets about 4.2 ft.",
-      "period": "THURSDAY",
+      "why": "Surf at the entry: CDIP MOP at this entry's 10 m line: 3.2 ft at 13 s from 271°, so sets about 4.1 ft.",
+      "period": "THIS AFTERNOON THROUGH THURSDAY",
       "period_fallback": false,
       "evidence": [
        {
@@ -658,7 +644,7 @@
          },
          {
           "time": "7 PM",
-          "text": "3.3 ft at 13 s from 272°"
+          "text": "3.2 ft at 13 s from 271°"
          }
         ]
        },
@@ -667,14 +653,14 @@
         "label": "NWS surf zone forecast for the county",
         "tag": "Rule",
         "source": "srf_sgx",
-        "text": "Surf 2 to 4 feet, sets to 5 feet; rip current risk Moderate; swell from n/a°."
+        "text": "Surf 2 to 4 feet; rip current risk Moderate; swell from 220°."
        },
        {
         "kind": "obs",
-        "label": "Buoy 46232 Point Loma South, 9:26 AM",
+        "label": "Buoy 46232 Point Loma South, 11:26 AM",
         "tag": "Observed",
         "source": "buoy_46232",
-        "text": "waves 4.3 ft, swell 3.6 ft at 13 s W, wind waves 2.6 ft at 10 s, water 75.4°F"
+        "text": "waves 5.2 ft, swell 4.3 ft at 13 s W, wind waves 2.6 ft at 10 s, water 75.9°F"
        }
       ]
      }
@@ -690,8 +676,8 @@
     "days": {
      "today": {
       "level": "marginal",
-      "exposure": "oblique",
-      "swell_from_deg": 280,
+      "exposure": "into",
+      "swell_from_deg": 200,
       "factors": [
        {
         "key": "headlines",
@@ -756,7 +742,7 @@
       ],
       "label": "Marginal",
       "why": "Rip current risk: Moderate (county forecast).",
-      "period": "TODAY",
+      "period": "THIS AFTERNOON THROUGH THURSDAY",
       "period_fallback": false,
       "evidence": [
        {
@@ -784,21 +770,21 @@
         "label": "NWS surf zone forecast for the county",
         "tag": "Rule",
         "source": "srf_sgx",
-        "text": "Surf 2 to 4 feet, sets to 5 feet; rip current risk Moderate; swell from 280°."
+        "text": "Surf 2 to 4 feet; rip current risk Moderate; swell from 200°."
        },
        {
         "kind": "obs",
-        "label": "Buoy 46253 San Pedro South, 9:26 AM",
+        "label": "Buoy 46253 San Pedro South, 11:26 AM",
         "tag": "Observed",
         "source": "buoy_46253",
-        "text": "waves 3.6 ft, swell 3.0 ft at 13 s W, wind waves 2.0 ft at 10 s, water 75.0°F"
+        "text": "waves 4.6 ft, swell 3.9 ft at 12 s W, wind waves 2.0 ft at 10 s, water 75.6°F"
        }
       ]
      },
      "tomorrow": {
       "level": "marginal",
-      "exposure": "oblique",
-      "swell_from_deg": 270.0,
+      "exposure": "into",
+      "swell_from_deg": 200,
       "factors": [
        {
         "key": "headlines",
@@ -824,7 +810,7 @@
         "key": "surf",
         "label": "Surf at the entry",
         "level": "within",
-        "value": "CDIP MOP at this entry's 10 m line: 1.9 ft at 13 s from 204°, so sets about 2.4 ft",
+        "value": "CDIP MOP at this entry's 10 m line: 1.9 ft at 13 s from 205°, so sets about 2.4 ft",
         "rule": "Set height (1.27 x the modeled significant height, the mean of the highest tenth of waves): under 2.5 ft within, under 4.5 ft marginal, otherwise outside.",
         "source": "mop_OC283",
         "tag": "Modeled",
@@ -863,7 +849,7 @@
       ],
       "label": "Marginal",
       "why": "Rip current risk: Moderate (county forecast).",
-      "period": "THURSDAY",
+      "period": "THIS AFTERNOON THROUGH THURSDAY",
       "period_fallback": false,
       "evidence": [
        {
@@ -890,7 +876,7 @@
          },
          {
           "time": "7 PM",
-          "text": "1.9 ft at 13 s from 204°"
+          "text": "1.9 ft at 13 s from 205°"
          }
         ]
        },
@@ -899,14 +885,14 @@
         "label": "NWS surf zone forecast for the county",
         "tag": "Rule",
         "source": "srf_sgx",
-        "text": "Surf 2 to 4 feet; rip current risk Moderate; swell from n/a°."
+        "text": "Surf 2 to 4 feet; rip current risk Moderate; swell from 200°."
        },
        {
         "kind": "obs",
-        "label": "Buoy 46253 San Pedro South, 9:26 AM",
+        "label": "Buoy 46253 San Pedro South, 11:26 AM",
         "tag": "Observed",
         "source": "buoy_46253",
-        "text": "waves 3.6 ft, swell 3.0 ft at 13 s W, wind waves 2.0 ft at 10 s, water 75.0°F"
+        "text": "waves 4.6 ft, swell 3.9 ft at 12 s W, wind waves 2.0 ft at 10 s, water 75.6°F"
        }
       ]
      }
@@ -984,7 +970,7 @@
          {
           "time": "5 AM",
           "level": "within",
-          "text": "wind 6 kt from E, waves 1.7 ft at 14 s"
+          "text": "wind 6 kt from E, waves 1.7 ft at 13 s"
          },
          {
           "time": "6 AM",
@@ -999,12 +985,12 @@
          {
           "time": "8 AM",
           "level": "within",
-          "text": "wind 4 kt from ENE, waves 1.7 ft at 14 s"
+          "text": "wind 4 kt from ENE, waves 1.7 ft at 13 s"
          },
          {
           "time": "9 AM",
           "level": "within",
-          "text": "wind 3 kt from N, waves 1.7 ft at 14 s"
+          "text": "wind 3 kt from N, waves 1.7 ft at 13 s"
          },
          {
           "time": "10 AM",
@@ -1029,7 +1015,7 @@
          {
           "time": "2 PM",
           "level": "within",
-          "text": "wind 9 kt from NNW, waves 1.7 ft at 14 s"
+          "text": "wind 9 kt from NNW, waves 1.9 ft at 14 s"
          },
          {
           "time": "3 PM",
@@ -1039,17 +1025,17 @@
          {
           "time": "4 PM",
           "level": "within",
-          "text": "wind 8 kt from NNW, waves 1.7 ft at 13 s"
+          "text": "wind 8 kt from NNW, waves 1.9 ft at 13 s"
          },
          {
           "time": "5 PM",
           "level": "within",
-          "text": "wind 7 kt from NNW, waves 1.7 ft at 13 s"
+          "text": "wind 7 kt from NNW, waves 1.9 ft at 13 s"
          },
          {
           "time": "6 PM",
           "level": "within",
-          "text": "wind 6 kt from NNW, waves 1.7 ft at 13 s"
+          "text": "wind 6 kt from NNW, waves 1.9 ft at 13 s"
          },
          {
           "time": "7 PM",
@@ -1060,10 +1046,10 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46232 Point Loma South, 9:26 AM",
+        "label": "Buoy 46232 Point Loma South, 11:26 AM",
         "tag": "Observed",
         "source": "buoy_46232",
-        "text": "waves 4.3 ft, swell 3.6 ft at 13 s W, wind waves 2.6 ft at 10 s, water 75.4°F"
+        "text": "waves 5.2 ft, swell 4.3 ft at 13 s W, wind waves 2.6 ft at 10 s, water 75.9°F"
        }
       ]
      },
@@ -1134,12 +1120,12 @@
          {
           "time": "6 AM",
           "level": "within",
-          "text": "wind 3 kt from N, waves 1.5 ft at 13 s"
+          "text": "wind 3 kt from N, waves 1.7 ft at 13 s"
          },
          {
           "time": "7 AM",
           "level": "within",
-          "text": "wind 1 kt from SE, waves 1.5 ft at 13 s"
+          "text": "wind 1 kt from SE, waves 1.7 ft at 13 s"
          },
          {
           "time": "8 AM",
@@ -1189,7 +1175,7 @@
          {
           "time": "5 PM",
           "level": "within",
-          "text": "wind 4 kt from SW, waves 1.9 ft at 13 s"
+          "text": "wind 4 kt from SW, waves 1.7 ft at 13 s"
          },
          {
           "time": "6 PM",
@@ -1205,10 +1191,10 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46232 Point Loma South, 9:26 AM",
+        "label": "Buoy 46232 Point Loma South, 11:26 AM",
         "tag": "Observed",
         "source": "buoy_46232",
-        "text": "waves 4.3 ft, swell 3.6 ft at 13 s W, wind waves 2.6 ft at 10 s, water 75.4°F"
+        "text": "waves 5.2 ft, swell 4.3 ft at 13 s W, wind waves 2.6 ft at 10 s, water 75.9°F"
        }
       ]
      }
@@ -1241,7 +1227,7 @@
         "key": "wind",
         "label": "Wind",
         "level": "within",
-        "value": "variable up to 4 kt",
+        "value": "NW/N up to 10 kt",
         "rule": "Sustained 15 kt or less within, up to 20 kt marginal; gusts 25 kt+ outside.",
         "source": "off_nhc",
         "tag": "Rule",
@@ -1260,8 +1246,8 @@
        {
         "key": "steepness",
         "label": "Wave steepness",
-        "level": "marginal",
-        "value": "7 ft at 13 s (steepest: 7 ft at 13 s)",
+        "level": "within",
+        "value": "7 ft at 14 s",
         "rule": "NWS San Diego steepness rule: seas of 6-10 ft with height (ft) at or above period (s), or 11 ft+, is outside; any train with period under twice its height is marginal (short, steep chop).",
         "source": "off_nhc",
         "tag": "Rule",
@@ -1272,10 +1258,10 @@
        "PMZ009",
        "PZZ740"
       ],
-      "period": "TODAY",
-      "period_fallback": false,
+      "period": "TONIGHT",
+      "period_fallback": true,
       "label": "Marginal",
-      "why": "Seas: 5 to 7 ft. Wave steepness: 7 ft at 13 s (steepest: 7 ft at 13 s).",
+      "why": "Seas: 5 to 7 ft.",
       "evidence": [
        {
         "kind": "series",
@@ -1312,7 +1298,7 @@
          {
           "time": "10 AM",
           "level": "within",
-          "text": "wind 4 kt from SSW, waves 2.2 ft at 14 s"
+          "text": "wind 4 kt from SSW, waves 2.2 ft at 13 s"
          },
          {
           "time": "11 AM",
@@ -1327,7 +1313,7 @@
          {
           "time": "1 PM",
           "level": "within",
-          "text": "wind 7 kt from N, waves 2.2 ft at 14 s"
+          "text": "wind 7 kt from N, waves 2.3 ft at 14 s"
          },
          {
           "time": "2 PM",
@@ -1347,7 +1333,7 @@
          {
           "time": "5 PM",
           "level": "within",
-          "text": "wind 7 kt from NNW, waves 2.3 ft at 13 s"
+          "text": "wind 7 kt from NNW, waves 2.3 ft at 14 s"
          },
          {
           "time": "6 PM",
@@ -1357,7 +1343,7 @@
          {
           "time": "7 PM",
           "level": "within",
-          "text": "wind 5 kt from NNW, waves 2.2 ft at 13 s"
+          "text": "wind 5 kt from NNW, waves 2.3 ft at 13 s"
          }
         ]
        },
@@ -1370,10 +1356,10 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46232 Point Loma South, 9:26 AM",
+        "label": "Buoy 46232 Point Loma South, 11:26 AM",
         "tag": "Observed",
         "source": "buoy_46232",
-        "text": "waves 4.3 ft, swell 3.6 ft at 13 s W, wind waves 2.6 ft at 10 s, water 75.4°F"
+        "text": "waves 5.2 ft, swell 4.3 ft at 13 s W, wind waves 2.6 ft at 10 s, water 75.9°F"
        }
       ]
      },
@@ -1445,12 +1431,12 @@
          {
           "time": "6 AM",
           "level": "within",
-          "text": "wind 6 kt from NNW, waves 2.0 ft at 13 s"
+          "text": "wind 6 kt from NNW, waves 2.2 ft at 13 s"
          },
          {
           "time": "7 AM",
           "level": "within",
-          "text": "wind 5 kt from NW, waves 2.0 ft at 13 s"
+          "text": "wind 5 kt from NW, waves 2.2 ft at 13 s"
          },
          {
           "time": "8 AM",
@@ -1475,7 +1461,7 @@
          {
           "time": "12 PM",
           "level": "within",
-          "text": "wind 9 kt from WSW, waves 2.0 ft at 13 s"
+          "text": "wind 9 kt from WSW, waves 2.2 ft at 13 s"
          },
          {
           "time": "1 PM",
@@ -1500,7 +1486,7 @@
          {
           "time": "5 PM",
           "level": "within",
-          "text": "wind 4 kt from SW, waves 2.3 ft at 13 s"
+          "text": "wind 4 kt from SW, waves 2.2 ft at 13 s"
          },
          {
           "time": "6 PM",
@@ -1523,10 +1509,10 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46232 Point Loma South, 9:26 AM",
+        "label": "Buoy 46232 Point Loma South, 11:26 AM",
         "tag": "Observed",
         "source": "buoy_46232",
-        "text": "waves 4.3 ft, swell 3.6 ft at 13 s W, wind waves 2.6 ft at 10 s, water 75.4°F"
+        "text": "waves 5.2 ft, swell 4.3 ft at 13 s W, wind waves 2.6 ft at 10 s, water 75.9°F"
        }
       ]
      }
@@ -1620,7 +1606,7 @@
          {
           "time": "8 AM",
           "level": "within",
-          "text": "wind 3 kt from ENE, waves 2.3 ft at 14 s"
+          "text": "wind 3 kt from ENE, waves 2.3 ft at 13 s"
          },
          {
           "time": "9 AM",
@@ -1635,12 +1621,12 @@
          {
           "time": "11 AM",
           "level": "within",
-          "text": "wind 7 kt from NNW, waves 2.3 ft at 14 s"
+          "text": "wind 7 kt from NNW, waves 2.5 ft at 14 s"
          },
          {
           "time": "12 PM",
           "level": "within",
-          "text": "wind 6 kt from NNW, waves 2.3 ft at 14 s"
+          "text": "wind 6 kt from NNW, waves 2.5 ft at 14 s"
          },
          {
           "time": "1 PM",
@@ -1688,17 +1674,17 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46258 Mission Bay West, 9:26 AM",
+        "label": "Buoy 46258 Mission Bay West, 11:26 AM",
         "tag": "Observed",
         "source": "buoy_46258",
-        "text": "waves 4.3 ft, swell 3.6 ft at 13 s W, wind waves 2.3 ft at 10 s, water 75.0°F"
+        "text": "waves 4.6 ft, swell 3.9 ft at 12 s W, wind waves 2.6 ft at 10 s, water 75.7°F"
        },
        {
         "kind": "obs",
-        "label": "Buoy 46086 San Clemente Basin, 9:20 AM",
+        "label": "Buoy 46086 San Clemente Basin, 10:40 AM",
         "tag": "Observed",
         "source": "buoy_46086",
-        "text": "wind 4 kt from NNW, gusts 4, water 75.4°F"
+        "text": "wind 2 kt from N, gusts 4, water 75.9°F"
        }
       ]
      },
@@ -1815,7 +1801,7 @@
          {
           "time": "3 PM",
           "level": "within",
-          "text": "wind 9 kt from WSW, waves 2.5 ft at 13 s"
+          "text": "wind 9 kt from WSW, waves 2.3 ft at 13 s"
          },
          {
           "time": "4 PM",
@@ -1841,17 +1827,17 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46258 Mission Bay West, 9:26 AM",
+        "label": "Buoy 46258 Mission Bay West, 11:26 AM",
         "tag": "Observed",
         "source": "buoy_46258",
-        "text": "waves 4.3 ft, swell 3.6 ft at 13 s W, wind waves 2.3 ft at 10 s, water 75.0°F"
+        "text": "waves 4.6 ft, swell 3.9 ft at 12 s W, wind waves 2.6 ft at 10 s, water 75.7°F"
        },
        {
         "kind": "obs",
-        "label": "Buoy 46086 San Clemente Basin, 9:20 AM",
+        "label": "Buoy 46086 San Clemente Basin, 10:40 AM",
         "tag": "Observed",
         "source": "buoy_46086",
-        "text": "wind 4 kt from NNW, gusts 4, water 75.4°F"
+        "text": "wind 2 kt from N, gusts 4, water 75.9°F"
        }
       ]
      }
@@ -1977,7 +1963,7 @@
          {
           "time": "1 PM",
           "level": "within",
-          "text": "wind 4 kt from NW, waves 1.4 ft at 14 s"
+          "text": "wind 4 kt from NW, waves 1.5 ft at 14 s"
          },
          {
           "time": "2 PM",
@@ -1997,17 +1983,17 @@
          {
           "time": "5 PM",
           "level": "within",
-          "text": "wind 12 kt from NW, waves 1.4 ft at 13 s"
+          "text": "wind 12 kt from NW, waves 1.5 ft at 13 s"
          },
          {
           "time": "6 PM",
           "level": "within",
-          "text": "wind 12 kt from NW, waves 1.4 ft at 13 s"
+          "text": "wind 12 kt from NW, waves 1.5 ft at 13 s"
          },
          {
           "time": "7 PM",
           "level": "within",
-          "text": "wind 12 kt from NW, waves 1.4 ft at 13 s"
+          "text": "wind 12 kt from NW, waves 1.5 ft at 13 s"
          }
         ]
        },
@@ -2020,10 +2006,10 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46253 San Pedro South, 9:26 AM",
+        "label": "Buoy 46253 San Pedro South, 11:26 AM",
         "tag": "Observed",
         "source": "buoy_46253",
-        "text": "waves 3.6 ft, swell 3.0 ft at 13 s W, wind waves 2.0 ft at 10 s, water 75.0°F"
+        "text": "waves 4.6 ft, swell 3.9 ft at 12 s W, wind waves 2.0 ft at 10 s, water 75.6°F"
        }
       ]
      },
@@ -2094,7 +2080,7 @@
          {
           "time": "6 AM",
           "level": "within",
-          "text": "wind 7 kt from WNW, waves 1.2 ft at 14 s"
+          "text": "wind 7 kt from WNW, waves 1.4 ft at 13 s"
          },
          {
           "time": "7 AM",
@@ -2114,7 +2100,7 @@
          {
           "time": "10 AM",
           "level": "within",
-          "text": "wind 4 kt from SSW, waves 1.4 ft at 14 s"
+          "text": "wind 4 kt from SSW, waves 1.2 ft at 14 s"
          },
          {
           "time": "11 AM",
@@ -2134,7 +2120,7 @@
          {
           "time": "2 PM",
           "level": "within",
-          "text": "wind 9 kt from SSW, waves 1.5 ft at 14 s"
+          "text": "wind 9 kt from SSW, waves 1.4 ft at 14 s"
          },
          {
           "time": "3 PM",
@@ -2172,10 +2158,10 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46253 San Pedro South, 9:26 AM",
+        "label": "Buoy 46253 San Pedro South, 11:26 AM",
         "tag": "Observed",
         "source": "buoy_46253",
-        "text": "waves 3.6 ft, swell 3.0 ft at 13 s W, wind waves 2.0 ft at 10 s, water 75.0°F"
+        "text": "waves 4.6 ft, swell 3.9 ft at 12 s W, wind waves 2.0 ft at 10 s, water 75.6°F"
        }
       ]
      }
@@ -2264,12 +2250,12 @@
          {
           "time": "7 AM",
           "level": "within",
-          "text": "wind 2 kt from SW, waves 3.7 ft at 13 s"
+          "text": "wind 2 kt from SW, waves 3.9 ft at 13 s"
          },
          {
           "time": "8 AM",
           "level": "within",
-          "text": "wind 3 kt from WSW, waves 3.7 ft at 13 s"
+          "text": "wind 3 kt from WSW, waves 3.9 ft at 13 s"
          },
          {
           "time": "9 AM",
@@ -2324,7 +2310,7 @@
          {
           "time": "7 PM",
           "level": "within",
-          "text": "wind 6 kt from WNW, waves 3.7 ft at 13 s"
+          "text": "wind 6 kt from WNW, waves 3.9 ft at 13 s"
          }
         ]
        },
@@ -2337,17 +2323,17 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46086 San Clemente Basin, 9:20 AM",
+        "label": "Buoy 46086 San Clemente Basin, 10:40 AM",
         "tag": "Observed",
         "source": "buoy_46086",
-        "text": "wind 4 kt from NNW, gusts 4, water 75.4°F"
+        "text": "wind 2 kt from N, gusts 4, water 75.9°F"
        },
        {
         "kind": "obs",
-        "label": "Buoy 46047 Tanner Bank, 9:20 AM",
+        "label": "Buoy 46047 Tanner Bank, 10:40 AM",
         "tag": "Observed",
         "source": "buoy_46047",
-        "text": "waves 9.2 ft, swell 8.9 ft at 13 s NW, wind waves 0.7 ft at 4 s, wind 6 kt from WSW, gusts 8, water 68.4°F"
+        "text": "waves 8.9 ft, swell 8.9 ft at 13 s WNW, wind waves 0.7 ft at 4 s, wind 8 kt from W, gusts 10, water 68.4°F"
        }
       ]
      },
@@ -2497,17 +2483,17 @@
        },
        {
         "kind": "obs",
-        "label": "Buoy 46086 San Clemente Basin, 9:20 AM",
+        "label": "Buoy 46086 San Clemente Basin, 10:40 AM",
         "tag": "Observed",
         "source": "buoy_46086",
-        "text": "wind 4 kt from NNW, gusts 4, water 75.4°F"
+        "text": "wind 2 kt from N, gusts 4, water 75.9°F"
        },
        {
         "kind": "obs",
-        "label": "Buoy 46047 Tanner Bank, 9:20 AM",
+        "label": "Buoy 46047 Tanner Bank, 10:40 AM",
         "tag": "Observed",
         "source": "buoy_46047",
-        "text": "waves 9.2 ft, swell 8.9 ft at 13 s NW, wind waves 0.7 ft at 4 s, wind 6 kt from WSW, gusts 8, water 68.4°F"
+        "text": "waves 8.9 ft, swell 8.9 ft at 13 s WNW, wind waves 0.7 ft at 4 s, wind 8 kt from W, gusts 10, water 68.4°F"
        }
       ]
      }
@@ -2532,7 +2518,7 @@
         {
          "time": "5 AM",
          "level": "within",
-         "text": "wind 6 kt from E, waves 1.7 ft at 14 s"
+         "text": "wind 6 kt from E, waves 1.7 ft at 13 s"
         },
         {
          "time": "6 AM",
@@ -2547,12 +2533,12 @@
         {
          "time": "8 AM",
          "level": "within",
-         "text": "wind 4 kt from ENE, waves 1.7 ft at 14 s"
+         "text": "wind 4 kt from ENE, waves 1.7 ft at 13 s"
         },
         {
          "time": "9 AM",
          "level": "within",
-         "text": "wind 3 kt from N, waves 1.7 ft at 14 s"
+         "text": "wind 3 kt from N, waves 1.7 ft at 13 s"
         },
         {
          "time": "10 AM",
@@ -2577,7 +2563,7 @@
         {
          "time": "2 PM",
          "level": "within",
-         "text": "wind 9 kt from NNW, waves 1.7 ft at 14 s"
+         "text": "wind 9 kt from NNW, waves 1.9 ft at 14 s"
         },
         {
          "time": "3 PM",
@@ -2587,17 +2573,17 @@
         {
          "time": "4 PM",
          "level": "within",
-         "text": "wind 8 kt from NNW, waves 1.7 ft at 13 s"
+         "text": "wind 8 kt from NNW, waves 1.9 ft at 13 s"
         },
         {
          "time": "5 PM",
          "level": "within",
-         "text": "wind 7 kt from NNW, waves 1.7 ft at 13 s"
+         "text": "wind 7 kt from NNW, waves 1.9 ft at 13 s"
         },
         {
          "time": "6 PM",
          "level": "within",
-         "text": "wind 6 kt from NNW, waves 1.7 ft at 13 s"
+         "text": "wind 6 kt from NNW, waves 1.9 ft at 13 s"
         },
         {
          "time": "7 PM",
@@ -2608,10 +2594,10 @@
       },
       {
        "kind": "obs",
-       "label": "Buoy 46232 Point Loma South, 9:26 AM",
+       "label": "Buoy 46232 Point Loma South, 11:26 AM",
        "tag": "Observed",
        "source": "buoy_46232",
-       "text": "waves 4.3 ft, swell 3.6 ft at 13 s W, wind waves 2.6 ft at 10 s, water 75.4°F"
+       "text": "waves 5.2 ft, swell 4.3 ft at 13 s W, wind waves 2.6 ft at 10 s, water 75.9°F"
       }
      ]
     },
@@ -2635,12 +2621,12 @@
         {
          "time": "6 AM",
          "level": "within",
-         "text": "wind 3 kt from N, waves 1.5 ft at 13 s"
+         "text": "wind 3 kt from N, waves 1.7 ft at 13 s"
         },
         {
          "time": "7 AM",
          "level": "within",
-         "text": "wind 1 kt from SE, waves 1.5 ft at 13 s"
+         "text": "wind 1 kt from SE, waves 1.7 ft at 13 s"
         },
         {
          "time": "8 AM",
@@ -2690,7 +2676,7 @@
         {
          "time": "5 PM",
          "level": "within",
-         "text": "wind 4 kt from SW, waves 1.9 ft at 13 s"
+         "text": "wind 4 kt from SW, waves 1.7 ft at 13 s"
         },
         {
          "time": "6 PM",
@@ -2706,10 +2692,10 @@
       },
       {
        "kind": "obs",
-       "label": "Buoy 46232 Point Loma South, 9:26 AM",
+       "label": "Buoy 46232 Point Loma South, 11:26 AM",
        "tag": "Observed",
        "source": "buoy_46232",
-       "text": "waves 4.3 ft, swell 3.6 ft at 13 s W, wind waves 2.6 ft at 10 s, water 75.4°F"
+       "text": "waves 5.2 ft, swell 4.3 ft at 13 s W, wind waves 2.6 ft at 10 s, water 75.9°F"
       }
      ]
     }
@@ -2731,11 +2717,11 @@
     "id": "46254",
     "name": "Scripps Nearshore (La Jolla)",
     "status": "ok",
-    "observed": "9:26 AM",
+    "observed": "11:26 AM",
     "age_h": 0.7,
     "nearshore": true,
     "wave_ft": 3.0,
-    "temp_f": 75.2,
+    "temp_f": 75.6,
     "swell": {
      "ft": 2.0,
      "s": 13.3,
@@ -2743,7 +2729,7 @@
     },
     "wind_waves": {
      "ft": 2.3,
-     "s": 8.3,
+     "s": 9.9,
      "dir": "W"
     }
    },
@@ -2751,13 +2737,13 @@
     "id": "46232",
     "name": "Point Loma South",
     "status": "ok",
-    "observed": "9:26 AM",
+    "observed": "11:26 AM",
     "age_h": 0.7,
     "nearshore": true,
-    "wave_ft": 4.3,
-    "temp_f": 75.4,
+    "wave_ft": 5.2,
+    "temp_f": 75.9,
     "swell": {
-     "ft": 3.6,
+     "ft": 4.3,
      "s": 13.3,
      "dir": "W"
     },
@@ -2771,33 +2757,13 @@
     "id": "46258",
     "name": "Mission Bay West",
     "status": "ok",
-    "observed": "9:26 AM",
+    "observed": "11:26 AM",
     "age_h": 0.7,
     "nearshore": true,
-    "wave_ft": 4.3,
-    "temp_f": 75.0,
+    "wave_ft": 4.6,
+    "temp_f": 75.7,
     "swell": {
-     "ft": 3.6,
-     "s": 13.3,
-     "dir": "W"
-    },
-    "wind_waves": {
-     "ft": 2.3,
-     "s": 9.9,
-     "dir": "W"
-    }
-   },
-   {
-    "id": "46225",
-    "name": "Torrey Pines Outer",
-    "status": "ok",
-    "observed": "9:26 AM",
-    "age_h": 0.7,
-    "nearshore": true,
-    "wave_ft": 4.3,
-    "temp_f": 75.0,
-    "swell": {
-     "ft": 3.3,
+     "ft": 3.9,
      "s": 12.5,
      "dir": "W"
     },
@@ -2808,17 +2774,37 @@
     }
    },
    {
+    "id": "46225",
+    "name": "Torrey Pines Outer",
+    "status": "ok",
+    "observed": "11:26 AM",
+    "age_h": 0.7,
+    "nearshore": true,
+    "wave_ft": 4.3,
+    "temp_f": 75.6,
+    "swell": {
+     "ft": 3.6,
+     "s": 13.3,
+     "dir": "W"
+    },
+    "wind_waves": {
+     "ft": 2.0,
+     "s": 9.9,
+     "dir": "W"
+    }
+   },
+   {
     "id": "46253",
     "name": "San Pedro South",
     "status": "ok",
-    "observed": "9:26 AM",
+    "observed": "11:26 AM",
     "age_h": 0.7,
     "nearshore": true,
-    "wave_ft": 3.6,
-    "temp_f": 75.0,
+    "wave_ft": 4.6,
+    "temp_f": 75.6,
     "swell": {
-     "ft": 3.0,
-     "s": 13.3,
+     "ft": 3.9,
+     "s": 12.5,
      "dir": "W"
     },
     "wind_waves": {
@@ -2831,73 +2817,73 @@
     "id": "46086",
     "name": "San Clemente Basin",
     "status": "ok",
-    "observed": "9:20 AM",
-    "age_h": 0.8,
+    "observed": "10:40 AM",
+    "age_h": 1.5,
     "nearshore": false,
     "wave_ft": null,
-    "temp_f": 75.4,
+    "temp_f": 75.9,
     "wind": {
-     "kt": 4,
+     "kt": 2,
      "gust_kt": 4,
-     "from_deg": 340.0
+     "from_deg": 360.0
     }
    },
    {
     "id": "46047",
     "name": "Tanner Bank",
     "status": "ok",
-    "observed": "9:20 AM",
-    "age_h": 0.8,
+    "observed": "10:40 AM",
+    "age_h": 1.5,
     "nearshore": false,
-    "wave_ft": 9.2,
+    "wave_ft": 8.9,
     "temp_f": 68.4,
     "swell": {
      "ft": 8.9,
      "s": 12.9,
-     "dir": "NW"
+     "dir": "WNW"
     },
     "wind_waves": {
      "ft": 0.7,
-     "s": 4.0,
+     "s": 3.8,
      "dir": "WNW"
     },
     "wind": {
-     "kt": 6,
-     "gust_kt": 8,
-     "from_deg": 240.0
+     "kt": 8,
+     "gust_kt": 10,
+     "from_deg": 260.0
     }
    }
   ],
   "piers": [
    {
     "name": "Scripps Pier, La Jolla",
-    "temp_f": 75.0,
-    "observed": "10:00 AM"
+    "temp_f": 75.4,
+    "observed": "12:00 PM"
    },
    {
     "name": "San Diego Bay (Broadway Pier)",
-    "temp_f": 72.5,
-    "observed": "9:54 AM"
+    "temp_f": 72.9,
+    "observed": "12:00 PM"
    }
   ],
   "surf": {
    "today": {
-    "rip_risk": "High",
-    "surf_text": "3 to 5 feet, sets to 6 feet",
-    "sets_ft": 6,
-    "swell_from_deg": null,
+    "rip_risk": "Moderate",
+    "surf_text": "2 to 4 feet",
+    "sets_ft": 4,
+    "swell_from_deg": 220,
     "thunder": "None expected",
-    "water_temp_lo_f": 73,
+    "water_temp_lo_f": 67,
     "water_temp_hi_f": 75
    },
    "tomorrow": {
     "rip_risk": "Moderate",
-    "surf_text": "2 to 4 feet, sets to 5 feet",
-    "sets_ft": 5,
-    "swell_from_deg": null,
+    "surf_text": "2 to 4 feet",
+    "sets_ft": 4,
+    "swell_from_deg": 220,
     "thunder": "None expected",
-    "water_temp_lo_f": null,
-    "water_temp_hi_f": null
+    "water_temp_lo_f": 67,
+    "water_temp_hi_f": 75
    },
    "county": "San Diego County",
    "headlines": [
@@ -2929,10 +2915,10 @@
     "zone": "PMZ009",
     "name": "Mexico: border to 30N within 60 nm (Coronados)",
     "status": "ok",
-    "issued": "704 AM PST Wed Nov 11 2026",
+    "issued": "1105 AM PST Wed Nov 11 2026",
     "url": "https://www.nhc.noaa.gov/text/MIAOFFPZ7.shtml",
     "headlines": [],
-    "today": "Variable winds less than 5 kt. Seas 5 to 7 ft in W to NW swell. Period 13 seconds.",
+    "today": "N of 31N, variable winds less than 5 kt. S of 31N, NW to N winds 10 kt in the evening, becoming variable winds less than 5 kt. Seas 5 to 7 ft in W to NW swell. Period 14 seconds.",
     "tomorrow": "Variable winds less than 5 kt. Seas 5 to 7 ft in W to NW swell. Period 13 seconds."
    },
    {
@@ -2957,14 +2943,14 @@
    }
   ],
   "sst_field": {
-   "date": "2026-11-08",
-   "date_label": "Nov 8",
-   "age_days": 3,
+   "date": "2026-11-09",
+   "date_label": "Nov 9",
+   "age_days": 2,
    "source": "MUR L4 SST (1 km)"
   },
   "chl": {
-   "date": "2026-11-09",
-   "date_label": "Nov 9",
+   "date": "2026-11-10",
+   "date_label": "Nov 10",
    "coverage_pct": 60
   },
   "thermocline": {
@@ -2977,13 +2963,13 @@
     },
     {
      "name": "Point Loma",
-     "cliff_ft": 45,
+     "cliff_ft": 46,
      "no_cliff": false,
      "bottom_ft": 320
     },
     {
      "name": "Coronados",
-     "cliff_ft": 48,
+     "cliff_ft": 49,
      "no_cliff": false,
      "bottom_ft": 1938
     }
@@ -3011,19 +2997,14 @@
    "station": "La Jolla",
    "events": [
     {
-     "time": "2:37 AM",
-     "type": "Low",
-     "ft": 2.4
-    },
-    {
-     "time": "9:01 AM",
-     "type": "High",
-     "ft": 5.8
-    },
-    {
      "time": "4:32 PM",
      "type": "Low",
      "ft": -0.2
+    },
+    {
+     "time": "11:15 PM",
+     "type": "High",
+     "ft": 3.3
     }
    ]
   },
@@ -3064,7 +3045,7 @@
      "site": "La Jolla Cove",
      "depth_ft": 33,
      "buoy": "46254",
-     "u_m_s": 0.39,
+     "u_m_s": 0.41,
      "u_ft_s": 1.3,
      "level": "strong"
     },
@@ -3072,7 +3053,7 @@
      "site": "La Jolla Canyon wall",
      "depth_ft": 66,
      "buoy": "46254",
-     "u_m_s": 0.23,
+     "u_m_s": 0.25,
      "u_ft_s": 0.8,
      "level": "strong"
     },
@@ -3080,24 +3061,24 @@
      "site": "Point Loma kelp",
      "depth_ft": 49,
      "buoy": "46232",
-     "u_m_s": 0.47,
-     "u_ft_s": 1.5,
+     "u_m_s": 0.53,
+     "u_ft_s": 1.7,
      "level": "strong"
     },
     {
      "site": "Wreck Alley",
      "depth_ft": 66,
      "buoy": "46258",
-     "u_m_s": 0.37,
-     "u_ft_s": 1.2,
+     "u_m_s": 0.4,
+     "u_ft_s": 1.3,
      "level": "strong"
     },
     {
      "site": "Laguna Beach coves",
      "depth_ft": 33,
      "buoy": "46253",
-     "u_m_s": 0.48,
-     "u_ft_s": 1.6,
+     "u_m_s": 0.6,
+     "u_ft_s": 2.0,
      "level": "strong"
     }
    ],
@@ -3140,8 +3121,8 @@
   },
   "best_bet": {
    "site": "La Jolla Shores",
-   "level": "marginal",
-   "text": "Best bet from shore: La Jolla Shores (marginal, with sets around 1 ft at the entry in the CDIP model)."
+   "level": "within",
+   "text": "Best bet from shore: La Jolla Shores (within our thresholds, with sets around 1 ft at the entry in the CDIP model)."
   },
   "hunting_vis": {
    "level": "within",
@@ -3162,7 +3143,7 @@
    "id": "alerts",
    "label": "NWS active alerts",
    "url": "https://api.weather.gov/alerts/active?zone=CAZ043,CAZ552,PZZ655,PZZ676,PZZ740,PZZ745",
-   "time_utc": "2026-11-11T18:09Z",
+   "time_utc": "2026-11-11T20:08Z",
    "age_h": 0.0,
    "error": null,
    "status": "ok"
@@ -3172,7 +3153,7 @@
    "label": "NWS Coastal Waters Forecast (SGX)",
    "url": "https://api.weather.gov/products/ec37edaa-3e6f-4c9d-b705-dd3fa9d82c81",
    "time_utc": "2026-11-11T10:06Z",
-   "age_h": 8.1,
+   "age_h": 10.0,
    "error": null,
    "status": "ok"
   },
@@ -3181,16 +3162,16 @@
    "label": "NWS Coastal Waters Forecast (LOX)",
    "url": "https://api.weather.gov/products/8aee1aa9-3f81-4e1d-ad5b-e7d078dfdac5",
    "time_utc": "2026-11-11T16:33Z",
-   "age_h": 1.6,
+   "age_h": 3.6,
    "error": null,
    "status": "ok"
   },
   {
    "id": "srf_sgx",
    "label": "NWS Surf Zone Forecast (SGX)",
-   "url": "https://api.weather.gov/products/551a6253-5fa8-418b-a1eb-836c9e8005ad",
-   "time_utc": "2026-11-11T10:05Z",
-   "age_h": 8.1,
+   "url": "https://api.weather.gov/products/e840b3d6-2cff-4b9e-ac81-796fa9417272",
+   "time_utc": "2026-11-11T19:51Z",
+   "age_h": 0.3,
    "error": null,
    "status": "ok"
   },
@@ -3198,8 +3179,8 @@
    "id": "off_nhc",
    "label": "NHC Offshore Waters Forecast (Mexico, OFFPZ7)",
    "url": "https://www.nhc.noaa.gov/text/MIAOFFPZ7.shtml",
-   "time_utc": "2026-11-11T15:04Z",
-   "age_h": 3.1,
+   "time_utc": "2026-11-11T19:05Z",
+   "age_h": 1.1,
    "error": null,
    "status": "ok"
   },
@@ -3207,7 +3188,7 @@
    "id": "buoy_46254",
    "label": "Buoy 46254 Scripps Nearshore (La Jolla)",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46254",
-   "time_utc": "2026-11-11T17:26Z",
+   "time_utc": "2026-11-11T19:26Z",
    "age_h": 0.7,
    "error": null,
    "status": "ok"
@@ -3216,7 +3197,7 @@
    "id": "buoy_46232",
    "label": "Buoy 46232 Point Loma South",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46232",
-   "time_utc": "2026-11-11T17:26Z",
+   "time_utc": "2026-11-11T19:26Z",
    "age_h": 0.7,
    "error": null,
    "status": "ok"
@@ -3225,7 +3206,7 @@
    "id": "buoy_46258",
    "label": "Buoy 46258 Mission Bay West",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46258",
-   "time_utc": "2026-11-11T17:26Z",
+   "time_utc": "2026-11-11T19:26Z",
    "age_h": 0.7,
    "error": null,
    "status": "ok"
@@ -3234,7 +3215,7 @@
    "id": "buoy_46225",
    "label": "Buoy 46225 Torrey Pines Outer",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46225",
-   "time_utc": "2026-11-11T17:26Z",
+   "time_utc": "2026-11-11T19:26Z",
    "age_h": 0.7,
    "error": null,
    "status": "ok"
@@ -3243,7 +3224,7 @@
    "id": "buoy_46253",
    "label": "Buoy 46253 San Pedro South",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46253",
-   "time_utc": "2026-11-11T17:26Z",
+   "time_utc": "2026-11-11T19:26Z",
    "age_h": 0.7,
    "error": null,
    "status": "ok"
@@ -3252,8 +3233,8 @@
    "id": "buoy_46086",
    "label": "Buoy 46086 San Clemente Basin",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46086",
-   "time_utc": "2026-11-11T17:20Z",
-   "age_h": 0.8,
+   "time_utc": "2026-11-11T18:40Z",
+   "age_h": 1.5,
    "error": null,
    "status": "ok"
   },
@@ -3261,8 +3242,8 @@
    "id": "buoy_46047",
    "label": "Buoy 46047 Tanner Bank",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46047",
-   "time_utc": "2026-11-11T17:20Z",
-   "age_h": 0.8,
+   "time_utc": "2026-11-11T18:40Z",
+   "age_h": 1.5,
    "error": null,
    "status": "ok"
   },
@@ -3270,8 +3251,8 @@
    "id": "coops_9410230",
    "label": "NOAA CO-OPS Scripps Pier, La Jolla",
    "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=9410230",
-   "time_utc": "2026-11-11T18:00Z",
-   "age_h": 0.2,
+   "time_utc": "2026-11-11T20:00Z",
+   "age_h": 0.1,
    "error": null,
    "status": "ok"
   },
@@ -3279,8 +3260,8 @@
    "id": "coops_9410170",
    "label": "NOAA CO-OPS San Diego Bay (Broadway Pier)",
    "url": "https://tidesandcurrents.noaa.gov/stationhome.html?id=9410170",
-   "time_utc": "2026-11-11T17:54Z",
-   "age_h": 0.3,
+   "time_utc": "2026-11-11T20:00Z",
+   "age_h": 0.1,
    "error": null,
    "status": "ok"
   },
@@ -3288,7 +3269,7 @@
    "id": "rain",
    "label": "Rain gauge, San Diego airport (KSAN) (IEM daily climate)",
    "url": "https://mesonet.agron.iastate.edu/sites/site.php?station=SAN&network=CA_ASOS",
-   "time_utc": "2026-11-11T18:09Z",
+   "time_utc": "2026-11-11T20:08Z",
    "age_h": 0.0,
    "error": null,
    "status": "ok"
@@ -3298,7 +3279,7 @@
    "label": "NOAA CPC ENSO diagnostic discussion",
    "url": "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso_advisory/ensodisc.shtml",
    "time_utc": "2026-10-08T00:00Z",
-   "age_h": 834.2,
+   "age_h": 836.1,
    "error": null,
    "status": "ok"
   },
@@ -3306,8 +3287,8 @@
    "id": "manifest",
    "label": "ShoudiDive layer manifest",
    "url": "/data/manifest.json",
-   "time_utc": "2026-11-11T06:14Z",
-   "age_h": 11.9,
+   "time_utc": "2026-11-11T18:09Z",
+   "age_h": 2.0,
    "error": null,
    "status": "ok"
   },
@@ -3315,8 +3296,8 @@
    "id": "tides",
    "label": "NOAA CO-OPS tide predictions (ShoudiDive tides.json)",
    "url": "/data/tides.json",
-   "time_utc": "2026-11-11T06:14Z",
-   "age_h": 11.9,
+   "time_utc": "2026-11-11T18:09Z",
+   "age_h": 2.0,
    "error": null,
    "status": "ok"
   },
@@ -3324,8 +3305,8 @@
    "id": "viz_column",
    "label": "ShoudiDive water-column heuristic",
    "url": "/data/viz_column_spots.json",
-   "time_utc": "2026-11-11T06:16Z",
-   "age_h": 11.9,
+   "time_utc": "2026-11-11T18:14Z",
+   "age_h": 1.9,
    "error": null,
    "status": "ok"
   },
@@ -3333,8 +3314,8 @@
    "id": "observations",
    "label": "Dive-shop condition posts (ShoudiDive ground-truth ingest)",
    "url": "/pipeline/validation/data/observations.jsonl",
-   "time_utc": "2026-11-11T05:31Z",
-   "age_h": 12.6,
+   "time_utc": "2026-11-11T11:28Z",
+   "age_h": 8.7,
    "error": null,
    "status": "ok"
   },
@@ -3342,8 +3323,8 @@
    "id": "mop_D0482",
    "label": "CDIP MOP nearshore wave model, point D0482",
    "url": "https://thredds.cdip.ucsd.edu/thredds/dodsC/cdip/model/MOP_alongshore/D0482_forecast.nc.html",
-   "time_utc": "2026-11-11T13:04Z",
-   "age_h": 5.1,
+   "time_utc": "2026-11-11T19:04Z",
+   "age_h": 1.1,
    "error": null,
    "status": "ok"
   },
@@ -3351,8 +3332,8 @@
    "id": "mop_D0500",
    "label": "CDIP MOP nearshore wave model, point D0500",
    "url": "https://thredds.cdip.ucsd.edu/thredds/dodsC/cdip/model/MOP_alongshore/D0500_forecast.nc.html",
-   "time_utc": "2026-11-11T13:04Z",
-   "age_h": 5.1,
+   "time_utc": "2026-11-11T19:04Z",
+   "age_h": 1.1,
    "error": null,
    "status": "ok"
   },
@@ -3360,8 +3341,8 @@
    "id": "mop_D0324",
    "label": "CDIP MOP nearshore wave model, point D0324",
    "url": "https://thredds.cdip.ucsd.edu/thredds/dodsC/cdip/model/MOP_alongshore/D0324_forecast.nc.html",
-   "time_utc": "2026-11-11T13:03Z",
-   "age_h": 5.1,
+   "time_utc": "2026-11-11T19:04Z",
+   "age_h": 1.1,
    "error": null,
    "status": "ok"
   },
@@ -3369,8 +3350,8 @@
    "id": "mop_OC283",
    "label": "CDIP MOP nearshore wave model, point OC283",
    "url": "https://thredds.cdip.ucsd.edu/thredds/dodsC/cdip/model/MOP_alongshore/OC283_forecast.nc.html",
-   "time_utc": "2026-11-11T13:08Z",
-   "age_h": 5.0,
+   "time_utc": "2026-11-11T19:09Z",
+   "age_h": 1.0,
    "error": null,
    "status": "ok"
   },
@@ -3379,7 +3360,7 @@
    "label": "Spray glider temperature profile (Scripps CUGN via IOOS Glider DAC)",
    "url": "https://gliders.ioos.us/erddap/tabledap/sp207-20260923T1722.html",
    "time_utc": "2026-11-10T16:02Z",
-   "age_h": 26.1,
+   "age_h": 28.1,
    "error": null,
    "status": "ok"
   },
@@ -3387,8 +3368,8 @@
    "id": "fleet_now",
    "label": "Fleet Tracks live AIS positions (fleet-live branch)",
    "url": "https://shouldidive.com/fleet/#view=live",
-   "time_utc": "2026-11-11T17:54Z",
-   "age_h": 0.2,
+   "time_utc": "2026-11-11T20:01Z",
+   "age_h": 0.1,
    "error": null,
    "status": "ok"
   },
@@ -3397,7 +3378,7 @@
    "label": "Buoy 46254 Scripps Nearshore (La Jolla), last 45 days",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46254",
    "time_utc": "2026-11-11T00:00Z",
-   "age_h": 18.2,
+   "age_h": 20.1,
    "error": null,
    "status": "ok"
   },
@@ -3406,7 +3387,7 @@
    "label": "Buoy 46232 Point Loma South, last 45 days",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46232",
    "time_utc": "2026-11-11T00:00Z",
-   "age_h": 18.2,
+   "age_h": 20.1,
    "error": null,
    "status": "ok"
   },
@@ -3415,7 +3396,7 @@
    "label": "Buoy 46086 San Clemente Basin, last 45 days",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46086",
    "time_utc": "2026-11-11T00:00Z",
-   "age_h": 18.2,
+   "age_h": 20.1,
    "error": null,
    "status": "ok"
   },
@@ -3424,7 +3405,7 @@
    "label": "Buoy 46047 Tanner Bank, last 45 days",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46047",
    "time_utc": "2026-11-11T00:00Z",
-   "age_h": 18.2,
+   "age_h": 20.1,
    "error": null,
    "status": "ok"
   },
@@ -3433,7 +3414,7 @@
    "label": "Buoy 46253 San Pedro South, last 45 days",
    "url": "https://www.ndbc.noaa.gov/station_page.php?station=46253",
    "time_utc": "2026-11-11T00:00Z",
-   "age_h": 18.2,
+   "age_h": 20.1,
    "error": null,
    "status": "ok"
   },
@@ -3442,7 +3423,7 @@
    "label": "Spray glider profiles, one a day for 10 days",
    "url": "https://gliders.ioos.us/erddap/",
    "time_utc": "2026-11-10T00:00Z",
-   "age_h": 42.2,
+   "age_h": 44.1,
    "error": null,
    "status": "ok"
   },
@@ -3451,7 +3432,7 @@
    "label": "NOAA CPC weekly Nino-3.4 anomaly (OISST, 1991-2020 base)",
    "url": "https://www.cpc.ncep.noaa.gov/data/indices/wksst9120.for",
    "time_utc": "2026-11-04T00:00Z",
-   "age_h": 186.2,
+   "age_h": 188.1,
    "error": null,
    "status": "ok"
   },
@@ -3459,7 +3440,7 @@
    "id": "season_curves",
    "label": "NDBC buoy history: this year, last year and the 10 years before",
    "url": "https://www.ndbc.noaa.gov/historical_data.shtml",
-   "time_utc": "2026-11-11T18:09Z",
+   "time_utc": "2026-11-11T20:08Z",
    "age_h": 0.0,
    "error": null,
    "status": "ok"
@@ -3468,7 +3449,7 @@
    "id": "field_reports",
    "label": "Field reports sent in from the water (approved)",
    "url": null,
-   "time_utc": "2026-11-11T18:09Z",
+   "time_utc": "2026-11-11T20:08Z",
    "age_h": 0.0,
    "error": null,
    "status": "ok"
@@ -3478,7 +3459,7 @@
    "label": "Dana Wharf fish counts",
    "url": "https://danawharf.com/fish-counts/",
    "time_utc": "2026-11-10T23:00Z",
-   "age_h": 19.2,
+   "age_h": 21.1,
    "error": null,
    "status": "ok"
   },
@@ -3487,7 +3468,7 @@
    "label": "Davey's Locker fish counts",
    "url": "https://daveyslocker.com/fish-count/",
    "time_utc": "2026-11-10T23:00Z",
-   "age_h": 19.2,
+   "age_h": 21.1,
    "error": null,
    "status": "ok"
   },
@@ -3496,7 +3477,7 @@
    "label": "Everingham Bros bait report (San Diego Bay, Mission Bay, Dana Point)",
    "url": "https://baitbarge.com/bait-report",
    "time_utc": "2026-11-11T16:45Z",
-   "age_h": 1.4,
+   "age_h": 3.4,
    "error": null,
    "status": "ok"
   },
@@ -3504,7 +3485,7 @@
    "id": "model_frames",
    "label": "ShoudiDive hourly wind frames (HRRR/GFS/ECMWF blend)",
    "url": "/",
-   "time_utc": "2026-11-11T17:19Z",
+   "time_utc": "2026-11-11T19:20Z",
    "age_h": 0.8,
    "error": null,
    "status": "ok"
@@ -3513,8 +3494,8 @@
    "id": "model_frames_waves",
    "label": "ShoudiDive hourly wave frames (NOAA WaveWatch III)",
    "url": "/",
-   "time_utc": "2026-11-11T06:17Z",
-   "age_h": 11.9,
+   "time_utc": "2026-11-11T18:15Z",
+   "age_h": 1.9,
    "error": null,
    "status": "ok"
   }
@@ -3536,10 +3517,20 @@
     "lat": 32.854,
     "lng": -117.275,
     "nm_from_sd": 8,
-    "sst_f": 74.2,
-    "chl": 0.31,
+    "sst_f": 75.1,
+    "chl": 0.29,
     "paddy": null,
-    "break": null
+    "break": {
+     "km": 16.4,
+     "nm": 8.8,
+     "direction": "NW",
+     "step_f": 1.1,
+     "over_nm": 4.3,
+     "warm_side": "W",
+     "grad_c_per_km": 0.098,
+     "lat": 32.9877,
+     "lng": -117.3491
+    }
    },
    {
     "name": "Point Loma kelp",
@@ -3547,19 +3538,19 @@
     "lat": 32.685,
     "lng": -117.27,
     "nm_from_sd": 3,
-    "sst_f": 74.6,
-    "chl": 3.66,
+    "sst_f": 75.4,
+    "chl": 3.75,
     "paddy": null,
     "break": {
-     "km": 4.5,
-     "nm": 2.4,
-     "direction": "SE",
-     "step_f": 1.9,
+     "km": 1.9,
+     "nm": 1.0,
+     "direction": "S",
+     "step_f": 1.6,
      "over_nm": 4.3,
      "warm_side": "W",
-     "grad_c_per_km": 0.17,
-     "lat": 32.6483,
-     "lng": -117.2492
+     "grad_c_per_km": 0.132,
+     "lat": 32.6683,
+     "lng": -117.2692
     }
    },
    {
@@ -3568,19 +3559,19 @@
     "lat": 32.401,
     "lng": -117.26,
     "nm_from_sd": 19,
-    "sst_f": 74.5,
-    "chl": 0.61,
+    "sst_f": 76.3,
+    "chl": 0.6,
     "paddy": null,
     "break": {
-     "km": 14.6,
-     "nm": 7.9,
+     "km": 17.4,
+     "nm": 9.4,
      "direction": "SE",
-     "step_f": 2.2,
+     "step_f": 1.8,
      "over_nm": 4.3,
      "warm_side": "W",
-     "grad_c_per_km": 0.178,
-     "lat": 32.329,
-     "lng": -117.1294
+     "grad_c_per_km": 0.156,
+     "lat": 32.309,
+     "lng": -117.1095
     }
    },
    {
@@ -3589,19 +3580,19 @@
     "lat": 32.5333,
     "lng": -117.35,
     "nm_from_sd": 13,
-    "sst_f": 75.1,
-    "chl": 0.29,
+    "sst_f": 76.4,
+    "chl": 0.22,
     "paddy": null,
     "break": {
-     "km": 15.9,
-     "nm": 8.6,
+     "km": 16.8,
+     "nm": 9.1,
      "direction": "NE",
-     "step_f": 1.9,
+     "step_f": 1.6,
      "over_nm": 4.3,
      "warm_side": "W",
-     "grad_c_per_km": 0.17,
-     "lat": 32.6483,
-     "lng": -117.2492
+     "grad_c_per_km": 0.132,
+     "lat": 32.6683,
+     "lng": -117.2692
     }
    },
    {
@@ -3610,19 +3601,19 @@
     "lat": 32.6333,
     "lng": -117.4333,
     "nm_from_sd": 11,
-    "sst_f": 74.4,
-    "chl": 0.37,
+    "sst_f": 75.6,
+    "chl": 0.57,
     "paddy": null,
     "break": {
-     "km": 17.3,
-     "nm": 9.3,
+     "km": 15.8,
+     "nm": 8.5,
      "direction": "E",
-     "step_f": 1.9,
+     "step_f": 1.6,
      "over_nm": 4.3,
      "warm_side": "W",
-     "grad_c_per_km": 0.17,
-     "lat": 32.6483,
-     "lng": -117.2492
+     "grad_c_per_km": 0.132,
+     "lat": 32.6683,
+     "lng": -117.2692
     }
    },
    {
@@ -3631,19 +3622,19 @@
     "lat": 32.7,
     "lng": -117.4886,
     "nm_from_sd": 13,
-    "sst_f": 74.8,
-    "chl": 0.32,
+    "sst_f": 75.8,
+    "chl": 0.37,
     "paddy": null,
     "break": {
-     "km": 15.3,
-     "nm": 8.2,
+     "km": 6.6,
+     "nm": 3.6,
      "direction": "SE",
-     "step_f": 0.9,
+     "step_f": 0.7,
      "over_nm": 4.3,
      "warm_side": "NE",
-     "grad_c_per_km": 0.069,
-     "lat": 32.6284,
-     "lng": -117.3491
+     "grad_c_per_km": 0.064,
+     "lat": 32.6683,
+     "lng": -117.4289
     }
    },
    {
@@ -3652,19 +3643,19 @@
     "lat": 32.4972,
     "lng": -117.4,
     "nm_from_sd": 16,
-    "sst_f": 75.3,
-    "chl": 0.25,
+    "sst_f": 76.2,
+    "chl": 0.2,
     "paddy": null,
     "break": {
-     "km": 17.4,
-     "nm": 9.4,
-     "direction": "NE",
-     "step_f": 1.8,
+     "km": 16.3,
+     "nm": 8.8,
+     "direction": "E",
+     "step_f": 1.2,
      "over_nm": 4.3,
      "warm_side": "W",
-     "grad_c_per_km": 0.162,
-     "lat": 32.5885,
-     "lng": -117.2492
+     "grad_c_per_km": 0.101,
+     "lat": 32.4687,
+     "lng": -117.2293
     }
    },
    {
@@ -3673,20 +3664,10 @@
     "lat": 32.25,
     "lng": -117.3867,
     "nm_from_sd": 29,
-    "sst_f": 75.6,
-    "chl": 0.29,
+    "sst_f": 76.3,
+    "chl": 0.31,
     "paddy": null,
-    "break": {
-     "km": 17.9,
-     "nm": 9.7,
-     "direction": "NE",
-     "step_f": 1.2,
-     "over_nm": 4.3,
-     "warm_side": "S",
-     "grad_c_per_km": 0.092,
-     "lat": 32.3888,
-     "lng": -117.2892
-    }
+    "break": null
    },
    {
     "name": "302",
@@ -3694,20 +3675,10 @@
     "lat": 32.4472,
     "lng": -117.5833,
     "nm_from_sd": 24,
-    "sst_f": 75.4,
-    "chl": 0.24,
+    "sst_f": 76.4,
+    "chl": 0.19,
     "paddy": null,
-    "break": {
-     "km": 15.9,
-     "nm": 8.6,
-     "direction": "N",
-     "step_f": 0.8,
-     "over_nm": 4.3,
-     "warm_side": "SE",
-     "grad_c_per_km": 0.065,
-     "lat": 32.5885,
-     "lng": -117.6086
-    }
+    "break": null
    },
    {
     "name": "371",
@@ -3715,20 +3686,10 @@
     "lat": 32.27,
     "lng": -117.5467,
     "nm_from_sd": 31,
-    "sst_f": 75.5,
-    "chl": 0.19,
+    "sst_f": 76.3,
+    "chl": 0.2,
     "paddy": null,
-    "break": {
-     "km": 11.4,
-     "nm": 6.2,
-     "direction": "W",
-     "step_f": 0.8,
-     "over_nm": 4.3,
-     "warm_side": "NE",
-     "grad_c_per_km": 0.063,
-     "lat": 32.2691,
-     "lng": -117.6685
-    }
+    "break": null
    },
    {
     "name": "226",
@@ -3736,20 +3697,10 @@
     "lat": 32.5055,
     "lng": -117.6333,
     "nm_from_sd": 24,
-    "sst_f": 75.6,
-    "chl": 0.21,
+    "sst_f": 76.4,
+    "chl": 0.2,
     "paddy": null,
-    "break": {
-     "km": 9.5,
-     "nm": 5.1,
-     "direction": "N",
-     "step_f": 0.8,
-     "over_nm": 4.3,
-     "warm_side": "SE",
-     "grad_c_per_km": 0.065,
-     "lat": 32.5885,
-     "lng": -117.6086
-    }
+    "break": null
    },
    {
     "name": "230",
@@ -3757,20 +3708,10 @@
     "lat": 32.3569,
     "lng": -117.707,
     "nm_from_sd": 32,
-    "sst_f": 75.2,
-    "chl": 0.17,
+    "sst_f": 76.1,
+    "chl": 0.16,
     "paddy": 0.8,
-    "break": {
-     "km": 10.4,
-     "nm": 5.6,
-     "direction": "S",
-     "step_f": 0.8,
-     "over_nm": 4.3,
-     "warm_side": "NE",
-     "grad_c_per_km": 0.063,
-     "lat": 32.2691,
-     "lng": -117.6685
-    }
+    "break": null
    },
    {
     "name": "182",
@@ -3778,20 +3719,10 @@
     "lat": 32.6972,
     "lng": -117.7139,
     "nm_from_sd": 24,
-    "sst_f": 74.8,
-    "chl": 0.19,
+    "sst_f": 76.4,
+    "chl": 0.17,
     "paddy": null,
-    "break": {
-     "km": 9.0,
-     "nm": 4.8,
-     "direction": "NW",
-     "step_f": 1.0,
-     "over_nm": 4.3,
-     "warm_side": "N",
-     "grad_c_per_km": 0.076,
-     "lat": 32.7481,
-     "lng": -117.7883
-    }
+    "break": null
    },
    {
     "name": "The Corner",
@@ -3799,19 +3730,19 @@
     "lat": 32.6267,
     "lng": -117.8233,
     "nm_from_sd": 30,
-    "sst_f": 74.8,
+    "sst_f": 76.4,
     "chl": 0.16,
     "paddy": null,
     "break": {
-     "km": 17.8,
-     "nm": 9.6,
-     "direction": "W",
-     "step_f": 1.8,
+     "km": 17.7,
+     "nm": 9.5,
+     "direction": "SW",
+     "step_f": 2.0,
      "over_nm": 4.3,
-     "warm_side": "E",
-     "grad_c_per_km": 0.134,
-     "lat": 32.5885,
-     "lng": -118.0079
+     "warm_side": "NE",
+     "grad_c_per_km": 0.157,
+     "lat": 32.5485,
+     "lng": -117.988
     }
    },
    {
@@ -3820,19 +3751,19 @@
     "lat": 32.6555,
     "lng": -117.9736,
     "nm_from_sd": 38,
-    "sst_f": 75.3,
-    "chl": 0.15,
+    "sst_f": 76.5,
+    "chl": 0.14,
     "paddy": null,
     "break": {
-     "km": 16.6,
-     "nm": 9.0,
+     "km": 16.4,
+     "nm": 8.8,
      "direction": "S",
-     "step_f": 2.0,
+     "step_f": 1.9,
      "over_nm": 4.3,
      "warm_side": "E",
-     "grad_c_per_km": 0.172,
+     "grad_c_per_km": 0.178,
      "lat": 32.5086,
-     "lng": -118.0079
+     "lng": -117.988
     }
    },
    {
@@ -3841,19 +3772,19 @@
     "lat": 32.3167,
     "lng": -117.9,
     "nm_from_sd": 42,
-    "sst_f": 75.5,
+    "sst_f": 76.5,
     "chl": 0.16,
     "paddy": 0.8,
     "break": {
-     "km": 12.1,
-     "nm": 6.5,
-     "direction": "W",
-     "step_f": 2.9,
+     "km": 17.8,
+     "nm": 9.6,
+     "direction": "NW",
+     "step_f": 1.7,
      "over_nm": 4.3,
      "warm_side": "SE",
-     "grad_c_per_km": 0.223,
-     "lat": 32.329,
-     "lng": -118.0279
+     "grad_c_per_km": 0.164,
+     "lat": 32.4487,
+     "lng": -118.0079
     }
    },
    {
@@ -3862,10 +3793,20 @@
     "lat": 32.9139,
     "lng": -117.8833,
     "nm_from_sd": 35,
-    "sst_f": 75.1,
-    "chl": 0.22,
+    "sst_f": 75.8,
+    "chl": 0.15,
     "paddy": null,
-    "break": null
+    "break": {
+     "km": 6.4,
+     "nm": 3.5,
+     "direction": "N",
+     "step_f": 1.1,
+     "over_nm": 4.3,
+     "warm_side": "NW",
+     "grad_c_per_km": 0.092,
+     "lat": 32.9677,
+     "lng": -117.9081
+    }
    },
    {
     "name": "312",
@@ -3873,10 +3814,20 @@
     "lat": 33.0236,
     "lng": -117.8083,
     "nm_from_sd": 34,
-    "sst_f": 75.2,
-    "chl": 0.18,
+    "sst_f": 76.2,
+    "chl": 0.14,
     "paddy": null,
-    "break": null
+    "break": {
+     "km": 11.2,
+     "nm": 6.0,
+     "direction": "SW",
+     "step_f": 1.1,
+     "over_nm": 4.3,
+     "warm_side": "NW",
+     "grad_c_per_km": 0.092,
+     "lat": 32.9677,
+     "lng": -117.9081
+    }
    },
    {
     "name": "209",
@@ -3884,10 +3835,20 @@
     "lat": 33.1056,
     "lng": -117.8722,
     "nm_from_sd": 40,
-    "sst_f": 75.1,
-    "chl": 0.17,
+    "sst_f": 76.2,
+    "chl": 0.19,
     "paddy": null,
-    "break": null
+    "break": {
+     "km": 15.7,
+     "nm": 8.5,
+     "direction": "S",
+     "step_f": 1.1,
+     "over_nm": 4.3,
+     "warm_side": "NW",
+     "grad_c_per_km": 0.092,
+     "lat": 32.9677,
+     "lng": -117.9081
+    }
    },
    {
     "name": "267",
@@ -3895,19 +3856,19 @@
     "lat": 33.2967,
     "lng": -117.8192,
     "nm_from_sd": 46,
-    "sst_f": 74.8,
-    "chl": 0.22,
+    "sst_f": 76.3,
+    "chl": 0.16,
     "paddy": null,
     "break": {
-     "km": 15.2,
-     "nm": 8.2,
-     "direction": "N",
-     "step_f": 0.9,
+     "km": 17.6,
+     "nm": 9.5,
+     "direction": "NE",
+     "step_f": 1.4,
      "over_nm": 4.3,
-     "warm_side": "S",
-     "grad_c_per_km": 0.06,
-     "lat": 33.4268,
-     "lng": -117.7683
+     "warm_side": "SW",
+     "grad_c_per_km": 0.09,
+     "lat": 33.3669,
+     "lng": -117.6485
     }
    },
    {
@@ -3916,19 +3877,19 @@
     "lat": 32.9333,
     "lng": -118.0972,
     "nm_from_sd": 46,
-    "sst_f": 75.0,
-    "chl": 0.15,
+    "sst_f": 76.2,
+    "chl": 0.14,
     "paddy": null,
     "break": {
-     "km": 17.3,
-     "nm": 9.3,
-     "direction": "SW",
-     "step_f": 1.7,
+     "km": 13.9,
+     "nm": 7.5,
+     "direction": "S",
+     "step_f": 2.2,
      "over_nm": 4.3,
-     "warm_side": "NW",
-     "grad_c_per_km": 0.147,
+     "warm_side": "E",
+     "grad_c_per_km": 0.184,
      "lat": 32.808,
-     "lng": -118.2076
+     "lng": -118.1078
     }
    },
    {
@@ -3937,17 +3898,17 @@
     "lat": 33.4,
     "lng": -117.9972,
     "nm_from_sd": 56,
-    "sst_f": 74.5,
+    "sst_f": 75.8,
     "chl": 0.16,
     "paddy": null,
     "break": {
      "km": 17.5,
      "nm": 9.4,
      "direction": "N",
-     "step_f": 1.8,
+     "step_f": 1.4,
      "over_nm": 4.3,
      "warm_side": "S",
-     "grad_c_per_km": 0.128,
+     "grad_c_per_km": 0.1,
      "lat": 33.5466,
      "lng": -117.9281
     }
@@ -3958,19 +3919,19 @@
     "lat": 32.0667,
     "lng": -118.2472,
     "nm_from_sd": 65,
-    "sst_f": 74.2,
-    "chl": 0.13,
+    "sst_f": 75.5,
+    "chl": 0.14,
     "paddy": null,
     "break": {
-     "km": 6.0,
-     "nm": 3.2,
-     "direction": "W",
-     "step_f": 2.3,
+     "km": 8.6,
+     "nm": 4.6,
+     "direction": "SW",
+     "step_f": 2.7,
      "over_nm": 4.3,
      "warm_side": "E",
-     "grad_c_per_km": 0.193,
-     "lat": 32.0495,
-     "lng": -118.3074
+     "grad_c_per_km": 0.233,
+     "lat": 32.0295,
+     "lng": -118.3274
     }
    },
    {
@@ -3979,19 +3940,19 @@
     "lat": 33.0367,
     "lng": -118.3933,
     "nm_from_sd": 62,
-    "sst_f": 72.8,
-    "chl": 0.13,
+    "sst_f": 75.3,
+    "chl": 0.14,
     "paddy": 0.8,
     "break": {
-     "km": 12.5,
-     "nm": 6.7,
-     "direction": "SE",
-     "step_f": 1.7,
+     "km": 1.6,
+     "nm": 0.9,
+     "direction": "SW",
+     "step_f": 1.9,
      "over_nm": 4.3,
-     "warm_side": "SE",
-     "grad_c_per_km": 0.126,
-     "lat": 32.9677,
-     "lng": -118.2875
+     "warm_side": "E",
+     "grad_c_per_km": 0.152,
+     "lat": 33.0276,
+     "lng": -118.4073
     }
    },
    {
@@ -4000,19 +3961,19 @@
     "lat": 32.92,
     "lng": -118.483,
     "nm_from_sd": 64,
-    "sst_f": 72.7,
+    "sst_f": 73.7,
     "chl": 0.15,
     "paddy": 0.8,
     "break": {
-     "km": 17.2,
-     "nm": 9.3,
-     "direction": "E",
-     "step_f": 1.6,
+     "km": 13.9,
+     "nm": 7.5,
+     "direction": "NE",
+     "step_f": 1.9,
      "over_nm": 4.3,
-     "warm_side": "SE",
-     "grad_c_per_km": 0.122,
-     "lat": 32.9677,
-     "lng": -118.3074
+     "warm_side": "E",
+     "grad_c_per_km": 0.152,
+     "lat": 33.0276,
+     "lng": -118.4073
     }
    },
    {
@@ -4021,19 +3982,19 @@
     "lat": 33.389,
     "lng": -118.45,
     "nm_from_sd": 73,
-    "sst_f": 73.6,
+    "sst_f": 74.7,
     "chl": 0.21,
     "paddy": null,
     "break": {
-     "km": 11.0,
-     "nm": 6.0,
+     "km": 7.5,
+     "nm": 4.1,
      "direction": "W",
-     "step_f": 0.8,
+     "step_f": 1.2,
      "over_nm": 4.3,
-     "warm_side": "W",
-     "grad_c_per_km": 0.062,
-     "lat": 33.4068,
-     "lng": -118.567
+     "warm_side": "S",
+     "grad_c_per_km": 0.087,
+     "lat": 33.3669,
+     "lng": -118.527
     }
    },
    {
@@ -4042,8 +4003,8 @@
     "lat": 33.4117,
     "lng": -118.225,
     "nm_from_sd": 65,
-    "sst_f": 74.3,
-    "chl": 0.16,
+    "sst_f": 75.8,
+    "chl": 0.14,
     "paddy": null,
     "break": null
    },
@@ -4053,19 +4014,19 @@
     "lat": 32.7,
     "lng": -119.1333,
     "nm_from_sd": 96,
-    "sst_f": 70.1,
-    "chl": 0.12,
+    "sst_f": 70.0,
+    "chl": 0.13,
     "paddy": 0.8,
     "break": {
-     "km": 16.3,
-     "nm": 8.8,
+     "km": 13.3,
+     "nm": 7.2,
      "direction": "SW",
-     "step_f": 2.4,
+     "step_f": 2.3,
      "over_nm": 4.3,
-     "warm_side": "NE",
-     "grad_c_per_km": 0.171,
-     "lat": 32.6284,
-     "lng": -119.2858
+     "warm_side": "N",
+     "grad_c_per_km": 0.149,
+     "lat": 32.6084,
+     "lng": -119.2259
     }
    },
    {
@@ -4074,17 +4035,17 @@
     "lat": 32.4403,
     "lng": -119.1305,
     "nm_from_sd": 97,
-    "sst_f": 68.4,
+    "sst_f": 68.3,
     "chl": 0.13,
     "paddy": 0.8,
     "break": {
      "km": 17.9,
      "nm": 9.7,
      "direction": "NW",
-     "step_f": 1.4,
+     "step_f": 1.9,
      "over_nm": 4.3,
-     "warm_side": "NE",
-     "grad_c_per_km": 0.137,
+     "warm_side": "N",
+     "grad_c_per_km": 0.129,
      "lat": 32.5885,
      "lng": -119.2059
     }
@@ -4095,8 +4056,8 @@
     "lat": 31.9,
     "lng": -117.5,
     "nm_from_sd": 51,
-    "sst_f": 75.8,
-    "chl": 0.19,
+    "sst_f": 76.4,
+    "chl": 0.17,
     "paddy": null,
     "break": null
    },
@@ -4106,8 +4067,8 @@
     "lat": 31.7667,
     "lng": -117.5,
     "nm_from_sd": 59,
-    "sst_f": 75.5,
-    "chl": 0.19,
+    "sst_f": 76.3,
+    "chl": 0.17,
     "paddy": null,
     "break": null
    }
@@ -4134,7 +4095,7 @@
     "best": [
      {
       "name": "Tanner Bank",
-      "sst_f": 70.1,
+      "sst_f": 70.0,
       "nm_from_sd": 96,
       "cues": [
        "break",
@@ -4144,7 +4105,7 @@
      },
      {
       "name": "Cortes Bank",
-      "sst_f": 68.4,
+      "sst_f": 68.3,
       "nm_from_sd": 97,
       "cues": [
        "break",
@@ -4180,7 +4141,7 @@
     "best": [
      {
       "name": "230",
-      "sst_f": 75.2,
+      "sst_f": 76.1,
       "nm_from_sd": 32,
       "cues": [
        "paddy"
@@ -4188,7 +4149,7 @@
      },
      {
       "name": "San Salvador Knoll",
-      "sst_f": 75.5,
+      "sst_f": 76.5,
       "nm_from_sd": 42,
       "cues": [
        "paddy"
@@ -4196,7 +4157,7 @@
      },
      {
       "name": "Mackerel Bank",
-      "sst_f": 72.8,
+      "sst_f": 75.3,
       "nm_from_sd": 62,
       "cues": [
        "paddy"
@@ -4204,7 +4165,7 @@
      },
      {
       "name": "San Clemente Island",
-      "sst_f": 72.7,
+      "sst_f": 73.7,
       "nm_from_sd": 64,
       "cues": [
        "paddy"
@@ -4212,7 +4173,7 @@
      },
      {
       "name": "Tanner Bank",
-      "sst_f": 70.1,
+      "sst_f": 70.0,
       "nm_from_sd": 96,
       "cues": [
        "paddy"
@@ -4245,7 +4206,7 @@
     "best": [
      {
       "name": "230",
-      "sst_f": 75.2,
+      "sst_f": 76.1,
       "nm_from_sd": 32,
       "cues": [
        "paddy"
@@ -4253,7 +4214,7 @@
      },
      {
       "name": "San Salvador Knoll",
-      "sst_f": 75.5,
+      "sst_f": 76.5,
       "nm_from_sd": 42,
       "cues": [
        "paddy"
@@ -4261,7 +4222,7 @@
      },
      {
       "name": "Mackerel Bank",
-      "sst_f": 72.8,
+      "sst_f": 75.3,
       "nm_from_sd": 62,
       "cues": [
        "paddy"
@@ -4269,7 +4230,7 @@
      },
      {
       "name": "San Clemente Island",
-      "sst_f": 72.7,
+      "sst_f": 73.7,
       "nm_from_sd": 64,
       "cues": [
        "paddy"
@@ -4277,7 +4238,7 @@
      },
      {
       "name": "Tanner Bank",
-      "sst_f": 70.1,
+      "sst_f": 70.0,
       "nm_from_sd": 96,
       "cues": [
        "paddy"
@@ -4300,14 +4261,24 @@
      60,
      75
     ],
-    "spots_in_band": 1,
-    "spots_tolerated": 14,
+    "spots_in_band": 2,
+    "spots_tolerated": 2,
     "spots_checked": 29,
     "ambient": [],
     "best": [
      {
+      "name": "Tanner Bank",
+      "sst_f": 70.0,
+      "nm_from_sd": 96,
+      "cues": [
+       "break",
+       "bank",
+       "paddy"
+      ]
+     },
+     {
       "name": "Cortes Bank",
-      "sst_f": 68.4,
+      "sst_f": 68.3,
       "nm_from_sd": 97,
       "cues": [
        "break",
@@ -4343,31 +4314,31 @@
     "best": [
      {
       "name": "North 9 Mile Bank",
-      "sst_f": 74.4,
+      "sst_f": 75.6,
       "nm_from_sd": 11,
       "cues": []
      },
      {
       "name": "South 9 Mile Bank",
-      "sst_f": 75.1,
+      "sst_f": 76.4,
       "nm_from_sd": 13,
       "cues": []
      },
      {
       "name": "178",
-      "sst_f": 74.8,
+      "sst_f": 75.8,
       "nm_from_sd": 13,
       "cues": []
      },
      {
       "name": "439",
-      "sst_f": 75.3,
+      "sst_f": 76.2,
       "nm_from_sd": 16,
       "cues": []
      },
      {
       "name": "Coronado Islands",
-      "sst_f": 74.5,
+      "sst_f": 76.3,
       "nm_from_sd": 19,
       "cues": []
      }
@@ -4398,7 +4369,7 @@
     "best": [
      {
       "name": "230",
-      "sst_f": 75.2,
+      "sst_f": 76.1,
       "nm_from_sd": 32,
       "cues": [
        "paddy"
@@ -4406,7 +4377,7 @@
      },
      {
       "name": "San Salvador Knoll",
-      "sst_f": 75.5,
+      "sst_f": 76.5,
       "nm_from_sd": 42,
       "cues": [
        "paddy"
@@ -4414,7 +4385,7 @@
      },
      {
       "name": "Mackerel Bank",
-      "sst_f": 72.8,
+      "sst_f": 75.3,
       "nm_from_sd": 62,
       "cues": [
        "paddy"
@@ -4422,7 +4393,7 @@
      },
      {
       "name": "San Clemente Island",
-      "sst_f": 72.7,
+      "sst_f": 73.7,
       "nm_from_sd": 64,
       "cues": [
        "paddy"
@@ -4430,7 +4401,7 @@
      },
      {
       "name": "North 9 Mile Bank",
-      "sst_f": 74.4,
+      "sst_f": 75.6,
       "nm_from_sd": 11,
       "cues": []
      }
@@ -4531,97 +4502,127 @@
   "fleet_now": {
    "at_sea": [
     {
-     "name": "Just Dreamin",
-     "sog": 0,
+     "name": "C-Bandit Ii",
+     "sog": 0.4,
      "stopped": true,
-     "lat": 32.68,
-     "lng": -117.175,
-     "spot": "Point Loma kelp",
-     "nm_from_sd": 4,
-     "t": "2026-11-11T17:54:23Z"
-    },
-    {
-     "name": "unnamed",
-     "sog": 1.3,
-     "stopped": true,
-     "lat": 32.706,
-     "lng": -117.498,
+     "lat": 32.715,
+     "lng": -117.507,
      "spot": "178",
      "nm_from_sd": 14,
-     "t": "2026-11-11T17:45:53Z"
+     "t": "2026-11-11T19:44:31Z"
+    },
+    {
+     "name": "Catalinaking",
+     "sog": 1.6,
+     "stopped": true,
+     "lat": 33.376,
+     "lng": -118.353,
+     "spot": "Catalina",
+     "nm_from_sd": 69,
+     "t": "2026-11-11T19:57:07Z"
     },
     {
      "name": "Second Chance",
-     "sog": 4.7,
+     "sog": 3.3,
      "stopped": false,
-     "lat": 32.677,
-     "lng": -117.168,
+     "lat": 32.68,
+     "lng": -117.164,
      "spot": "Point Loma kelp",
      "nm_from_sd": 4,
-     "t": "2026-11-11T17:50:13Z"
+     "t": "2026-11-11T18:37:51Z"
     },
     {
      "name": "Cachalot",
-     "sog": 7,
+     "sog": 7.2,
      "stopped": false,
-     "lat": 33.026,
-     "lng": -117.337,
+     "lat": 32.8,
+     "lng": -117.301,
      "spot": "La Jolla kelp",
-     "nm_from_sd": 19,
-     "t": "2026-11-11T17:52:50Z"
+     "nm_from_sd": 6,
+     "t": "2026-11-11T19:50:51Z"
+    },
+    {
+     "name": "Legacy",
+     "sog": 5.7,
+     "stopped": false,
+     "lat": 32.759,
+     "lng": -117.355,
+     "spot": "Point Loma kelp",
+     "nm_from_sd": 7,
+     "t": "2026-11-11T20:00:45Z"
+    },
+    {
+     "name": "Sea Haven",
+     "sog": 3.5,
+     "stopped": false,
+     "lat": 32.696,
+     "lng": -117.648,
+     "spot": "182",
+     "nm_from_sd": 21,
+     "t": "2026-11-11T19:54:45Z"
     },
     {
      "name": "Catalina Duchess",
-     "sog": 7.9,
+     "sog": 11.8,
      "stopped": false,
-     "lat": 33.349,
-     "lng": -118.32,
+     "lat": 33.35,
+     "lng": -118.319,
      "spot": "Avalon Bank",
      "nm_from_sd": 67,
-     "t": "2026-11-11T17:21:13Z"
+     "t": "2026-11-11T19:59:23Z"
     },
     {
-     "name": "Enterprise",
-     "sog": 8.1,
+     "name": "Island Explorer",
+     "sog": 18.3,
      "stopped": false,
-     "lat": 33.689,
-     "lng": -118.141,
+     "lat": 34.046,
+     "lng": -119.479,
      "spot": null,
-     "nm_from_sd": 74,
-     "t": "2026-11-11T15:20:24Z"
-    },
-    {
-     "name": "Victory",
-     "sog": 8.8,
-     "stopped": false,
-     "lat": 33.715,
-     "lng": -118.138,
-     "spot": null,
-     "nm_from_sd": 75,
-     "t": "2026-11-11T15:27:00Z"
-    },
-    {
-     "name": "Islander",
-     "sog": 17.9,
-     "stopped": false,
-     "lat": 34.038,
-     "lng": -119.516,
-     "spot": null,
-     "nm_from_sd": 140,
-     "t": "2026-11-11T17:45:58Z"
+     "nm_from_sd": 138,
+     "t": "2026-11-11T19:54:22Z"
     },
     {
      "name": "Island Adventure",
-     "sog": 18.7,
+     "sog": 21.6,
      "stopped": false,
-     "lat": 34.093,
-     "lng": -119.504,
+     "lat": 34.055,
+     "lng": -119.557,
      "spot": null,
-     "nm_from_sd": 141,
-     "t": "2026-11-11T17:53:36Z"
+     "nm_from_sd": 142,
+     "t": "2026-11-11T18:28:41Z"
+    },
+    {
+     "name": "Islander",
+     "sog": 19.5,
+     "stopped": false,
+     "lat": 33.934,
+     "lng": -119.67,
+     "spot": null,
+     "nm_from_sd": 143,
+     "t": "2026-11-11T18:20:11Z"
+    },
+    {
+     "name": "Wmt",
+     "sog": 2.6,
+     "stopped": false,
+     "lat": 34.335,
+     "lng": -119.553,
+     "spot": null,
+     "nm_from_sd": 152,
+     "t": "2026-11-11T18:57:48Z"
+    },
+    {
+     "name": "Condor Express",
+     "sog": 12.6,
+     "stopped": false,
+     "lat": 34.191,
+     "lng": -119.684,
+     "spot": null,
+     "nm_from_sd": 152,
+     "t": "2026-11-11T19:24:14Z"
     }
    ],
-   "fresh": "2026-11-11T17:54:36Z",
+   "fresh": "2026-11-11T20:01:55Z",
    "max_age_h": 3.0
   },
   "inshore": [
@@ -4633,7 +4634,7 @@
     "drivers": "Warm-year regime (landings swing from under 10,000 to 450,000 fish), bait: squid, sardine, mackerel.",
     "look": "Outer kelp edge next to deep water, up-current points at the islands.",
     "evidence": "Strong for the regime; the 64-66°F 'switch' is angler lore.",
-    "today": "Surface water is 75°F; San Diego catch rates have fallen above 69°F in fleet data."
+    "today": "Surface water is 76°F; San Diego catch rates have fallen above 69°F in fleet data."
    },
    {
     "key": "wsb",
@@ -4643,7 +4644,7 @@
     "drivers": "Spawning Mar-Jul (peak May); tagged fish spent half their time at 55-61°F, tracking the thermocline.",
     "look": "Kelp near squid grounds, at dusk; near the surface Apr-Oct, deeper Dec-Feb.",
     "evidence": "Thermal niche from one tagging study (Aalbers & Sepulveda 2015).",
-    "today": "Surface water is 75°F, above the 55-61°F the tagged fish used; offshore, the nearest glider puts the thermocline about 220 ft down, and the cooler water they favored sits below it."
+    "today": "Surface water is 76°F, above the 55-61°F the tagged fish used; offshore, the nearest glider puts the thermocline about 220 ft down, and the cooler water they favored sits below it."
    },
    {
     "key": "calico",
@@ -4683,40 +4684,40 @@
    }
   ],
   "sst_field": {
-   "date": "2026-11-08",
-   "date_label": "Nov 8",
-   "age_days": 3,
+   "date": "2026-11-09",
+   "date_label": "Nov 9",
+   "age_days": 2,
    "source": "MUR L4 SST (1 km)"
   },
   "chl": {
-   "date": "2026-11-09",
-   "date_label": "Nov 9",
+   "date": "2026-11-10",
+   "date_label": "Nov 10",
    "coverage_pct": 60
   },
   "method": "Profiles say where the water matches what each species needs, not how many fish are there. Water temperature is the satellite map's; breaks are the strongest gradient within 10 nm of a spot, read as the temperature change across 4.3 nm. A cue met at most in-range spots that day is 'everywhere' and singles nothing out.",
   "counts_note": "No dock counts: the network that publishes SoCal landing counts now forbids automated collection and republishing without a license."
  },
  "bottom_line": [
-  "Shore diving today: marginal at La Jolla Cove, La Jolla Shores, Point Loma and Sunset Cliffs, and Laguna Beach. The San Diego County surf forecast is 3 to 5 feet, sets to 6 feet, with a high rip current risk.",
+  "Shore diving today: marginal at La Jolla Cove, Point Loma and Sunset Cliffs, and Laguna Beach; within our thresholds at La Jolla Shores. The San Diego County surf forecast is 2 to 4 feet from 220°, with a moderate rip current risk.",
   "By boat today: outside our thresholds for Catalina and the San Pedro Channel and the outer islands; marginal for the Coronados and the offshore banks; within our thresholds for San Diego inshore.",
-  "Nearshore buoys read 75°F as of 9:26 AM; the latest satellite temperature map is from Nov 8."
+  "Nearshore buoys read 76°F as of 11:26 AM; the latest satellite temperature map is from Nov 9."
  ],
  "views": {
   "fishing": [
    "By boat today: outside our thresholds for Catalina and the San Pedro Channel and the outer islands; marginal for the Coronados and the offshore banks; within our thresholds for San Diego inshore.",
-   "Water at the named spots runs 68-76°F on the Nov 8 satellite map; the strongest break is near San Salvador Knoll, 2.9°F over 4.3 nm, warm side to the SE.",
+   "Water at the named spots runs 68-76°F on the Nov 9 satellite map; the strongest break is near 60 Mile Bank, 2.7°F over 4.3 nm, warm side to the E.",
    "Season and water both match today for bluefin tuna, yellowfin tuna, dorado, yellowtail, striped marlin and wahoo. That says the water is right, not that fish are there.",
-   "AIS shows 9 boats at sea in the last 3 hours, 2 of them stopped. Over the last three days the fleet stopped longest at 33.59N 118.16W."
+   "AIS shows 12 boats at sea in the last 3 hours, 2 of them stopped. Over the last three days the fleet stopped longest at 33.59N 118.16W."
   ],
   "diving": [
-   "Shore diving today: marginal at La Jolla Cove, La Jolla Shores, Point Loma and Sunset Cliffs, and Laguna Beach. The San Diego County surf forecast is 3 to 5 feet, sets to 6 feet, with a high rip current risk.",
-   "Best bet from shore: La Jolla Shores (marginal, with sets around 1 ft at the entry in the CDIP model). Just Get Wet (La Jolla dive shop) reported 10-15ft at Coronado Islands on Nov 9.",
+   "Shore diving today: marginal at La Jolla Cove, Point Loma and Sunset Cliffs, and Laguna Beach; within our thresholds at La Jolla Shores. The San Diego County surf forecast is 2 to 4 feet from 220°, with a moderate rip current risk.",
+   "Best bet from shore: La Jolla Shores (within our thresholds, with sets around 1 ft at the entry in the CDIP model). Just Get Wet (La Jolla dive shop) reported 10-15ft at Coronado Islands on Nov 9.",
    "Suit: 3-5 mm for most divers, sized for 74°F at 60 ft in the nearest glider profile. Kelp-bed bottoms can run colder when internal tides push cold water in. A glider 11 nm from San Diego measured 74°F at the surface and 74°F at 100 ft, with the sharpest drop near 220 ft (8:02 AM Nov 10)."
   ],
   "spearfishing": [
-   "Entries today: marginal at La Jolla Cove, La Jolla Shores, Point Loma and Sunset Cliffs, and Laguna Beach. The San Diego County surf forecast is 3 to 5 feet, sets to 6 feet, with a high rip current risk.",
+   "Entries today: marginal at La Jolla Cove, Point Loma and Sunset Cliffs, and Laguna Beach; within our thresholds at La Jolla Shores. The San Diego County surf forecast is 2 to 4 feet from 220°, with a moderate rip current risk.",
    "Just Get Wet (La Jolla dive shop) reported 10-15ft at Coronado Islands on Nov 9: enough to hunt pelagics (15 ft or more).",
-   "A glider 11 nm from San Diego measured 74°F at the surface and 74°F at 100 ft, with the sharpest drop near 220 ft (8:02 AM Nov 10). White seabass: Surface water is 75°F, above the 55-61°F the tagged fish used; offshore, the nearest glider puts the thermocline about 220 ft down, and the cooler water they favored sits below it. Open now: spiny lobster (by hand only)."
+   "A glider 11 nm from San Diego measured 74°F at the surface and 74°F at 100 ft, with the sharpest drop near 220 ft (8:02 AM Nov 10). White seabass: Surface water is 76°F, above the 55-61°F the tagged fish used; offshore, the nearest glider puts the thermocline about 220 ft down, and the cooler water they favored sits below it. Open now: spiny lobster (by hand only)."
   ]
  },
  "season_curves": {
@@ -8805,87 +8806,87 @@
    "notice": null,
    "temp_series": [
     {
-     "date": "2026-11-02",
-     "temp_f": 75.1,
-     "coverage": 0.67
-    },
-    {
      "date": "2026-11-03",
-     "temp_f": 74.6,
+     "temp_f": 75.8,
      "coverage": 0.67
     },
     {
      "date": "2026-11-04",
-     "temp_f": 74.3,
+     "temp_f": 75.6,
      "coverage": 0.67
     },
     {
      "date": "2026-11-05",
-     "temp_f": 74.5,
+     "temp_f": 75.8,
      "coverage": 0.67
     },
     {
      "date": "2026-11-06",
-     "temp_f": 74.7,
+     "temp_f": 76.1,
      "coverage": 0.67
     },
     {
      "date": "2026-11-07",
-     "temp_f": 74.6,
+     "temp_f": 75.8,
      "coverage": 0.67
     },
     {
      "date": "2026-11-08",
-     "temp_f": 74.5,
+     "temp_f": 75.8,
+     "coverage": 0.67
+    },
+    {
+     "date": "2026-11-09",
+     "temp_f": 75.6,
      "coverage": 0.67
     }
    ],
-   "temp_f": 74.5,
-   "temp_change_f": -0.6,
+   "temp_f": 75.6,
+   "temp_change_f": -0.2,
    "temp_days": 6,
    "break": {
     "km": 0.0,
     "nm": 0.0,
     "direction": "",
-    "step_f": 1.9,
+    "step_f": 1.6,
     "over_nm": 4.3,
     "warm_side": "W",
-    "grad_c_per_km": 0.17,
-    "lat": 32.6483,
-    "lng": -117.2492,
-    "gps": "32 39 x 117 15"
+    "grad_c_per_km": 0.132,
+    "lat": 32.6683,
+    "lng": -117.2692,
+    "gps": "32 40 x 117 16"
    },
    "break_series": [
-    {
-     "date": "2026-11-02",
-     "c_per_km": 0.109
-    },
     {
      "date": "2026-11-03",
      "c_per_km": 0.067
     },
     {
      "date": "2026-11-04",
-     "c_per_km": 0.081
+     "c_per_km": 0.083
     },
     {
      "date": "2026-11-05",
-     "c_per_km": 0.094
+     "c_per_km": 0.098
     },
     {
      "date": "2026-11-06",
-     "c_per_km": 0.147
+     "c_per_km": 0.134
     },
     {
      "date": "2026-11-07",
-     "c_per_km": 0.151
+     "c_per_km": 0.152
     },
     {
      "date": "2026-11-08",
-     "c_per_km": 0.17
+     "c_per_km": 0.155
+    },
+    {
+     "date": "2026-11-09",
+     "c_per_km": 0.132
     }
    ],
-   "chl": 1.45,
+   "chl": 1.53,
    "chl_seen": 0.75,
    "paddy": null,
    "paddy_series": [
@@ -9023,18 +9024,18 @@
      "label": "Fri",
      "wind_max_kt": 8,
      "wind_dir": "SSE",
-     "hs_max_ft": 2.3,
+     "hs_max_ft": 1.7,
      "tp_s": 16
     }
    ],
-   "vs_normal_f": 10.8,
+   "vs_normal_f": 11.9,
    "normal_f": 63.7,
    "normal_label": "Nov average, 1991-2020",
    "vis_pred": {
-    "ft": 13,
-    "lo_ft": 8,
-    "hi_ft": 24,
-    "raw_p50": 24.52193478175572,
+    "ft": 15,
+    "lo_ft": 9,
+    "hi_ft": 26,
+    "raw_p50": 26.726658412388392,
     "adjusted": true
    }
   },
@@ -9053,64 +9054,60 @@
    "notice": null,
    "temp_series": [
     {
-     "date": "2026-11-02",
-     "temp_f": 75.0,
-     "coverage": 0.54
-    },
-    {
      "date": "2026-11-03",
-     "temp_f": 74.6,
+     "temp_f": 75.8,
      "coverage": 0.54
     },
     {
      "date": "2026-11-04",
-     "temp_f": 74.7,
+     "temp_f": 76.0,
      "coverage": 0.54
     },
     {
      "date": "2026-11-05",
-     "temp_f": 74.8,
+     "temp_f": 76.1,
      "coverage": 0.54
     },
     {
      "date": "2026-11-06",
-     "temp_f": 74.8,
+     "temp_f": 76.1,
      "coverage": 0.54
     },
     {
      "date": "2026-11-07",
-     "temp_f": 74.6,
+     "temp_f": 75.9,
      "coverage": 0.54
     },
     {
      "date": "2026-11-08",
-     "temp_f": 74.4,
+     "temp_f": 75.7,
+     "coverage": 0.54
+    },
+    {
+     "date": "2026-11-09",
+     "temp_f": 75.5,
      "coverage": 0.54
     }
    ],
-   "temp_f": 74.4,
-   "temp_change_f": -0.6,
+   "temp_f": 75.5,
+   "temp_change_f": -0.3,
    "temp_days": 6,
    "break": {
     "km": 0.0,
     "nm": 0.0,
     "direction": "",
-    "step_f": 1.5,
+    "step_f": 1.8,
     "over_nm": 4.3,
     "warm_side": "SW",
-    "grad_c_per_km": 0.12,
-    "lat": 33.1873,
+    "grad_c_per_km": 0.15,
+    "lat": 33.1673,
     "lng": -117.4489,
-    "gps": "33 11 x 117 27"
+    "gps": "33 10 x 117 27"
    },
    "break_series": [
     {
-     "date": "2026-11-02",
-     "c_per_km": 0.163
-    },
-    {
      "date": "2026-11-03",
-     "c_per_km": 0.05
+     "c_per_km": 0.052
     },
     {
      "date": "2026-11-04",
@@ -9118,22 +9115,26 @@
     },
     {
      "date": "2026-11-05",
-     "c_per_km": 0.093
+     "c_per_km": 0.095
     },
     {
      "date": "2026-11-06",
-     "c_per_km": 0.105
+     "c_per_km": 0.104
     },
     {
      "date": "2026-11-07",
-     "c_per_km": 0.122
+     "c_per_km": 0.093
     },
     {
      "date": "2026-11-08",
-     "c_per_km": 0.12
+     "c_per_km": 0.121
+    },
+    {
+     "date": "2026-11-09",
+     "c_per_km": 0.15
     }
    ],
-   "chl": 0.31,
+   "chl": 0.41,
    "chl_seen": 0.43,
    "paddy": null,
    "paddy_series": [
@@ -9269,18 +9270,18 @@
      "label": "Fri",
      "wind_max_kt": 9,
      "wind_dir": "W",
-     "hs_max_ft": 2.0,
+     "hs_max_ft": 1.5,
      "tp_s": 16
     }
    ],
-   "vs_normal_f": 10.6,
+   "vs_normal_f": 11.7,
    "normal_f": 63.8,
    "normal_label": "Nov average, 1991-2020",
    "vis_pred": {
-    "ft": 18,
-    "lo_ft": 10,
-    "hi_ft": 31,
-    "raw_p50": 33.4558171166314,
+    "ft": 19,
+    "lo_ft": 11,
+    "hi_ft": 34,
+    "raw_p50": 36.395450592041016,
     "adjusted": true
    }
   },
@@ -9299,64 +9300,60 @@
    "notice": null,
    "temp_series": [
     {
-     "date": "2026-11-02",
-     "temp_f": 73.9,
-     "coverage": 0.62
-    },
-    {
      "date": "2026-11-03",
-     "temp_f": 74.3,
+     "temp_f": 75.6,
      "coverage": 0.62
     },
     {
      "date": "2026-11-04",
-     "temp_f": 74.3,
+     "temp_f": 75.6,
      "coverage": 0.62
     },
     {
      "date": "2026-11-05",
-     "temp_f": 74.4,
+     "temp_f": 75.6,
      "coverage": 0.62
     },
     {
      "date": "2026-11-06",
-     "temp_f": 74.5,
+     "temp_f": 75.8,
      "coverage": 0.62
     },
     {
      "date": "2026-11-07",
-     "temp_f": 74.4,
+     "temp_f": 75.8,
      "coverage": 0.62
     },
     {
      "date": "2026-11-08",
-     "temp_f": 74.3,
+     "temp_f": 75.5,
+     "coverage": 0.62
+    },
+    {
+     "date": "2026-11-09",
+     "temp_f": 75.3,
      "coverage": 0.62
     }
    ],
-   "temp_f": 74.3,
-   "temp_change_f": 0.4,
+   "temp_f": 75.3,
+   "temp_change_f": -0.3,
    "temp_days": 6,
    "break": {
-    "km": 2.9,
-    "nm": 1.6,
-    "direction": "SE",
-    "step_f": 0.7,
+    "km": 0.0,
+    "nm": 0.0,
+    "direction": "",
+    "step_f": 1.1,
     "over_nm": 4.3,
     "warm_side": "SW",
-    "grad_c_per_km": 0.07,
-    "lat": 33.2871,
-    "lng": -117.5687,
-    "gps": "33 17 x 117 34"
+    "grad_c_per_km": 0.106,
+    "lat": 33.347,
+    "lng": -117.6086,
+    "gps": "33 21 x 117 37"
    },
    "break_series": [
     {
-     "date": "2026-11-02",
-     "c_per_km": 0.142
-    },
-    {
      "date": "2026-11-03",
-     "c_per_km": 0.05
+     "c_per_km": 0.056
     },
     {
      "date": "2026-11-04",
@@ -9364,22 +9361,26 @@
     },
     {
      "date": "2026-11-05",
-     "c_per_km": 0.096
+     "c_per_km": 0.09
     },
     {
      "date": "2026-11-06",
-     "c_per_km": 0.052
+     "c_per_km": 0.048
     },
     {
      "date": "2026-11-07",
-     "c_per_km": 0.096
+     "c_per_km": 0.047
     },
     {
      "date": "2026-11-08",
-     "c_per_km": 0.068
+     "c_per_km": 0.084
+    },
+    {
+     "date": "2026-11-09",
+     "c_per_km": 0.106
     }
    ],
-   "chl": 0.3,
+   "chl": 0.25,
    "chl_seen": 0.33,
    "paddy": null,
    "paddy_series": [
@@ -9507,26 +9508,26 @@
      "label": "Thu",
      "wind_max_kt": 9,
      "wind_dir": "S",
-     "hs_max_ft": 0.9,
-     "tp_s": 14
+     "hs_max_ft": 1.1,
+     "tp_s": 13
     },
     {
      "date": "2026-11-13",
      "label": "Fri",
      "wind_max_kt": 9,
      "wind_dir": "WSW",
-     "hs_max_ft": 1.9,
-     "tp_s": 15
+     "hs_max_ft": 1.4,
+     "tp_s": 16
     }
    ],
-   "vs_normal_f": 10.3,
+   "vs_normal_f": 11.3,
    "normal_f": 64.0,
    "normal_label": "Nov average, 1991-2020",
    "vis_pred": {
-    "ft": 10,
-    "lo_ft": 6,
-    "hi_ft": 15,
-    "raw_p50": 32.81889724731445,
+    "ft": 12,
+    "lo_ft": 7,
+    "hi_ft": 18,
+    "raw_p50": 38.36220474243164,
     "adjusted": true
    }
   },
@@ -9548,87 +9549,87 @@
    },
    "temp_series": [
     {
-     "date": "2026-11-02",
-     "temp_f": 74.2,
-     "coverage": 1.0
-    },
-    {
      "date": "2026-11-03",
-     "temp_f": 74.5,
+     "temp_f": 75.8,
      "coverage": 1.0
     },
     {
      "date": "2026-11-04",
-     "temp_f": 74.1,
+     "temp_f": 75.4,
      "coverage": 1.0
     },
     {
      "date": "2026-11-05",
-     "temp_f": 74.2,
+     "temp_f": 75.4,
      "coverage": 1.0
     },
     {
      "date": "2026-11-06",
-     "temp_f": 74.3,
+     "temp_f": 75.7,
      "coverage": 1.0
     },
     {
      "date": "2026-11-07",
-     "temp_f": 74.4,
+     "temp_f": 75.6,
      "coverage": 1.0
     },
     {
      "date": "2026-11-08",
-     "temp_f": 74.8,
+     "temp_f": 76.1,
+     "coverage": 1.0
+    },
+    {
+     "date": "2026-11-09",
+     "temp_f": 76.0,
      "coverage": 1.0
     }
    ],
-   "temp_f": 74.8,
-   "temp_change_f": 0.6,
+   "temp_f": 76.0,
+   "temp_change_f": 0.2,
    "temp_days": 6,
    "break": {
-    "km": 2.9,
-    "nm": 1.6,
-    "direction": "SE",
-    "step_f": 2.0,
+    "km": 0.0,
+    "nm": 0.0,
+    "direction": "",
+    "step_f": 1.2,
     "over_nm": 4.3,
-    "warm_side": "SW",
-    "grad_c_per_km": 0.161,
-    "lat": 32.3489,
-    "lng": -117.1494,
-    "gps": "32 21 x 117 09"
+    "warm_side": "W",
+    "grad_c_per_km": 0.108,
+    "lat": 32.4487,
+    "lng": -117.2093,
+    "gps": "32 27 x 117 13"
    },
    "break_series": [
     {
-     "date": "2026-11-02",
-     "c_per_km": 0.061
-    },
-    {
      "date": "2026-11-03",
-     "c_per_km": 0.064
+     "c_per_km": 0.067
     },
     {
      "date": "2026-11-04",
-     "c_per_km": 0.122
+     "c_per_km": 0.118
     },
     {
      "date": "2026-11-05",
-     "c_per_km": 0.134
+     "c_per_km": 0.129
     },
     {
      "date": "2026-11-06",
-     "c_per_km": 0.149
+     "c_per_km": 0.137
     },
     {
      "date": "2026-11-07",
-     "c_per_km": 0.146
+     "c_per_km": 0.148
     },
     {
      "date": "2026-11-08",
-     "c_per_km": 0.14
+     "c_per_km": 0.134
+    },
+    {
+     "date": "2026-11-09",
+     "c_per_km": 0.108
     }
    ],
-   "chl": 0.47,
+   "chl": 0.42,
    "chl_seen": 1.0,
    "paddy": null,
    "paddy_series": [
@@ -9764,7 +9765,7 @@
      "label": "Fri",
      "wind_max_kt": 10,
      "wind_dir": "SSW",
-     "hs_max_ft": 4.3,
+     "hs_max_ft": 3.2,
      "tp_s": 15
     }
    ],
@@ -9774,14 +9775,14 @@
     "Striped marlin",
     "Wahoo"
    ],
-   "vs_normal_f": 11.1,
+   "vs_normal_f": 12.3,
    "normal_f": 63.7,
    "normal_label": "Nov average, 1991-2020",
    "vis_pred": {
-    "ft": 14,
-    "lo_ft": 8,
-    "hi_ft": 24,
-    "raw_p50": 26.03674570719401,
+    "ft": 16,
+    "lo_ft": 9,
+    "hi_ft": 28,
+    "raw_p50": 30.02624766031901,
     "adjusted": true
    }
   },
@@ -9800,87 +9801,87 @@
    "notice": null,
    "temp_series": [
     {
-     "date": "2026-11-02",
-     "temp_f": 72.8,
-     "coverage": 1.0
-    },
-    {
      "date": "2026-11-03",
-     "temp_f": 72.9,
+     "temp_f": 74.3,
      "coverage": 1.0
     },
     {
      "date": "2026-11-04",
-     "temp_f": 73.3,
+     "temp_f": 74.7,
      "coverage": 1.0
     },
     {
      "date": "2026-11-05",
-     "temp_f": 73.5,
+     "temp_f": 74.9,
      "coverage": 1.0
     },
     {
      "date": "2026-11-06",
-     "temp_f": 73.9,
+     "temp_f": 75.3,
      "coverage": 1.0
     },
     {
      "date": "2026-11-07",
-     "temp_f": 74.1,
+     "temp_f": 75.5,
      "coverage": 1.0
     },
     {
      "date": "2026-11-08",
-     "temp_f": 74.0,
+     "temp_f": 75.4,
+     "coverage": 1.0
+    },
+    {
+     "date": "2026-11-09",
+     "temp_f": 75.2,
      "coverage": 1.0
     }
    ],
-   "temp_f": 74.0,
-   "temp_change_f": 1.2,
+   "temp_f": 75.2,
+   "temp_change_f": 0.9,
    "temp_days": 6,
    "break": {
     "km": 0.0,
     "nm": 0.0,
     "direction": "",
-    "step_f": 0.8,
+    "step_f": 1.2,
     "over_nm": 4.3,
-    "warm_side": "W",
-    "grad_c_per_km": 0.062,
-    "lat": 33.4068,
-    "lng": -118.567,
-    "gps": "33 24 x 118 34"
+    "warm_side": "S",
+    "grad_c_per_km": 0.087,
+    "lat": 33.3669,
+    "lng": -118.527,
+    "gps": "33 22 x 118 32"
    },
    "break_series": [
     {
-     "date": "2026-11-02",
-     "c_per_km": 0.192
-    },
-    {
      "date": "2026-11-03",
-     "c_per_km": 0.113
+     "c_per_km": 0.111
     },
     {
      "date": "2026-11-04",
-     "c_per_km": 0.148
-    },
-    {
-     "date": "2026-11-05",
      "c_per_km": 0.144
     },
     {
+     "date": "2026-11-05",
+     "c_per_km": 0.142
+    },
+    {
      "date": "2026-11-06",
-     "c_per_km": 0.126
+     "c_per_km": 0.12
     },
     {
      "date": "2026-11-07",
-     "c_per_km": 0.113
+     "c_per_km": 0.11
     },
     {
      "date": "2026-11-08",
-     "c_per_km": 0.062
+     "c_per_km": 0.068
+    },
+    {
+     "date": "2026-11-09",
+     "c_per_km": 0.087
     }
    ],
-   "chl": 0.17,
+   "chl": 0.16,
    "chl_seen": 0.83,
    "paddy": null,
    "paddy_series": [
@@ -10008,7 +10009,7 @@
      "label": "Thu",
      "wind_max_kt": 9,
      "wind_dir": "SW",
-     "hs_max_ft": 2.0,
+     "hs_max_ft": 1.9,
      "tp_s": 14
     },
     {
@@ -10016,18 +10017,18 @@
      "label": "Fri",
      "wind_max_kt": 8,
      "wind_dir": "WSW",
-     "hs_max_ft": 4.0,
+     "hs_max_ft": 2.8,
      "tp_s": 14
     }
    ],
-   "vs_normal_f": 10.3,
+   "vs_normal_f": 11.5,
    "normal_f": 63.7,
    "normal_label": "Nov average, 1991-2020",
    "vis_pred": {
     "ft": 17,
     "lo_ft": 10,
     "hi_ft": 25,
-    "raw_p50": 47.44094443321228,
+    "raw_p50": 49.25196838378906,
     "adjusted": true
    }
   },
@@ -10049,76 +10050,72 @@
    },
    "temp_series": [
     {
-     "date": "2026-11-02",
-     "temp_f": 70.4,
-     "coverage": 1.0
-    },
-    {
      "date": "2026-11-03",
-     "temp_f": 70.4,
-     "coverage": 1.0
-    },
-    {
-     "date": "2026-11-04",
-     "temp_f": 71.3,
-     "coverage": 1.0
-    },
-    {
-     "date": "2026-11-05",
      "temp_f": 71.6,
      "coverage": 1.0
     },
     {
-     "date": "2026-11-06",
-     "temp_f": 72.2,
+     "date": "2026-11-04",
+     "temp_f": 72.5,
      "coverage": 1.0
     },
     {
-     "date": "2026-11-07",
+     "date": "2026-11-05",
      "temp_f": 72.8,
      "coverage": 1.0
     },
     {
+     "date": "2026-11-06",
+     "temp_f": 73.4,
+     "coverage": 1.0
+    },
+    {
+     "date": "2026-11-07",
+     "temp_f": 74.0,
+     "coverage": 1.0
+    },
+    {
      "date": "2026-11-08",
-     "temp_f": 73.3,
+     "temp_f": 74.5,
+     "coverage": 1.0
+    },
+    {
+     "date": "2026-11-09",
+     "temp_f": 74.5,
      "coverage": 1.0
     }
    ],
-   "temp_f": 73.3,
+   "temp_f": 74.5,
    "temp_change_f": 2.9,
    "temp_days": 6,
    "break": {
-    "km": 0.0,
-    "nm": 0.0,
-    "direction": "",
-    "step_f": 2.7,
+    "km": 2.2,
+    "nm": 1.2,
+    "direction": "S",
+    "step_f": 2.9,
     "over_nm": 4.3,
-    "warm_side": "NE",
-    "grad_c_per_km": 0.203,
-    "lat": 32.7082,
-    "lng": -118.6269,
-    "gps": "32 42 x 118 38"
+    "warm_side": "E",
+    "grad_c_per_km": 0.233,
+    "lat": 32.7282,
+    "lng": -118.6668,
+    "gps": "32 44 x 118 40"
    },
    "break_series": [
     {
-     "date": "2026-11-02",
-     "c_per_km": 0.142
-    },
-    {
      "date": "2026-11-03",
-     "c_per_km": 0.117
+     "c_per_km": 0.124
     },
     {
      "date": "2026-11-04",
-     "c_per_km": 0.152
+     "c_per_km": 0.166
     },
     {
      "date": "2026-11-05",
-     "c_per_km": 0.201
+     "c_per_km": 0.212
     },
     {
      "date": "2026-11-06",
-     "c_per_km": 0.207
+     "c_per_km": 0.217
     },
     {
      "date": "2026-11-07",
@@ -10126,10 +10123,14 @@
     },
     {
      "date": "2026-11-08",
-     "c_per_km": 0.203
+     "c_per_km": 0.21
+    },
+    {
+     "date": "2026-11-09",
+     "c_per_km": 0.221
     }
    ],
-   "chl": 0.13,
+   "chl": 0.14,
    "chl_seen": 1.0,
    "paddy": {
     "level": 0.3,
@@ -10255,7 +10256,7 @@
      "label": "Wed",
      "wind_max_kt": 11,
      "wind_dir": "NW",
-     "hs_max_ft": 3.1,
+     "hs_max_ft": 3.2,
      "tp_s": 13
     },
     {
@@ -10271,18 +10272,18 @@
      "label": "Fri",
      "wind_max_kt": 10,
      "wind_dir": "SW",
-     "hs_max_ft": 6.0,
+     "hs_max_ft": 4.6,
      "tp_s": 14
     }
    ],
-   "vs_normal_f": 9.6,
+   "vs_normal_f": 10.8,
    "normal_f": 63.7,
    "normal_label": "Nov average, 1991-2020",
    "vis_pred": {
-    "ft": 21,
+    "ft": 22,
     "lo_ft": 13,
-    "hi_ft": 31,
-    "raw_p50": 52.35193401834239,
+    "hi_ft": 32,
+    "raw_p50": 53.11879531196926,
     "adjusted": true
    }
   },
@@ -10301,61 +10302,57 @@
    "notice": null,
    "temp_series": [
     {
-     "date": "2026-11-02",
-     "temp_f": 74.5,
-     "coverage": 1.0
-    },
-    {
      "date": "2026-11-03",
-     "temp_f": 74.3,
+     "temp_f": 75.5,
      "coverage": 1.0
     },
     {
      "date": "2026-11-04",
-     "temp_f": 74.4,
+     "temp_f": 75.6,
      "coverage": 1.0
     },
     {
      "date": "2026-11-05",
-     "temp_f": 74.6,
+     "temp_f": 75.9,
      "coverage": 1.0
     },
     {
      "date": "2026-11-06",
-     "temp_f": 75.1,
+     "temp_f": 76.4,
      "coverage": 1.0
     },
     {
      "date": "2026-11-07",
-     "temp_f": 75.2,
+     "temp_f": 76.4,
      "coverage": 1.0
     },
     {
      "date": "2026-11-08",
-     "temp_f": 75.1,
+     "temp_f": 76.3,
+     "coverage": 1.0
+    },
+    {
+     "date": "2026-11-09",
+     "temp_f": 76.2,
      "coverage": 1.0
     }
    ],
-   "temp_f": 75.1,
-   "temp_change_f": 0.6,
+   "temp_f": 76.2,
+   "temp_change_f": 0.7,
    "temp_days": 6,
    "break": {
     "km": 2.9,
     "nm": 1.6,
     "direction": "SW",
-    "step_f": 2.0,
+    "step_f": 1.9,
     "over_nm": 4.3,
     "warm_side": "E",
-    "grad_c_per_km": 0.157,
-    "lat": 32.5885,
-    "lng": -118.0279,
-    "gps": "32 35 x 118 02"
+    "grad_c_per_km": 0.178,
+    "lat": 32.5086,
+    "lng": -117.988,
+    "gps": "32 31 x 117 59"
    },
    "break_series": [
-    {
-     "date": "2026-11-02",
-     "c_per_km": 0.199
-    },
     {
      "date": "2026-11-03",
      "c_per_km": 0.174
@@ -10366,11 +10363,11 @@
     },
     {
      "date": "2026-11-05",
-     "c_per_km": 0.09
+     "c_per_km": 0.088
     },
     {
      "date": "2026-11-06",
-     "c_per_km": 0.138
+     "c_per_km": 0.141
     },
     {
      "date": "2026-11-07",
@@ -10378,10 +10375,14 @@
     },
     {
      "date": "2026-11-08",
-     "c_per_km": 0.115
+     "c_per_km": 0.145
+    },
+    {
+     "date": "2026-11-09",
+     "c_per_km": 0.15
     }
    ],
-   "chl": 0.21,
+   "chl": 0.2,
    "chl_seen": 1.0,
    "paddy": null,
    "paddy_series": [
@@ -10501,15 +10502,15 @@
      "label": "Wed",
      "wind_max_kt": 8,
      "wind_dir": "NNW",
-     "hs_max_ft": 2.6,
-     "tp_s": 14
+     "hs_max_ft": 2.8,
+     "tp_s": 13
     },
     {
      "date": "2026-11-12",
      "label": "Thu",
      "wind_max_kt": 10,
      "wind_dir": "WSW",
-     "hs_max_ft": 2.9,
+     "hs_max_ft": 2.8,
      "tp_s": 13
     },
     {
@@ -10517,7 +10518,7 @@
      "label": "Fri",
      "wind_max_kt": 11,
      "wind_dir": "W",
-     "hs_max_ft": 5.1,
+     "hs_max_ft": 4.0,
      "tp_s": 15
     }
    ],
@@ -10527,7 +10528,7 @@
     "Striped marlin",
     "Wahoo"
    ],
-   "vs_normal_f": 10.9,
+   "vs_normal_f": 12.0,
    "normal_f": 64.2,
    "normal_label": "Nov average, 1991-2020"
   },
@@ -10546,76 +10547,87 @@
    "notice": null,
    "temp_series": [
     {
-     "date": "2026-11-02",
-     "temp_f": 75.0,
-     "coverage": 1.0
-    },
-    {
      "date": "2026-11-03",
-     "temp_f": 74.9,
+     "temp_f": 76.2,
      "coverage": 1.0
     },
     {
      "date": "2026-11-04",
-     "temp_f": 74.4,
+     "temp_f": 75.7,
      "coverage": 1.0
     },
     {
      "date": "2026-11-05",
-     "temp_f": 74.5,
+     "temp_f": 75.8,
      "coverage": 1.0
     },
     {
      "date": "2026-11-06",
-     "temp_f": 74.8,
+     "temp_f": 76.1,
      "coverage": 1.0
     },
     {
      "date": "2026-11-07",
-     "temp_f": 75.0,
+     "temp_f": 76.2,
      "coverage": 1.0
     },
     {
      "date": "2026-11-08",
-     "temp_f": 75.1,
+     "temp_f": 76.4,
+     "coverage": 1.0
+    },
+    {
+     "date": "2026-11-09",
+     "temp_f": 76.2,
      "coverage": 1.0
     }
    ],
-   "temp_f": 75.1,
-   "temp_change_f": 0.1,
+   "temp_f": 76.2,
+   "temp_change_f": 0.0,
    "temp_days": 6,
-   "break": null,
+   "break": {
+    "km": 0.0,
+    "nm": 0.0,
+    "direction": "",
+    "step_f": 1.1,
+    "over_nm": 4.3,
+    "warm_side": "NW",
+    "grad_c_per_km": 0.092,
+    "lat": 32.9677,
+    "lng": -117.9081,
+    "gps": "32 58 x 117 54"
+   },
    "break_series": [
-    {
-     "date": "2026-11-02",
-     "c_per_km": 0.179
-    },
     {
      "date": "2026-11-03",
      "c_per_km": 0.124
     },
     {
      "date": "2026-11-04",
-     "c_per_km": 0.095
+     "c_per_km": 0.093
     },
     {
      "date": "2026-11-05",
-     "c_per_km": 0.1
+     "c_per_km": 0.103
     },
     {
      "date": "2026-11-06",
-     "c_per_km": 0.091
+     "c_per_km": 0.09
     },
     {
      "date": "2026-11-07",
-     "c_per_km": 0.068
+     "c_per_km": 0.066
     },
     {
      "date": "2026-11-08",
-     "c_per_km": 0.054
+     "c_per_km": 0.055
+    },
+    {
+     "date": "2026-11-09",
+     "c_per_km": 0.092
     }
    ],
-   "chl": 0.21,
+   "chl": 0.18,
    "chl_seen": 1.0,
    "paddy": null,
    "paddy_series": [
@@ -10744,14 +10756,14 @@
      "wind_max_kt": 9,
      "wind_dir": "SW",
      "hs_max_ft": 2.0,
-     "tp_s": 14
+     "tp_s": 13
     },
     {
      "date": "2026-11-13",
      "label": "Fri",
      "wind_max_kt": 10,
      "wind_dir": "WSW",
-     "hs_max_ft": 3.6,
+     "hs_max_ft": 2.8,
      "tp_s": 15
     }
    ],
@@ -10761,7 +10773,7 @@
     "Striped marlin",
     "Wahoo"
    ],
-   "vs_normal_f": 11.0,
+   "vs_normal_f": 12.1,
    "normal_f": 64.1,
    "normal_label": "Nov average, 1991-2020"
   },
@@ -10780,84 +10792,84 @@
    "notice": null,
    "temp_series": [
     {
-     "date": "2026-11-02",
-     "temp_f": 74.8,
-     "coverage": 1.0
-    },
-    {
      "date": "2026-11-03",
-     "temp_f": 74.2,
+     "temp_f": 75.5,
      "coverage": 1.0
     },
     {
      "date": "2026-11-04",
-     "temp_f": 74.5,
+     "temp_f": 75.8,
      "coverage": 1.0
     },
     {
      "date": "2026-11-05",
-     "temp_f": 74.7,
+     "temp_f": 76.0,
      "coverage": 1.0
     },
     {
      "date": "2026-11-06",
-     "temp_f": 74.6,
+     "temp_f": 76.0,
      "coverage": 1.0
     },
     {
      "date": "2026-11-07",
-     "temp_f": 74.6,
+     "temp_f": 76.0,
      "coverage": 1.0
     },
     {
      "date": "2026-11-08",
-     "temp_f": 74.5,
+     "temp_f": 75.9,
+     "coverage": 1.0
+    },
+    {
+     "date": "2026-11-09",
+     "temp_f": 75.7,
      "coverage": 1.0
     }
    ],
-   "temp_f": 74.5,
-   "temp_change_f": -0.3,
+   "temp_f": 75.7,
+   "temp_change_f": 0.2,
    "temp_days": 6,
    "break": {
     "km": 2.2,
     "nm": 1.2,
     "direction": "N",
-    "step_f": 1.8,
+    "step_f": 1.1,
     "over_nm": 4.3,
-    "warm_side": "S",
-    "grad_c_per_km": 0.136,
+    "warm_side": "SW",
+    "grad_c_per_km": 0.112,
     "lat": 33.5665,
     "lng": -117.948,
     "gps": "33 34 x 117 57"
    },
    "break_series": [
     {
-     "date": "2026-11-02",
-     "c_per_km": 0.167
-    },
-    {
      "date": "2026-11-03",
-     "c_per_km": 0.159
+     "c_per_km": 0.164
     },
     {
      "date": "2026-11-04",
-     "c_per_km": 0.123
+     "c_per_km": 0.121
     },
     {
      "date": "2026-11-05",
-     "c_per_km": 0.104
+     "c_per_km": 0.106
     },
     {
      "date": "2026-11-06",
-     "c_per_km": 0.12
+     "c_per_km": 0.129
     },
     {
      "date": "2026-11-07",
-     "c_per_km": 0.145
+     "c_per_km": 0.096
     },
     {
      "date": "2026-11-08",
-     "c_per_km": 0.126
+     "c_per_km": 0.1
+    },
+    {
+     "date": "2026-11-09",
+     "c_per_km": 0.086
     }
    ],
    "chl": 0.16,
@@ -10996,8 +11008,8 @@
      "label": "Fri",
      "wind_max_kt": 9,
      "wind_dir": "WSW",
-     "hs_max_ft": 3.4,
-     "tp_s": 15
+     "hs_max_ft": 2.5,
+     "tp_s": 16
     }
    ],
    "water_fits": [
@@ -11006,7 +11018,7 @@
     "Striped marlin",
     "Wahoo"
    ],
-   "vs_normal_f": 10.7,
+   "vs_normal_f": 11.9,
    "normal_f": 63.8,
    "normal_label": "Nov average, 1991-2020"
   },
@@ -11025,84 +11037,84 @@
    "notice": null,
    "temp_series": [
     {
-     "date": "2026-11-02",
-     "temp_f": 68.4,
-     "coverage": 1.0
-    },
-    {
      "date": "2026-11-03",
-     "temp_f": 68.1,
-     "coverage": 1.0
-    },
-    {
-     "date": "2026-11-04",
-     "temp_f": 68.2,
-     "coverage": 1.0
-    },
-    {
-     "date": "2026-11-05",
      "temp_f": 68.3,
      "coverage": 1.0
     },
     {
+     "date": "2026-11-04",
+     "temp_f": 68.3,
+     "coverage": 1.0
+    },
+    {
+     "date": "2026-11-05",
+     "temp_f": 68.5,
+     "coverage": 1.0
+    },
+    {
      "date": "2026-11-06",
-     "temp_f": 68.7,
+     "temp_f": 68.9,
      "coverage": 1.0
     },
     {
      "date": "2026-11-07",
-     "temp_f": 69.2,
+     "temp_f": 69.3,
      "coverage": 1.0
     },
     {
      "date": "2026-11-08",
-     "temp_f": 69.3,
+     "temp_f": 69.5,
+     "coverage": 1.0
+    },
+    {
+     "date": "2026-11-09",
+     "temp_f": 69.4,
      "coverage": 1.0
     }
    ],
-   "temp_f": 69.3,
-   "temp_change_f": 0.9,
+   "temp_f": 69.4,
+   "temp_change_f": 1.1,
    "temp_days": 6,
    "break": {
     "km": 0.0,
     "nm": 0.0,
     "direction": "",
-    "step_f": 2.4,
+    "step_f": 2.9,
     "over_nm": 4.3,
-    "warm_side": "NE",
-    "grad_c_per_km": 0.198,
-    "lat": 32.8879,
-    "lng": -118.8265,
-    "gps": "32 53 x 118 50"
+    "warm_side": "E",
+    "grad_c_per_km": 0.233,
+    "lat": 32.7282,
+    "lng": -118.6668,
+    "gps": "32 44 x 118 40"
    },
    "break_series": [
     {
-     "date": "2026-11-02",
-     "c_per_km": 0.23
-    },
-    {
      "date": "2026-11-03",
-     "c_per_km": 0.165
+     "c_per_km": 0.168
     },
     {
      "date": "2026-11-04",
-     "c_per_km": 0.175
+     "c_per_km": 0.179
     },
     {
      "date": "2026-11-05",
-     "c_per_km": 0.225
-    },
-    {
-     "date": "2026-11-06",
      "c_per_km": 0.229
     },
     {
+     "date": "2026-11-06",
+     "c_per_km": 0.236
+    },
+    {
      "date": "2026-11-07",
-     "c_per_km": 0.213
+     "c_per_km": 0.211
     },
     {
      "date": "2026-11-08",
-     "c_per_km": 0.198
+     "c_per_km": 0.199
+    },
+    {
+     "date": "2026-11-09",
+     "c_per_km": 0.233
     }
    ],
    "chl": 0.13,
@@ -11231,7 +11243,7 @@
      "label": "Wed",
      "wind_max_kt": 9,
      "wind_dir": "NW",
-     "hs_max_ft": 5.9,
+     "hs_max_ft": 6.0,
      "tp_s": 14
     },
     {
@@ -11247,7 +11259,7 @@
      "label": "Fri",
      "wind_max_kt": 13,
      "wind_dir": "W",
-     "hs_max_ft": 9.9,
+     "hs_max_ft": 8.2,
      "tp_s": 14
     }
    ],
@@ -11257,7 +11269,7 @@
     "Yellowtail",
     "Striped marlin"
    ],
-   "vs_normal_f": 6.4,
+   "vs_normal_f": 6.5,
    "normal_f": 62.9,
    "normal_label": "Nov average, 1991-2020"
   },
@@ -11279,68 +11291,53 @@
    },
    "temp_series": [
     {
-     "date": "2026-11-02",
-     "temp_f": 74.8,
-     "coverage": 1.0
-    },
-    {
      "date": "2026-11-03",
-     "temp_f": 74.9,
+     "temp_f": 76.1,
      "coverage": 1.0
     },
     {
      "date": "2026-11-04",
-     "temp_f": 74.9,
+     "temp_f": 76.2,
      "coverage": 1.0
     },
     {
      "date": "2026-11-05",
-     "temp_f": 75.0,
+     "temp_f": 76.3,
      "coverage": 1.0
     },
     {
      "date": "2026-11-06",
-     "temp_f": 75.2,
+     "temp_f": 76.5,
      "coverage": 1.0
     },
     {
      "date": "2026-11-07",
-     "temp_f": 75.3,
+     "temp_f": 76.5,
      "coverage": 1.0
     },
     {
      "date": "2026-11-08",
-     "temp_f": 75.4,
+     "temp_f": 76.6,
+     "coverage": 1.0
+    },
+    {
+     "date": "2026-11-09",
+     "temp_f": 76.4,
      "coverage": 1.0
     }
    ],
-   "temp_f": 75.4,
-   "temp_change_f": 0.6,
+   "temp_f": 76.4,
+   "temp_change_f": 0.3,
    "temp_days": 6,
-   "break": {
-    "km": 1.9,
-    "nm": 1.0,
-    "direction": "E",
-    "step_f": 0.8,
-    "over_nm": 4.3,
-    "warm_side": "SW",
-    "grad_c_per_km": 0.072,
-    "lat": 32.4088,
-    "lng": -117.3291,
-    "gps": "32 25 x 117 20"
-   },
+   "break": null,
    "break_series": [
     {
-     "date": "2026-11-02",
-     "c_per_km": 0.183
-    },
-    {
      "date": "2026-11-03",
-     "c_per_km": 0.105
+     "c_per_km": 0.108
     },
     {
      "date": "2026-11-04",
-     "c_per_km": 0.088
+     "c_per_km": 0.085
     },
     {
      "date": "2026-11-05",
@@ -11348,18 +11345,22 @@
     },
     {
      "date": "2026-11-06",
-     "c_per_km": 0.131
+     "c_per_km": 0.127
     },
     {
      "date": "2026-11-07",
-     "c_per_km": 0.109
+     "c_per_km": 0.104
     },
     {
      "date": "2026-11-08",
-     "c_per_km": 0.067
+     "c_per_km": 0.06
+    },
+    {
+     "date": "2026-11-09",
+     "c_per_km": 0.058
     }
    ],
-   "chl": 0.21,
+   "chl": 0.19,
    "chl_seen": 1.0,
    "paddy": null,
    "paddy_series": [
@@ -11495,7 +11496,7 @@
      "label": "Fri",
      "wind_max_kt": 12,
      "wind_dir": "SW",
-     "hs_max_ft": 6.3,
+     "hs_max_ft": 5.1,
      "tp_s": 15
     }
    ],
@@ -11505,7 +11506,7 @@
     "Striped marlin",
     "Wahoo"
    ],
-   "vs_normal_f": 11.2,
+   "vs_normal_f": 12.2,
    "normal_f": 64.2,
    "normal_label": "Nov average, 1991-2020"
   },
@@ -11527,87 +11528,87 @@
    },
    "temp_series": [
     {
-     "date": "2026-11-02",
-     "temp_f": 75.1,
-     "coverage": 1.0
-    },
-    {
      "date": "2026-11-03",
-     "temp_f": 75.4,
+     "temp_f": 76.6,
      "coverage": 1.0
     },
     {
      "date": "2026-11-04",
-     "temp_f": 75.2,
+     "temp_f": 76.5,
      "coverage": 1.0
     },
     {
      "date": "2026-11-05",
-     "temp_f": 75.3,
+     "temp_f": 76.5,
      "coverage": 1.0
     },
     {
      "date": "2026-11-06",
-     "temp_f": 75.5,
+     "temp_f": 76.7,
      "coverage": 1.0
     },
     {
      "date": "2026-11-07",
-     "temp_f": 75.5,
+     "temp_f": 76.8,
      "coverage": 1.0
     },
     {
      "date": "2026-11-08",
-     "temp_f": 75.5,
+     "temp_f": 76.7,
+     "coverage": 1.0
+    },
+    {
+     "date": "2026-11-09",
+     "temp_f": 76.4,
      "coverage": 1.0
     }
    ],
-   "temp_f": 75.5,
-   "temp_change_f": 0.4,
+   "temp_f": 76.4,
+   "temp_change_f": -0.2,
    "temp_days": 6,
    "break": {
-    "km": 2.9,
-    "nm": 1.6,
-    "direction": "NW",
-    "step_f": 0.9,
+    "km": 0.0,
+    "nm": 0.0,
+    "direction": "",
+    "step_f": 1.4,
     "over_nm": 4.3,
     "warm_side": "NE",
-    "grad_c_per_km": 0.069,
+    "grad_c_per_km": 0.099,
     "lat": 31.8699,
-    "lng": -117.8881,
-    "gps": "31 52 x 117 53"
+    "lng": -117.8482,
+    "gps": "31 52 x 117 51"
    },
    "break_series": [
     {
-     "date": "2026-11-02",
-     "c_per_km": 0.144
-    },
-    {
      "date": "2026-11-03",
-     "c_per_km": 0.077
+     "c_per_km": 0.083
     },
     {
      "date": "2026-11-04",
-     "c_per_km": 0.072
+     "c_per_km": 0.073
     },
     {
      "date": "2026-11-05",
-     "c_per_km": 0.087
+     "c_per_km": 0.089
     },
     {
      "date": "2026-11-06",
-     "c_per_km": 0.079
+     "c_per_km": 0.086
     },
     {
      "date": "2026-11-07",
-     "c_per_km": 0.063
+     "c_per_km": 0.052
     },
     {
      "date": "2026-11-08",
-     "c_per_km": 0.066
+     "c_per_km": 0.061
+    },
+    {
+     "date": "2026-11-09",
+     "c_per_km": 0.099
     }
    ],
-   "chl": 0.24,
+   "chl": 0.2,
    "chl_seen": 1.0,
    "paddy": null,
    "paddy_series": [
@@ -11727,7 +11728,7 @@
      "label": "Wed",
      "wind_max_kt": 13,
      "wind_dir": "NW",
-     "hs_max_ft": 4.8,
+     "hs_max_ft": 4.9,
      "tp_s": 13
     },
     {
@@ -11743,7 +11744,7 @@
      "label": "Fri",
      "wind_max_kt": 13,
      "wind_dir": "WSW",
-     "hs_max_ft": 8.2,
+     "hs_max_ft": 6.8,
      "tp_s": 14
     }
    ],
@@ -11753,7 +11754,7 @@
     "Striped marlin",
     "Wahoo"
    ],
-   "vs_normal_f": 11.1,
+   "vs_normal_f": 12.0,
    "normal_f": 64.4,
    "normal_label": "Nov average, 1991-2020"
   }
@@ -12715,7 +12716,7 @@
      },
      {
       "date": "2026-11-11",
-      "temp_f": 74.5,
+      "temp_f": 74.6,
       "wind_max_kt": 10,
       "wind_mean_kt": 6
      }
@@ -13124,8 +13125,8 @@
      {
       "date": "2026-11-11",
       "temp_f": 68.3,
-      "wave_ft": 8.8,
-      "wave_max_ft": 9.8,
+      "wave_ft": 8.9,
+      "wave_max_ft": 10.2,
       "period_s": 13,
       "wind_max_kt": 10,
       "wind_mean_kt": 5
@@ -13448,7 +13449,7 @@
       "date": "2026-11-11",
       "temp_f": 75.0,
       "wave_ft": 3.8,
-      "wave_max_ft": 4.3,
+      "wave_max_ft": 4.6,
       "period_s": 13
      }
     ]
@@ -14685,39 +14686,39 @@
   "field_reports_used": 0,
   "sites": {
    "la-jolla-cove": {
-    "ft": 12,
-    "lo_ft": 7,
-    "hi_ft": 21,
-    "raw_p50": 21.4,
+    "ft": 14,
+    "lo_ft": 8,
+    "hi_ft": 25,
+    "raw_p50": 25.2,
     "adjusted": true,
     "area": "la-jolla"
    },
    "la-jolla-shores": {
-    "ft": 12,
-    "lo_ft": 7,
-    "hi_ft": 21,
-    "raw_p50": 21.4,
+    "ft": 14,
+    "lo_ft": 8,
+    "hi_ft": 25,
+    "raw_p50": 25.2,
     "adjusted": true,
     "area": "la-jolla"
    },
    "point-loma-shore": {
-    "ft": 8,
+    "ft": 9,
     "lo_ft": 5,
-    "hi_ft": 15,
-    "raw_p50": 15.4,
+    "hi_ft": 16,
+    "raw_p50": 16.4,
     "adjusted": true,
     "area": "la-jolla"
    },
    "laguna": {
-    "ft": 9,
+    "ft": 10,
     "lo_ft": 6,
-    "hi_ft": 14,
-    "raw_p50": 31.5,
+    "hi_ft": 15,
+    "raw_p50": 34.6,
     "adjusted": true,
     "area": "laguna"
    }
   },
-  "valid_at": "2026-11-11T06:16:08Z",
+  "valid_at": "2026-11-11T18:14:10Z",
   "url": "/data/viz_p50_ft.png",
   "range_ft": [
    0.0,
@@ -14761,7 +14762,7 @@
       "label": "Fri",
       "wind_max_kt": 8,
       "wind_dir": "SSE",
-      "hs_max_ft": 2.3,
+      "hs_max_ft": 1.7,
       "tp_s": 16
      }
     ]
@@ -14790,7 +14791,7 @@
       "label": "Fri",
       "wind_max_kt": 10,
       "wind_dir": "SSW",
-      "hs_max_ft": 4.3,
+      "hs_max_ft": 3.2,
       "tp_s": 15
      }
     ]
@@ -14803,15 +14804,15 @@
       "label": "Wed",
       "wind_max_kt": 8,
       "wind_dir": "NNW",
-      "hs_max_ft": 2.6,
-      "tp_s": 14
+      "hs_max_ft": 2.8,
+      "tp_s": 13
      },
      {
       "date": "2026-11-12",
       "label": "Thu",
       "wind_max_kt": 10,
       "wind_dir": "WSW",
-      "hs_max_ft": 2.9,
+      "hs_max_ft": 2.8,
       "tp_s": 13
      },
      {
@@ -14819,7 +14820,7 @@
       "label": "Fri",
       "wind_max_kt": 11,
       "wind_dir": "W",
-      "hs_max_ft": 5.1,
+      "hs_max_ft": 4.0,
       "tp_s": 15
      }
     ]
@@ -14848,7 +14849,7 @@
       "label": "Fri",
       "wind_max_kt": 12,
       "wind_dir": "SW",
-      "hs_max_ft": 6.3,
+      "hs_max_ft": 5.1,
       "tp_s": 15
      }
     ]
@@ -14877,8 +14878,8 @@
       "label": "Fri",
       "wind_max_kt": 9,
       "wind_dir": "WSW",
-      "hs_max_ft": 3.4,
-      "tp_s": 15
+      "hs_max_ft": 2.5,
+      "tp_s": 16
      }
     ]
    },
@@ -14890,7 +14891,7 @@
       "label": "Wed",
       "wind_max_kt": 11,
       "wind_dir": "NW",
-      "hs_max_ft": 3.1,
+      "hs_max_ft": 3.2,
       "tp_s": 13
      },
      {
@@ -14906,7 +14907,7 @@
       "label": "Fri",
       "wind_max_kt": 10,
       "wind_dir": "SW",
-      "hs_max_ft": 6.0,
+      "hs_max_ft": 4.6,
       "tp_s": 14
      }
     ]
@@ -14919,7 +14920,7 @@
       "label": "Wed",
       "wind_max_kt": 9,
       "wind_dir": "NW",
-      "hs_max_ft": 5.9,
+      "hs_max_ft": 6.0,
       "tp_s": 14
      },
      {
@@ -14935,7 +14936,7 @@
       "label": "Fri",
       "wind_max_kt": 13,
       "wind_dir": "W",
-      "hs_max_ft": 9.9,
+      "hs_max_ft": 8.2,
       "tp_s": 14
      }
     ]
@@ -14944,15 +14945,15 @@
   "wind_now": [
    {
     "name": "San Clemente Basin",
-    "kt": 4,
+    "kt": 2,
     "gust_kt": 4,
-    "observed": "9:20 AM"
+    "observed": "10:40 AM"
    },
    {
     "name": "Tanner Bank",
-    "kt": 6,
-    "gust_kt": 8,
-    "observed": "9:20 AM"
+    "kt": 8,
+    "gust_kt": 10,
+    "observed": "10:40 AM"
    }
   ]
  },
@@ -14968,8 +14969,8 @@
     {
      "date": "2026-11-11",
      "label": "Wed",
-     "hs_ft": 2.4,
-     "sets_ft": 3.1,
+     "hs_ft": 2.5,
+     "sets_ft": 3.2,
      "tp_s": 12,
      "dp_deg": 330
     },
@@ -14984,16 +14985,16 @@
     {
      "date": "2026-11-13",
      "label": "Fri",
-     "hs_ft": 4.4,
-     "sets_ft": 5.6,
+     "hs_ft": 4.0,
+     "sets_ft": 5.1,
      "tp_s": 12,
      "dp_deg": 329
     },
     {
      "date": "2026-11-14",
      "label": "Sat",
-     "hs_ft": 4.8,
-     "sets_ft": 6.1,
+     "hs_ft": 4.4,
+     "sets_ft": 5.6,
      "tp_s": 17,
      "dp_deg": 328
     }
@@ -15189,15 +15190,15 @@
     "site": "La Jolla Cove",
     "depth_ft": 33,
     "buoy": "46254",
-    "u_m_s": 0.39,
+    "u_m_s": 0.41,
     "u_ft_s": 1.3,
     "level": "strong"
    },
    "vis_pred": {
-    "ft": 12,
-    "lo_ft": 7,
-    "hi_ft": 21,
-    "raw_p50": 21.4,
+    "ft": 14,
+    "lo_ft": 8,
+    "hi_ft": 25,
+    "raw_p50": 25.2,
     "adjusted": true,
     "area": "la-jolla"
    }
@@ -15229,17 +15230,17 @@
     {
      "date": "2026-11-13",
      "label": "Fri",
-     "hs_ft": 1.4,
-     "sets_ft": 1.8,
+     "hs_ft": 0.9,
+     "sets_ft": 1.1,
      "tp_s": 12,
      "dp_deg": 271
     },
     {
      "date": "2026-11-14",
      "label": "Sat",
-     "hs_ft": 2.1,
-     "sets_ft": 2.7,
-     "tp_s": 6,
+     "hs_ft": 1.4,
+     "sets_ft": 1.8,
+     "tp_s": 12,
      "dp_deg": 271
     }
    ],
@@ -15434,15 +15435,15 @@
     "site": "La Jolla Cove",
     "depth_ft": 33,
     "buoy": "46254",
-    "u_m_s": 0.39,
+    "u_m_s": 0.41,
     "u_ft_s": 1.3,
     "level": "strong"
    },
    "vis_pred": {
-    "ft": 12,
-    "lo_ft": 7,
-    "hi_ft": 21,
-    "raw_p50": 21.4,
+    "ft": 14,
+    "lo_ft": 8,
+    "hi_ft": 25,
+    "raw_p50": 25.2,
     "adjusted": true,
     "area": "la-jolla"
    }
@@ -15459,31 +15460,31 @@
      "date": "2026-11-11",
      "label": "Wed",
      "hs_ft": 3.4,
-     "sets_ft": 4.3,
+     "sets_ft": 4.4,
      "tp_s": 13,
      "dp_deg": 274
     },
     {
      "date": "2026-11-12",
      "label": "Thu",
-     "hs_ft": 3.3,
-     "sets_ft": 4.2,
+     "hs_ft": 3.2,
+     "sets_ft": 4.1,
      "tp_s": 13,
-     "dp_deg": 272
+     "dp_deg": 271
     },
     {
      "date": "2026-11-13",
      "label": "Fri",
-     "hs_ft": 5.9,
-     "sets_ft": 7.5,
+     "hs_ft": 5.4,
+     "sets_ft": 6.8,
      "tp_s": 14,
      "dp_deg": 273
     },
     {
      "date": "2026-11-14",
      "label": "Sat",
-     "hs_ft": 6.3,
-     "sets_ft": 7.9,
+     "hs_ft": 5.7,
+     "sets_ft": 7.2,
      "tp_s": 17,
      "dp_deg": 268
     }
@@ -15580,15 +15581,15 @@
     "site": "Point Loma kelp",
     "depth_ft": 49,
     "buoy": "46232",
-    "u_m_s": 0.47,
-    "u_ft_s": 1.5,
+    "u_m_s": 0.53,
+    "u_ft_s": 1.7,
     "level": "strong"
    },
    "vis_pred": {
-    "ft": 8,
+    "ft": 9,
     "lo_ft": 5,
-    "hi_ft": 15,
-    "raw_p50": 15.4,
+    "hi_ft": 16,
+    "raw_p50": 16.4,
     "adjusted": true,
     "area": "la-jolla"
    }
@@ -15615,23 +15616,23 @@
      "hs_ft": 1.9,
      "sets_ft": 2.4,
      "tp_s": 13,
-     "dp_deg": 204
+     "dp_deg": 205
     },
     {
      "date": "2026-11-13",
      "label": "Fri",
-     "hs_ft": 2.4,
-     "sets_ft": 3.1,
+     "hs_ft": 2.3,
+     "sets_ft": 2.9,
      "tp_s": 15,
      "dp_deg": 205
     },
     {
      "date": "2026-11-14",
      "label": "Sat",
-     "hs_ft": 3.4,
-     "sets_ft": 4.3,
-     "tp_s": 14,
-     "dp_deg": 203
+     "hs_ft": 2.9,
+     "sets_ft": 3.7,
+     "tp_s": 17,
+     "dp_deg": 209
     }
    ],
    "vis": [],
@@ -15726,15 +15727,15 @@
     "site": "Laguna Beach coves",
     "depth_ft": 33,
     "buoy": "46253",
-    "u_m_s": 0.48,
-    "u_ft_s": 1.6,
+    "u_m_s": 0.6,
+    "u_ft_s": 2.0,
     "level": "strong"
    },
    "vis_pred": {
-    "ft": 9,
+    "ft": 10,
     "lo_ft": 6,
-    "hi_ft": 14,
-    "raw_p50": 31.5,
+    "hi_ft": 15,
+    "raw_p50": 34.6,
     "adjusted": true,
     "area": "laguna"
    }
@@ -18209,21 +18210,21 @@
  },
  "highlights": {
   "fishing": [
-   "Since Nov 2, water warmed in 6 zones and cooled in 2; the biggest move was San Clemente Is. (+2.9°F). Warmest: Rockpile / Upper 500 at 75.5°F; coolest: Tanner / Cortes at 69.3°F.",
-   "Strongest offshore break: Tanner / Cortes, 2.4°F over 4.3 nm at 32 53 x 118 50, warm side NE. It has held steady over the last three map days.",
+   "Since Nov 3, water warmed in 4 zones and cooled in 0; the biggest move was San Clemente Is. (+2.9°F). Warmest: South 9 / 302 / 425 at 76.4°F; coolest: Tanner / Cortes at 69.4°F.",
+   "Strongest offshore break: Tanner / Cortes, 2.9°F over 4.3 nm at 32 44 x 118 40, warm side E. It has held steady over the last three map days.",
    "The paddy drift model's core regions sit in San Clemente Is..",
    "AIS-tracked boats stopped longest in La Jolla to IB over the last three days (0.2 h). The same weeks last year, the fleet's stops concentrated at Tanner / Cortes (150 h), 14 Mile / Avalon Bank (41 h) and Catalina (14 h).",
    "Our model's windiest daytime spot in the next days: Tanner / Cortes, W 13 kt on Fri.",
    "El Niño: weekly Niño-3.4 anomaly +3.3°C, from +3.2°C four weeks earlier."
   ],
   "diving": [
-   "Predicted visibility today: La Jolla Cove about 12 ft (7-21); La Jolla Shores about 12 ft (7-21); Point Loma and Sunset Cliffs about 8 ft (5-15); Laguna Beach about 9 ft (6-14). Our model's number, scaled to where recent shop reports landed: La Jolla x0.55 from 44 reports; Laguna Beach x0.30 from 18 reports.",
+   "Predicted visibility today: La Jolla Cove about 14 ft (8-25); La Jolla Shores about 14 ft (8-25); Point Loma and Sunset Cliffs about 9 ft (5-16); Laguna Beach about 10 ft (6-15). Our model's number, scaled to where recent shop reports landed: La Jolla x0.55 from 44 reports; Laguna Beach x0.30 from 18 reports.",
    "Just Get Wet (La Jolla) visibility posts: 10-15 ft on Nov 9, against 10-15 ft on Nov 1.",
    "Water at the La Jolla nearshore buoy: 75.3°F, -0.4°F over a week and +1.4°F since Sep 28.",
-   "Set height at the entries (CDIP model): La Jolla Cove Wed 3 ft, Thu 3 ft, Fri 6 ft; La Jolla Shores Wed 1 ft, Thu under 1 ft, Fri 2 ft; Point Loma and Sunset Cliffs Wed 4 ft, Thu 4 ft, Fri 8 ft.",
+   "Set height at the entries (CDIP model): La Jolla Cove Wed 3 ft, Thu 3 ft, Fri 5 ft; La Jolla Shores Wed 1 ft, Thu under 1 ft, Fri 1 ft; Point Loma and Sunset Cliffs Wed 4 ft, Thu 4 ft, Fri 7 ft.",
    "Offshore water column (Spray gliders, nearest each day): the warm top layer reached 187 ft on Nov 10, against 213 ft on Nov 5; 74.2°F at 60 ft.",
-   "White seabass: Surface water is 75°F, above the 55-61°F the tagged fish used; offshore, the nearest glider puts the thermocline about 220 ft down, and the cooler water they favored sits below it.",
-   "Yellowtail (islands and kelp): Surface water is 75°F; San Diego catch rates have fallen above 69°F in fleet data."
+   "White seabass: Surface water is 76°F, above the 55-61°F the tagged fish used; offshore, the nearest glider puts the thermocline about 220 ft down, and the cooler water they favored sits below it.",
+   "Yellowtail (islands and kelp): Surface water is 76°F; San Diego catch rates have fallen above 69°F in fleet data."
   ]
  }
 }
