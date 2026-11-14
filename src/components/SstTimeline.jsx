@@ -6,7 +6,7 @@ import {
   getSstHistoryStats,
   getSstHistorySummary,
 } from "../lib/dataSource.js";
-import { findTodayDay } from "../lib/today.js";
+import { findTodayDay, summaryTzToday } from "../lib/today.js";
 import { useTimelineDrag } from "./useTimelineDrag.js";
 
 function fmtDay(iso) {
@@ -179,17 +179,23 @@ export default function SstTimeline({ sel, setSel, units, mode = "history" }) {
       ? day.mean - prev.mean
       : null;
 
+  // Label the cell that is today (in the summary's own tz) "Today", the
+  // way the wind / current / closures strips do, so the user can see at
+  // a glance that the window opens on current conditions and which
+  // cells are hindcast vs forecast.
+  const todayIso = summaryTzToday(summary);
   const dayCells = days.map((d, i) => {
     const left = (i / numDays) * 100;
     const width = 100 / numDays;
+    const isToday = d.date === todayIso;
     return (
       <div
         key={effectiveSlot(d, i)}
-        className={`tl-day-cell ${i % 2 === 0 ? "even" : "odd"} conf-${d.confidence || "high"}`}
+        className={`tl-day-cell ${i % 2 === 0 ? "even" : "odd"} conf-${d.confidence || "high"}${isToday ? " today" : ""}`}
         style={{ left: `${left}%`, width: `${width}%` }}
       >
         <span className="tl-day-label">
-          {fmtWeekday(d.date)} {fmtDay(d.date)}
+          {isToday ? "Today" : fmtWeekday(d.date)} {fmtDay(d.date)}
         </span>
       </div>
     );
