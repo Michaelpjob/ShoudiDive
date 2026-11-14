@@ -288,6 +288,72 @@ def check_generated_at(manifest: dict) -> list[Finding]:
 SST_MIN_ACTIVE_ANCHORS = 1
 
 
+# chl sources the app actually SHOWS. The observed-only gate
+# (src/lib/scalarPng.js) blanks every cell owned by a gap-filled product
+# (DINEOF 4/5, GlobColour 6), so only direct retrievals — NASA OB.DAAC L3m
+# (1-3) and raw VIIRS (7) — ever paint. When none of them own a cell the
+# chl map is BLANK in the app while the manifest still reads 60% coverage,
+# 1-day-old data: healthy-looking, and invisible to every other check.
+CHL_DIRECT_SOURCE_PRIORITIES = {1, 2, 3, 7}
+
+
+def check_chl_provenance(manifest: dict) -> list[Finding]:
+    """chl-specific integrity: are there any direct satellite retrievals
+    in the blend, and did NASA reject the token?
+
+    Both leave chl_1d.png decodable and fresh-dated; only the per-source
+    stats in the manifest (``windows.1d.sources``) and the blender's
+    ``nasa_auth_failed`` flag surface them.
+    """
+    out: list[Finding] = []
+    layers = manifest.get("layers") or {}
+    chl = layers.get("chl")
+    if not isinstance(chl, dict):
+        return out
+
+    if chl.get("nasa_auth_failed"):
+        out.append(Finding(
+            severity="high",
+            code="chl_nasa_auth_failed",
+            title="NASA OB.DAAC rejected EARTHDATA_TOKEN — chl direct observations offline",
+            detail=(
+                "Every NASA chl download in the last refresh came back as the Earthdata "
+                "login page. Earthdata Login user tokens expire 60 days after generation. "
+                "Regenerate at https://urs.earthdata.nasa.gov (profile → Generate Token), "
+                "then `gh secret set EARTHDATA_TOKEN`; the next refresh picks it up."
+            ),
+            layer="chl",
+        ))
+
+    win = (chl.get("windows") or {}).get("1d") or {}
+    sources = win.get("sources") or {}
+    if isinstance(sources, dict) and sources:
+        direct = {
+            sid: st for sid, st in sources.items()
+            if isinstance(st, dict) and int(st.get("priority") or 0) in CHL_DIRECT_SOURCE_PRIORITIES
+        }
+        direct_owned = sum(int(st.get("cells_owned") or 0) for st in direct.values())
+        if direct_owned == 0:
+            roster = ", ".join(
+                f"{sid} (p{st.get('priority')}, {st.get('cells_owned', 0)} cells, "
+                f"{st.get('age_days', '?')}d)"
+                for sid, st in sorted(sources.items(), key=lambda kv: kv[1].get("priority", 99))
+                if isinstance(st, dict)
+            )
+            out.append(Finding(
+                severity="high",
+                code="chl_no_direct_observation",
+                title="chl blend has no direct satellite retrievals — the app's chl map is blank",
+                detail=(
+                    "No source with priority 1-3 (NASA OB.DAAC) or 7 (raw VIIRS) owns a cell, "
+                    "so the observed-only chl view has nothing to paint (gap-fill is hidden by "
+                    f"design). 1d sources: {roster or 'none'}."
+                ),
+                layer="chl",
+            ))
+    return out
+
+
 def check_sst_health(manifest: dict) -> list[Finding]:
     """SST-specific integrity the generic per-layer PNG probe can't see.
 
@@ -725,6 +791,7 @@ def main() -> int:
     else:
         findings.extend(check_generated_at(manifest))
         findings.extend(check_sst_health(manifest))
+        findings.extend(check_chl_provenance(manifest))
         layer_findings, layer_stats = check_layers(manifest)
         findings.extend(layer_findings)
     findings.extend(check_closures())
