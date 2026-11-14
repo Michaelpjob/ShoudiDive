@@ -17,10 +17,11 @@ var CONV_BOATS=3;          // "fleet piled in" = this many boats in one cell on 
    treaty), then OP-1..OP-4 of the 1978 Treaty on Maritime Boundaries (UN
    DOALOS text). Degrees from the treaty's D-M-S. */
 var MX_BORDER=[[32.5344,-117.1249],[32.58948,-117.46373],[32.62694,-117.82528],[31.13278,-118.60500],[30.54200,-121.86621]];
-var D,map,hexLayer,stopLayer,portLayer,borderLayer,structLayer,spotLayer,liveLayer,trackLayer,pathLayer,wpMarker,coordbox,LIVE=null,TRACKS=null,PATHS={},STOPWEEK=[],WEEKIDX={},MMSI_IDX={};
-/* w0..w1 = inclusive week window (indices into D.weeks); both -1 = whole period */
-var S={w0:-1,w1:-1,metric:'fish',boat:'all',kind:'all',nearshore:false,cell:null,trip:null,playing:null,pick:false,view:'',shadows:true,mon:'all'};
-var LAST_AGG={};
+var D,map,hexLayer,stopLayer,portLayer,borderLayer,structLayer,spotLayer,liveLayer,trackLayer,pathLayer,vesselLayer,wpMarker,coordbox,LIVE=null,TRACKS=null,PATHS={},STOPWEEK=[],WEEKIDX={},MMSI_IDX={};
+/* w0..w1 = inclusive week window (indices into D.weeks); both -1 = whole period.
+   vessel = a 9-digit MMSI from Find (any boat with AIS, fleet or not), vhrs = its track window */
+var S={w0:-1,w1:-1,metric:'fish',boat:'all',kind:'all',nearshore:false,cell:null,trip:null,playing:null,pick:false,view:'',shadows:true,mon:'all',vessel:null,vhrs:48};
+var LAST_AGG={},LAST_VMAX=1;   // the ramp top from the last draw(), so legend refreshes keep its scale
 
 function isMobile(){return window.innerWidth<=760;}
 function fmtDate(s){var d=new Date(s+'T12:00:00Z');return d.toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'});}
@@ -57,6 +58,7 @@ function stateToHash(){var p=[];
  if(S.cell)p.push('cell='+S.cell);
  if(S.trip)p.push('trip='+D.boats[S.trip[0]].mmsi+'.'+S.trip[1]);
  if(S.view==='live')p.push('view=live');
+ if(S.vessel){p.push('vessel='+S.vessel);if(S.vhrs!==48)p.push('hrs='+S.vhrs);}
  return p.length?'#'+p.join('&'):'';}
 function readHash(){var h=location.hash.replace(/^#/,''),q={};
  h.split('&').forEach(function(kv){if(!kv)return;var i=kv.indexOf('=');q[decodeURIComponent(kv.slice(0,i))]=decodeURIComponent(kv.slice(i+1));});
@@ -70,6 +72,9 @@ function readHash(){var h=location.hash.replace(/^#/,''),q={};
  S.nearshore=q.neardock==='1';
  S.cell=(q.cell&&D.cells[q.cell])?q.cell:null;
  S.view=q.view==='live'?'live':'';
+ S.vessel=/^\d{9}$/.test(q.vessel||'')?q.vessel:null;
+ S.vhrs=VHRS.some(function(o){return o[0]===+q.hrs;})?+q.hrs:48;
+ if(S.vessel)S._fitVessel=true;
  S.trip=null;
  if(q.trip){var t=q.trip.split('.');if(MMSI_IDX[t[0]]!=null&&isSingleBoat()&&+S.boat===MMSI_IDX[t[0]])S.trip=[MMSI_IDX[t[0]],+t[1]];}}
 function commit(){var h=stateToHash();if(h!==location.hash&&!(h===''&&location.hash==='')){history.pushState(null,'',location.pathname+location.search+h);}
@@ -118,6 +123,7 @@ function draw(){
  vals.sort(function(a,b){return a-b;});
  var vmax=vals.length?vals[Math.floor((vals.length-1)*0.97)]:1;  // clip the top 3% so one mega-cell doesn't flatten the ramp
  if(vmax<=0)vmax=1;
+ LAST_VMAX=vmax;
  var n=0;
  Object.keys(A).forEach(function(h){var c=A[h],v=metricOf(c,h);if(v<=0||!D.cells[h])return;n++;
   var t=S.metric==='fish'?Math.sqrt(v/vmax):v/vmax;
@@ -126,7 +132,7 @@ function draw(){
   poly.on('click',function(e){if(S.pick){dropWp(e.latlng);return;}S.cell=(S.cell===h)?null:h;if(isMobile())openSheet(!!S.cell);commit();});
   poly.on('contextmenu',function(e){dropWp(e.latlng);});
   poly.addTo(hexLayer);});
- drawStops();drawPaths();
+ drawStops();drawPaths();drawVessel();
  document.getElementById('legend').innerHTML=legendHtml(vmax,n);placeReadout();renderMe();
  if(S.cell&&!A[S.cell])S.cell=null;
  renderPanel(A,n);}
@@ -148,6 +154,7 @@ function legendHtml(vmax,n){var steps=[0,.25,.5,.75,1];var f=S.metric==='fish'?f
  else if(map.getZoom()<10&&!isSingleBoat())html+='<div class="mobhide">Each cell ≈ 1.4 km across. Zoom in to see individual stops.</div>';
  else html+='<div class="mobhide">Dots are individual stops: white = drifting/anchored, blue = trolling. Bigger = longer.</div>';
  html+='<div class="mobhide"><span class="ln"></span>US / Mexico maritime boundary · AIS coverage ends well before it</div>';
+ if(S.vessel)html+='<div><span class="vln"></span><b>'+esc(vesselTitle())+'</b>, last '+vhrsLabel()+' · dots = stops</div>';
  if(map.hasLayer(liveLayer))html+=liveSummary();
  return html;}
 
@@ -253,7 +260,7 @@ function drawLive(){if(!liveLayer)return;liveLayer.clearLayers();if(!LIVE||!LIVE
   m.bindTooltip(esc(boat.name)+(st.moving?' · '+(b.sog||0).toFixed(0)+' kt':''),{className:'lv-lbl'+(st.state==='dock'?' dock':''),direction:'right',offset:[12,0],permanent:showLbl,interactive:false});
   m.addTo(liveLayer);});}
 function fetchLive(){fetch(LIVE_URL,{cache:'no-cache'}).then(function(r){return r.ok?r.json():null;}).then(function(j){
-  if(!j)return;LIVE=j;drawLive();var lg=document.getElementById('legend');if(lg)lg.innerHTML=legendHtml(1,Object.keys(LAST_AGG).length);placeReadout();renderMe();if(S.view==='live')renderPanel(LAST_AGG,Object.keys(LAST_AGG).length);}).catch(function(){});}
+  if(!j)return;LIVE=j;drawLive();var lg=document.getElementById('legend');if(lg)lg.innerHTML=legendHtml(LAST_VMAX,Object.keys(LAST_AGG).length);placeReadout();renderMe();if(S.view==='live')renderPanel(LAST_AGG,Object.keys(LAST_AGG).length);}).catch(function(){});}
 function liveCounts(){var c={under:0,dock:0,sea:0,n:0,fresh:0,list:[]};if(!LIVE||!LIVE.boats)return c;
  LIVE.boats.forEach(function(b){var bi=MMSI_IDX[String(b.mmsi)];if(bi==null)return;var st=liveStatus(b);c.n++;if(st.fresh)c.fresh++;
   if(st.state==='underway')c.under++;else if(st.state==='dock')c.dock++;else c.sea++;c.list.push({b:b,bi:bi,st:st});});
@@ -327,6 +334,126 @@ function fetchTracks(){fetch(TRACKS_URL,{cache:'no-cache'}).then(function(r){ret
 function tripDep(mmsi){if(!TRACKS||!TRACKS.boats)return null;var b=null;TRACKS.boats.forEach(function(x){if(x.mmsi===mmsi)b=x;});if(!b||b.pts.length<2)return null;
  var k=tripStart(b.pts);if(k>=b.pts.length-1)return null;return {dep:b.pts[Math.max(0,k)][0],sinceOnly:k<0,pts:b.pts.length-Math.max(0,k),dist:b.pts.slice(Math.max(0,k)).reduce(function(a,p,i,arr){return i?a+distNm([arr[i-1][1],arr[i-1][2]],[p[1],p[2]]):0;},0)};}
 
+/* ---------- Find: any boat the receivers hear, fleet or not ----------
+   The logger keeps every hull in the SoCal box, thinned (one point per 2 min
+   under way, a heartbeat every 30 min stopped), on the fleet-any branch.
+   /api/fleet/vessels lists the hulls heard this week (name search),
+   /api/fleet/vessel returns one hull's track. */
+var VESSELS_URL='/api/fleet/vessels',VESSEL_URL='/api/fleet/vessel',VGAP_S=3900;   // longer than the 30-min heartbeat + a logger chunk gap = out of range
+var VHRS=[[24,'24 h'],[48,'2 days'],[168,'7 days']],VINDEX=null,VINDEX_AT=0,VESSEL={},FIND_LAST=[];
+function vhrsLabel(){var o=VHRS.filter(function(x){return x[0]===S.vhrs;})[0];return o?o[1]:S.vhrs+' h';}
+function aisType(t){t=+t;if(!t)return '';
+ if(t===30)return 'fishing';if(t===31||t===32)return 'towing';if(t===33)return 'dredging';if(t===34)return 'dive ops';if(t===35)return 'military';
+ if(t===36)return 'sailing';if(t===37)return 'pleasure craft';if(t>=40&&t<50)return 'high-speed craft';if(t===50)return 'pilot';if(t===51)return 'search and rescue';
+ if(t===52)return 'tug';if(t===53)return 'port tender';if(t===55)return 'law enforcement';if(t===58)return 'medical';
+ if(t>=60&&t<70)return 'passenger';if(t>=70&&t<80)return 'cargo';if(t>=80&&t<90)return 'tanker';return 'other';}
+function ft(m){return Math.round(m*3.28084)+' ft';}
+function fetchIndex(){if(VINDEX_AT&&Date.now()-VINDEX_AT<300000)return;VINDEX_AT=Date.now();
+ fetch(VESSELS_URL,{cache:'no-cache'}).then(function(r){return r.ok?r.json():null;}).then(function(j){if(j){VINDEX=j;renderFind();}}).catch(function(){VINDEX_AT=0;});}
+function findMatches(q){q=q.trim().toLowerCase();if(!q)return [];
+ var digits=/^\d+$/.test(q),fleet=[],heard=[],seen={};
+ var hit=function(mmsi,name){return digits?String(mmsi).indexOf(q)===0:(name||'').toLowerCase().indexOf(q)>=0;};
+ var rank=function(a,b){var pa=a.name.toLowerCase().indexOf(q)===0,pb=b.name.toLowerCase().indexOf(q)===0;return pa===pb?0:pa?-1:1;};
+ D.boats.forEach(function(b,i){if(b.trips>0&&hit(b.mmsi,b.name)){seen[b.mmsi]=1;fleet.push({mmsi:String(b.mmsi),name:b.name,sub:short(b.landing)+' · fleet boat',bi:i});}});
+ if(VINDEX&&VINDEX.v)VINDEX.v.forEach(function(v){if(seen[v[0]]||!hit(v[0],v[1]))return;seen[v[0]]=1;
+  heard.push({mmsi:String(v[0]),name:v[1]||'MMSI '+v[0],sub:[aisType(v[3]),v[4]?ft(v[4]):'','heard '+ageText(Math.round((Date.now()-v[2]*1000)/60000))].filter(Boolean).join(' · ')});});
+ var out=fleet.sort(rank).concat(heard.sort(rank)).slice(0,10);
+ if(digits&&q.length===9&&!out.some(function(o){return o.mmsi===q;}))out.push({mmsi:q,name:'MMSI '+q,sub:'look up its track'});
+ return out;}
+function renderFind(){var fi=document.getElementById('find'),fr=document.getElementById('findres');if(!fi)return;
+ if(document.activeElement!==fi){fr.classList.remove('open');return;}
+ var q=fi.value.trim(),m=FIND_LAST=findMatches(q),html;
+ if(!q)html='<div class="fh">Type a boat\'s name or its 9-digit MMSI. Fleet boats come first; any other boat with AIS that the SoCal receivers heard this week is searchable too.</div>';
+ else if(!m.length)html='<div class="fh">'+(/^\d+$/.test(q)?'Keep typing: an MMSI has 9 digits.':'No boat by that name heard this week. Try its MMSI.')+(VINDEX?'':' Loading the list…')+'</div>';
+ else html=m.map(function(o,i){return '<div class="fr'+(i===0?' hi':'')+'" data-i="'+i+'"><b>'+esc(o.name)+'</b><span class="mut">'+esc(o.sub)+' · '+o.mmsi+'</span></div>';}).join('');
+ fr.innerHTML=html;fr.classList.add('open');}
+function closeFind(){var fi=document.getElementById('find');fi.value='';fi.blur();document.getElementById('findres').classList.remove('open');document.getElementById('bar').classList.remove('finding');}
+function pickFind(o){if(!o)return;closeFind();stopPlay();
+ S.cell=null;S.trip=null;S.view='';S.mon='all';
+ if(o.bi!=null){S.boat=String(o.bi);S.vessel=null;}   // fleet boats open their season history
+ else{S.boat='all';S.vessel=o.mmsi;S._fitVessel=true;}
+ if(isMobile())openSheet(true);
+ commit();}
+function vesselData(){if(!S.vessel)return null;var key=S.vessel+'|'+S.vhrs;if(VESSEL[key]===undefined){VESSEL[key]=null;fetchVessel(S.vessel,S.vhrs);}return VESSEL[key];}
+function fetchVessel(m,h){var key=m+'|'+h;
+ var done=function(j){VESSEL[key]=j||{mmsi:+m,info:null,pts:[],failed:true};if(S.vessel===m&&S.vhrs===h){drawVessel();renderPanel(LAST_AGG,Object.keys(LAST_AGG).length);
+  document.getElementById('legend').innerHTML=legendHtml(LAST_VMAX,Object.keys(LAST_AGG).length);placeReadout();}};
+ fetch(VESSEL_URL+'?mmsi='+m+'&hours='+h,{cache:'no-cache'}).then(function(r){return r.ok?r.json():null;}).then(done).catch(function(){done(null);});}
+function vesselTitle(){var j=S.vessel?VESSEL[S.vessel+'|'+S.vhrs]:null,bi=MMSI_IDX[S.vessel];
+ return (j&&j.info&&j.info.name)||(bi!=null?D.boats[bi].name:'MMSI '+S.vessel);}
+/* The newest fix: vessels.json carries the latest report even while the
+   thinned track is between heartbeats. */
+function vesselLast(j){var p=j.pts&&j.pts.length?j.pts[j.pts.length-1]:null,i=j.info;
+ if(i&&i.t&&i.lat!=null&&(!p||i.t>=p[0]))return {mmsi:j.mmsi,lat:i.lat,lon:i.lon,sog:i.sog,cog:i.cog,heading:i.heading,t:new Date(i.t*1000).toISOString()};
+ if(p)return {mmsi:j.mmsi,lat:p[1],lon:p[2],sog:p[3],cog:p[4],heading:null,t:new Date(p[0]*1000).toISOString()};
+ return null;}
+function vesselSegs(pts){var segs=[],cur=[];
+ pts.forEach(function(p,i){if(i&&p[0]-pts[i-1][0]>VGAP_S){segs.push(cur);cur=[];}cur.push(p);});
+ if(cur.length)segs.push(cur);return segs;}
+/* Stops, by the fleet model's drift rule (under drift_max_kt for
+   drift_min_min+): runs of points whose reported speed and the speed implied
+   between them are both under the limit. */
+function vesselStops(pts){var R=(D.meta&&D.meta.stop_rule)||{},kt=R.drift_max_kt||2,minMin=R.drift_min_min||10,out=[],run=null;
+ var slow=function(a,b){var dt=(b[0]-a[0])/3600;if(dt<=0||b[0]-a[0]>VGAP_S)return false;
+  return (a[3]==null||a[3]<kt)&&(b[3]==null||b[3]<kt)&&distNm([a[1],a[2]],[b[1],b[2]])/dt<kt;};
+ var close=function(){if(run&&(run.t1-run.t0)/60>=minMin)out.push({t0:run.t0,t1:run.t1,min:(run.t1-run.t0)/60,lat:run.la/run.n,lon:run.lo/run.n});run=null;};
+ for(var i=1;i<pts.length;i++){var a=pts[i-1],b=pts[i];
+  if(slow(a,b)){if(!run)run={t0:a[0],la:a[1],lo:a[2],n:1};run.t1=b[0];run.la+=b[1];run.lo+=b[2];run.n++;}else close();}
+ close();return out;}
+function vesselIcon(st){var rot=st.hdg!=null?st.hdg:0;
+ var html=st.moving
+  ?'<div class="lvwrap"><div class="lv big"><svg width="28" height="28" viewBox="0 0 28 28" style="transform:rotate('+rot+'deg)"><path d="M14 2 L23 25 L14 19.5 L5 25 Z" fill="#22d3ee" stroke="#083344" stroke-width="1.5"/></svg></div></div>'
+  :'<div class="lvwrap"><div class="lv"><svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="7" fill="#22d3ee" stroke="#083344" stroke-width="2"/></svg></div></div>';
+ return L.divIcon({className:'',html:html,iconSize:[28,28],iconAnchor:[14,14]});}
+function fitPad(){return {padding:[30,30],paddingTopLeft:[0,isMobile()?110:70],paddingBottomRight:[isMobile()?0:380,isMobile()?Math.round(window.innerHeight*0.5):0]};}
+function drawVessel(){if(!vesselLayer)return;vesselLayer.clearLayers();if(!S.vessel)return;
+ var j=vesselData();if(!j)return;
+ var pts=j.pts||[],name=vesselTitle(),segs=vesselSegs(pts),last=vesselLast(j);
+ for(var s=1;s<segs.length;s++){var a=segs[s-1][segs[s-1].length-1],b=segs[s][0];   // out of range: a faint join, not a track
+  L.polyline([[a[1],a[2]],[b[1],b[2]]],{color:'#67e8f9',weight:1.5,opacity:.45,dashArray:'2 6',interactive:true})
+   .bindTooltip('not heard for '+hrs((b[0]-a[0])/60),{className:'trk-lbl vs',sticky:true}).addTo(vesselLayer);}
+ segs.forEach(function(sg){if(sg.length<2)return;var ll=sg.map(function(p){return [p[1],p[2]];});
+  L.polyline(ll,{color:'#0b1220',weight:6,opacity:.55,interactive:false}).addTo(vesselLayer);
+  L.polyline(ll,{color:'#22d3ee',weight:3,opacity:.95,interactive:true}).bindTooltip(esc(name)+' · '+fmtTs(sg[0][0]*1000)+' to '+fmtTs(sg[sg.length-1][0]*1000),{className:'trk-lbl vs',sticky:true}).addTo(vesselLayer);});
+ var step=S.vhrs>48?10800:3600,next=pts.length?Math.ceil(pts[0][0]/step)*step:0;   // a tick every hour (3 h on the week view)
+ pts.forEach(function(p){if(p[0]<next)return;next=Math.floor(p[0]/step)*step+step;
+  L.marker([p[1],p[2]],{icon:L.divIcon({className:'',html:'<div class="trk-tick vs"></div>',iconSize:[7,7],iconAnchor:[3.5,3.5]}),zIndexOffset:800})
+   .bindTooltip(fmtTs(p[0]*1000)+((p[3]||0)>=1?' · '+p[3].toFixed(1)+' kt':' · stopped'),{className:'trk-lbl vs',direction:'top'}).addTo(vesselLayer);});
+ vesselStops(pts).forEach(function(st){
+  L.circleMarker([st.lat,st.lon],{radius:Math.max(3,Math.min(10,Math.sqrt(st.min/8))),weight:1.2,color:'#a5f3fc',fillColor:'#0e7490',fillOpacity:.65})
+   .bindTooltip('stopped '+hrs(st.min)+' · '+fmtTs(st.t0*1000)+' to '+fmtT(st.t1),{className:'trk-lbl vs',direction:'top'}).addTo(vesselLayer);});
+ if(last){var st=liveStatus(last);
+  if(st.moving&&st.hdg!=null)L.polyline([[last.lat,last.lon],destPoint(last.lat,last.lon,st.hdg,(last.sog||0)*(20/60))],{color:'#22d3ee',weight:2,opacity:.8,dashArray:'4 4',interactive:false}).addTo(vesselLayer);
+  L.marker([last.lat,last.lon],{icon:vesselIcon(st),zIndexOffset:1000})
+   .bindPopup('<div class="ref"><b>'+esc(name)+'</b><br/>'+esc(st.txt)+(st.where?' · '+esc(st.where):'')+'<br/><span class="mut">'+ageText(st.age)+' · '+last.t.replace('T',' ').slice(0,16)+' UTC</span></div>',{closeButton:false,maxWidth:260})
+   .bindTooltip(esc(name)+(st.moving?' · '+(last.sog||0).toFixed(0)+' kt':''),{className:'lv-lbl vs',direction:'right',offset:[12,0],permanent:true,interactive:false}).addTo(vesselLayer);}
+ if(S._fitVessel){S._fitVessel=false;
+  if(pts.length>1)map.fitBounds(pts.map(function(p){return [p[1],p[2]];}).concat(last?[[last.lat,last.lon]]:[]),Object.assign({maxZoom:12,animate:false},fitPad()));
+  else if(last)map.setView([last.lat,last.lon],11,{animate:false});}}
+function vesselPanel(){var m=S.vessel,j=vesselData(),bi=MMSI_IDX[m],nav='<button class="chip" data-act="fleet">‹ Fleet</button>';
+ var chips='<div class="vhrs">'+VHRS.map(function(o){return '<button class="chip'+(S.vhrs===o[0]?' on':'')+'" data-act="vhrs" data-h="'+o[0]+'">'+o[1]+'</button>';}).join('')+'</div>';
+ if(!j)return {nav:nav,title:'MMSI '+m,body:chips+'<div class="mut">Looking it up…</div>'};
+ var inf=j.info||{},name=vesselTitle(),pts=j.pts||[],last=vesselLast(j),since=j.logging_since?fmtDate(j.logging_since)+' '+j.logging_since.slice(0,4):'';
+ var html='<div class="mut">MMSI '+m+(inf.type?' · '+esc(aisType(inf.type)):'')+(inf.len?' · '+ft(inf.len):'')+(inf.callsign?' · call sign '+esc(inf.callsign):'')+(inf.dest?' · bound for '+esc(inf.dest):'')+'</div>';
+ if(bi!=null)html+='<div class="banner"><span>A fleet boat, with a season of trips on file.</span><button class="chip" data-act="boat" data-b="'+bi+'">Open its trips</button></div>';
+ html+=chips;
+ if(j.failed)html+='<div class="empty">The lookup failed. It retries every 3 minutes, or pick a window above to try now.</div>';
+ else if(!last)html+='<div class="empty">Not heard by the SoCal receivers in the last '+vhrsLabel()+'. The search covers every vessel with AIS from Point Conception to the border, out to roughly 30 to 50 nm'+(since?', logged since '+since:'')+'. Plenty of small boats carry no AIS or only switch it on now and then.</div>';
+ else{var st=liveStatus(last),f=_fmt({lat:last.lat,lng:last.lon}),segs=vesselSegs(pts),stops=vesselStops(pts),run=0,heard=0;
+  segs.forEach(function(sg){for(var i=1;i<sg.length;i++)run+=distNm([sg[i-1][1],sg[i-1][2]],[sg[i][1],sg[i][2]]);if(sg.length>1)heard+=sg[sg.length-1][0]-sg[0][0];});
+  html+='<div class="ans" style="border-left-color:#22d3ee"><div class="q">Last heard '+ageText(st.age)+' · '+fmtTs(last.t)+'</div><div class="a"><b>'+esc(st.txt)+'</b>'+(st.where?' · '+esc(st.where):'')
+   +'<br/><span class="mut">'+f.dd+' · '+f.dm+'</span><br/><button class="chip" data-act="vfly">Centre on it</button></div></div>'
+   +'<div class="stat"><span>Distance run, last '+vhrsLabel()+'</span><b>'+Math.round(run)+' nm</b></div>'
+   +'<div class="stat"><span>Time in receiver range</span><b>'+hrs(heard/60)+'</b></div>'
+   +'<div class="stat"><span>Stops (10+ min under '+((D.meta.stop_rule||{}).drift_max_kt||2)+' kt)</span><b>'+stops.length+'</b></div>';
+  if(stops.length){html+='<h4>Stops <span class="mut">· tap one to go there</span></h4><table><tr><th>Started</th><th class="n">How long</th><th>Where</th></tr>';
+   stops.map(function(x,i){return [x,i];}).reverse().forEach(function(x){var s=x[0],w=liveStatus({lat:s.lat,lon:s.lon,sog:0,t:new Date().toISOString()});
+    html+='<tr class="row" data-act="vstop" data-i="'+x[1]+'"><td>'+fmtTs(s.t0*1000)+'</td><td class="n">'+hrs(s.min)+'</td><td>'+esc(w.where)+'</td></tr>';});
+   html+='</table>';}}
+ html+='<div class="caveat"><b>Any boat with AIS.</b> Fleet or not, every vessel the SoCal shore receivers hear is logged'+(since?' (since '+since+')':'')+', thinned to a point every 2 minutes under way and every 30 minutes stopped. A faint dotted line means the boat went out of range (receivers fade 30 to 50 nm out), not that it sat still. Stops use the same rule as the fleet history. Refreshes every 3 minutes.</div>'
+  +'<div class="caveat"><a href="https://www.marinetraffic.com/en/ais/details/ships/mmsi:'+m+'" target="_blank" rel="noopener">This MMSI on MarineTraffic</a></div>';
+ return {nav:nav,title:esc(name)+(inf.type?' <span class="mut">· '+esc(aisType(inf.type))+'</span>':''),body:html};}
+
 /* ---------- "Me": the user's own live position ---------- */
 var ME={watch:null,marker:null,ring:null,ll:null,acc:null,follow:true,t:0};
 var toR=function(x){return x*Math.PI/180;},toD=function(x){return x*180/Math.PI;};
@@ -378,6 +505,7 @@ function renderPanel(A,n){var p=document.getElementById('panel');
  drawTracks();
  if(S.view==='live')r=livePanel();
  else if(S.cell&&A[S.cell])r=cellPanel(S.cell,A[S.cell]);
+ else if(S.vessel)r=vesselPanel();
  else if(isSingleBoat())r=boatPanel(boatIdx(),n);
  else r=fleetPanel(n);
  /* One shape for every view: a head (back button + title, plus a chevron on
@@ -390,13 +518,19 @@ function renderPanel(A,n){var p=document.getElementById('panel');
 function onPanelClick(e){var p=document.getElementById('panel');
  var el=e.target.closest('[data-act]');
  if(el){var act=el.getAttribute('data-act');
-  if(act==='fleet'){S.boat='all';S.cell=null;S.trip=null;S.view='';}
+  if(act==='fleet'){S.boat='all';S.cell=null;S.trip=null;S.view='';S.vessel=null;}
   else if(act==='flyto'){var fb=D.boats[+el.getAttribute('data-b')],hit=null;(LIVE&&LIVE.boats||[]).forEach(function(b){if(b.mmsi===fb.mmsi)hit=b;});
    if(hit){if(!map.hasLayer(liveLayer))liveLayer.addTo(map);map.setView([hit.lat,hit.lon],Math.max(map.getZoom(),11),{animate:false});liveLayer.eachLayer(function(l){if(l.getLatLng&&l.getPopup&&l.getLatLng().lat===hit.lat&&l.getLatLng().lng===hit.lon)l.openPopup();});if(isMobile())openSheet(false);}
    return;}
-  else if(act==='boat'){S.boat=el.getAttribute('data-b');S.cell=null;S.trip=null;S.view='';S.mon='all';}
+  else if(act==='boat'){S.boat=el.getAttribute('data-b');S.cell=null;S.trip=null;S.view='';S.mon='all';S.vessel=null;}
+  else if(act==='vhrs'){S.vhrs=+el.getAttribute('data-h');S._fitVessel=true;delete VESSEL[S.vessel+'|'+S.vhrs];}
+  else if(act==='vfly'||act==='vstop'){var vj=vesselData(),to=null;if(!vj)return;
+   if(act==='vfly'){var vl=vesselLast(vj);if(vl)to=[vl.lat,vl.lon];}
+   else{var vs=vesselStops(vj.pts||[])[+el.getAttribute('data-i')];if(vs)to=[vs.lat,vs.lon];}
+   if(to){map.setView(to,Math.max(map.getZoom(),12),{animate:false});if(isMobile())openSheet(false);}
+   return;}
   else if(act==='uncell'){S.cell=null;}
-  else if(act==='live'){S.view='live';if(!map.hasLayer(liveLayer))liveLayer.addTo(map);}
+  else if(act==='live'){S.view='live';S.vessel=null;if(!map.hasLayer(liveLayer))liveLayer.addTo(map);}
   else if(act==='trip'){var tid=+el.getAttribute('data-t'),bi=boatIdx();S.trip=(S.trip&&S.trip[1]===tid)?null:[bi,tid];S._fitTrip=!!S.trip;}
   else if(act==='alltrips'){S.trip=null;}
   else if(act==='weeks'){S.w0=S.w1=-1;}
@@ -412,6 +546,7 @@ function howTo(){var seen=isMobile();try{seen=seen||localStorage.getItem('sd:fle
   +'<li>Choose a window of weeks with the two week menus; <b>‹ ›</b> slide it, <b>Play</b> sweeps it through the season, <b>All weeks</b> brings back the whole period.</li>'
   +'<li>Tap any hexagon for who fished it and when. Zoom in to see individual stops. Purple and teal markers are named structure (banks, seamounts, reefs); the layers button at bottom right toggles them and the dive spots.</li>'
   +'<li><b>⌖ GPS</b> (or a right-click / long-press anywhere) drops a waypoint you can copy coordinates from. <b>● Me</b> shows your own live position with distance and bearing to the nearest fishing cell and boat.</li>'
+  +'<li><b>Find</b> (top bar) takes a boat\'s name or 9-digit MMSI. Fleet boats open their season of trips; any other boat with AIS that the SoCal receivers hear shows its track for the last day, two days or week.</li>'
   +'<li>The browser Back button undoes a selection.</li></ul></details>';}
 
 function fleetPanel(n){var m=D.meta,s=D.summary;
@@ -461,7 +596,7 @@ function cellPanel(h,c){var ctr=D.cells[h].c;
  var byBoat=Object.keys(c.byBoat).map(function(b){return [b,c.byBoat[b]];}).sort(function(a,b){return b[1]-a[1];});
  var days=Object.keys(c.days).sort();
  var k=D.cell_catch[h];
- var back=isSingleBoat()?'‹ '+esc(D.boats[boatIdx()].name):'‹ Fleet';
+ var back=S.vessel?'‹ '+esc(vesselTitle()):isSingleBoat()?'‹ '+esc(D.boats[boatIdx()].name):'‹ Fleet';
  var f=_fmt({lat:ctr[0],lng:ctr[1]});
  var html='<div class="mut">'+f.dd+' · '+f.dm+' · about 1.4 km across · '+weekLabel()+'</div>'
   +'<div class="stat"><span>Time stopped and fishing</span><b>'+hrs(c.fish)+(c.troll?' ('+Math.round(100*c.troll/c.fish)+'% trolling)':'')+'</b></div>'
@@ -503,7 +638,7 @@ function boot(d){D=d;
  L.marker(MX_BORDER[2],{interactive:false,icon:L.divIcon({className:'',html:'',iconSize:[0,0]})}).bindTooltip('US / Mexico maritime boundary',{permanent:true,direction:'right',offset:[8,0],className:'border-lbl'}).addTo(borderLayer);
  hexLayer=L.layerGroup().addTo(map);stopLayer=L.layerGroup().addTo(map);
  var prefs=refPrefs();
- structLayer=L.layerGroup();spotLayer=L.layerGroup();portLayer=L.layerGroup();liveLayer=L.layerGroup();pathLayer=L.layerGroup().addTo(map);trackLayer=L.layerGroup().addTo(map);
+ structLayer=L.layerGroup();spotLayer=L.layerGroup();portLayer=L.layerGroup();liveLayer=L.layerGroup();pathLayer=L.layerGroup().addTo(map);trackLayer=L.layerGroup().addTo(map);vesselLayer=L.layerGroup().addTo(map);
  if(prefs.live!==false)liveLayer.addTo(map);
  if(prefs.structure!==false)structLayer.addTo(map);
  if(prefs.spots===true)spotLayer.addTo(map);
@@ -511,13 +646,13 @@ function boot(d){D=d;
  drawReference();syncRefZoom();
  L.control.layers(null,{'Right now: live positions':liveLayer,'Structure: banks, seamounts, reefs':structLayer,'Dive spots':spotLayer,'Landings':portLayer},{position:'bottomright',collapsed:true}).addTo(map);
  fetchLive();setInterval(fetchLive,LIVE_EVERY_MS);
- setInterval(function(){if(S.view==='live')fetchTracks();},LIVE_EVERY_MS);
- map.on('overlayadd overlayremove',function(){document.getElementById('legend').innerHTML=legendHtml(1,Object.keys(LAST_AGG).length);placeReadout();});
+ setInterval(function(){if(S.view==='live')fetchTracks();if(S.vessel)fetchVessel(S.vessel,S.vhrs);},LIVE_EVERY_MS);
+ map.on('overlayadd overlayremove',function(){document.getElementById('legend').innerHTML=legendHtml(LAST_VMAX,Object.keys(LAST_AGG).length);placeReadout();});
  map.on('overlayadd overlayremove',saveRefPrefs);
  Object.keys(D.landings).forEach(function(n){var p=D.landings[n];
   L.circleMarker([p[0],p[1]],{radius:3,weight:1,color:'#fbbf24',fillColor:'#b45309',fillOpacity:.8}).bindTooltip(n,{className:'lbl',permanent:map.getZoom()>=9,direction:'right'}).addTo(portLayer);});
  map.on('zoomend',function(){syncRefZoom();portLayer.eachLayer(function(l){var t=l.getTooltip();if(t){t.options.permanent=map.getZoom()>=9;l.unbindTooltip().bindTooltip(t.getContent(),t.options);}});drawStops();
-  document.getElementById('legend').innerHTML=legendHtml(1,Object.keys(LAST_AGG).length);placeReadout();});
+  document.getElementById('legend').innerHTML=legendHtml(LAST_VMAX,Object.keys(LAST_AGG).length);placeReadout();});
  window.addEventListener('resize',placeReadout);
  coordbox=document.getElementById('coordbox');setReadout(map.getCenter());
  map.on('mousemove',function(e){setReadout(e.latlng);});
@@ -526,10 +661,10 @@ function boot(d){D=d;
  map.on('popupopen',wireCopy);
  var bar=document.getElementById('bar'),fb=document.getElementById('filt');
  var closeFilters=function(){bar.classList.remove('open');fb.setAttribute('aria-expanded','false');fb.innerHTML='Filters &#9662;';};
- fb.onclick=function(){var o=bar.classList.toggle('open');fb.setAttribute('aria-expanded',o?'true':'false');fb.innerHTML=o?'Filters &#9652;':'Filters &#9662;';if(o&&isMobile())openSheet(false);};
+ fb.onclick=function(){var o=bar.classList.toggle('open');if(o)closeFind();fb.setAttribute('aria-expanded',o?'true':'false');fb.innerHTML=o?'Filters &#9652;':'Filters &#9662;';if(o&&isMobile())openSheet(false);};
  document.getElementById('gps').onclick=function(){togglePick();if(isMobile())closeFilters();};
  document.getElementById('me').onclick=function(){toggleMe();if(isMobile())closeFilters();};
- document.getElementById('livebtn').onclick=function(){S.view=S.view==='live'?'':'live';if(S.view==='live'&&!map.hasLayer(liveLayer))liveLayer.addTo(map);if(isMobile())openSheet(S.view==='live');commit();};
+ document.getElementById('livebtn').onclick=function(){S.view=S.view==='live'?'':'live';if(S.view==='live'){S.vessel=null;if(!map.hasLayer(liveLayer))liveLayer.addTo(map);}if(isMobile())openSheet(S.view==='live');commit();};
  map.on('zoomend',drawLive);
  map.on('dragstart',function(){if(ME.watch!=null&&ME.follow){ME.follow=false;renderMe();}});
  /* week window: two selects (first / last week) */
@@ -552,7 +687,17 @@ function boot(d){D=d;
   Object.keys(ports[p]).sort().forEach(function(l){var o2=document.createElement('option');o2.value='L:'+l;o2.textContent='  '+short(l)+' (landing)';og.appendChild(o2);
    D.boats.forEach(function(b,i){if(b.landing===l&&b.trips>0){var o3=document.createElement('option');o3.value=String(i);o3.textContent='    '+b.name;og.appendChild(o3);}});});
   sel.appendChild(og);});
- sel.onchange=function(e){S.boat=e.target.value;S.cell=null;S.trip=null;S.mon='all';if(isMobile()){closeFilters();openSheet(isSingleBoat());}commit();};
+ sel.onchange=function(e){S.boat=e.target.value;S.cell=null;S.trip=null;S.mon='all';S.vessel=null;if(isMobile()){closeFilters();openSheet(isSingleBoat());}commit();};
+ /* Find: a dropdown under the box; Enter takes the top match. On phones the
+    box hides behind a Find chip, like the filters. */
+ var fi=document.getElementById('find'),fr=document.getElementById('findres');
+ fi.addEventListener('focus',function(){fetchIndex();renderFind();if(isMobile()){closeFilters();openSheet(false);}});
+ fi.addEventListener('input',renderFind);
+ fi.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();pickFind(findMatches(fi.value)[0]);}else if(e.key==='Escape')closeFind();});
+ fi.addEventListener('blur',function(){setTimeout(function(){if(document.activeElement!==fi)fr.classList.remove('open');},200);});
+ fr.addEventListener('mousedown',function(e){e.preventDefault();});   // keep focus so the click lands
+ fr.addEventListener('click',function(e){var el=e.target.closest('[data-i]');if(el)pickFind(FIND_LAST[+el.getAttribute('data-i')]);});
+ document.getElementById('findbtn').onclick=function(){if(bar.classList.toggle('finding')){closeFilters();fi.focus();}else closeFind();};
  window.addEventListener('popstate',function(){stopPlay();readHash();syncControls();draw();});
  readHash();
  openSheet(!isMobile()||!!(S.cell||isSingleBoat()));
