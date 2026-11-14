@@ -39,6 +39,46 @@ export const OBSERVED_FRESH_DAYS = { chl: 3 };
 // `source` / `age` are the raw per-cell code arrays from decodeRawPng, or
 // null when that sidecar is absent (then that gate is skipped). Age codes:
 // 0 = no-data sentinel; code-1 = age in whole days.
+// Balanced confidence veil (chosen 2026-07-06): rather than NaN-blank every
+// unverified cell (which turned the chl map into a boxy checkerboard of holes),
+// keep the value and encode confidence as per-cell OPACITY. Fresh verified
+// satellite obs paint solid; gap-filled / aging cells paint FADED; only genuine
+// no-data (already-NaN) stays transparent. Uncertainty becomes translucency —
+// nothing is hidden or fabricated. See DataOverlay (per-cell alpha) + the
+// "How to read this" copy.
+export const GAP_FILL_CONFIDENCE = 0.40;    // DINEOF / GlobColour spatial fill
+export const UNKNOWN_AGE_CONFIDENCE = 0.30; // age sidecar = no-data sentinel
+const AGE_DECAY_DAYS = 7;                    // past the fresh window, fade over ~7d
+const AGE_CONFIDENCE_FLOOR = 0.30;          // a real (if old) obs never fully vanishes
+
+// Per-cell confidence in [0, 1] from the provenance sidecars. 1 = fresh verified
+// observation; lower = gap-filled and/or aging; 0 = genuine no-data. Pure +
+// allocation-light so it runs in the per-layer-change budget.
+export function computeConfidence(data, { source, age, gapFillCodes, freshDays } = {}) {
+  const conf = new Float32Array(data.length);
+  const ageGate = age && Number.isFinite(freshDays);
+  for (let i = 0; i < data.length; i++) {
+    if (!Number.isFinite(data[i])) { conf[i] = 0; continue; } // truly no data
+    let c = 1.0;
+    if (source && gapFillCodes && gapFillCodes.has(source[i])) c = GAP_FILL_CONFIDENCE;
+    if (ageGate) {
+      const code = age[i];
+      if (code === 0) {
+        c = Math.min(c, UNKNOWN_AGE_CONFIDENCE);
+      } else {
+        const days = code - 1;
+        if (days > freshDays) {
+          const decay = Math.min(1, Math.max(
+            AGE_CONFIDENCE_FLOOR, 1 - (days - freshDays) / AGE_DECAY_DAYS));
+          c *= decay;
+        }
+      }
+    }
+    conf[i] = c;
+  }
+  return conf;
+}
+
 export function blankUnverifiedCells(data, { source, age, gapFillCodes, freshDays } = {}) {
   let blankedGapFill = 0;
   let blankedStale = 0;
@@ -80,15 +120,19 @@ export async function loadScalarPng(layer, info, state) {
       const source = await loadSidecarCodes(w.source_url, decoded);
       const age = await loadSidecarCodes(w.age_days_url, decoded);
       if (source || (age && Number.isFinite(freshDays))) {
-        const { blankedGapFill, blankedStale } = blankUnverifiedCells(decoded.data, {
+        // Confidence veil (not blanking): keep values, encode trust as opacity.
+        decoded.confidence = computeConfidence(decoded.data, {
           source, age, gapFillCodes: GAP_FILL_SOURCE_CODES, freshDays,
         });
-        if (blankedGapFill || blankedStale) {
-          console.info(
-            `dataSource: ${layer}/${win} observed-only — blanked ${blankedGapFill} gap-fill + ` +
-            `${blankedStale} stale (> ${freshDays}d) cells`,
-          );
+        let faded = 0, solid = 0;
+        for (let i = 0; i < decoded.confidence.length; i++) {
+          const c = decoded.confidence[i];
+          if (c > 0 && c < 1) faded++; else if (c >= 1) solid++;
         }
+        console.info(
+          `dataSource: ${layer}/${win} confidence veil — ${solid} solid + ${faded} faded ` +
+          `(gap-fill/aging) cells`,
+        );
       }
       state.layers[layer][win] = { ...decoded, dates: w.dates || [] };
     } catch (e) {
