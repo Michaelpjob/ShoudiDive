@@ -17,6 +17,25 @@ build_site.py  model.run() + counts join                ->  public/fleet/data.js
 `$FLEET_DATA_DIR` defaults to a sibling `ShoudiDive-fleet-data/` next to the
 checkout; the raw AIS is tens of GB and never enters git.
 
+Live: `live_logger.py` (aisstream.io, `.github/workflows/fleet-live-logger.yml`)
+writes the roster boats at full rate to `live/<date>.jsonl` on the
+`fleet-live` branch, and every other hull in the box, thinned by
+`any_log.py`, to `any/` on the `fleet-any` branch (one commit, replaced on
+each push, 14 days kept). The tool's Find box reads the latter through
+`/api/fleet/vessels` (who was heard this week) and `/api/fleet/vessel?mmsi=`
+(one hull's track).
+
+Groups: `/api/fleet/vessels` also sorts every hull into a group (sportfishing
+fleet, possible sportfishers, commercial fishing, dive and charter, research,
+government and rescue, work boats, ships, private, not identified) in
+`functions/api/fleet/_groups.js`, with a reason for each. Hand lists and
+corrections live in `functions/api/fleet/_vessel_groups.js` (research and
+government MMSIs were checked against the year of NOAA AIS); the roster's
+fleet, candidates and unmatched fleet-list names reach the Function through
+`_roster_lists.js`, which `vessel_lists.py` regenerates (roster.py runs it).
+Off shouldidive.com, or with `?review=1`, the tool shows a "Needs a look"
+queue of the guesses, with a copy-the-list button for corrections.
+
 ```bash
 python fleet-model/fetch_ais.py --start 2025-06-01 --end 2025-10-31 --workers 4
 python fleet-model/roster.py            # needs $FLEET_DATA_DIR/roster_web.json (fleet lists)
