@@ -1,24 +1,24 @@
-# Validation watchdog — 2026-11-04T18:12Z
+# Validation watchdog — 2026-11-16T18:13Z
 
 **3 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
-### 🔴 1. Only 19 observations in the last 24h (floor: 50)
+### 🔴 1. Only 20 observations in the last 24h (floor: 50)
 
 Multiple scrapers may be silently broken.
 
 **Suggested action:** Open the latest hourly ingest workflow run; look for `FAILED` lines per scraper.
 
-### ⚠️ 2. 1 non-critical external feed(s) are red
+### ⚠️ 2. 2 non-critical external feed(s) are red
 
-Red feeds: osm_overpass_main. Fallbacks may keep the model running, but redundancy is degraded.
+Red feeds: osm_overpass_main, ingest_bdoutdoors. Fallbacks may keep the model running, but redundancy is degraded.
 
 **Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
 
 ### 🔴 3. Published-data freshness gate found 1 issue(s)
 
-Freshness/completeness failures: swell5d:summary_day_sparse.
+Freshness/completeness failures: sst7d:summary_days_short.
 
 **Suggested action:** Open `pipeline/validation/data/freshness_health.json`; fix the failing fetcher or rerun the matching workflow before trusting the deploy.
 
@@ -26,16 +26,17 @@ Freshness/completeness failures: swell5d:summary_day_sparse.
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_nearshore` | 3 | 6.76 | -3.44 | 0% | 0.86 |
-| `central_nearshore` | 1 | 2.86 | -2.86 | 100% | — |
+| `bight_islands` | 2 | 29.28 | +29.25 | 0% | — |
+| `bight_nearshore` | 2 | 8.70 | +0.14 | 0% | 1.00 |
+| `central_nearshore` | 1 | 3.16 | +3.16 | 0% | — |
 
 ## Per-source bias (informational)
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `cencoos` | 1 | -2.86 ft |
-| `dive-shop-diveviz` | 1 | -7.24 ft |
-| `dive-shop-justgetwet` | 2 | -1.54 ft |
+| `cencoos` | 1 | +3.16 ft |
+| `dive-shop-diveviz` | 1 | -8.56 ft |
+| `dive-shop-justgetwet` | 3 | +22.45 ft |
 
 ## How to act on this issue
 

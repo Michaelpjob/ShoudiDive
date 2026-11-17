@@ -8,6 +8,8 @@ import any_log  # noqa: E402
 from any_log import AnyLog  # noqa: E402
 
 T0 = any_log.epoch("2026-11-04T12:00:00")
+# Every AnyLog / close() call passes `now`: the logger prunes hulls and day
+# folders against the clock, so wall-clock time would age these fixtures out.
 
 
 def rows(root, day="2026-11-04", shard="56"):
@@ -20,7 +22,7 @@ def test_under_way_keeps_one_point_per_two_minutes(tmp_path):
     kept = [log.position(366123456, T0 + s, 32.7 + s * 1e-5, -117.2, sog=8.0, cog=270, heading=268)
             for s in range(0, 600, 10)]     # a report every 10 s for 10 min
     assert sum(kept) == 5                    # t = 0, 120, 240, 360, 480
-    log.close()
+    log.close(now=T0 + 3600)
     r = rows(str(tmp_path))
     assert [int(x[1]) - T0 for x in r] == [0, 120, 240, 360, 480]
     assert r[0][0] == "366123456" and r[0][4] == "8" and r[0][6] == "268"
@@ -44,7 +46,7 @@ def test_sentinels_and_bad_positions(tmp_path):
     assert not log.position(366123456, T0, 91.0, 181.0, sog=0)
     assert not log.position(366123456, None, 32.7, -117.2)
     assert log.position(366123456, T0, 32.7, -117.2, sog=102.3, cog=360, heading=511)
-    log.close()
+    log.close(now=T0 + 3600)
     assert rows(str(tmp_path))[0][4:] == ["", "", ""]
     v = json.load(open(tmp_path / "vessels.json"))["v"]["366123456"]
     assert v["s"] is None and v["c"] is None and v["h"] is None
@@ -60,7 +62,7 @@ def test_index_carries_identity_and_latest_fix(tmp_path):
                {"PartNumber": True, "ReportA": {"Valid": False, "Name": ""},
                 "ReportB": {"Valid": True, "ShipType": 30, "CallSign": "", "Dimension": {"A": 7, "B": 4}}}, T0)
     log.position(366123456, T0 + 60, 32.71, -117.21, sog=6.5, cog=200)   # not written (thinned) ...
-    log.close()
+    log.close(now=T0 + 3600)
     idx = json.load(open(tmp_path / "vessels.json"))
     v = idx["v"]["366123456"]
     assert (v["n"], v["ty"], v["cs"], v["d"], v["len"]) == ("SEA WOLF", 37, "WDA1234", "AVALON", 15)
@@ -73,7 +75,7 @@ def test_shards_by_last_two_digits_and_reloads_index(tmp_path):
     log = AnyLog(str(tmp_path), now=T0)
     log.position(366123401, T0, 32.7, -117.2, sog=0, name="A")
     log.position(366123499, T0, 32.8, -117.3, sog=0, name="B")
-    log.close()
+    log.close(now=T0 + 3600)
     assert os.path.exists(tmp_path / "2026-11-04" / "01.csv")
     assert os.path.exists(tmp_path / "2026-11-04" / "99.csv")
     again = AnyLog(str(tmp_path), now=T0 + 3600)   # the next CI chunk
