@@ -5,7 +5,9 @@ a free aisstream.io API key (https://aisstream.io, sign in with GitHub) gives
 one WebSocket that pushes every AIS position in a bounding box. We subscribe
 to the SoCal box, keep only roster MMSIs (plus anything in FILTER_EXTRA) and
 append rows in the same schema as fetch_ais.py's SoCal cut, so model.py can
-read live days alongside the archive.
+read live days alongside the archive. Every other hull in the box goes,
+thinned, to $FLEET_DATA_DIR/any/ (any_log.py) for the tool's find-any-MMSI
+search; pass --no-any to skip that.
 
     set AISSTREAM_API_KEY=...        (never commit it)
     python live_logger.py [--all-vessels] [--minutes N]   # N: stop after N minutes (CI chunks)
@@ -31,6 +33,7 @@ import sys
 import time
 
 from config import DATA_DIR, BBOX
+from any_log import AnyLog, epoch
 
 try:
     import websockets
@@ -42,6 +45,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROSTER = os.path.join(HERE, "data", "roster.json")
 URL = "wss://stream.aisstream.io/v0/stream"
 LIVE_DIR = os.path.join(DATA_DIR, "live")
+ANY_DIR = os.path.join(DATA_DIR, "any")
+POSITION_TYPES = ("PositionReport", "StandardClassBPositionReport")
+STATIC_TYPES = ("ShipStaticData", "StaticDataReport")
 
 
 def roster_mmsis():
@@ -92,10 +98,10 @@ def roll_all():
             roll_day(name[:-6], force=True)
 
 
-async def run(api_key, mmsis, all_vessels, minutes=None):
+async def run(api_key, mmsis, all_vessels, minutes=None, any_vessels=True):
     s, w, n, e = BBOX
     sub = {"APIKey": api_key, "BoundingBoxes": [[[s, w], [n, e]]],
-           "FilterMessageTypes": ["PositionReport", "StandardClassBPositionReport"]}
+           "FilterMessageTypes": list(POSITION_TYPES + (STATIC_TYPES if any_vessels else ()))}
     # aisstream caps FiltersShipMMSI at 50 hulls and the roster is ~200, so
     # subscribe to the whole SoCal box and keep the roster locally (a few
     # hundred messages a minute; trivial).
@@ -105,6 +111,17 @@ async def run(api_key, mmsis, all_vessels, minutes=None):
     fh = None
     n_rows = 0
     deadline = time.time() + minutes * 60 if minutes else None
+    anylog = AnyLog(ANY_DIR) if any_vessels else None
+
+    def any_call(fn, *args):
+        # The every-vessel log is a side channel: a fault there must never
+        # stop the roster log, so it switches itself off instead.
+        nonlocal anylog
+        try:
+            fn(*args)
+        except Exception as exc:  # noqa: BLE001
+            print(f"any-vessel log disabled: {exc!r}", flush=True)
+            anylog = None
     while True:
         if deadline and time.time() >= deadline:
             break
@@ -123,10 +140,24 @@ async def run(api_key, mmsis, all_vessels, minutes=None):
                         raise SystemExit(f"aisstream error: {msg['error']}")
                     meta = msg.get("MetaData", {})
                     mmsi = meta.get("MMSI")
-                    if not mmsi or (not all_vessels and mmsi not in keep):
+                    if not mmsi:
                         continue
-                    body = msg["Message"].get("PositionReport") or msg["Message"].get("StandardClassBPositionReport") or {}
+                    mtype = msg.get("MessageType")
                     ts = meta.get("time_utc", "")[:19].replace(" ", "T")
+                    if mtype in STATIC_TYPES:
+                        if anylog:
+                            any_call(anylog.static, mmsi, mtype, (msg.get("Message") or {}).get(mtype), epoch(ts))
+                        continue
+                    m = msg.get("Message") or {}
+                    body = m.get("PositionReport") or m.get("StandardClassBPositionReport") or {}
+                    if anylog:
+                        any_call(anylog.position, mmsi, epoch(ts), meta.get("latitude"), meta.get("longitude"),
+                                 body.get("Sog"), body.get("Cog"), body.get("TrueHeading"),
+                                 (meta.get("ShipName") or "").strip() or None)
+                        if anylog:
+                            any_call(anylog.flush)
+                    if not all_vessels and mmsi not in keep:
+                        continue
                     day = ts[:10]
                     if day != current_day:
                         if fh:
@@ -148,7 +179,8 @@ async def run(api_key, mmsis, all_vessels, minutes=None):
                         print(f"first position: {meta.get('ShipName', '').strip()} ({mmsi}) at {ts}", flush=True)
                     if n_rows % 500 == 0:
                         fh.flush()
-                        print(f"{dt.datetime.utcnow():%H:%M} {n_rows} positions", flush=True)
+                        print(f"{dt.datetime.utcnow():%H:%M} {n_rows} positions"
+                              + (f"; any-vessel {anylog.rows} points, {len(anylog.idx['v'])} hulls" if anylog else ""), flush=True)
             if deadline and time.time() >= deadline:
                 break
         except SystemExit:
@@ -162,7 +194,10 @@ async def run(api_key, mmsis, all_vessels, minutes=None):
             await asyncio.sleep(30)
     if fh:
         fh.close()
-    print(f"done: {n_rows} positions this run", flush=True)
+    if anylog:
+        any_call(anylog.close)
+    print(f"done: {n_rows} positions this run"
+          + (f"; any-vessel {anylog.rows} points, {len(anylog.idx['v'])} hulls" if anylog else ""), flush=True)
 
 
 def main():
@@ -170,6 +205,7 @@ def main():
     ap.add_argument("--all-vessels", action="store_true", help="log every vessel in the box (not just the roster)")
     ap.add_argument("--minutes", type=float, default=None, help="stop after this many minutes (CI chunks)")
     ap.add_argument("--roll-all", action="store_true", help="only roll existing jsonl day files into parquet")
+    ap.add_argument("--no-any", action="store_true", help="skip the thinned every-vessel log (any/)")
     a = ap.parse_args()
     if a.roll_all:
         roll_all()
@@ -177,7 +213,7 @@ def main():
     key = os.environ.get("AISSTREAM_API_KEY")
     if not key:
         sys.exit("set AISSTREAM_API_KEY (free key from https://aisstream.io)")
-    asyncio.run(run(key, roster_mmsis(), a.all_vessels, a.minutes))
+    asyncio.run(run(key, roster_mmsis(), a.all_vessels, a.minutes, any_vessels=not a.no_any))
 
 
 if __name__ == "__main__":
