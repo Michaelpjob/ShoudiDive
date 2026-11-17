@@ -191,6 +191,6 @@ class AnyLog:
                 shutil.rmtree(os.path.join(self.root, name), ignore_errors=True)
         return True
 
-    def close(self):
-        self.flush(force=True)
+    def close(self, now=None):
+        self.flush(force=True, now=now)
         self._close()
