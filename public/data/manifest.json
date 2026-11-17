@@ -380,31 +380,113 @@
         "now": {
           "speed_url": "/data/wind_speed_now.png",
           "uv_url": "/data/wind_uv_now.png",
-          "valid_at": "2026-11-17T14:00:00Z",
-          "fcst_hour": 2,
-          "source": "HRRR+ECMWF"
+          "valid_at": "2026-11-17T15:00:00Z",
+          "fcst_hour": 3,
+          "source": "HRRR+ECMWF+buoy"
         },
         "p6h": {
           "speed_url": "/data/wind_speed_p6h.png",
           "uv_url": "/data/wind_uv_p6h.png",
-          "valid_at": "2026-11-17T20:00:00Z",
-          "fcst_hour": 8,
+          "valid_at": "2026-11-17T21:00:00Z",
+          "fcst_hour": 9,
           "source": "HRRR+ECMWF"
         },
         "p24h": {
           "speed_url": "/data/wind_speed_p24h.png",
           "uv_url": "/data/wind_uv_p24h.png",
-          "valid_at": "2026-11-18T14:00:00Z",
-          "fcst_hour": 26,
+          "valid_at": "2026-11-18T15:00:00Z",
+          "fcst_hour": 27,
           "source": "HRRR+ECMWF"
         },
         "p72h": {
           "speed_url": "/data/wind_speed_p72h.png",
           "uv_url": "/data/wind_uv_p72h.png",
-          "valid_at": "2026-11-20T14:00:00Z",
-          "fcst_hour": 80,
+          "valid_at": "2026-11-20T15:00:00Z",
+          "fcst_hour": 81,
           "source": "GFS+ECMWF"
         }
+      },
+      "buoy_correction": {
+        "method": "buoy_kriging_uv",
+        "length_km": 45.0,
+        "anemometer_height_m": 5.0,
+        "n_anchors_total": 6,
+        "n_anchors_active": 6,
+        "mean_resid_ms": 3.55,
+        "anchors": [
+          {
+            "stn": "46086",
+            "name": "San Clemente Basin",
+            "lat": 32.499,
+            "lng": -118.034,
+            "buoy_spd_kt": 23.8,
+            "n_samples": 9,
+            "age_hours": 1.7,
+            "model_spd_kt": 22.3,
+            "resid_ms": 4.8,
+            "skipped": null
+          },
+          {
+            "stn": "46047",
+            "name": "Tanner Bank",
+            "lat": 32.418,
+            "lng": -119.535,
+            "buoy_spd_kt": 24.6,
+            "n_samples": 4,
+            "age_hours": 2.5,
+            "model_spd_kt": 21.9,
+            "resid_ms": 3.5,
+            "skipped": null
+          },
+          {
+            "stn": "46025",
+            "name": "Santa Monica Basin",
+            "lat": 33.765,
+            "lng": -119.077,
+            "buoy_spd_kt": 24.6,
+            "n_samples": 4,
+            "age_hours": 2.5,
+            "model_spd_kt": 24.7,
+            "resid_ms": 4.8,
+            "skipped": null
+          },
+          {
+            "stn": "46011",
+            "name": "Santa Maria",
+            "lat": 34.937,
+            "lng": -120.999,
+            "buoy_spd_kt": 14.5,
+            "n_samples": 10,
+            "age_hours": 1.5,
+            "model_spd_kt": 10.8,
+            "resid_ms": 4.6,
+            "skipped": null
+          },
+          {
+            "stn": "46028",
+            "name": "Cape San Martin",
+            "lat": 35.763,
+            "lng": -121.893,
+            "buoy_spd_kt": 18.4,
+            "n_samples": 4,
+            "age_hours": 2.5,
+            "model_spd_kt": 14.9,
+            "resid_ms": 3.0,
+            "skipped": null
+          },
+          {
+            "stn": "46042",
+            "name": "Monterey",
+            "lat": 36.787,
+            "lng": -122.408,
+            "buoy_spd_kt": 9.7,
+            "n_samples": 10,
+            "age_hours": 1.5,
+            "model_spd_kt": 8.8,
+            "resid_ms": 0.6,
+            "skipped": null
+          }
+        ]
       },
       "history": {
         "d-1": {
@@ -428,7 +510,7 @@
           "source": "GFS"
         }
       },
-      "generated_at": "2026-11-17T14:20:14Z"
+      "generated_at": "2026-11-17T15:19:49Z"
     },
     "viz": {
       "range_ft": [
@@ -522,7 +604,7 @@
         30.0
       ],
       "tz": "America/Los_Angeles",
-      "generated_at": "2026-11-17T14:21:25Z",
+      "generated_at": "2026-11-17T15:21:08Z",
       "best_window": {
         "day": 3,
         "bucket": "midday",
