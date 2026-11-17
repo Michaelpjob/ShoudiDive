@@ -320,6 +320,8 @@ def build(start, end):
         json.dump(out, f, indent=1)
     print(f"roster: {len(boats)} accepted, {len(candidates)} candidates for review, "
           f"{len(unmatched)} fleet-list names not matched on AIS -> {OUT}")
+    import vessel_lists   # the Find box's groups read the roster through a generated module
+    vessel_lists.build(OUT)
     return out
 
 

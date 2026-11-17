@@ -29,12 +29,15 @@ test("parseShard keeps one MMSI, inside the window, with nulls for blanks", () =
   assert.deepEqual(parseShard(null, "366123456", 0), []);
 });
 
-test("listVessels drops identity-only hulls and sorts newest fix first", () => {
+test("listVessels drops identity-only hulls, sorts newest fix first, carries the group", () => {
   const idx = { v: {
-    "366000001": { n: "OLD", t: 100, ty: 37, len: 12 },
+    "366000001": { n: "OLD", t: 100, ty: 37, len: 12, la: 32.7, lo: -117.2, s: 0.1, c: 90, h: 511 },
     "366000002": { n: "NEW", t: 300 },
     "366000003": { ty: 30, u: 400 },        // static heard, no position yet
   } };
-  assert.deepEqual(listVessels(idx), [[366000002, "NEW", 300, null, null], [366000001, "OLD", 100, 37, 12]]);
+  assert.deepEqual(listVessels(idx), [
+    [366000002, "NEW", 300, null, null, null, null, null, null, null, "unknown", "no identity report heard yet", 0],
+    [366000001, "OLD", 100, 37, 12, 32.7, -117.2, 0.1, 90, 511, "private", "AIS type 37 (pleasure craft), 12 m", 0],
+  ]);
   assert.deepEqual(listVessels(null), []);
 });
