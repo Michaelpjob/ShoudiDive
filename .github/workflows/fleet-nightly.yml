@@ -1,11 +1,17 @@
 name: Fleet nightly rebuild (live days -> data.json)
 
 # Folds the live AIS days (fleet-live branch, from fleet-live-logger.yml) into
-# Fleet Tracks every night: rolls the day files into the model's cut, scrapes
-# the last two weeks of dock counts, rebuilds public/fleet/data.json on top of
-# the frozen archive base (fleet-model/data/base, export_base.py) and commits
-# it to main + deploys prod, the same way refresh-paddies.yml self-updates the
-# paddy tool. Takes a few minutes: the 40 GB archive is never touched here.
+# Fleet Tracks every night: rolls the day files into the model's cut, rebuilds
+# public/fleet/data.json on top of the frozen archive base (fleet-model/data/base,
+# export_base.py) and commits it to main + deploys prod, the same way
+# refresh-paddies.yml self-updates the paddy tool. Takes a few minutes: the
+# 40 GB archive is never touched here.
+#
+# Dock counts are PAUSED: sportfishingreport.com's terms (updated 2026-09-01)
+# bar automated access and republishing counts without a written license, so
+# the catch.py scrape only runs when the repo variable SFR_COUNTS_ENABLED is
+# 'true' (unset = off). Without it, live trips simply carry no dock count;
+# the frozen base counts are unchanged.
 
 on:
   schedule:
@@ -52,7 +58,8 @@ jobs:
           echo "live day files: $(find "$FLEET_DATA_DIR/live" -name '*.jsonl' | wc -l)"
           python fleet-model/live_logger.py --roll-all
 
-      - name: Dock counts for the last 14 days
+      - name: Dock counts for the last 14 days (off unless SFR_COUNTS_ENABLED)
+        if: vars.SFR_COUNTS_ENABLED == 'true'
         continue-on-error: true   # the site being down must not stop the rebuild
         run: |
           python fleet-model/catch.py --start "$(date -u -d '14 days ago' +%F)" --end "$(date -u +%F)"
