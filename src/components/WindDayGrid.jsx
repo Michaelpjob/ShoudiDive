@@ -9,7 +9,7 @@ import {
   hourKey,
 } from "../lib/dataSource.js";
 import { pinnedWind } from "../lib/pinSample.js";
-import { findTodayDay } from "../lib/today.js";
+import { todaySelection } from "../lib/today.js";
 
 // Beaufort-aligned colour ramp — same kt stops as the legend / particles.
 const KT_STOPS = [
@@ -324,10 +324,12 @@ export function defaultWindSelection(summary) {
   // Prefer "today" (matched against the summary's own tz) so the app
   // always opens on the user's current day instead of best_window
   // (which can be any of the next 5 days) or anchor_date (which lags
-  // when the data is fresh-but-not-current).
-  const todayDay = findTodayDay(summary);
-  if (todayDay?.buckets?.length) {
-    return { day: todayDay.day, bucket: todayDay.buckets[0].bucket, hour: null };
+  // when the data is fresh-but-not-current). Within today, open on the
+  // bucket that contains the current local hour — "current conditions",
+  // not pre-dawn.
+  const today = todaySelection(summary);
+  if (today) {
+    return { day: today.day, bucket: today.bucket, hour: null };
   }
   if (summary?.best_window) {
     return {
