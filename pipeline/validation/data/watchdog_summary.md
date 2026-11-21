@@ -1,28 +1,22 @@
-# Validation watchdog — 2026-11-20T18:13Z
+# Validation watchdog — 2026-11-21T06:16Z
 
-**4 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
+**3 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
-### 🔴 1. Only 20 observations in the last 24h (floor: 50)
+### 🔴 1. Only 16 observations in the last 24h (floor: 50)
 
 Multiple scrapers may be silently broken.
 
 **Suggested action:** Open the latest hourly ingest workflow run; look for `FAILED` lines per scraper.
 
-### 🔴 2. 1 critical external feed(s) are red
-
-A required upstream data source failed the latest feed-health probe.
-
-**Suggested action:** Inspect `pipeline/validation/data/feed_health.json`, then retry the affected fetch workflow after confirming the upstream feed recovered.
-
-### ⚠️ 3. 2 non-critical external feed(s) are red
+### ⚠️ 2. 2 non-critical external feed(s) are red
 
 Red feeds: osm_overpass_main, ingest_reddit. Fallbacks may keep the model running, but redundancy is degraded.
 
 **Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
 
-### 🔴 4. Published-data freshness gate found 2 issue(s)
+### 🔴 3. Published-data freshness gate found 2 issue(s)
 
 Freshness/completeness failures: kd490:layer_date_stale, swell5d:summary_day_sparse.
 
@@ -32,17 +26,17 @@ Freshness/completeness failures: kd490:layer_date_stale, swell5d:summary_day_spa
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_islands` | 2 | 28.12 | +28.12 | 0% | — |
-| `bight_nearshore` | 2 | 9.79 | -0.46 | 0% | -1.00 |
-| `central_nearshore` | 1 | 6.35 | +6.35 | 0% | — |
+| `bight_islands` | 2 | 20.06 | +19.90 | 0% | — |
+| `bight_nearshore` | 2 | 9.56 | -6.57 | 50% | -1.00 |
+| `central_nearshore` | 1 | 1.70 | +1.70 | 100% | — |
 
 ## Per-source bias (informational)
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `cencoos` | 1 | +6.35 ft |
-| `dive-shop-diveviz` | 1 | -10.24 ft |
-| `dive-shop-justgetwet` | 3 | +21.85 ft |
+| `cencoos` | 1 | +1.70 ft |
+| `dive-shop-diveviz` | 1 | -13.52 ft |
+| `dive-shop-justgetwet` | 3 | +13.39 ft |
 
 ## How to act on this issue
 
