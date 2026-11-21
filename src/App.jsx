@@ -35,19 +35,18 @@ function useDataVersion() {
 
 
 
-// Region-aware browser tab title. index.html ships a static
-// "ShouldIDive — CA Coast Conditions" fallback; this overrides it
-// once the React app boots so PNW + tropical visitors don't see
-// "CA Coast" in their tab.
+// Region-aware browser tab title. Google indexes the title after
+// JavaScript runs, so the default (CA) region keeps the exact title
+// index.html ships; other regions name their own coast.
 function useRegionAwareTitle() {
   useEffect(() => {
     const r = activeRegion();
     const subtitle =
-      r === "pnw"      ? "Pacific NW Conditions" :
-      r === "tropical" ? "FL + Caribbean Conditions" :
-      r === "baja"     ? "Baja Mexico Conditions" :
-      "California Coast Conditions";
-    document.title = `ShouldIDive — ${subtitle}`;
+      r === "pnw"      ? "live ocean conditions for the Pacific Northwest" :
+      r === "tropical" ? "live ocean conditions for Florida and the Caribbean" :
+      r === "baja"     ? "live ocean conditions map for Baja" :
+      "live ocean conditions map for California and Baja";
+    document.title = `ShouldIDive: ${subtitle}`;
   }, []);
 }
 
