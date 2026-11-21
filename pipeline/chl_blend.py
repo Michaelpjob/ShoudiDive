@@ -229,6 +229,37 @@ def _nasa_search_files(session: requests.Session, sensor: str, d: date) -> list[
     return files
 
 
+# Running tally of NASA downloads answered with the Earthdata LOGIN PAGE while
+# a token WAS set — the signature of an expired or revoked EARTHDATA_TOKEN.
+# Earthdata Login user tokens live 60 days; after that OB.DAAC 302s every
+# getfile to urs.earthdata.nasa.gov, which serves HTML with HTTP 200, so the
+# fetch "succeeds" and chl quietly falls back to gap-fill. The 2026-06-23
+# token expired 2026-08-23 and nobody noticed for 69 days (the app's
+# observed-only chl view blanks gap-fill, so the layer was simply empty).
+# Reset per build_blended_chl run; read back to raise the manifest flag.
+_NASA_AUTH = {"rejected": 0}
+
+
+def _looks_like_login_page(r) -> bool:
+    """True when a getfile response is the Earthdata OAuth login page
+    rather than a netCDF: final URL on urs.earthdata.nasa.gov, or an HTML
+    content type."""
+    from urllib.parse import urlparse
+    host = (urlparse(getattr(r, "url", "") or "").hostname or "").lower()
+    headers = getattr(r, "headers", None) or {}
+    ctype = str(headers.get("Content-Type", "")).lower()
+    return host.endswith("urs.earthdata.nasa.gov") or "text/html" in ctype
+
+
+def _nasa_auth_failed(have_token: bool, per_source: list["_SourceResult"]) -> bool:
+    """True when a token is set, NO NASA source produced a frame, and at
+    least one download came back as the Earthdata login page. That is an
+    auth failure (token expired/revoked), not an outage or a cloudy week."""
+    if not have_token or _NASA_AUTH["rejected"] == 0:
+        return False
+    return not any(r.frames for r in per_source if r.source.requires_earthdata)
+
+
 def _nasa_download(session: requests.Session, filename: str) -> Optional[Path]:
     """Download an OB.DAAC file to the local cache. Returns the local path
     on success, None on failure. Caches by filename so repeat runs no-op."""
@@ -244,9 +275,14 @@ def _nasa_download(session: requests.Session, filename: str) -> Optional[Path]:
     if r.status_code != 200 or len(r.content) < 50_000:
         # < 50 KB is almost certainly the Earthdata HTML login page or a
         # JSON error wrapper, not a real netCDF.
+        login = _looks_like_login_page(r)
+        if login:
+            _NASA_AUTH["rejected"] += 1
+        why = ("Earthdata login page — EARTHDATA_TOKEN rejected" if login
+               else "probably auth-failed")
         print(
             f"  nasa-dl {filename}: HTTP {r.status_code}, "
-            f"{len(r.content)} bytes (probably auth-failed)",
+            f"{len(r.content)} bytes ({why})",
             flush=True,
         )
         return None
@@ -806,6 +842,7 @@ def build_blended_chl(end: date) -> dict | None:
     return) plus extended fields for source provenance."""
     print(f"[chl] blender ending {end} — {len(CHL_SOURCES)} sources", flush=True)
     have_token = bool(os.environ.get("EARTHDATA_TOKEN"))
+    _NASA_AUTH["rejected"] = 0
     if not have_token:
         print(f"  EARTHDATA_TOKEN unset — NASA OB.DAAC sources will be skipped, "
               f"falling back to NOAA-only blend (~4 day lag floor)", flush=True)
@@ -836,6 +873,22 @@ def build_blended_chl(end: date) -> dict | None:
         ages_str = ", ".join(str((end - d).days) for d in res.dates)
         print(f"  [{source.id}] {len(res.frames)} frames, ages: {ages_str}d", flush=True)
         per_source.append(res)
+
+    # Token rejected → say so where it will be seen (a GitHub Actions
+    # warning annotation on the run) and flag the manifest so
+    # check_published.py opens the data-health issue. Without this the run
+    # stays green while the chl map is blank.
+    nasa_auth_failed = _nasa_auth_failed(have_token, per_source)
+    if nasa_auth_failed:
+        print(
+            "::warning title=NASA OB.DAAC rejected EARTHDATA_TOKEN::"
+            f"{_NASA_AUTH['rejected']} chl downloads were answered with the "
+            "Earthdata login page and no NASA source produced a frame. "
+            "Earthdata Login user tokens expire 60 days after generation: "
+            "regenerate at https://urs.earthdata.nasa.gov (Generate Token) "
+            "and run `gh secret set EARTHDATA_TOKEN`.",
+            flush=True,
+        )
 
     if not per_source:
         print("[chl] no source returned data, skipping layer", flush=True)
@@ -937,6 +990,8 @@ def build_blended_chl(end: date) -> dict | None:
             manifest_layer["source"] = dom.label
             if dom.fallback:
                 manifest_layer["source_fallback"] = True
+    if nasa_auth_failed:
+        manifest_layer["nasa_auth_failed"] = True
     return manifest_layer
 
 
