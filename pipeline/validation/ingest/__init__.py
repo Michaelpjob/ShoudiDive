@@ -46,12 +46,11 @@ SCRAPERS = [
 
     # Tier 1 — labelled prose, regex-extractable, no LLM dependency
     JustGetWetScraper(),         # SD dive shop, La Jolla / Pt Loma / Coronados, conf 0.85
-    BeachCitiesCubaScraper(),    # Laguna Beach dive shop, central-OC kelp coverage,
-                                 # conf 0.85. Single spot per page, daily updates.
-                                 # 2026-05-09 re-probe of the "JS-rendered" site
-                                 # in the previous skip-list — turns out it parses
-                                 # cleanly with the same labelled-field pattern
-                                 # JustGetWet uses.
+    # BeachCitiesCubaScraper retired 2026-10-15: the shop's terms of service
+    # forbid using the site "to spider, crawl, or scrape". It had also
+    # produced no rows in observations.jsonl. Laguna is covered by South
+    # Coast Divers (robots.txt allows all). The file stays for reference;
+    # ask the shop for permission before re-adding it.
 
     # Tier 2 — prose, LLM-extracted (no-ops gracefully without API key)
     DiveVizScraper(),      # SD + LA + OC dive shop, two-blog feed, conf 0.85
