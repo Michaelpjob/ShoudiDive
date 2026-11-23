@@ -1,18 +1,18 @@
-# Validation watchdog — 2026-11-23T06:23Z
+# Validation watchdog — 2026-11-23T18:14Z
 
 **3 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
-### 🔴 1. Only 19 observations in the last 24h (floor: 50)
+### 🔴 1. Only 20 observations in the last 24h (floor: 50)
 
 Multiple scrapers may be silently broken.
 
 **Suggested action:** Open the latest hourly ingest workflow run; look for `FAILED` lines per scraper.
 
-### ⚠️ 2. 2 non-critical external feed(s) are red
+### ⚠️ 2. 3 non-critical external feed(s) are red
 
-Red feeds: osm_overpass_main, ingest_reddit. Fallbacks may keep the model running, but redundancy is degraded.
+Red feeds: chl_climo_modis_pfeg, osm_overpass_main, ingest_reddit. Fallbacks may keep the model running, but redundancy is degraded.
 
 **Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
 
@@ -26,17 +26,17 @@ Freshness/completeness failures: kd490:layer_date_stale, swell5d:summary_day_spa
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_islands` | 2 | 11.00 | +11.00 | 0% | — |
-| `bight_nearshore` | 2 | 8.76 | -7.65 | 50% | -1.00 |
-| `central_nearshore` | 1 | 3.85 | +3.85 | 0% | — |
+| `bight_islands` | 2 | 17.64 | +17.64 | 0% | — |
+| `bight_nearshore` | 2 | 4.78 | -3.93 | 50% | -1.00 |
+| `central_nearshore` | 1 | 4.21 | +4.21 | 0% | — |
 
 ## Per-source bias (informational)
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `cencoos` | 1 | +3.85 ft |
-| `dive-shop-diveviz` | 1 | -11.92 ft |
-| `dive-shop-justgetwet` | 3 | +6.21 ft |
+| `cencoos` | 1 | +4.21 ft |
+| `dive-shop-diveviz` | 1 | -6.65 ft |
+| `dive-shop-justgetwet` | 3 | +11.35 ft |
 
 ## How to act on this issue
 
