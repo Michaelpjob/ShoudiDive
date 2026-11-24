@@ -1,22 +1,28 @@
-# Validation watchdog — 2026-11-23T18:14Z
+# Validation watchdog — 2026-11-24T06:19Z
 
-**3 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
+**4 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
-### 🔴 1. Only 20 observations in the last 24h (floor: 50)
+### 🔴 1. Only 13 observations in the last 24h (floor: 50)
 
 Multiple scrapers may be silently broken.
 
 **Suggested action:** Open the latest hourly ingest workflow run; look for `FAILED` lines per scraper.
 
-### ⚠️ 2. 3 non-critical external feed(s) are red
+### 🔴 2. Required source `ndbc-buoy` has been silent for >24h
 
-Red feeds: chl_climo_modis_pfeg, osm_overpass_main, ingest_reddit. Fallbacks may keep the model running, but redundancy is degraded.
+Expected `ndbc-buoy` to contribute at least one observation per cron. None seen in the recent window.
+
+**Suggested action:** Inspect `pipeline/validation/ingest/ndbc.py` and the latest ingest cron's log.
+
+### ⚠️ 3. 2 non-critical external feed(s) are red
+
+Red feeds: osm_overpass_main, ingest_reddit. Fallbacks may keep the model running, but redundancy is degraded.
 
 **Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
 
-### 🔴 3. Published-data freshness gate found 2 issue(s)
+### 🔴 4. Published-data freshness gate found 2 issue(s)
 
 Freshness/completeness failures: kd490:layer_date_stale, swell5d:summary_day_sparse.
 
@@ -26,17 +32,17 @@ Freshness/completeness failures: kd490:layer_date_stale, swell5d:summary_day_spa
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_islands` | 2 | 17.64 | +17.64 | 0% | — |
-| `bight_nearshore` | 2 | 4.78 | -3.93 | 50% | -1.00 |
-| `central_nearshore` | 1 | 4.21 | +4.21 | 0% | — |
+| `bight_islands` | 2 | 8.03 | +6.29 | 50% | — |
+| `bight_nearshore` | 2 | 7.10 | -6.72 | 0% | 1.00 |
+| `central_nearshore` | 1 | 4.94 | +4.94 | 0% | — |
 
 ## Per-source bias (informational)
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `cencoos` | 1 | +4.21 ft |
-| `dive-shop-diveviz` | 1 | -6.65 ft |
-| `dive-shop-justgetwet` | 3 | +11.35 ft |
+| `cencoos` | 1 | +4.94 ft |
+| `dive-shop-diveviz` | 1 | -9.00 ft |
+| `dive-shop-justgetwet` | 3 | +2.71 ft |
 
 ## How to act on this issue
 
