@@ -1,5 +1,5 @@
 {
-  "computed_at": "2026-11-25T06:31:59Z",
+  "computed_at": "2026-11-25T06:20:54Z",
   "manifest": "public/data/manifest.json",
   "layers_checked": [
     "sst",
@@ -12,7 +12,7 @@
     "precip"
   ],
   "summary": {
-    "total_findings": 1,
+    "total_findings": 3,
     "healthy": false
   },
   "findings": [
@@ -22,6 +22,20 @@
       "title": "Layer kd490 is 20.3d old",
       "layer": "kd490",
       "detail": "threshold=14d window=1d"
+    },
+    {
+      "severity": "high",
+      "code": "layer_date_stale",
+      "title": "Layer precip is 3.3d old",
+      "layer": "precip",
+      "detail": "threshold=3d window=now"
+    },
+    {
+      "severity": "high",
+      "code": "summary_day_sparse",
+      "title": "Layer swell5d has sparse day summaries",
+      "layer": "swell5d",
+      "detail": "d0 buckets=2"
     }
   ]
 }
