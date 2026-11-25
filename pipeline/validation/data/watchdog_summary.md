@@ -1,30 +1,24 @@
-# Validation watchdog — 2026-11-25T06:20Z
+# Validation watchdog — 2026-11-25T18:15Z
 
-**4 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
+**3 finding(s)** flagged across the gated rules. Each finding includes a suggested action; the watchdog never modifies coefficients itself.
 
 ## Findings
 
-### 🔴 1. Only 12 observations in the last 24h (floor: 50)
+### 🔴 1. Only 18 observations in the last 24h (floor: 50)
 
 Multiple scrapers may be silently broken.
 
 **Suggested action:** Open the latest hourly ingest workflow run; look for `FAILED` lines per scraper.
 
-### 🔴 2. Required source `ndbc-buoy` has been silent for >24h
+### ⚠️ 2. 3 non-critical external feed(s) are red
 
-Expected `ndbc-buoy` to contribute at least one observation per cron. None seen in the recent window.
-
-**Suggested action:** Inspect `pipeline/validation/ingest/ndbc.py` and the latest ingest cron's log.
-
-### ⚠️ 3. 3 non-critical external feed(s) are red
-
-Red feeds: cpc_precip_psl, osm_overpass_main, ingest_reddit. Fallbacks may keep the model running, but redundancy is degraded.
+Red feeds: chl_climo_modis_pfeg, osm_overpass_main, ingest_reddit. Fallbacks may keep the model running, but redundancy is degraded.
 
 **Suggested action:** Check `pipeline/check_feeds.py` probe URLs and the latest refresh logs for source-specific failures.
 
-### 🔴 4. Published-data freshness gate found 3 issue(s)
+### 🔴 3. Published-data freshness gate found 4 issue(s)
 
-Freshness/completeness failures: kd490:layer_date_stale, precip:layer_date_stale, swell5d:summary_day_sparse.
+Freshness/completeness failures: sst7d:summary_days_short, kd490:layer_date_stale, swell5d:summary_day_sparse, sst:sst_source_lag.
 
 **Suggested action:** Open `pipeline/validation/data/freshness_health.json`; fix the failing fetcher or rerun the matching workflow before trusting the deploy.
 
@@ -32,17 +26,17 @@ Freshness/completeness failures: kd490:layer_date_stale, precip:layer_date_stale
 
 | Zone | n | RMSE (ft) | Bias (ft) | Calibration | Pearson r |
 |---|---|---|---|---|---|
-| `bight_islands` | 2 | 4.48 | +4.30 | 50% | — |
-| `bight_nearshore` | 1 | 5.59 | -5.59 | 0% | — |
-| `central_nearshore` | 1 | 6.83 | +6.83 | 0% | — |
+| `bight_islands` | 2 | 8.56 | +8.46 | 0% | — |
+| `bight_nearshore` | 1 | 1.91 | -1.91 | 100% | — |
+| `central_nearshore` | 1 | 6.86 | +6.86 | 0% | — |
 
 ## Per-source bias (informational)
 
 | Source | n | Mean residual (predicted − observed) |
 |---|---|---|
-| `cencoos` | 1 | +6.83 ft |
-| `dive-shop-diveviz` | 1 | -5.59 ft |
-| `dive-shop-justgetwet` | 2 | +4.30 ft |
+| `cencoos` | 1 | +6.86 ft |
+| `dive-shop-diveviz` | 1 | -1.91 ft |
+| `dive-shop-justgetwet` | 2 | +8.46 ft |
 
 ## How to act on this issue
 
