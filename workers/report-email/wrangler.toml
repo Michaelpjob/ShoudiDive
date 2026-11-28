@@ -1,0 +1,24 @@
+# shouldidive-report-email: fishing reports by email into the Ocean Report's
+# pending queue (the same REPORTS_KV the Pages Functions use).
+#
+# Not active until both steps are done in the Cloudflare account:
+#   1. Deploy:  npx wrangler deploy   (from workers/report-email/)
+#   2. Email Routing on the shouldidive.com zone: enable it (this adds
+#      Cloudflare MX records, so check nothing else receives mail for the
+#      domain first), then a custom address, e.g. reports@shouldidive.com,
+#      with action "Send to a Worker" -> shouldidive-report-email.
+#
+# The binding below is the PREVIEW namespace, so emailed reports show on the
+# dev preview's review queue. Switch the id to the production namespace
+# (4e4c80119bb745339ca345e134027240, see ../../wrangler.toml) when the report
+# goes to production.
+name = "shouldidive-report-email"
+main = "worker.js"
+compatibility_date = "2026-07-01"
+
+[[kv_namespaces]]
+binding = "REPORTS_KV"
+id = "515946cfd3154194bf7dabb2a7fa0565"
+
+[observability]
+enabled = true

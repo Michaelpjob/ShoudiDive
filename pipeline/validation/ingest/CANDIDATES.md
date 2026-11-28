@@ -168,3 +168,19 @@ scraper same-day if it's regex-extractable, next-day if LLM.
 > chat if there's a way to make this useful for both of us.
 >
 > — Michael
+
+## 2026-10-15 re-audit (visibility beyond La Jolla)
+
+Only two public sources outside La Jolla post numeric visibility on a schedule:
+
+- **South Coast Divers** (Laguna, weekdays). The reader was broken by a key mismatch (it read `viz_ft`/`excerpt`; the shared LLM prompt returns `observed_secchi_ft`/`raw_excerpt`), so 176 rows since May carried no number, and it stamped Pacific filename times as UTC. Now read deterministically from the plain-text post (`extract_viz`, conditions paragraph only), LLM as fallback. The archive index reaches back to 2013. Most values are webcam estimates.
+- **Pacific Wilderness** (San Pedro: Palos Verdes, Point Fermin, the oil rigs, Catalina front side; weekly). The posts live in Facebook and Instagram embeds on `pacificwilderness.com/?page_id=676`, which this file earlier rejected as a link page. Not wired: the embed keeps relative dates only and Meta's terms were not reviewed.
+
+Changes to earlier entries:
+
+- **Beach Cities Scuba** (Shaw's Cove, now also carrying the Laguna Sea Sports report): its terms forbid scraping ("spider, crawl, or scrape"). Retired from the roster; ask the shop before re-adding.
+- **DivePros SD** is now **DiveProCA**, a forecaster (`model_outputs/latest_forecast.json`): a peer forecast, not ground truth.
+- **eagle4pacific.com** no longer resolves (already retired).
+- **Reddit**: `robots.txt` is `User-agent: * Disallow: /`, which covers the existing reader. Flagged, not changed.
+
+Nothing public covers Point Loma, Wreck Alley, the Coronados, San Clemente Island, the Channel Islands or Malibu; boats there post to Facebook or Instagram or not at all. Vision Expeditions (`visionexpeditions.com/recent-trips`) has a placeholder that would be the only offshore source if it fills in. The Ocean Report's own intake (`/api/reports`) is the route for those areas.
