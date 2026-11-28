@@ -268,6 +268,14 @@ The settings:
 There's no required-reviewer count — the user reviews + merges
 manually. If you want stricter guardrails, edit the script.
 
+## Ops log
+
+Incidents, owner actions and recurring deadlines live in
+[`docs/OPS-LOG.md`](docs/OPS-LOG.md) (newest first). Append an entry when
+you diagnose a data outage, ship a fix for one, or learn a deadline such as a
+credential lifetime. Keep the "Open items" table current: close a row when
+the fix is merged and verified live.
+
 ## Special cases
 
 ### Hotfixes
