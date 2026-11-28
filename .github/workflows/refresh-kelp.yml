@@ -33,7 +33,13 @@ jobs:
           cache-dependency-path: pipeline/requirements.txt
       - name: Install pipeline dependencies
         run: pip install -r pipeline/requirements.txt
+      # EDI's PASTA API refuses anonymous calls since 2026-07-30, so the
+      # script pulls the public copy through DataONE by default. EDI_API_KEY
+      # is optional: only the PASTA fallback uses it (create one at
+      # https://auth.edirepository.org/auth/ui/key). Unset = empty string.
       - name: Fetch + extract latest Landsat kelp (knb-lter-sbc.74)
+        env:
+          EDI_API_KEY: ${{ secrets.EDI_API_KEY }}
         run: python pipeline/fetch_kelp_landsat.py
       - name: Commit refreshed extract
         run: |
